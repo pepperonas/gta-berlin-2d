@@ -24,7 +24,8 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
   Schillerpromenade, Neuköllner Mitte, Reuterstraße, Rixdorf, Köllnische Heide) im Maßstab 1:1 (10 px = 1 m), ca.
   8 × 6 km. Rund 27 500 Gebäude mit echter Grundfläche und Höhe (Geschosszahl aus OSM), 29 500 Straßenstücke mit Namen,
   Breite, Einbahnregeln und Brücken, Spree und Kanäle mit Kaimauern, Parks, Friedhöfe, Kleingärten, Gleisanlagen,
-  U1-Hochbahn, 42 000 Straßenbäume. **Kein Baumstamm steht auf einer Fahrbahn** (die Krone darf überragen): OSM-Bäume
+  U1-Hochbahn (jedes Gleis einzeln und maßstäblich, wie in OSM erfasst; mehrere Linien teilen sich dieselben Gleise),
+  42 000 Straßenbäume. **Kein Baumstamm steht auf einer Fahrbahn** (die Krone darf überragen): OSM-Bäume
   auf der geschätzten Fahrbahnbreite rückt der Karten-Build an den Bordstein ihrer Straßenseite, ohne freien Platz
   entfallen sie; der Build bricht bei einem Verstoß ab, das Spiel verwirft solche Bäume beim Laden, Tests prüfen beides.
 - **POIs und Hausnummern:** rund 8 700 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
@@ -75,7 +76,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 60 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 61 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -213,7 +214,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 60 automatischen Tests grün, darunter:
+- Alle 61 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -231,6 +232,8 @@ in Edge `edge://inspect` mit der Konsole verbinden
     kein Passant in einem Gebäude) und ein Test, dass die Bevölkerung der Kamera folgt;
   - Teleport: nur bei offenem Stadtplan, außerhalb des Gebiets abgelehnt, Abbruch ändert nichts, Welt steht während des
     Dialogs, Ziel zu Fuß auf dem Gehweg bzw. im Auto auf der Fahrbahn, während eines Auftrags gesperrt;
+  - Gleise maßstäblich (Spurweite 1435 mm, zwei Schienen je Gleis) und in Ebenen gezeichnet (Bett → Schwellen →
+    Schienen über alle Gleise), damit parallele Gleise und Weichen sich nicht übermalen;
   - gestrichelte Straßenmarkierungen haben in jedem Bild den Strichversatz 0 (aufzeichnender Canvas-Ersatz; vorher
     übernahmen sie den animierten Versatz des Missionskreises und „flossen“);
   - Speichern/Laden inkl. kaputter, alter (Rasterstadt) und ungültiger Positionen, Menüführung nur mit Controller-Aktionen.

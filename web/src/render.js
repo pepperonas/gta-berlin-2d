@@ -5,6 +5,7 @@ import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawPerson, drawTree, shade } from './assets.js';
 import { playerCar, speedOf } from './world.js';
+import { offsetPolyline } from './geom.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -30,6 +31,9 @@ export const POI_STYLE = {
   service: { bg: '#34627f', fg: '#fff', glyph: 'i', prio: 4 }, culture: { bg: '#16806f', fg: '#fff', glyph: '★', prio: 3 },
   hotel: { bg: '#2c3e8f', fg: '#fff', glyph: 'Z', prio: 4 },
 };
+
+// Gleismaße in px (10 px = 1 m).
+export const TRACK = { gauge: 14.35, rail: 1.6, sleeper: 26, sleeperDash: [2.5, 3.5], bed: 36, deck: 46 };
 
 const SIDEWALK = '#9d9990', ASPHALT = '#3b3e43', CURB = '#c3bfb5', WATER = '#2c6c98';
 
@@ -163,10 +167,7 @@ export class Renderer {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
     for (const p of paths) if (!p.bridge) ctx.stroke(pathOf(p));
-    for (const r of rails) if (!r.bridge) {
-      ctx.strokeStyle = '#6e665c'; ctx.lineWidth = 34; ctx.stroke(pathOf(r));
-      ctx.strokeStyle = '#4b4944'; ctx.lineWidth = 16; ctx.setLineDash([3, 6]); ctx.stroke(pathOf(r)); ctx.setLineDash([]);
-    }
+    this.drawTracks(rails.filter((r) => !r.bridge), false);
 
     // 4) Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst, Brücken zuletzt
     edges.sort((a, b) => (a.bridge - b.bridge) || (b.cls - a.cls));
@@ -211,10 +212,7 @@ export class Renderer {
     for (const it of list) it.d();
 
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
-    for (const r of rails) if (r.bridge) {
-      ctx.strokeStyle = 'rgba(58,52,48,0.92)'; ctx.lineWidth = r.subway ? 64 : 48; ctx.stroke(pathOf(r));
-      ctx.strokeStyle = 'rgba(120,112,100,0.9)'; ctx.lineWidth = r.subway ? 40 : 28; ctx.setLineDash([4, 7]); ctx.stroke(pathOf(r)); ctx.setLineDash([]);
-    }
+    this.drawTracks(rails.filter((r) => r.bridge), true);
 
     // 9) Partikel
     for (const p of this.particles) {
@@ -254,6 +252,27 @@ export class Renderer {
     if (m.state === 'toDropoff') ring(p.dropoff, 'rgba(80,220,120,A)', MISSION.zoneRadius);
   }
 
+
+  // Gleise maßstäblich: jeder OSM-Weg ist ein Gleis (Spurweite 1435 mm, Schwellen 2,6 m im Abstand von 0,6 m).
+  // Ebenen nacheinander über ALLE Gleise zeichnen (Bett/Viadukt → Schwellen → Schienen), damit parallele Gleise
+  // und Weichen sauber ineinander übergehen statt sich gegenseitig zu übermalen.
+  drawTracks(tracks, elevated) {
+    if (!tracks.length) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = elevated ? '#4a433d' : '#7a7266'; ctx.lineWidth = elevated ? TRACK.deck : TRACK.bed;
+    for (const r of tracks) ctx.stroke(pathOf(r));
+    ctx.strokeStyle = elevated ? '#6b5f52' : '#5a4a3c'; ctx.lineWidth = TRACK.sleeper; ctx.setLineDash(TRACK.sleeperDash);
+    for (const r of tracks) ctx.stroke(pathOf(r));
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#c9cdd2'; ctx.lineWidth = TRACK.rail;
+    for (const r of tracks) {
+      r._rails ??= [linePath(offsetPolyline(r.pts, TRACK.gauge / 2)), linePath(offsetPolyline(r.pts, -TRACK.gauge / 2))];
+      ctx.stroke(r._rails[0]); ctx.stroke(r._rails[1]);
+    }
+    ctx.restore();
+  }
 
   drawPois(world, v, s, W, H) {
     const ctx = this.ctx, cam = world.camera;

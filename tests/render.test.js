@@ -37,3 +37,38 @@ test('gestrichelte Straßenmarkierungen „fließen“ nicht (kein wandernder St
   assert.ok(log.length > 3, 'Mittellinien wurden gezeichnet');
   assert.ok(moving.length <= 1, `${moving.length} gestrichelte Striche mit Versatz ${moving.join(', ')}`);
 });
+
+test('Gleise maßstäblich und in Ebenen: erst Bett/Viadukt, dann Schwellen, dann Schienen (Spurweite 1435 mm)', async () => {
+  const { Renderer, TRACK } = await import('../web/src/render.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const city = realCity();
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  // Kottbusser Tor: U1-Viadukt mit zwei Gleisen
+  const kotti = city.pois.find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
+  w.camera.x = kotti.x; w.camera.y = kotti.y;
+  const strokes = [];
+  let dash = [];
+  const ctx = new Proxy({ lineDashOffset: 0, lineWidth: 1, strokeStyle: '' }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'setLineDash') return (d) => { dash = d; };
+      if (k === 'stroke') return () => strokes.push({ w: t.lineWidth, dash: dash.slice(), color: t.strokeStyle });
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'createPattern' || k === 'createLinearGradient') return () => ({ addColorStop() {} });
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  new Renderer(ctx).draw(w, 1280, 720, 1.2);
+  const deck = strokes.map((x, i) => [x, i]).filter(([x]) => x.w === TRACK.deck);
+  const sleepers = strokes.map((x, i) => [x, i]).filter(([x]) => x.w === TRACK.sleeper && x.dash.length);
+  const rails = strokes.map((x, i) => [x, i]).filter(([x]) => x.w === TRACK.rail);
+  assert.ok(deck.length >= 2, 'Viadukt mit mindestens zwei Gleisen im Bild');
+  assert.equal(rails.length, 2 * deck.length, 'je Gleis genau zwei Schienen');
+  assert.ok(Math.max(...deck.map(([, i]) => i)) < Math.min(...sleepers.map(([, i]) => i)), 'alle Betten vor allen Schwellen');
+  assert.ok(Math.max(...sleepers.map(([, i]) => i)) < Math.min(...rails.map(([, i]) => i)), 'alle Schwellen vor allen Schienen');
+  // Maße: Spurweite 1,435 m, Schwelle 2,6 m, Gleisbett schmaler als der Gleisabstand von 4 m + Bett
+  assert.equal(TRACK.gauge, 14.35);
+  assert.ok(TRACK.sleeper > TRACK.gauge && TRACK.sleeper < 30);
+  assert.ok(TRACK.deck <= 50, 'Viaduktbreite je Gleis höchstens 5 m');
+});
