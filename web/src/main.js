@@ -2,7 +2,7 @@
 import { DT } from './config.js';
 import { createGame, updateGame, setCity, requestTeleport, confirmTeleport } from './game.js';
 import { openCity } from './map.js';
-import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
+import { createWorld, updateWorld, playerCar, speedOf, resetPopulation } from './world.js';
 import { parseClock } from './daylight.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
@@ -180,7 +180,7 @@ function frame(now) {
     const inp = input.frame(readRaw(), DT);
     applyPointer(inp);
     const events = updateGame(game, inp, DT);
-    if (forcedClock !== null && game.world && game.world !== clockSetFor) { game.world.clock = forcedClock; clockSetFor = game.world; }
+    if (forcedClock !== null && game.world && game.world !== clockSetFor) { game.world.clock = forcedClock; clockSetFor = game.world; resetPopulation(game.world); }
     for (const e of events) playEvent(e);
     if (game.world) {
       renderer.handleEvents(events);

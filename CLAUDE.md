@@ -19,7 +19,7 @@ npm test                               # node --test tests/
 node --test tests/mission.test.js      # single file
 node --test --test-name-pattern="Menü" tests/   # single test by name
 node tools/prepare-xbox.mjs            # copy web/ → xbox/GtaBerlin/Web/ and generate package logos (PNG, no libs)
-npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries + tree cadastre (Geoportal WFS) → data/raw/ (gitignored, needs network)
+npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries + tree cadastre + population density + traffic counts (Geoportal WFS) → data/raw/ (gitignored, needs network)
 npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
 npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
 ```
@@ -106,6 +106,12 @@ change in `web/`.
 - **POIs and house numbers** come from the same Overpass fetch: `city.pois` (`POI_CATS` in `citycodes.js`, stations
   deduped by name), `city.addresses`; queries `nearestPoi` / `nearestAddress`; `locationName` appends the house number.
   Labels are drawn in screen space by `Renderer.drawPois` (capped, overlap-culled).
+- **Day rhythm and city life:** `w.clock` + `w.day` (weekday, 0 = Mon, new game Friday). `rhythm.js` turns time, weekday,
+  edge traffic counts (`e.dtv`, from `assignTraffic` in the build) and the density raster (`densityAt`) into population
+  targets (`w.carTarget`/`w.pedTarget`, only when `w.rhythm`, i.e. default population). `life.js lifeSpots` derives
+  activity spots from POIs, OSM furniture (`city.render` layer `'furn'`, `FURN_KIND`) and big lawns, deterministically
+  from place/hour/day; `world.js manageLife` keeps them staffed with peds in state `'hang'` — spawn and despawn only out
+  of view. Visual variety comes from id hashes, never from `world.rng`.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.

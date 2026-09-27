@@ -14,6 +14,37 @@ const LOR = 'https://gdi.berlin.de/services/wfs/lor_2021?SERVICE=WFS&VERSION=2.0
 const TREES_WFS = 'https://gdi.berlin.de/services/wfs/baumbestand?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature'
   + '&SRSNAME=EPSG:4326&OUTPUTFORMAT=application/json&PROPERTYNAME=gisid,gattung,art_dtsch,kronedurch,stammumfg,baumhoehe,geom&SORTBY=gisid';
 const PAGE = 20000;
+// Einwohnerdichte 2022 (Umweltatlas, Blöcke) und Verkehrsmengen DTVw 2019 (Kfz je Werktag, übergeordnetes Netz)
+const DENSITY_WFS = 'https://gdi.berlin.de/services/wfs/ua_einwohnerdichte_2022?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature'
+  + '&TYPENAMES=ua_einwohnerdichte_2022:einwohnerdichte2022&SRSNAME=EPSG:4326&OUTPUTFORMAT=application/json&PROPERTYNAME=ew_ha_2022,geom&SORTBY=schluessel';
+const TRAFFIC_WFS = 'https://gdi.berlin.de/services/wfs/verkehrsmengen_2019?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature'
+  + '&TYPENAMES=verkehrsmengen_2019:dtvw2019kfz&SRSNAME=EPSG:4326&OUTPUTFORMAT=application/json&PROPERTYNAME=elem_nr,dtvw_kfz,geom&SORTBY=elem_nr';
+
+const round6 = (v) => Math.round(v * 1e6) / 1e6;
+async function pages(url, onPage) {
+  const out = [];
+  for (let start = 0; ; start += PAGE) {
+    const page = JSON.parse(await get(`${url}&COUNT=${PAGE}&STARTINDEX=${start}`));
+    out.push(...page.features);
+    onPage?.(start + page.features.length, page.numberMatched);
+    if (page.features.length < PAGE) break;
+  }
+  return out;
+}
+
+// Einwohner je Hektar je Block: [ew_ha, [[lon, lat, lon, lat, …] je Ring]]
+export async function fetchDensity(opts) {
+  const fs = await pages(DENSITY_WFS, opts?.onPage);
+  return fs.filter((f) => f.geometry).map((f) => [f.properties.ew_ha_2022 ?? 0,
+    f.geometry.coordinates.flatMap((poly) => poly.map((ring) => ring.flatMap(([lon, lat]) => [round6(lon), round6(lat)])))]);
+}
+
+// Kfz je Werktag je Straßenabschnitt: [dtv, [lon, lat, …] je Linie]
+export async function fetchTraffic(opts) {
+  const fs = await pages(TRAFFIC_WFS, opts?.onPage);
+  return fs.filter((f) => f.geometry && f.properties.dtvw_kfz > 0).map((f) => [f.properties.dtvw_kfz,
+    (f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [f.geometry.coordinates]).map((l) => l.flatMap(([lon, lat]) => [round6(lon), round6(lat)]))]);
+}
 
 const raw = fileURLToPath(new URL('../../data/raw/', import.meta.url));
 
@@ -60,7 +91,25 @@ async function download(url, file) {
   return r.url; // nach Weiterleitung: Datei mit Datum
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+async function fetchLife() {
+  console.log('Einwohnerdichte 2022 (Geoportal Berlin) …');
+  const dichte = await fetchDensity({ onPage: (n, all) => process.stdout.write(`\r  ${n} / ${all}   `) });
+  process.stdout.write('\n');
+  if (dichte.length < 20000) throw new Error(`Einwohnerdichte unvollständig: ${dichte.length} Blöcke`);
+  await writeFile(raw + 'dichte.json', JSON.stringify(dichte));
+  console.log('Verkehrsmengen DTVw 2019 (Geoportal Berlin) …');
+  const verkehr = await fetchTraffic({ onPage: (n, all) => process.stdout.write(`\r  ${n} / ${all}   `) });
+  process.stdout.write('\n');
+  if (verkehr.length < 5000) throw new Error(`Verkehrsmengen unvollständig: ${verkehr.length} Abschnitte`);
+  await writeFile(raw + 'verkehr.json', JSON.stringify(verkehr));
+  return { dichte: dichte.length, verkehr: verkehr.length };
+}
+
+if (import.meta.url === `file://${process.argv[1]}` && process.argv.includes('--life')) {
+  // nur die Daten für Belebung (Dichte, Verkehrsmengen) nachladen: node tools/osm/fetch.mjs --life
+  await mkdir(raw, { recursive: true });
+  console.log(await fetchLife());
+} else if (import.meta.url === `file://${process.argv[1]}`) {
   await mkdir(raw, { recursive: true });
   const t0 = Date.now();
   console.log('LOR-Prognoseräume (Geoportal Berlin) …');
@@ -73,6 +122,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const trees = await fetchTrees({ onPage: (l, n, all) => process.stdout.write(`\r  ${l}: ${n} / ${all}   `) });
   process.stdout.write('\n');
   await writeFile(raw + 'baeume.json', JSON.stringify(trees));
+  await fetchLife();
   await writeFile(raw + 'fetched.json', JSON.stringify({ at: new Date().toISOString(), pbf: pbfUrl, lor: lor.features.length, trees: trees.length }, null, 1));
   console.log(`fertig: ${trees.length} Bäume, ${lor.features.length} Prognoseräume in ${((Date.now() - t0) / 1000).toFixed(0)} s → data/raw/`);
 }

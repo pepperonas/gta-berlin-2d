@@ -66,6 +66,16 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   werden dahinter abgebaut.
 - Passanten gehen die Gehwege entlang der echten Straßen, biegen ab, überqueren Straßen (und warten auf fahrende Autos),
   fliehen vor Rasern, Hupen und Unfällen, stehen nach einem Anfahren wieder auf.
+- **Tagesrhythmus und Stadtleben:** Die Uhr kennt Wochentage (neues Spiel: Freitag, 16:00; im HUD „Fr 16:00“). Wie viel
+  Verkehr fährt, folgt Werktag (Berufsverkehr morgens und abends) und Wochenende (später, flacher) und dem Ort: gezählte
+  Kfz je Werktag auf den Hauptstraßen (Verkehrsmengen 2019) und die Einwohnerdichte (Umweltatlas 2022) samt Läden in der
+  Nähe bestimmen, wie belebt eine Gegend ist; Freitag- und Samstagnacht füllt das Nachtleben die Kieze mit Bars.
+  Autos entstehen bevorzugt auf stark befahrenen Straßen. Menschen tun etwas an echten Orten: Wartende an Haltestellen,
+  Raucher vor Bars, Schlangen vor Clubs in Partynächten, Leute mit Flasche vor Spätis, Gäste an Cafétischen,
+  Plaudernde vor dem Imbiss, Schaufenstergucker, Straßenmusik am U-Bahnhof, Sitzende auf den 76 000 Bänken aus OSM,
+  Gruppen auf Decken in Parks (nachmittags, am Wochenende mehr); dazu Jogger morgens und abends und Hundehalter.
+  Fahrradständer mit wechselnd vielen Rädern und orange Mülleimer stehen an ihren echten Plätzen. Wer erschreckt wird,
+  flieht und geht danach normal weiter. Neue Leute erscheinen nur außer Sicht, niemand verschwindet vor den Augen.
 - Mission „Kisten für den Kiez“: Auftrag am Späti in der Wrangelstraße (Wrangelkiez) annehmen → zur Lagerhalle in
   Neukölln fahren → dort anhalten und **A halten** zum Einladen → zurück zur Wrangelstraße → abliefern. Das Zeitlimit
   berechnet der Karten-Build aus der kürzesten Route (derzeit 8,7 km → 930 s). Scheitern bei Zeitablauf oder wenn das
@@ -139,7 +149,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 141 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 154 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -149,7 +159,7 @@ für den Stadtplan, `tiles/<x>_<y>.json` je 640 × 640 m; zusammen 138 MB) im Re
 Neu bauen, z. B. für aktuellere OSM-Daten oder andere Missionsorte:
 
 ```bash
-npm run map:fetch                     # OSM-Auszug Berlin (Geofabrik, PBF ~100 MB), LOR-Grenzen und Baumbestand (WFS Geoportal Berlin) → data/raw/ (gitignored, ~2 min)
+npm run map:fetch                     # OSM-Auszug Berlin (Geofabrik, PBF ~100 MB), LOR-Grenzen, Baumbestand, Einwohnerdichte und Verkehrsmengen (WFS Geoportal Berlin) → data/raw/ (gitignored, ~2 min)
 npm run map:build                     # data/raw/ + data/places.json → web/data/berlin/ (deterministisch, ~40 s, braucht ~6 GB Arbeitsspeicher)
 npm run map:preview -- out.svg        # Sichtprüfung als SVG (Standard 4 × 4 km um den Späti; Ausschnitt: out.svg x y breite höhe in px)
 ```
@@ -289,7 +299,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 141 automatischen Tests grün, darunter:
+- Alle 154 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -343,6 +353,14 @@ in Edge `edge://inspect` mit der Konsole verbinden
     erkannt); Gegenwehr (wer sich wehrt, schlägt zurück, andere fliehen, Kämpfer in der Nähe mischen mit), Heilen nach
     der Pause, K. o. mit Neustart am nächsten Krankenhaus samt Geldabzug und gescheitertem Auftrag, Anfahren verletzt,
     im Auto und am Boden keine weiteren Treffer (neun Mutationsproben, alle erkannt);
+  - Tagesrhythmus und Stadtleben: Berufsverkehr, ruhige Nacht, Wochenende später, alle Kurven über eine Woche stetig;
+    Nachtleben Freitag/Samstag voll, die Nacht zählt bis 6 Uhr zum Vortag; am Späti nachts weniger Autos als im
+    Berufsverkehr und Freitagnacht mehr Menschen als Dienstagnacht, Zielwerte in Grenzen; Verkehrsmengen landen im
+    Build auf der passenden Kante und nicht auf der Querstraße, Dichteraster spart Innenhöfe aus; Tätigkeiten je Ort
+    und Uhrzeit (keine Clubschlange am Dienstag, kein Café nachts); Plätze deterministisch, nie im Haus, Gruppen nicht
+    auf der Fahrbahn, Liegende nur auf Wiesen, Sitzende nur auf Bänken; neue Leute nur außer Sicht, niemand verschwindet
+    im Bild, Erschreckte geben ihren Platz auf; feste Bevölkerung (Tests, Demo) ohne Rhythmus; Wochentag wechselt um
+    Mitternacht und steht im Spielstand (14 Mutationsproben, alle erkannt);
   - Gebäude-Regeln im Build: Brückenpfeiler, Kreuzgänge, Dächer und schwebende Teile werden keine Häuser, Bauteile
     nur ohne umgebenden Umriss (das höchste einer Gruppe); an der echten Oberbaumbrücke stehen die Türme (≥ 30 m),
     kein Haus auf der Fahrbahn, ein Brückendeck unter dem POI, das über dem Wasser nicht als Wasser gilt; Krankenhäuser

@@ -3,7 +3,7 @@
 // Bildmitte weg → Seitenwände werden sichtbar).
 import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
-import { drawCar, drawPerson, drawTree, shade } from './assets.js';
+import { drawCar, drawPerson, drawTree, shade, drawDog } from './assets.js';
 import { playerCar, speedOf } from './world.js';
 import { signalState } from './signals.js';
 import { offsetPolyline, polylineLength } from './geom.js';
@@ -18,6 +18,8 @@ import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
 import { WEAPONS } from './combat.js';
+import { benchAngle } from './life.js';
+import { FURN_KIND } from './citycodes.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -277,6 +279,7 @@ export function nightVariant(b, windowsLit) {
 }
 
 const STAIN_LIFE = 90, STAIN_MAX = 160;
+const hashN = (n) => { const x = Math.sin(n * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); };
 
 // Fadenkreuz: nur mit Schusswaffe; sitzt in Zielrichtung auf Reichweite der Hand (Zielhilfe dreht die Figur)
 function drawCrosshair(ctx, pl) {
@@ -463,7 +466,7 @@ export class Renderer {
 
     // Sichtbare Kartenobjekte (unten großzügiger: hohe Häuser ragen ins Bild).
     const q = city.render.query({ x: v.x - 60, y: v.y - 60, w: v.w + 120, h: v.h + 420 }, this._q ??= []);
-    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [], junctions = [], crossings = [], barriers = [], fences = [];
+    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [], junctions = [], crossings = [], barriers = [], fences = [], furns = [];
     for (const f of q) {
       switch (f.layer) {
         case 'area': areas.push(f); break;
@@ -477,6 +480,7 @@ export class Renderer {
         case 'crossing': crossings.push(f); break;
         case 'barrier': barriers.push(f); break;
         case 'fence': fences.push(f); break;
+        case 'furn': furns.push(f); break;
       }
     }
 
@@ -558,6 +562,10 @@ export class Renderer {
     }
     ctx.lineCap = 'butt';
 
+    // Stadtmöbel und Requisiten der Tätigkeiten (Decken, Café-Tische, Gitarrenkoffer)
+    this.drawFurniture(furns, city, world.clock);
+    this.drawLifeProps(world);
+
     // Baumscheiben der Straßenbäume
     ctx.fillStyle = '#5e4c3b'; ctx.strokeStyle = '#8c8578'; ctx.lineWidth = 1.2;
     for (const tr of trees) if (treePit(city, tr)) { const h = 7 + tr.r; ctx.fillRect(tr.x - h, tr.y - h, 2 * h, 2 * h); ctx.strokeRect(tr.x - h, tr.y - h, 2 * h, 2 * h); }
@@ -600,7 +608,11 @@ export class Renderer {
     for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
     for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
-    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null }) });
+    for (const p of world.peds) if (near(p.x, p.y)) {
+      const act = p.state === 'hang' ? p.hang.act : null;
+      list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t }) });
+      if (p.style === 'dog' && p.state !== 'dead' && p.state !== 'down') list.push({ y: p.y - 1, d: () => drawDog(ctx, p, t) });
+    }
     const pl = world.player;
     if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
     list.sort((a, b) => a.y - b.y);
@@ -717,6 +729,11 @@ export class Renderer {
     const pl = world.player;
     if (!pl.inCar) out.push({ x: pl.x, y: pl.y, r: 70, rgb: '255,210,170', a: 0.35 * k });
     for (const f of this.flashes) out.push({ x: f.x, y: f.y, r: f.big ? 150 : 100, rgb: '255,210,120', a: Math.max(0.6, k) });
+    if (k > 0.3) for (const p of world.peds) { // glimmende Zigaretten, Handydisplays
+      if (p.state !== 'hang' || !inView(p.x, p.y)) continue;
+      if (p.hang.act === 'smoke') out.push({ x: p.x + Math.cos(p.facing) * 5, y: p.y + Math.sin(p.facing) * 5, r: 9, rgb: '255,120,40', a: 0.8 * k });
+      else if (p.hang.act === 'wait') out.push({ x: p.x + Math.cos(p.facing) * 5, y: p.y + Math.sin(p.facing) * 5, r: 14, rgb: '150,200,255', a: 0.5 * k });
+    }
     if (markers) {
       const m = world.mission, p = world.city.places;
       const spots = m.state === 'toPickup' ? [p.pickup] : m.state === 'toDropoff' ? [p.dropoff] : m.state === 'idle' || m.state === 'briefing' ? [p.giver] : [];
@@ -815,6 +832,63 @@ export class Renderer {
     }
     if (hi) for (const d of roof.decor) drawDecor(ctx, d);
     ctx.strokeStyle = col.line; ctx.lineWidth = 1.3; ctx.stroke(p);
+  }
+
+  // Bänke (Holzlatten, zur Straße ausgerichtet), Fahrradständer mit ein paar Rädern, Mülleimer
+  drawFurniture(furns, city, clock) {
+    const ctx = this.ctx, hr = Math.floor(clock / 60);
+    for (const f of furns) {
+      ctx.save(); ctx.translate(f.x, f.y);
+      if (f.kind === FURN_KIND.bench) {
+        ctx.rotate(benchAngle(city, f));
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-10, -3, 22, 8);
+        ctx.fillStyle = '#3a3d42'; ctx.fillRect(-9, -3.5, 2, 7); ctx.fillRect(7, -3.5, 2, 7);
+        ctx.fillStyle = '#8a5a2e'; for (let k = -3; k <= 2; k += 1.8) ctx.fillRect(-10, k, 20, 1.3);
+        ctx.fillStyle = '#6e4521'; ctx.fillRect(-10, -4.2, 20, 1.4); // Lehne
+      } else if (f.kind === FURN_KIND.bicycle) {
+        ctx.rotate((f.seed % 314) / 100);
+        ctx.strokeStyle = '#8f959c'; ctx.lineWidth = 1;
+        for (let k = -9; k <= 9; k += 6) { ctx.beginPath(); ctx.moveTo(k, -5); ctx.lineTo(k, 5); ctx.stroke(); }
+        const bikes = Math.floor(hashN(f.seed + hr) * 4);
+        for (let b = 0; b < bikes; b++) {
+          const x = -9 + b * 6, col = ['#c0392b', '#2e86de', '#27ae60', '#1d1d1d', '#e1e1e1'][(f.seed + b) % 5];
+          ctx.strokeStyle = '#222'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, -8); ctx.lineTo(x, -3); ctx.moveTo(x, 3); ctx.lineTo(x, 8); ctx.stroke();
+          ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, -5); ctx.lineTo(x, 5); ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1, 1, 3.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e8621a'; ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI * 2); ctx.fill(); // Berliner Mülleimer: orange
+        ctx.fillStyle = '#3a2a20'; ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // Unter Gruppen: Picknickdecke (liegend im Park), Café-Tisch (sitzend, nicht auf der Bank), Gitarrenkoffer
+  drawLifeProps(world) {
+    const ctx = this.ctx, done = new Set();
+    for (const p of world.peds) {
+      const hg = p.state === 'hang' ? p.hang : null;
+      if (!hg || done.has(hg.g)) continue;
+      done.add(hg.g);
+      const r = hashN(hg.g.length * 131 + Math.round(hg.gx ?? hg.x));
+      if (hg.act === 'lie') {
+        ctx.save(); ctx.translate(hg.gx, hg.gy); ctx.rotate(r * 3);
+        ctx.fillStyle = ['#c0392b', '#2e86de', '#f1c40f', '#8e44ad', '#16a085'][Math.floor(r * 5)];
+        ctx.fillRect(-18, -13, 36, 26);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'; for (let k = -18; k < 18; k += 6) ctx.fillRect(k, -13, 2.5, 26);
+        ctx.restore();
+      } else if (hg.act === 'sit' && !hg.bench) {
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.arc(hg.gx + 1.5, hg.gy + 1.5, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#d9d4c7'; ctx.beginPath(); ctx.arc(hg.gx, hg.gy, 5.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#6b4a2b'; ctx.fillRect(hg.gx - 1.5, hg.gy - 1.5, 3, 3); // Tassen
+      } else if (hg.act === 'music') {
+        ctx.save(); ctx.translate(hg.x + Math.cos(hg.face) * 11, hg.y + Math.sin(hg.face) * 11); ctx.rotate(hg.face);
+        ctx.fillStyle = '#1d1d1d'; ctx.fillRect(-4, -7, 8, 14); ctx.fillStyle = '#7a1f2b'; ctx.fillRect(-3, -6, 6, 12);
+        ctx.fillStyle = '#e6c35a'; for (let k = 0; k < 4; k++) ctx.fillRect(-2 + (k % 2) * 2.5, -4 + k * 2.3, 1.4, 1.4);
+        ctx.restore();
+      }
+    }
   }
 
   drawDecals(edges, city) {

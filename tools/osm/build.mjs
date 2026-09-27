@@ -10,7 +10,7 @@ import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, u
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
 import { ringIndex, insideIndex, pointInRings } from '../../web/src/geom.js';
-import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA } from '../../web/src/citycodes.js';
+import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA, FURN_KIND, DENS_CELL_M, DTV_ESTIMATE } from '../../web/src/citycodes.js';
 
 const num = (v) => { const m = /^\s*(-?\d+(?:[.,]\d+)?)/.exec(v ?? ''); return m ? parseFloat(m[1].replace(',', '.')) : NaN; };
 
@@ -167,7 +167,7 @@ class Heap {
 
 // lor: LOR-Prognoseräume (GeoJSON, Grenze = ihre Vereinigung); osm: Store (store.mjs) oder { elements } (Overpass-Format);
 // places: Missionsorte; kataster: Berliner Baumbestand. Liefert { index, overview, tiles: Map Schlüssel → Kachel }.
-export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], tile = TILE_PX, marginM = 250, log = () => {} } = {}) {
+export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life = {}, tile = TILE_PX, marginM = 250, log = () => {} } = {}) {
   const S = scale;
   const osm = osmIn.coord ? osmIn : storeFromElements(osmIn.elements, { timestamp: osmIn.osm3s?.timestamp_osm_base ?? null });
   const [s, w, n, e] = bboxOfFeatures(lor.features, marginM);
@@ -451,20 +451,24 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], tile 
   trees.sort((a, b) => a.y - b.y || a.x - b.x);
   kieze.sort((a, b) => a.n.localeCompare(b.n) || a.x - b.x);
   step(`${trees.length} Bäume (${JSON.stringify(treeStats)})`);
-  const { pois, addresses } = extractPoisAndAddresses(osm, { P, toPx, W, H, S, nameOf });
-  step(`${pois.length} POIs, ${addresses.length} Hausnummern`);
+  const { pois, addresses, furniture } = extractPoisAndAddresses(osm, { P, toPx, W, H, S, nameOf });
+  step(`${pois.length} POIs, ${addresses.length} Hausnummern, ${furniture.length} Stadtmöbel`);
+  // Belebung: gezählte Kfz je Werktag auf die Straßen, Einwohnerdichte als Raster
+  const trafficStats = assignTraffic(edges, vertices, life.verkehr ?? [], { toPx, S });
+  const dens = densityGrid(life.dichte ?? [], { toPx, W, H, S });
+  step(`Verkehrsmengen: ${trafficStats.measured} Kanten gezählt (${trafficStats.km} km), Dichte-Raster ${dens.nx}×${dens.ny} (${dens.filled} Zellen bewohnt)`);
 
   const missionPlaces = placeMission({ places, toPx, edges, vertices, buildings, S, insideBorder });
   step(`Mission: Route ${missionPlaces.routeMeters} m → ${missionPlaces.timeLimit} s`);
 
   const g = {
-    S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, trees, kieze, pois, addresses, junctions, trim,
+    S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, trees, kieze, pois, addresses, junctions, trim, furniture, dens,
     border, bezirke, districts, access: access.out,
   };
   const meta = {
     version: 3, scale: S, width: W, height: H, origin: { lat0, lon0, bbox: [s, w, n, e] },
     osmBase: osm.timestamp ?? null,
-    attribution: 'Kartendaten © OpenStreetMap-Mitwirkende (ODbL) · Grenzen und Baumbestand: Geoportal Berlin (dl-de/zero-2.0)',
+    attribution: 'Kartendaten © OpenStreetMap-Mitwirkende (ODbL) · Grenzen, Baumbestand, Einwohnerdichte und Verkehrsmengen: Geoportal Berlin (dl-de/zero-2.0)',
     classes: ROAD_CLASSES, trafficMaxClass: TRAFFIC_MAX_CLASS,
     trees: treeStats, access: access.stats,
     counts: { buildings: buildings.length, heightMeasured, edges: edges.length, vertices: vertices.length / 2, trees: trees.length, pois: pois.length, addresses: addresses.length, water: water.length, areas: areas.length, walls: walls.length },
@@ -553,7 +557,7 @@ function extractPoisAndAddresses(osm, { P, toPx, W, H, S, nameOf }) {
     return n ? [Math.round(x / n), Math.round(y / n)] : null;
   };
   const inside = (p) => p && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
-  const pois = [], addresses = [];
+  const pois = [], addresses = [], furniture = [];
   const seenStation = new Map(); // Kategorie|Name → Positionen
   for (const el of osm.elements()) {
     const t = el.tags;
@@ -572,6 +576,11 @@ function extractPoisAndAddresses(osm, { P, toPx, W, H, S, nameOf }) {
         }
       }
     }
+    // Stadtmöbel (nur Knoten)
+    if (el.type === 'node') {
+      const fk = t.amenity === 'bench' || t.leisure === 'picnic_table' ? FURN_KIND.bench : t.amenity === 'bicycle_parking' ? FURN_KIND.bicycle : t.amenity === 'waste_basket' ? FURN_KIND.bin : -1;
+      if (fk >= 0) { const p = toPx(el.lat, el.lon); if (inside(p)) furniture.push({ x: p[0], y: p[1], k: fk, id: el.id }); }
+    }
     const nr = t['addr:housenumber'], street = t['addr:street'] ?? t['addr:place'];
     if (nr && street) {
       const p = center(el);
@@ -587,7 +596,67 @@ function extractPoisAndAddresses(osm, { P, toPx, W, H, S, nameOf }) {
     if (prev && Math.hypot(prev.x - a.x, prev.y - a.y) < 40 * S) continue;
     seen.set(k, a); out.push(a);
   }
-  return { pois, addresses: out };
+  furniture.sort((a, b) => a.y - b.y || a.x - b.x || a.id - b.id);
+  return { pois, addresses: out, furniture };
+}
+
+// Verkehrsmengen (Kfz je Werktag, Geoportal) auf die OSM-Kanten übertragen: Punkte alle 20 m entlang jedes Abschnitts,
+// je Punkt die nächste Hauptstraßen-Kante (≤ 15 m, ähnliche Richtung) – sie erhält den größten gezählten Wert.
+// Kanten ohne Zählung bekommen einen Schätzwert nach Straßenklasse (DTV_ESTIMATE); measured merkt sich die Herkunft.
+export function assignTraffic(edges, vertices, verkehr, { toPx, S }) {
+  const grid = boxGrid(300);
+  const ptsOf = (e) => [vertices[2 * e.a], vertices[2 * e.a + 1], ...e.p, vertices[2 * e.b], vertices[2 * e.b + 1]];
+  edges.forEach((e, k) => {
+    e.dtv = 0; e.dtvMeasured = false;
+    if (e.c > 7) return;
+    const p = ptsOf(e);
+    for (let i = 0; i < p.length - 2; i += 2) grid.add({ k, ax: p[i], ay: p[i + 1], bx: p[i + 2], by: p[i + 3] }, Math.min(p[i], p[i + 2]) - 150, Math.min(p[i + 1], p[i + 3]) - 150, Math.max(p[i], p[i + 2]) + 150, Math.max(p[i + 1], p[i + 3]) + 150);
+  });
+  let km = 0;
+  for (const [dtv, lines] of verkehr) for (const l of lines) {
+    const q = []; for (let i = 0; i < l.length; i += 2) q.push(...toPx(l[i + 1], l[i]));
+    for (let i = 0; i < q.length - 2; i += 2) {
+      const dx = q[i + 2] - q[i], dy = q[i + 3] - q[i + 1], L = Math.hypot(dx, dy);
+      if (L < 1) continue;
+      km += L / S / 1000;
+      for (let s = 0; s <= L; s += 20 * S) {
+        const x = q[i] + dx * s / L, y = q[i + 1] + dy * s / L;
+        let best = null, bd = (15 * S) ** 2;
+        for (const sg of grid.at(x, y)) {
+          const ex = sg.bx - sg.ax, ey = sg.by - sg.ay, el = Math.hypot(ex, ey) || 1;
+          if (Math.abs(ex * dx + ey * dy) / (el * L) < 0.8) continue; // Richtung passt nicht (Querstraße)
+          const d2 = segDist2(x, y, sg.ax, sg.ay, sg.bx, sg.by);
+          if (d2 < bd) { bd = d2; best = sg; }
+        }
+        if (best) { const e = edges[best.k]; if (dtv > e.dtv) { e.dtv = dtv; e.dtvMeasured = true; } }
+      }
+    }
+  }
+  let measured = 0;
+  for (const e of edges) { if (e.dtvMeasured) measured++; else e.dtv = DTV_ESTIMATE[e.c] ?? 0; }
+  return { measured, km: Math.round(km) };
+}
+
+// Einwohner je Hektar als Raster (DENS_CELL_M), Wert der Blockfläche am Zellmittelpunkt (0 = unbewohnt/unbekannt).
+export function densityGrid(dichte, { toPx, W, H, S }) {
+  const cell = DENS_CELL_M * S, nx = Math.ceil(W / cell), ny = Math.ceil(H / cell);
+  const v = new Uint16Array(nx * ny);
+  let filled = 0;
+  for (const [ewha, rings] of dichte) {
+    if (!(ewha > 0)) continue;
+    const rs = rings.map((r) => { const o = []; for (let i = 0; i < r.length; i += 2) o.push(...toPx(r[i + 1], r[i])); return o; });
+    const [x0, y0, x1, y1] = ringBox(rs[0]);
+    for (let cx = Math.max(0, Math.floor(x0 / cell)); cx <= Math.min(nx - 1, Math.floor(x1 / cell)); cx++) {
+      for (let cy = Math.max(0, Math.floor(y0 / cell)); cy <= Math.min(ny - 1, Math.floor(y1 / cell)); cy++) {
+        const px = (cx + 0.5) * cell, py = (cy + 0.5) * cell;
+        if (rs.filter((r) => pointInRing(px, py, r)).length % 2 !== 1) continue;
+        const i = cy * nx + cx;
+        if (!v[i]) filled++;
+        v[i] = Math.min(65535, Math.max(v[i], Math.round(ewha)));
+      }
+    }
+  }
+  return { cell, nx, ny, v, filled };
 }
 
 // --- Korridore: Polylinien in 1-m-Stücke zerlegen und Stücke in einem Korridor weglassen --------------
@@ -1073,7 +1142,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const places = JSON.parse(await readFile(new URL('data/places.json', root)));
   let kataster = [];
   try { kataster = JSON.parse(await readFile(new URL('data/raw/baeume.json', root))); } catch { console.warn('data/raw/baeume.json fehlt – nur OSM-Bäume'); }
-  const out = buildCity(lor, osm, places, { scale: Number(arg('--scale', 10)), kataster, log: console.log });
+  const life = {};
+  for (const k of ['dichte', 'verkehr']) {
+    try { life[k] = JSON.parse(await readFile(new URL(`data/raw/${k}.json`, root))); } catch { console.warn(`data/raw/${k}.json fehlt – Schätzwerte (node tools/osm/fetch.mjs --life)`); }
+  }
+  const out = buildCity(lor, osm, places, { scale: Number(arg('--scale', 10)), kataster, life, log: console.log });
   const r = await writeCity(out, dir);
   const m = out.index.meta;
   console.log(`${fileURLToPath(dir)}: ${(r.bytes / 1e6).toFixed(1)} MB in ${r.tiles} Kacheln (größte ${(r.maxTile / 1e6).toFixed(2)} MB), ${m.width}×${m.height} px, ` +

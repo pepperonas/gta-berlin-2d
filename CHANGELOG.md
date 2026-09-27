@@ -4,6 +4,27 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.12.0] – 2026-09-28
+
+### Hinzugefügt
+- Wochentage: Die Uhr zählt Mo–So (neues Spiel Freitag, 16:00), das HUD zeigt „Fr 22:34“, der Spielstand merkt sich
+  den Tag (alte Stände bleiben gültig).
+- Tagesrhythmus: Verkehr und Menschen folgen Werktag (Berufsverkehr) und Wochenende; Freitag- und Samstagnacht füllt
+  das Nachtleben die Kieze mit Bars. Wie belebt ein Ort ist, bestimmen echte Daten: Verkehrsmengen 2019 (Kfz je
+  Werktag, 31 305 Kanten gemessen, der Rest nach Straßenklasse geschätzt) und die Einwohnerdichte 2022 (64-m-Raster),
+  beide aus dem Geoportal Berlin (dl-de/zero-2.0). Autos entstehen bevorzugt auf stark befahrenen Straßen.
+- Stadtleben an echten Orten: Wartende an Haltestellen, Raucher vor Bars, Clubschlangen in Partynächten, Leute mit
+  Flasche vor Spätis (und Kalles Stammgäste am Auftrags-Späti), Cafégäste an Tischen, Plaudernde vor dem Imbiss,
+  Schaufenstergucker, Straßenmusik am U-Bahnhof, Sitzende auf Bänken, Gruppen auf Decken in Parks; Jogger und
+  Hundehalter unter den Spaziergängern; Zigaretten und Handys glimmen nachts.
+- Stadtmöbel aus OSM: 76 380 Bänke, Picknicktische, Fahrradständer (mit je Stunde wechselnd vielen Rädern) und orange
+  Mülleimer.
+
+### Geändert
+- Die Zahl der Autos und Passanten ist nicht mehr fest, sondern wird um die Kamera je nach Ort und Zeit eingestellt;
+  Überzählige verschwinden außer Sicht. Tests und Titel-Demo mit fester Bevölkerung bleiben unverändert.
+- `?uhr=` baut die Bevölkerung für die gewählte Uhrzeit neu auf.
+
 ## [0.11.0] – 2026-09-27
 
 ### Hinzugefügt

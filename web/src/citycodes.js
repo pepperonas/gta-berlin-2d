@@ -6,6 +6,12 @@ export const TRAFFIC_MAX_CLASS = 8; // Autobahn … Spielstraße: KI-Verkehr; Zu
 export const AREA_KIND = { rail: 0, plaza: 1, allotments: 2, cemetery: 3, grass: 4, pitch: 5, sand: 6, wood: 7, bridge: 8 };
 // Wandzüge (Kachelformat): Art der Wand; 1 = Stadtgrenze (unsichtbare Wand)
 export const WALL_KIND = { other: 0, border: 1, quay: 2, rail: 3, railing: 4, fence: 5 };
+// Stadtmöbel (Kachelformat): Bänke (auch Picknicktische), Fahrradständer, Mülleimer
+export const FURN_KIND = { bench: 0, bicycle: 1, bin: 2 };
+// Einwohnerdichte: Rasterweite (m) des Dichtegitters je Kachel
+export const DENS_CELL_M = 64;
+// Geschätzte Kfz je Werktag nach Straßenklasse, wo keine Zählung vorliegt (Index = Klasse)
+export const DTV_ESTIMATE = [0, 45000, 35000, 22000, 14000, 7000, 2500, 900, 200, 150, 0, 0, 300];
 export const BUILDING_KIND = { house: 0, public: 1, industrial: 2, church: 3, small: 4, spaeti: 5, warehouse: 6 };
 
 // Bäume: Der Stamm (Kreis mit TREE_TRUNK_M) darf nie auf einer Fahrbahn bis einschließlich dieser Klasse stehen

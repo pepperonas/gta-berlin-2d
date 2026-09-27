@@ -39,7 +39,7 @@ export function tileCity(g, { tile, meta, places }) {
     let t = tiles.get(k);
     if (!t) tiles.set(k, t = { tx, ty, names: [], nameIdx: new Map(), vmap: new Map(), vid: [], vxy: [], vtrim: [],
       edges: [], junctions: [], paths: [], rails: [], buildings: [], water: [], areas: [], walls: [], fences: [],
-      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], addresses: { xy: [], street: [], nr: [] } });
+      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
     return t;
   };
   const cx = (x) => Math.min(NX - 1, Math.max(0, Math.floor(x / tile))), cy = (y) => Math.min(NY - 1, Math.max(0, Math.floor(y / tile)));
@@ -58,7 +58,7 @@ export function tileCity(g, { tile, meta, places }) {
     const flags = ed.br | (ed.in << 1) | ((ed.blocked ? 1 : 0) << 2) | (ed.pass << 3);
     const x = ed.c <= 8 ? ed.x : [ed.x[10], ed.x[11]]; // Nebenwege: nur Tempo + Belag
     each(bboxOf(pts, ed.w / 10 * S / 2 + S), (t) => {
-      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x]);
+      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1)]);
     });
   });
   // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1, kleinste Klasse]
@@ -114,6 +114,20 @@ export function tileCity(g, { tile, meta, places }) {
   const TB = g.access.turnBans;
   for (let i = 0; i < TB.length; i += 3) { const v = TB[i + 1]; home(g.vertices[2 * v], g.vertices[2 * v + 1]).turnBans.push(TB[i], v, TB[i + 2]); }
   for (const q of g.pois) { const t = home(q.x, q.y); t.pois.push([q.x, q.y, POI_CAT[q.cat], nm(t, g.names[q.n]), nm(t, g.names[q.k])]); }
+  for (const f of g.furniture ?? []) home(f.x, f.y).furn.push([f.x, f.y, f.k]);
+  // Einwohnerdichte: je Kachel das Teilraster (Zeilen von oben), nur wenn dort jemand wohnt
+  if (g.dens) {
+    const { cell, nx, ny, v } = g.dens, per = Math.round(tile / cell);
+    for (const t of tiles.values()) {
+      const tx = t.tx, ty = t.ty, vals = [];
+      let any = false;
+      for (let j = 0; j < per; j++) for (let i = 0; i < per; i++) {
+        const cx = tx * per + i, cy = ty * per + j, val = cx < nx && cy < ny ? v[cy * nx + cx] : 0;
+        vals.push(val); if (val) any = true;
+      }
+      if (any) t.dens = { cell, vals };
+    }
+  }
   for (const a of g.addresses) { const t = home(a.x, a.y); t.addresses.xy.push(a.x, a.y); t.addresses.street.push(nm(t, g.names[a.s])); t.addresses.nr.push(a.nr); }
 
   // Serialisieren
@@ -128,7 +142,7 @@ export function tileCity(g, { tile, meta, places }) {
       walls: t.walls, fences: t.fences,
       trees: { xy: delta(t.trees.xy), g: t.trees.g, c: t.trees.c, r: t.trees.r },
       barriers: t.barriers, posts: t.posts, crossings: t.crossings, signals: t.signals, turnBans: t.turnBans,
-      pois: t.pois,
+      pois: t.pois, furn: t.furn, ...(t.dens ? { dens: t.dens } : {}),
       addresses: { xy: delta(t.addresses.xy), street: t.addresses.street, nr: t.addresses.nr },
     });
   }

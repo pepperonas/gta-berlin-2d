@@ -13,7 +13,7 @@ export function makeSave(w, now = Date.now()) {
   const pos = playerCar(w) ?? w.player;
   return {
     version: SAVE_VERSION, savedAt: now,
-    money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock),
+    money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock), day: w.day,
     player: { x: Math.round(pos.x), y: Math.round(pos.y) },
     car: car && !car.wrecked ? { x: Math.round(car.x), y: Math.round(car.y), angle: car.angle, health: car.health } : null,
   };
@@ -29,7 +29,8 @@ export function validateSave(s) {
   let car = null;
   if (s.car && num(s.car.x, 0, MAX_XY) && num(s.car.y, 0, MAX_XY) && num(s.car.angle, -100, 100) && num(s.car.health, 1, 100)) car = s.car;
   const clock = num(s.clock, 0, 1440) ? s.clock : null; // ältere Stände ohne Uhr: Uhr bleibt beim Spielstart
-  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, clock, player: s.player, car };
+  const day = Number.isInteger(s.day) && s.day >= 0 && s.day < 7 ? s.day : null;
+  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, clock, day, player: s.player, car };
 }
 
 export function writeSave(storage, w) {
@@ -47,6 +48,7 @@ export function readSave(storage) {
 export function applySave(w, s) {
   w.money = s.money; w.completed = s.completed; w.bestTime = s.bestTime;
   if (s.clock !== null && s.clock !== undefined) w.clock = s.clock;
+  if (s.day !== null && s.day !== undefined) w.day = s.day;
   w.pendingSave = s;
   const p = s.car ?? s.player;
   if (p && insideBorder(w.city, p.x, p.y)) { w.camera.x = p.x; w.camera.y = p.y; }

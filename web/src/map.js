@@ -47,7 +47,7 @@ export function openCity(index, loadTile, { overview = null } = {}) {
     overview,
     nodes: new Map(), edges: new Map(), signals: new Set(), turnBans: new Set(),
     render: new SpatialHash(640), edgeSegs: new SpatialHash(320), polys: new SpatialHash(320), solids: new SpatialHash(128),
-    poiHash: new SpatialHash(400), addrHash: new SpatialHash(400),
+    poiHash: new SpatialHash(400), addrHash: new SpatialHash(400), dens: new Map(),
     droppedTrees: 0, droppedPosts: 0, gen: 0,
     hooks: { edgeAdd: [], edgeRemove: [] },
     // Nachladen
@@ -208,7 +208,7 @@ function install(city, key, json) {
     return nd;
   };
 
-  for (const [gid, ia, ib, cls, w, n, o, flags, p, x0] of json.edges) acquire(city, t, 'e' + gid, (r) => {
+  for (const [gid, ia, ib, cls, w, n, o, flags, p, x0, dtv100 = 0] of json.edges) acquire(city, t, 'e' + gid, (r) => {
     const A = node(ia), B = node(ib);
     const pts = [A.x, A.y, ...undelta(p), B.x, B.y];
     const d = (dm) => dm / 10 * S; // dm → px
@@ -219,7 +219,8 @@ function install(city, key, json) {
       right: { park: x[5], parkW: d(x[6]), orient: PARK_ORIENT[x[7]] ?? 'parallel', cycle: d(x[9]) },
       maxspeed: x[10], surface: x[11], lit: !!(x[12] & 1), gaslight: !!(x[12] & 2) };
     const e = { id: gid, a: A.id, b: B.id, cls, w: d(w), cs, name: nm(n), oneway: o, bridge: !!(flags & 1), inside: !!(flags & 2),
-      blocked: !!(flags & 4), passage: !!(flags & 8), pts, len: polylineLength(pts), bbox: bboxOf(pts, {}), layer: 'edge' };
+      blocked: !!(flags & 4), passage: !!(flags & 8), pts, len: polylineLength(pts), bbox: bboxOf(pts, {}), layer: 'edge',
+      dtv: Math.abs(dtv100) * 100, dtvMeasured: dtv100 > 0 }; // Kfz je Werktag (gezählt oder nach Klasse geschätzt)
     city.edges.set(gid, e);
     addSorted(A.edges, gid); // nach Nummer sortiert: gleiche Reihenfolge, egal in welcher Folge Kacheln laden
     if (B !== A) addSorted(B.edges, gid);
@@ -329,6 +330,12 @@ function install(city, key, json) {
   for (let i = 0; i < json.turnBans.length; i += 3) { const k = `${json.turnBans[i]}>${json.turnBans[i + 1]}>${json.turnBans[i + 2]}`; t.bans.push(k); countAdd(city._ban, city.turnBans, k); }
 
   // POIs und Hausnummern
+  // Stadtmöbel (Bänke, Fahrradständer, Mülleimer) und Einwohnerdichte der Kachel
+  for (const [x, y, k] of json.furn ?? []) own(t, (r) => {
+    const f = { x, y, kind: k, layer: 'furn', seed: Math.floor(hash01(x * 131 + y) * 1e6) };
+    put(r, city.render, f, { x: x - 12, y: y - 12, w: 24, h: 24 }); track(city, 'furn', f); r.drop = () => untrack(city, 'furn', f);
+  });
+  if (json.dens) { city.dens.set(key, { x0: tx * T, y0: ty * T, cell: json.dens.cell, per: Math.round(T / json.dens.cell), vals: json.dens.vals }); t.dens = true; }
   for (const [x, y, c, n, k] of json.pois) own(t, (r) => {
     const q = { x, y, cat: POI_CATS[c], name: nm(n), kind: nm(k), layer: 'poi' };
     put(r, city.poiHash, q, { x, y, w: 0, h: 0 }); track(city, 'poi', q); r.drop = () => untrack(city, 'poi', q);
@@ -385,7 +392,17 @@ function uninstall(city, key) {
   }
   for (const v of t.signals) countDel(city._sig, city.signals, v);
   for (const k of t.bans) countDel(city._ban, city.turnBans, k);
+  city.dens.delete(key);
   city.gen++;
+}
+
+// Einwohner je Hektar am Ort (64-m-Raster aus dem Umweltatlas); 0 = unbewohnt oder Kachel nicht geladen
+export function densityAt(city, x, y) {
+  const T = city.tile, d = city.dens.get(`${Math.floor(x / T)}_${Math.floor(y / T)}`);
+  if (!d) return 0;
+  const i = Math.floor((x - d.x0) / d.cell), j = Math.floor((y - d.y0) / d.cell);
+  if (i < 0 || j < 0 || i >= d.per || j >= d.per) return 0;
+  return d.vals[j * d.per + i] ?? 0;
 }
 
 // Winkel zwischen zwei Kanten an einem Knoten (0 = geradeaus weiter).

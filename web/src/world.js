@@ -5,7 +5,7 @@ import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage } from './car.js';
-import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree } from './traffic.js';
+import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
 import { insideBorder, inBuilding, locationName, hash01 } from './map.js';
@@ -17,13 +17,15 @@ import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
 import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
 import { failMission } from './mission.js';
+import { populationTargets, START_DAY } from './rhythm.js';
+import { lifeSpots, walkerStyle, LIFE } from './life.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0, clock: CLOCK.start,
+    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -38,6 +40,8 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   w.cars.push(createCar({ x: pc.x, y: pc.y, angle: pc.angle, color: '#16a085', role: 'parked' }));
 
   w.carTarget = cars; w.pedTarget = pedestrians;
+  // Tagesrhythmus nur bei der Standardbevölkerung (Tests und Titel-Demo geben feste Zahlen vor)
+  w.rhythm = cars === TRAFFIC.cars && pedestrians === TRAFFIC.pedestrians;
   w.camera.x = w.player.x; w.camera.y = w.player.y;
   w.focusKey = `world${++worldCount}`;
   w.loading = !city.focus(w.focusKey, w.camera.x, w.camera.y);
@@ -54,12 +58,15 @@ export function resetPopulation(w, keepCar = null) {
     return keep;
   });
   w.peds = [];
+  w.hangers?.clear();
   w.populated = false;
 }
 
 // Startbevölkerung: im ganzen Umkreis verteilt (auch im Bild), danach nur noch außerhalb der Sicht.
 function populate(w) {
   w.populated = true;
+  if (w.rhythm) { const t = populationTargets(w.city, w.camera.x, w.camera.y, w.clock, w.day, TRAFFIC); w.carTarget = t.cars; w.pedTarget = t.peds; w._rhythmT = w.time; }
+  manageLife(w, true);
   for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
   for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
 }
@@ -76,13 +83,48 @@ function spawnPed(w, minR, maxR) {
   const sp = pedSpawnSpot(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
   if (!sp) return null;
   const ped = createPed(w.city, sp, w.rng);
+  if (w.rhythm) { // Jogger und Hundehalter je nach Tageszeit
+    ped.style = walkerStyle(w.clock, w.rng);
+    if (ped.style === 'jog') { ped.speed *= 2.3; ped.shirt = ['#e84393', '#00b894', '#0984e3', '#fdcb6e', '#d63031'][ped.id % 5]; }
+  }
   w.peds.push(ped);
   return ped;
+}
+
+// Stadtleben: Passanten mit Tätigkeit an ihren Plätzen halten (life.js). Neue entstehen nur außer Sicht, außer direkt
+// nach dem Aufbau eines Ortes (Spielbeginn, Teleport); wer nicht mehr gebraucht wird, geht außer Sicht wieder.
+export function manageLife(w, all = false) {
+  if (!w.rhythm) return;
+  if (!all && w.time - (w._lifeT ?? -99) < LIFE.every) return;
+  w._lifeT = w.time;
+  const cam = w.camera, hangers = (w.hangers ??= new Map());
+  const inView = (x, y) => Math.abs(x - cam.x) < LIFE.viewHalfX && Math.abs(y - cam.y) < LIFE.viewHalfY;
+  const want = new Map(lifeSpots(w.city, cam.x, cam.y, w.clock, w.day).map((s) => [s.key, s]));
+  for (const [key, ped] of hangers) {
+    const gone = !w.peds.includes(ped) || ped.state !== 'hang';
+    if (gone) { hangers.delete(key); if (ped.hang) ped.hang.released = true; continue; }
+    const far = Math.hypot(ped.x - cam.x, ped.y - cam.y) > LIFE.despawn;
+    if (far || (!want.has(key) && !inView(ped.x, ped.y))) { hangers.delete(key); w.peds.splice(w.peds.indexOf(ped), 1); }
+  }
+  for (const [key, s] of want) {
+    if (hangers.has(key) || hangers.size >= LIFE.maxHangers) continue;
+    if (!all && inView(s.x, s.y)) continue;
+    const sp = nearestSpot(w.city, s.x, s.y);
+    if (!sp) continue;
+    const ped = createPed(w.city, sp, w.rng);
+    Object.assign(ped, { x: s.x, y: s.y, facing: s.face, state: 'hang', hang: { ...s } });
+    hangers.set(key, ped); w.peds.push(ped);
+  }
 }
 
 // Bevölkerung um die Kamera halten: Fernes abbauen, Fehlendes im Ring außerhalb der Sicht erzeugen.
 function managePopulation(w) {
   const cam = w.camera, far = TRAFFIC.despawn;
+  if (w.rhythm && !(w.time - (w._rhythmT ?? -99) < 2)) { // Tageszeit und Ort bestimmen, wie viel los ist
+    w._rhythmT = w.time;
+    const t = populationTargets(w.city, cam.x, cam.y, w.clock, w.day, TRAFFIC);
+    w.carTarget = t.cars; w.pedTarget = t.peds;
+  }
   const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player';
   // Festgefahrene KI-Autos außerhalb des Bildes abbauen (sie entstehen anderswo neu), damit sich nirgends ein Knoten hält
   const stuck = (c) => c.driver === 'npc' && c.ai && ((c.ai.stillT ?? 0) > 30 || (c.ai.headOn ?? 0) >= 4) && Math.hypot(c.x - cam.x, c.y - cam.y) > 1100;
@@ -90,7 +132,17 @@ function managePopulation(w) {
   w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
   const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
   if (npc < w.carTarget) spawnTraffic(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
-  if (w.peds.filter((q) => q.state !== 'dead').length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
+  // weniger los als eben (Tageszeit, anderer Ort): Überzählige außer Sicht verschwinden lassen, eins je Schritt
+  if (w.rhythm && npc > w.carTarget + 2) {
+    const i = w.cars.findIndex((c) => c.driver === 'npc' && !keep(c) && Math.hypot(c.x - cam.x, c.y - cam.y) > TRAFFIC.spawnMin);
+    if (i >= 0) { dropClaims(w.cars[i], w); w.cars.splice(i, 1); }
+  }
+  const walkers = w.peds.filter((q) => q.state === 'walk' && !q.hang);
+  if (w.rhythm && walkers.length > w.pedTarget + 4) {
+    const q = walkers.find((o) => Math.hypot(o.x - cam.x, o.y - cam.y) > TRAFFIC.spawnMin);
+    if (q) w.peds.splice(w.peds.indexOf(q), 1);
+  }
+  if (w.peds.filter((q) => q.state !== 'dead' && !q.hang).length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
 }
 
 function spawnPlayerAndCar(w) {
@@ -115,6 +167,8 @@ function spawnTraffic(w, minR, maxR) {
     const sp = spawnSpot(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
     if (!sp) return null;
     if (!w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 70) || !narrowFree(w, sp.lane)) continue;
+    // Hauptstraßen mit viel gezähltem Verkehr bekommen mehr Autos als stille Nebenstraßen
+    if (w.rng() > Math.min(1, Math.max(0.12, (sp.lane.edge.dtv ?? 8000) / 15000))) continue;
     const car = createCar({ x: sp.x, y: sp.y, color: CAR_COLORS[Math.floor(w.rng() * CAR_COLORS.length)] });
     placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
     car.driver = 'npc';
@@ -342,7 +396,8 @@ export function updateWorld(w, input, dt) {
   if (w.pendingSave && !resolveSave(w)) { w.loading = true; return; }
   if (!streamWorld(w)) return;
   w.time += dt;
-  w.clock = (w.clock + dt * CLOCK.minutesPerSecond) % 1440;
+  w.clock += dt * CLOCK.minutesPerSecond;
+  if (w.clock >= 1440) { w.clock -= 1440; w.day = (w.day + 1) % 7; }
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;
 
@@ -452,6 +507,7 @@ export function updateWorld(w, input, dt) {
   }
   managePopulation(w);
   manageParked(w);
+  manageLife(w);
 
   w.events.push(...updateMission(m, missionCtx(w, input), dt));
   if (m.state === 'success') {

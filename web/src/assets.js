@@ -92,7 +92,7 @@ export function drawCar(ctx, car, t, sun) {
   ctx.restore();
 }
 
-export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false, dead = false, sun = null, weapon = null, attack = null }) {
+export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false, dead = false, sun = null, weapon = null, attack = null, act = null, time = 0 }) {
   ctx.save();
   ctx.translate(p.x, p.y);
   const [sx, sy, sa] = smallShadow(sun, down ? 4 : 17);
@@ -101,6 +101,7 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   ctx.rotate(p.facing ?? p.angle ?? 0);
   const key = player ? 'player' : 'pedestrian';
   if (sprites[key]) { ctx.drawImage(sprites[key], -8, -8, 16, 16); ctx.restore(); return; }
+  if (act === 'lie') down = true;
   if (down) {
     if (dead) ctx.rotate((p.fall ?? 0) - (p.facing ?? p.angle ?? 0) + 0.6); // in Schlagrichtung gefallen, verdreht
     const look = personLook(p, hair);
@@ -113,12 +114,19 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   }
   // Aussehen je Person fest (aus ihrer Nummer): Hose, Haare, manchmal Tasche oder Rucksack
   const look = personLook(p, hair);
+  if (act === 'sit') { drawSitting(ctx, p, shirt, skin, look); ctx.restore(); return; }
   const ph = (p.step ?? 0) * 0.35, swing = Math.sin(ph) * 3, arm = Math.sin(ph) * 2.4;
   // Beine (Schrittlänge folgt der zurückgelegten Strecke)
   ctx.fillStyle = look.pants;
   ctx.fillRect(swing - 1.6, -3.4, 3.4, 2.4); ctx.fillRect(-swing - 1.6, 1.0, 3.4, 2.4);
   ctx.fillStyle = '#1e2126';
   ctx.fillRect(swing + 1.4, -3.4, 1.2, 2.4); ctx.fillRect(-swing + 1.4, 1.0, 1.2, 2.4); // Schuhe
+  if (act && ACT_ARMS[act]) { // Tätigkeit: eigene Armhaltung statt Gehbewegung
+    ACT_ARMS[act](ctx, shirt, skin, time + (p.id ?? 0));
+    drawTorsoHead(ctx, shirt, skin, look, player);
+    ctx.restore();
+    return;
+  }
   // Tritt: ein Bein nach vorn
   if (attack?.kind === 'kick') { ctx.fillStyle = look.pants; ctx.fillRect(3, 0.8, 9, 3); ctx.fillStyle = '#1e2126'; ctx.fillRect(11, 0.8, 2.4, 3); }
   const gun = weapon === 'pistol' || weapon === 'smg' || weapon === 'shotgun';
@@ -173,6 +181,88 @@ function drawArmsWithWeapon(ctx, weapon, attack, shirt, skin, arm) {
   sleeve(-arm * 0.3, -5.2); hand(-arm * 0.3 + 1.8, -5.3);
   sleeve(2 + reach, 4.2); hand(4 + reach, 4.4);
   if (weapon === 'knife') { ctx.fillStyle = '#c9ced4'; ctx.fillRect(4.5 + reach, 3.8, 5, 1.2); ctx.fillStyle = '#222'; ctx.fillRect(3.5 + reach, 3.7, 1.4, 1.4); }
+}
+
+// Rumpf und Kopf (wie beim Gehen), für Tätigkeiten mit eigener Armhaltung
+function drawTorsoHead(ctx, shirt, skin, look, player) {
+  ctx.fillStyle = shirt;
+  ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = shade(shirt, 0.15); ctx.beginPath(); ctx.ellipse(0.8, -0.6, 1.8, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+  if (look.bag === 'backpack') { ctx.fillStyle = look.bagColor; ctx.fillRect(-4.8, -2.8, 2.6, 5.6); }
+  ctx.fillStyle = look.hair; ctx.beginPath(); ctx.arc(0.3, 0, 3.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(1.5, 0, 2.1, 0, Math.PI * 2); ctx.fill();
+  if (player) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.stroke(); }
+}
+
+// Sitzend (Bank, Café): Beine nach vorn, Hände im Schoß
+function drawSitting(ctx, p, shirt, skin, look) {
+  ctx.fillStyle = look.pants; ctx.fillRect(1, -3.2, 7, 2.6); ctx.fillRect(1, 0.6, 7, 2.6);
+  ctx.fillStyle = '#1e2126'; ctx.fillRect(7.5, -3.2, 1.6, 2.6); ctx.fillRect(7.5, 0.6, 1.6, 2.6);
+  ctx.save(); ctx.translate(-1.2, 0);
+  ctx.fillStyle = shade(shirt, -0.18);
+  ctx.beginPath(); ctx.ellipse(2.4, -3.6, 2.2, 1.3, 0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(2.4, 3.6, 2.2, 1.3, -0.4, 0, Math.PI * 2); ctx.fill();
+  drawTorsoHead(ctx, shirt, skin, look, false);
+  ctx.restore();
+}
+
+const sleeveAt = (ctx, shirt, x, y) => { ctx.fillStyle = shade(shirt, -0.18); ctx.beginPath(); ctx.ellipse(x, y, 2.2, 1.3, 0, 0, Math.PI * 2); ctx.fill(); };
+const handAt = (ctx, skin, x, y) => { ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill(); };
+// Armhaltungen je Tätigkeit (lokal: +x Blickrichtung, rechte Hand +y); t läuft für Bewegung
+export const ACT_ARMS = {
+  smoke: (ctx, shirt, skin, t) => { // Zigarette zum Mund und zurück
+    const up = Math.max(0, Math.sin(t * 0.8)) > 0.6;
+    sleeveAt(ctx, shirt, 0, -5.2); handAt(ctx, skin, 1.5, -5.4);
+    sleeveAt(ctx, shirt, up ? 2 : 0.5, up ? 2.5 : 5); handAt(ctx, skin, up ? 3.5 : 2, up ? 1.5 : 5.4);
+    ctx.fillStyle = '#f2f2f2'; ctx.fillRect(up ? 3.8 : 2.4, up ? 1 : 4.9, 2.2, 0.7);
+    ctx.fillStyle = '#ff7a2a'; ctx.fillRect(up ? 5.8 : 4.4, up ? 1 : 4.9, 0.8, 0.7);
+  },
+  drink: (ctx, shirt, skin, t) => { // Flasche (Berliner Späti)
+    const up = Math.sin(t * 0.6) > 0.7;
+    sleeveAt(ctx, shirt, 0, -5.2); handAt(ctx, skin, 1.5, -5.4);
+    sleeveAt(ctx, shirt, up ? 2 : 1, up ? 2 : 4.8); handAt(ctx, skin, up ? 3.5 : 3, up ? 1 : 4.8);
+    ctx.fillStyle = (t | 0) % 2 ? '#3f6b2a' : '#6b4a1e'; ctx.fillRect(up ? 3.2 : 2.6, up ? -0.2 : 4, 4.2, 1.6);
+  },
+  chat: (ctx, shirt, skin, t) => { // Gestikulieren
+    const a = Math.sin(t * 3.1) * 2, b = Math.sin(t * 2.3 + 1) * 2;
+    sleeveAt(ctx, shirt, 1.5 + a * 0.3, -4.6); handAt(ctx, skin, 3.5 + a, -3.8);
+    sleeveAt(ctx, shirt, 1.5 + b * 0.3, 4.6); handAt(ctx, skin, 3.5 + b, 3.8);
+  },
+  wait: (ctx, shirt, skin, t) => { // aufs Handy schauen
+    sleeveAt(ctx, shirt, 1.6, -3); sleeveAt(ctx, shirt, 1.6, 3); handAt(ctx, skin, 3.5, -1.2); handAt(ctx, skin, 3.5, 1.2);
+    ctx.fillStyle = '#1a1c20'; ctx.fillRect(3.6, -1.4, 1.6, 2.8);
+    ctx.fillStyle = Math.sin(t * 0.3) > -0.5 ? '#9fd3ff' : '#35495e'; ctx.fillRect(3.8, -1.1, 1.1, 2.2);
+  },
+  music: (ctx, shirt, skin, t) => { // Gitarre
+    ctx.fillStyle = '#8a5a2b'; ctx.beginPath(); ctx.ellipse(3.2, 2.2, 3.2, 2.4, 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b1a0c'; ctx.beginPath(); ctx.arc(3.2, 2.2, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3a1b'; ctx.fillRect(3.5, -6, 1.1, 6.5);
+    sleeveAt(ctx, shirt, 1.5, -4.5); handAt(ctx, skin, 4, -4 + Math.sin(t * 4) * 0.6);
+    sleeveAt(ctx, shirt, 1.5, 4); handAt(ctx, skin, 3.8, 2 + Math.sin(t * 9) * 0.8);
+  },
+  queue: (ctx, shirt, skin) => { sleeveAt(ctx, shirt, 0, -5.2); sleeveAt(ctx, shirt, 0, 5.2); handAt(ctx, skin, 1.4, -5.3); handAt(ctx, skin, 1.4, 5.3); },
+  browse: (ctx, shirt, skin) => { sleeveAt(ctx, shirt, -0.8, -4.8); sleeveAt(ctx, shirt, -0.8, 4.8); handAt(ctx, skin, -2, -3); handAt(ctx, skin, -2, 3); }, // Hände hinter dem Rücken
+};
+
+// Hund an der Leine, läuft hinter/neben dem Halter (nur Darstellung; Lage wird am Passanten nachgeführt)
+export function drawDog(ctx, p, t) {
+  const f = p.facing ?? 0, tx = p.x - Math.cos(f) * 15 + Math.sin(f) * 6, ty = p.y - Math.sin(f) * 15 - Math.cos(f) * 6;
+  const d = (p._dog ??= { x: tx, y: ty, a: f });
+  d.x += (tx - d.x) * 0.15; d.y += (ty - d.y) * 0.15;
+  const dx = p.x - d.x, dy = p.y - d.y;
+  if (Math.hypot(dx, dy) > 3) d.a = Math.atan2(dy, dx);
+  const col = ['#6b4a2b', '#1d1d1d', '#d9b27a', '#8c8c8c', '#f2ead8'][(p.id ?? 0) % 5];
+  ctx.strokeStyle = 'rgba(40,30,20,0.8)'; ctx.lineWidth = 0.7;
+  ctx.beginPath(); ctx.moveTo(p.x + Math.sin(f) * 4, p.y - Math.cos(f) * 4); ctx.lineTo(d.x + Math.cos(d.a) * 5, d.y + Math.sin(d.a) * 5); ctx.stroke();
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(1, 1.5, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+  const leg = Math.sin((p.step ?? 0) * 0.6) * 1.5;
+  ctx.fillStyle = shade(col, -0.25); ctx.fillRect(2 + leg, -3, 1.2, 1.4); ctx.fillRect(2 - leg, 1.6, 1.2, 1.4); ctx.fillRect(-3 - leg, -3, 1.2, 1.4); ctx.fillRect(-3 + leg, 1.6, 1.2, 1.4);
+  ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 5, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, 0, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(-7.5, Math.sin(t * 12) * 1.8); ctx.stroke();
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(6.6, -0.5, 1, 1);
+  ctx.restore();
 }
 
 const PANTS = ['#2c3e50', '#34495e', '#1f2a36', '#5d4e3c', '#3d5a80', '#6b6b6b', '#2b2b2b', '#7a5c3a'];

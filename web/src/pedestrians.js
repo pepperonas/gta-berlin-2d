@@ -235,6 +235,15 @@ export function updatePed(ped, world, dt) {
     case 'dead':
       ped.deadT = (ped.deadT ?? 0) + dt;
       return;
+    case 'hang': { // an seinem Platz: kleine Bewegungen, Blick wandert (life.js)
+      const hg = ped.hang;
+      ped.x = hg.x; ped.y = hg.y;
+      ped.hangT = (ped.hangT ?? 0) + dt;
+      const k = ped.id * 1.7;
+      ped.facing = hg.face + Math.sin(ped.hangT * 0.6 + k) * (hg.act === 'queue' || hg.act === 'wait' ? 0.25 : 0.45);
+      if (hg.act === 'queue' || hg.act === 'wait' || hg.act === 'music') ped.step = Math.sin(ped.hangT * 1.5 + k) * 3; // Tippeln
+      return;
+    }
     case 'fight':
       if (!updateFight(ped, world, dt, moveWithCollision)) { ped.state = 'idle'; scare(ped, world.player.x, world.player.y, 2); }
       break;

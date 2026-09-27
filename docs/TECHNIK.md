@@ -84,7 +84,7 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 - Weg B: Device Portal (`https://<xbox-ip>:11443`) → *Add* → `.msix`/`.appx` plus Abhängigkeiten (VCLibs, Microsoft.UI.Xaml,
   .NET Native Runtime/Framework aus dem `Dependencies\x64`-Ordner des Pakets) hochladen.
 
-## Karte: ganz Berlin aus offenen Daten (Stand 27.09.2026)
+## Karte: ganz Berlin aus offenen Daten (Stand 28.09.2026)
 
 **Quellen**
 
@@ -93,6 +93,8 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 | Stadtgrenze, Bezirke | Geoportal Berlin, WFS `lor_2021` (`c_lor_pgr_2021`, alle 58 LOR-Prognoseräume 2021; Bezirk aus dem Feld `bez`) | Datenlizenz Deutschland – Zero 2.0 |
 | Ortsteile (97), Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen, POIs, Hausnummern, Ampeln, Querungen, Poller, Zäune, Abbiegeverbote | OpenStreetMap, Berlin-Auszug von Geofabrik (`berlin-latest.osm.pbf`, täglich, ~100 MB) | ODbL 1.0 |
 | Straßen- und Anlagenbäume (Gattung, Höhe, Kronendurchmesser, Stammumfang), 962 545 Bäume | Geoportal Berlin, WFS `baumbestand` | Datenlizenz Deutschland – Zero 2.0 |
+| Einwohnerdichte 2022 (Einwohner je Hektar je Block, 26 397 Blöcke) | Geoportal Berlin, WFS `ua_einwohnerdichte_2022` (Umweltatlas) | Datenlizenz Deutschland – Zero 2.0 |
+| Verkehrsmengen 2019 (Kfz je Werktag, 9 922 Abschnitte des Hauptstraßennetzes) | Geoportal Berlin, WFS `verkehrsmengen_2019` (`dtvw2019kfz`) | Datenlizenz Deutschland – Zero 2.0 |
 
 Warum Geofabrik statt Overpass: ganz Berlin ergäbe über Overpass mehrere GB JSON in Dutzenden Abfragen und sprengt die
 Nutzungsgrenzen der öffentlichen Server (~1 GB/Tag). Der Auszug enthält dieselben OSM-Daten mit allen Tags; Ortsteile
@@ -212,6 +214,25 @@ aus der Autonummer abgeleitet – nicht aus dem Zufallsgenerator der Welt, sonst
 Karosserien sind je Modell × Farbe zwischengespeicherte Sprites (höchstens 160, dann wird geleert); Räder, Licht und
 Blinker kommen jedes Bild dazu. Der Blinker (`ai.blink`) ist das einzige neue Feld in der Simulation, rein
 abgeleitet aus Route und Abbiegewinkel, ohne Zufall. Ein Sprite in `assets/manifest.json` ersetzt weiterhin alles.
+
+**Tagesrhythmus und Stadtleben** (`web/src/rhythm.js`, `web/src/life.js`, rein rechnerisch):
+- Daten aus dem Build: Jede Kante trägt `dtv` (Kfz je Werktag). `assignTraffic` tastet die Zähllinien alle 20 m ab und
+  gibt den Wert der nächsten Hauptstraßen-Kante (≤ 15 m, Richtung ähnlich – sonst erbt die Querstraße die Zählung);
+  1 443 km Zählstrecke treffen 31 305 Kanten, alle anderen bekommen einen Schätzwert nach Straßenklasse
+  (`DTV_ESTIMATE`, Vorzeichen im Kachelformat = gemessen/geschätzt). Die Einwohnerdichte wird auf ein 64-m-Raster
+  gelegt (`densityGrid`, Wert am Zellmittelpunkt, Innenhöfe ausgespart) und je Kachel als 10 × 10 Werte ausgeliefert,
+  nur wo jemand wohnt. Bänke, Picknicktische, Fahrradständer und Mülleimer aus OSM kommen als `furn` (76 380).
+- `populationTargets` bestimmt alle 2 s die Zielzahl an Autos und Passanten um die Kamera: Tageskurve (Werktag bzw.
+  Wochenende; alle Kurven treffen sich um Mitternacht im selben Wert, damit der Wechsel keinen Sprung macht) ×
+  örtlicher Faktor (Wurzel des längengewichteten DTV im Umkreis von 300 m bzw. Dichte + Läden im Umkreis) + Nachtleben
+  (Freitag/Samstag voll, Nacht zählt bis 6 Uhr zum Vortag, gewichtet mit Bars und Spätis in der Nähe). Überzählige
+  Autos und Passanten werden außer Sicht abgebaut; neue Autos entstehen mit Wahrscheinlichkeit nach DTV der Spur.
+- `lifeSpots` liefert aus POIs, Bänken und großen Wiesen die Plätze mit Tätigkeit (deterministisch aus Ort, Stunde und
+  Wochentag – keine Zufallszahlen der Welt). Gruppen stehen vor dem Laden auf dem Gehweg zur nächsten Straße hin,
+  Schlangen entlang des Gehwegs, Liegende auf Decken nur innerhalb der Wiese. `manageLife` (alle 0,5 s) besetzt
+  fehlende Plätze nur außer Sicht mit Passanten im Zustand `hang` und baut nicht mehr gewünschte nur außer Sicht ab
+  (höchstens 70); wer erschreckt wird, verlässt den Zustand und fällt aus der Verwaltung. Nur die Standardbevölkerung
+  hat Rhythmus – Tests und Titel-Demo mit festen Zahlen bleiben unverändert.
 
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
