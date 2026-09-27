@@ -119,6 +119,7 @@ export class Renderer {
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
     windowPatterns ??= makeWindowPatterns(ctx);
+    ctx.lineDashOffset = 0; // gestrichelte Markierungen stehen fest auf der Straße
 
     // Sichtbare Kartenobjekte (unten großzügiger: hohe Häuser ragen ins Bild).
     const q = city.render.query({ x: v.x - 60, y: v.y - 60, w: v.w + 120, h: v.h + 420 }, this._q ??= []);
@@ -246,6 +247,7 @@ export class Renderer {
       ctx.fillStyle = color.replace('A', '0.18'); ctx.beginPath(); ctx.arc(pt.x, pt.y, r * pulse, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = color.replace('A', '0.9'); ctx.lineWidth = 2.5; ctx.setLineDash([10, 7]); ctx.lineDashOffset = -t * 20;
       ctx.beginPath(); ctx.arc(pt.x, pt.y, r * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.lineDashOffset = 0; // sonst „laufen“ im nächsten Bild die Mittellinien und Gleise mit
     };
     if (m.state === 'available') ring(p.giver, 'rgba(255,210,0,A)', MISSION.giverRadius);
     if (m.state === 'toPickup') ring(p.pickup, 'rgba(255,210,0,A)', MISSION.zoneRadius);

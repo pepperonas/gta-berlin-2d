@@ -1,6 +1,6 @@
 // Bildschirm-Zustandsmaschine: Titel → Spiel ⇄ Pause, Steuerungshilfe, Missions-Ergebnis.
 // Ohne DOM: bekommt abstrakte Eingaben und einen storage, liefert Ereignisse für Audio.
-import { createWorld, updateWorld, restartMission } from './world.js';
+import { createWorld, updateWorld, restartMission, findTeleportSpot, teleportTo } from './world.js';
 import { readSave, writeSave, applySave } from './save.js';
 import { resetMission } from './mission.js';
 
@@ -25,12 +25,29 @@ export function menuInput(menu, input) {
 
 // city: dekodierte Karte; im Browser kommt sie asynchron nach (setCity), bis dahin zeigt der Titel „Lade Stadt …“.
 export function createGame({ storage, canQuit = false, seed = 1989, city = null } = {}) {
-  const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false };
+  const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false, teleport: null };
   g.titleMenu = buildTitleMenu(g);
   return g;
 }
 
 export function setCity(g, city) { g.city = city; }
+
+// Teleport per Klick auf den Stadtplan: erst Ziel vormerken, dann bestätigen (Dialog).
+export function requestTeleport(g, x, y) {
+  if (g.screen !== 'playing' || !g.world || !g.showBigMap || g.teleport) return false;
+  const st = g.world.mission.state;
+  if (st === 'toPickup' || st === 'toDropoff' || st === 'briefing') { g.toast = { text: 'Während eines Auftrags nicht möglich', t: 2 }; return false; }
+  const spot = findTeleportSpot(g.world, x, y);
+  if (!spot) { g.toast = { text: 'Dort kann man nicht hin (außerhalb des Gebiets)', t: 2 }; return false; }
+  g.teleport = spot;
+  return true;
+}
+
+export function confirmTeleport(g, yes) {
+  if (!g.teleport) return;
+  if (yes) { teleportTo(g.world, g.teleport); g.showBigMap = false; g.toast = { text: `Teleportiert: ${g.teleport.name}`, t: 2.5 }; }
+  g.teleport = null;
+}
 
 function buildTitleMenu(g) {
   const hasSave = !!readSave(g.storage);
@@ -116,6 +133,12 @@ export function updateGame(g, input, dt) {
     }
     case 'playing': {
       const w = g.world, m = w.mission;
+      // Bestätigungsdialog für den Teleport: Welt steht still, A/Enter = ja, B/Esc = nein.
+      if (g.teleport) {
+        if (input.confirm) { confirmTeleport(g, true); ev.push({ type: 'ui' }); }
+        else if (input.back || input.pause) { confirmTeleport(g, false); ev.push({ type: 'ui-back' }); }
+        break;
+      }
       if (input.pause) { g.screen = 'paused'; g.pauseMenu = pauseMenu(); ev.push({ type: 'ui' }); break; }
       if (input.mapToggle) g.showBigMap = !g.showBigMap;
       if (m.state === 'success' || m.state === 'failed') {

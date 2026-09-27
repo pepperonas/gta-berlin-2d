@@ -8,6 +8,9 @@ import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed
 import { placeOnLane, spawnSpot, driveAi } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
+import { insideBorder, inBuilding, locationName } from './map.js';
+import { buildLaneGraph, nearestLane } from './roadgraph.js';
+import { sidewalkPoint } from './pedestrians.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -83,6 +86,39 @@ function spawnTraffic(w, minR, maxR) {
     return car;
   }
   return null;
+}
+
+// Teleport-Ziel zu einem Kartenpunkt: im Auto auf die nächste Fahrspur (in Fahrtrichtung), zu Fuß auf den nächsten
+// Gehweg. null, wenn der Punkt außerhalb des Spielgebiets liegt oder nichts Passendes in der Nähe ist.
+export function findTeleportSpot(w, x, y) {
+  const city = w.city;
+  if (!insideBorder(city, x, y)) return null;
+  let spot = null;
+  if (playerCar(w)) {
+    const hit = nearestLane(buildLaneGraph(city), x, y, undefined, 3000);
+    if (hit) {
+      const p = hit.lane.pts, i = hit.i;
+      spot = { x: hit.x, y: hit.y, angle: Math.atan2(p[i + 3] - p[i + 1], p[i + 2] - p[i]) };
+    }
+  } else {
+    const sp = nearestSpot(city, x, y, 3000);
+    if (sp) { const p = sidewalkPoint(city, sp.edge, sp.side, sp.s); spot = { x: p.x, y: p.y, angle: 0 }; }
+  }
+  if (!spot || !insideBorder(city, spot.x, spot.y) || inBuilding(city, spot.x, spot.y)) return null;
+  spot.name = locationName(city, spot.x, spot.y);
+  return spot;
+}
+
+export function teleportTo(w, spot) {
+  const car = playerCar(w), p = w.player;
+  if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0 });
+  p.x = spot.x; p.y = spot.y;
+  w.camera.x = spot.x; w.camera.y = spot.y;
+  // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
+  w.cars = w.cars.filter((c) => c === car || c.id === w.playerCarId || c.cargo || c.role === 'parked');
+  w.peds = [];
+  for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
+  for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
 }
 
 export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar) ?? null; }

@@ -47,7 +47,9 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
   Auto mit der Ware zum Wrack wird. Lohn mit Zeitbonus und Schadensabzug, Bestzeit. Die Orte stehen in
   [`data/places.json`](data/places.json) und lassen sich austauschen.
 - HUD: echter Straßenname (an Kreuzungen „A / B“, sonst Kiez oder Bezirk), Geld, Auftrag und Timer, Minikarte, Richtungspfeil mit Entfernung, Tempo und Fahrzeugzustand,
-  Stadtplan auf der Ansicht-Taste. Tastensymbole wechseln zwischen Controller und Tastatur.
+  Stadtplan auf der Ansicht-Taste. **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
+  auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
+  neuen Ort. Während eines laufenden Auftrags gesperrt (sonst wäre die Mission trivial). Tastensymbole wechseln zwischen Controller und Tastatur.
 - Startmenü, Pause, Mission neu starten, Speichern (ein Speicherplatz, automatisch nach jedem erfüllten Auftrag), Fortsetzen.
   Alles komplett mit dem Controller bedienbar.
 
@@ -63,6 +65,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 | Aktion (Auftrag, Einladen, Abliefern) | A | E / Enter |
 | Hupe | X | H |
 | Stadtplan | Ansicht-Taste | M |
+| Teleport (auf dem Stadtplan) | – | Mausklick auf die Karte, dann Ja/Nein (Maus, A/Enter, B/Esc) |
 | Pause | Menü-Taste | Esc / P |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
 
@@ -72,7 +75,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 58 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 60 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -210,7 +213,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 58 automatischen Tests grün, darunter:
+- Alle 60 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -226,6 +229,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
   - Vollgas gegen Hauswand, Kaimauer und Gebietsgrenze (jeder Schritt geprüft);
   - ein 90-s-Dauertest mit 24 Autos und 55 Passanten (0,0 % der Stichproben neben der Fahrbahn, kein Auto in einer Hauswand,
     kein Passant in einem Gebäude) und ein Test, dass die Bevölkerung der Kamera folgt;
+  - Teleport: nur bei offenem Stadtplan, außerhalb des Gebiets abgelehnt, Abbruch ändert nichts, Welt steht während des
+    Dialogs, Ziel zu Fuß auf dem Gehweg bzw. im Auto auf der Fahrbahn, während eines Auftrags gesperrt;
+  - gestrichelte Straßenmarkierungen haben in jedem Bild den Strichversatz 0 (aufzeichnender Canvas-Ersatz; vorher
+    übernahmen sie den animierten Versatz des Missionskreises und „flossen“);
   - Speichern/Laden inkl. kaputter, alter (Rasterstadt) und ungültiger Positionen, Menüführung nur mit Controller-Aktionen.
 - Im Browser (Chromium via Playwright): Titel mit Ladeanzeige, Spiel, HUD mit echtem Straßennamen, Minikarte,
   Stadtplan; Stichproben an Kottbusser Tor (U1-Hochbahn), Admiralbrücke, Hermannplatz, Kottbusser Damm. Volle

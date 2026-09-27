@@ -1,6 +1,6 @@
 // Browser-Einstieg: Canvas, Hauptschleife (fester 60-Hz-Takt), Eingabequellen, Xbox-Hüllen-Brücke.
 import { DT } from './config.js';
-import { createGame, updateGame, setCity } from './game.js';
+import { createGame, updateGame, setCity, requestTeleport, confirmTeleport } from './game.js';
 import { decodeCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
@@ -56,6 +56,23 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 addEventListener('pointerdown', () => sound.unlock());
+
+// Maus: Klick auf den Stadtplan wählt ein Teleport-Ziel, Klick auf Ja/Nein im Dialog bestätigt.
+canvas.addEventListener('pointerdown', (e) => {
+  if (!hud.s) return;
+  const r = canvas.getBoundingClientRect();
+  const vx = (e.clientX - r.left) * (canvas.width / r.width) / hud.s, vy = (e.clientY - r.top) * (canvas.height / r.height) / hud.s;
+  const inside = (b) => b && vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h;
+  if (game.teleport) {
+    if (inside(hud.dialogButtons?.yes)) { confirmTeleport(game, true); sound.play('ui'); }
+    else if (inside(hud.dialogButtons?.no)) { confirmTeleport(game, false); sound.play('ui-back'); }
+    return;
+  }
+  const m = hud.bigMap;
+  if (game.screen === 'playing' && game.showBigMap && inside(m)) {
+    if (requestTeleport(game, (vx - m.x) / m.f, (vy - m.y) / m.f)) sound.play('ui');
+  }
+});
 
 let W = 0, H = 0, dpr = 1;
 function resize() {
@@ -133,7 +150,9 @@ function draw() {
     game.worldScale = worldScale; game.hintT = hintT;
     if (game.screen === 'playing') {
       hud.drawGameplay(game.world, game);
+      canvas.style.cursor = game.showBigMap && !game.teleport ? 'crosshair' : '';
       if (game.showBigMap) hud.drawBigMap(game.world);
+      if (game.teleport) hud.drawTeleportDialog(game.teleport);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);
     else if (game.screen === 'controls') hud.drawControls();

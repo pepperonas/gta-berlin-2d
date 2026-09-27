@@ -83,3 +83,49 @@ test('ohne Karte bleibt der Titel stehen, bis sie geladen ist', async () => {
   press(g, { confirm: true });
   assert.equal(g.screen, 'playing');
 });
+
+test('Teleport: Klick auf den Stadtplan, Bestätigung, Abbruch, Sperren', async () => {
+  const { requestTeleport, confirmTeleport } = await import('../web/src/game.js');
+  const { playerCar } = await import('../web/src/world.js');
+  const { inBuilding, onRoad, insideBorder } = await import('../web/src/map.js');
+  const g = createGame({ storage: memoryStorage(), city });
+  press(g, { confirm: true });
+  const w = g.world;
+  const kotti = city.pois.find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
+  assert.equal(requestTeleport(g, kotti.x, kotti.y), false, 'nur bei offenem Stadtplan');
+  g.showBigMap = true;
+  // außerhalb des Gebiets
+  assert.equal(requestTeleport(g, 10, 10), false);
+  assert.match(g.toast.text, /außerhalb/);
+  // Abbrechen mit B: nichts passiert, Welt stand still
+  const before = [w.player.x, w.player.y, w.time];
+  assert.ok(requestTeleport(g, kotti.x, kotti.y));
+  assert.match(g.teleport.name, /\S/);
+  press(g, {});
+  assert.equal(w.time, before[2], 'Welt steht während des Dialogs');
+  press(g, { back: true });
+  assert.equal(g.teleport, null);
+  assert.deepEqual([w.player.x, w.player.y], before.slice(0, 2));
+  // Bestätigen mit A: zu Fuß auf den Gehweg nahe Kottbusser Tor
+  requestTeleport(g, kotti.x, kotti.y);
+  press(g, { confirm: true });
+  assert.ok(Math.hypot(w.player.x - kotti.x, w.player.y - kotti.y) < 600, 'nahe am Ziel');
+  assert.ok(!inBuilding(city, w.player.x, w.player.y) && insideBorder(city, w.player.x, w.player.y));
+  assert.equal(g.showBigMap, false);
+  assert.ok(w.cars.some((c) => c.driver === 'npc' && Math.hypot(c.x - w.player.x, c.y - w.player.y) < 2000), 'Verkehr am neuen Ort');
+  // Im Auto: landet auf einer Fahrspur, in Spurrichtung ausgerichtet; Mausweg (confirmTeleport) wie A
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  w.player.inCar = car.id; car.driver = 'player';
+  g.showBigMap = true;
+  const arc = city.pois.find((q) => q.name === 'Neukölln Arcaden');
+  assert.ok(requestTeleport(g, arc.x, arc.y));
+  confirmTeleport(g, true);
+  assert.equal(playerCar(w), car);
+  assert.ok(onRoad(city, car.x, car.y), 'Auto steht auf der Fahrbahn');
+  assert.ok(Math.hypot(car.x - arc.x, car.y - arc.y) < 1500);
+  // während eines Auftrags gesperrt
+  g.showBigMap = true;
+  w.mission.state = 'toPickup';
+  assert.equal(requestTeleport(g, kotti.x, kotti.y), false);
+  assert.match(g.toast.text, /Auftrag/);
+});

@@ -270,6 +270,7 @@ export class Hud {
     const x = this.vw / 2 - ww / 2, y = this.m.y + 30;
     c.drawImage(ov.cv, x, y, ww, hh);
     const f = ww / city.width;
+    this.bigMap = { x, y, w: ww, h: hh, f }; // für Mausklicks (virtuelle HUD-Koordinaten)
     for (const q of city.pois) if (q.cat === 'ubahn' || q.cat === 'sbahn') this.stationIcon(q.cat, x + q.x * f, y + q.y * f, 5);
     const obj = missionObjective(world.mission, { places: city.places, player: world.player, cars: world.cars });
     c.fillStyle = '#e03b3b'; c.beginPath(); c.arc(x + city.places.giver.x * f, y + city.places.giver.y * f, 5, 0, Math.PI * 2); c.fill();
@@ -279,6 +280,25 @@ export class Hud {
     this.text('Stadtplan · Kreuzberg und Nord-Neukölln', x, y - 8, { size: 20, weight: 800 });
     this.text('rot = Späti · gelb = Ziel · weiß = du · U/S = Bahnhof', x + ww, y - 8, { size: 15, align: 'right', color: '#ccc', weight: 500 });
     this.text(city.attribution, x + ww, y + hh + 20, { size: 12, align: 'right', color: '#aaa', weight: 500 });
+    this.panel(x + 10, y + hh - 40, 300, 30, 0.75);
+    this.text('Klick auf die Karte: dorthin teleportieren', x + 22, y + hh - 20, { size: 14, color: '#eee', weight: 600 });
+  }
+
+  // Bestätigung vor dem Teleport; die Knopfflächen merkt sich der HUD für Mausklicks.
+  drawTeleportDialog(spot) {
+    const c = this.ctx, w = 560, h = 190, x = this.vw / 2 - w / 2, y = this.vh / 2 - h / 2;
+    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(0, 0, this.vw, this.vh);
+    this.panel(x, y, w, h, 0.92);
+    this.text('HIERHIN TELEPORTIEREN?', this.vw / 2, y + 44, { size: 22, align: 'center', weight: 800, color: YELLOW });
+    this.text(spot.name, this.vw / 2, y + 84, { size: 20, align: 'center', weight: 600 });
+    const bw = 200, bh = 46, by = y + h - bh - 22;
+    this.dialogButtons = { yes: { x: this.vw / 2 - bw - 12, y: by, w: bw, h: bh }, no: { x: this.vw / 2 + 12, y: by, w: bw, h: bh } };
+    for (const [k, label, glyph, bg] of [['yes', 'Ja', 'A', YELLOW], ['no', 'Nein', 'B', 'rgba(255,255,255,0.12)']]) {
+      const b = this.dialogButtons[k];
+      c.fillStyle = bg; rr(c, b.x, b.y, b.w, b.h, 10); c.fill();
+      const gw = this.glyph(glyph, b.x + 34, b.y + b.h / 2, 12);
+      this.text(label, b.x + 34 + gw / 2 + 12, b.y + b.h / 2 + 8, { size: 20, weight: 800, color: k === 'yes' ? '#111' : '#eee', shadow: k !== 'yes' });
+    }
   }
 
   // --- Menüs --------------------------------------------------------------
