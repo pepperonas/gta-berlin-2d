@@ -158,7 +158,19 @@ Knoten; Sperrlinien (`barrier=*` als Weg), die eine Straße kreuzen, ebenso; bei
 auch knapp daneben verlaufende Straßen. Tordurchfahrten (`tunnel=building_passage`) öffnen die Hauswand im Korridor.
 Einzelne Poller auf Gehwegen sperren nichts (Berlin hat viele davon gegen Gehwegparken).
 
-**Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine Vorfahrtregeln an ungeregelten Kreuzungen,
+**Verkehrsfluss ohne Ampel** (`web/src/traffic.js`): Jede KI-Route besteht aus Spurstücken; vor dem Ende eines Stücks
+bittet das Auto um Einfahrt (`mayEnter`). Eine Kreuzung ohne Ampel hält eine Reservierung (`world.jres`: Zufahrt,
+Autos, Bewegung je Auto als Sehne Spurende → Zielspur). Hinein darf, wer hinter der Kreuzung Platz hat und entweder aus
+der reservierenden Zufahrt kommt (Kolonne, höchstens 6 s) oder mit keiner reservierten Bewegung in Konflikt steht
+(Sehnen kreuzen sich nicht, kommen sich nicht näher als 2 m, andere Zielspur). Engstellen (Straßen, auf denen beide
+Richtungen mittig fahren) werden über alle zusammenhängenden Abschnitte gleichen Namens als eine Einheit reserviert
+(`world.nres`: Richtung, Autos); Sackgassen-Engstellen nur einzeln. Wer nicht einfahren darf, hält 2,4 m vor der Linie
+(vor Engstellen 7,4 m), sucht nach 3 s einen anderen Weg, und wer sonst steht, gibt seine Reservierungen nach 2 s frei.
+Hindernisse werden entlang der eigenen Route gemessen. Das ersetzt Vorfahrtregeln: es ist keine StVO-Vorfahrt, aber es
+verklemmt nicht.
+
+**Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
+ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.
 
 ## Offene Punkte, nur auf echter Hardware prüfbar

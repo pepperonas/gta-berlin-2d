@@ -95,7 +95,8 @@ function makeLanes(city, e, g) {
       if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
       const pts = cutPolyline(raw, s0, s1);
       if (pts.length < 4) continue;
-      made.push(new Lane(city, g, { id: laneId++, key: (dir === 1 ? 0 : 100) + k, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed) }));
+      // eng: Gegenverkehr teilt sich die Fahrbahnmitte (Engstelle, man muss einander durchlassen)
+      made.push(new Lane(city, g, { id: laneId++, key: (dir === 1 ? 0 : 100) + k, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), narrow: lo.narrow && e.cs.fwd > 0 && e.cs.bwd > 0 }));
     }
   }
   return made;

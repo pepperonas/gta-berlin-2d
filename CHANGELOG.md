@@ -4,6 +4,36 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.4.1] – 2026-09-27
+
+### Behoben
+- Verkehrschaos (Autos verkeilt, quer, Stoßstange an Stoßstange). Es waren viele Ursachen, jede für sich gemessen
+  (Simulation an 5 Orten in Kreuzberg und Neukölln: Zusammenstöße 233 → 1, Rückwärts-Rangieren 271 → 10 in je 3 min;
+  Autos, die länger als 60 s am Stück standen, 76 → 2 und keines mehr über 2 min in je 5 min):
+  - Autos in der Schlange rammten den Vordermann („Hindernis ignorieren“ nach Wartezeit) – entfernt; Mindestabstand
+    jetzt eine Autolänge plus 1,5 m (vorher kürzer als ein Auto).
+  - Poller standen auf der Fahrbahn (allein im Kerngebiet 4 234), Zäune und Gleismauern lagen innerhalb der geschätzten
+    Straßenbreite. Der Build schiebt Poller an den Bordstein und schneidet Zäune/Gleiswände aus befahrbaren Fahrbahnen.
+  - Einmündungen ohne Ampel werden je Auto reserviert; einfahren darf, wer frei ist und hinter der Kreuzung Platz hat,
+    Kolonnen dürfen 6 s nachrücken, dann ist die andere Zufahrt dran. Bewegungen, die sich nicht kreuzen (Gegenverkehr
+    geradeaus, zweimal rechts), dürfen gleichzeitig hinein – vorher verklemmten sich zwei Kolonnen zwischen zwei nah
+    beieinanderliegenden Kreuzungen.
+  - Reservierungen der gerade verlassenen Kreuzung hielten bis 8,5 m dahinter (auch dort, wo gleich die nächste kommt);
+    jetzt nur noch, bis das Heck heraus ist.
+  - Wer warten muss, hält 2,4 m vor der Linie (vorher 1 m – dort schaltete die Route schon auf „in der Kreuzung“ und das
+    Auto fuhr ohne Reservierung hinein), vor einer Engstelle 5 m weiter zurück, damit der Gegenverkehr ausschwenken kann.
+  - Engstellen (zu schmal für Begegnungsverkehr) zählen über alle ihre Abschnitte als eine; ein Auto blieb eingetragen,
+    auch wenn es nur einen Abschnitt verließ (vorher trug die erste Freigabe es ganz aus und Gegenverkehr fuhr hinein).
+    In eine Sackgassen-Engstelle darf nur einer zur Zeit (wer drin ist, wendet und kommt zurück).
+  - Hindernisse werden entlang der Route gemessen, die das Auto gleich fährt, nicht entlang seiner Längsachse: mitten im
+    Abbiegen galt sonst ein korrekt auf der Gegenspur wartendes Auto als „im Weg“.
+  - Abgestellte Autos ohne Fahrer (Spieler-, Missionsauto) zählen wie Parker: die KI fährt vorbei, wenn Platz ist,
+    statt ewig davor zu warten.
+  - Kommt man nicht weiter, sucht man sich nach 3 s einen anderen Weg; zwei Autos Kühler an Kühler: eines setzt zurück.
+  - Angefahrene Passanten standen nie wieder auf und blockierten die Straße; Passanten, die zurück auf den Gehweg wollen,
+    geben nach 4 s ohne Fortschritt auf; wartende Autos hupen, Passanten weichen dem Hupen aus.
+  - Außerhalb des Sichtbereichs festgefahrene Autos werden abgebaut und neu erzeugt.
+
 ## [0.4.0] – 2026-09-27
 
 ### Geändert

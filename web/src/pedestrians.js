@@ -221,14 +221,19 @@ export function updatePed(ped, world, dt) {
       const p = sidewalkPoint(city, ped.edge, ped.side, ped.s);
       const dx = p.x - ped.x, dy = p.y - ped.y, d = Math.hypot(dx, dy);
       const v = ped.speed * 1.2 * dt;
-      if (d <= Math.max(v, 2)) { ped.state = 'walk'; ped.x = p.x; ped.y = p.y; }
+      // kommt nicht voran (z. B. ein Auto steht auf dem Rückweg): nach 4 s einfach weitergehen
+      ped.returnT = (ped.returnT ?? 0) + dt;
+      if (d < (ped.returnBest ?? Infinity) - 5) { ped.returnBest = d; ped.returnT = 0; }
+      if (ped.returnT > 4) { ped.x = p.x; ped.y = p.y; ped.state = 'walk'; ped.returnT = 0; ped.returnBest = undefined; }
+      else if (d <= Math.max(v, 2)) { ped.state = 'walk'; ped.x = p.x; ped.y = p.y; ped.returnBest = undefined; }
       else if (d > 1500) { ped.x = p.x; ped.y = p.y; ped.state = 'walk'; }
       else moveWithCollision(ped, dx / d * v, dy / d * v, world);
       break;
     }
     case 'down':
       ped.t -= dt;
-      if (ped.t <= 0) scare(ped, ped.threat.x, ped.threat.y, 2);
+      // aufstehen und weglaufen (erst den Zustand verlassen – scare() ignoriert Liegende)
+      if (ped.t <= 0) { ped.state = 'idle'; scare(ped, ped.threat.x, ped.threat.y, 2); }
       break;
   }
   const mx = ped.x - prevX, my = ped.y - prevY;

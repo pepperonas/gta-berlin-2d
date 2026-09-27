@@ -253,7 +253,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 91 automatischen Tests grün, darunter:
+- Alle 99 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -278,6 +278,11 @@ in Edge `edge://inspect` mit der Konsole verbinden
   - der vollständige Missionsablauf per Autopilot über die echte Route Wrangelstraße → Neukölln → zurück
     (ohne Verkehr, innerhalb von 930 s), Scheitern durch Zeitablauf und Totalschaden;
   - Vollgas gegen Hauswand, Kaimauer und Gebietsgrenze (jeder Schritt geprüft);
+  - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
+    gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
+    belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig
+    in eine Kreuzung; Schlange an der roten Ampel ohne Auffahren; angefahrene Passanten stehen wieder auf (für sieben
+    dieser Regeln gegengeprüft, dass der Test fehlschlägt, wenn man sie abschaltet);
   - ein 90-s-Dauertest mit 24 Autos und 55 Passanten (0,0 % der Stichproben neben der Fahrbahn, kein Auto in einer Hauswand,
     kein Passant in einem Gebäude) und ein Test, dass die Bevölkerung der Kamera folgt;
   - Teleport: nur bei offenem Stadtplan, außerhalb des Gebiets abgelehnt, Abbruch ändert nichts, Welt steht während des

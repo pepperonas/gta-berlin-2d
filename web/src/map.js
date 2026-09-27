@@ -9,7 +9,9 @@
 // keine Kachel mehr sie hält. Punkte gehören genau einer Kachel, große Flächen sind je Kachel abgeschnitten.
 import { undelta, pointInRings, signedArea, segDist2, bboxOf, polylineLength, projectOnPolyline, ringIndex, insideIndex, pointInRing } from './geom.js';
 import { SpatialHash } from './collision.js';
-import { AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK_ORIENT, SURFACE, TREE_GENERA } from './citycodes.js';
+import { WALL_KIND, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK_ORIENT, SURFACE, TREE_GENERA } from './citycodes.js';
+
+const WALL_NAMES = Object.fromEntries(Object.entries(WALL_KIND).map(([k, v]) => [v, k]));
 
 export const T = { ROAD: 0, SIDEWALK: 1, BUILDING: 2, GRASS: 3, WATER: 4, PLAZA: 5, COBBLE: 6 };
 export const isRoadSurface = (t) => t === T.ROAD || t === T.COBBLE; // Fahrbahn (Asphalt oder Pflaster)
@@ -45,7 +47,7 @@ export function openCity(index, loadTile, { overview = null } = {}) {
     nodes: new Map(), edges: new Map(), signals: new Set(), turnBans: new Set(),
     render: new SpatialHash(640), edgeSegs: new SpatialHash(320), polys: new SpatialHash(320), solids: new SpatialHash(128),
     poiHash: new SpatialHash(400), addrHash: new SpatialHash(400),
-    droppedTrees: 0, gen: 0,
+    droppedTrees: 0, droppedPosts: 0, gen: 0,
     hooks: { edgeAdd: [], edgeRemove: [] },
     // Nachladen
     available: new Set(index.tiles), tiles: new Map(), inbox: [], reg: new Map(), items: new Map(), focuses: new Map(), clock: 0, loader: loadTile, pinned: new Set(),
@@ -265,7 +267,8 @@ function install(city, key, json) {
     }
   };
   for (const [gid, kind, p] of json.walls) acquire(city, t, 'g' + gid, (r) => {
-    const pts = undelta(p), f = { pts, kind: kind ? 'border' : 'wall', layer: 'wall' };
+    // kind: Kollisionsart ('border' für die Stadtgrenze), sub: Art der Wand (Ufer, Gleis, Geländer, Zaun)
+    const pts = undelta(p), f = { pts, kind: kind === WALL_KIND.border ? 'border' : 'wall', sub: WALL_NAMES[kind] ?? 'other', layer: 'wall' };
     addLine(r, pts, false, f.kind); track(city, 'wall', f); r.drop = () => untrack(city, 'wall', f);
   });
 
@@ -355,6 +358,8 @@ function install(city, key, json) {
 
 function barrier(city, r, x, y, kind) {
   const b = { x, y, kind, r: 0.15 * city.scale, layer: 'barrier' };
+  // Sicherheitsnetz: kein Poller auf einer befahrbaren Fahrbahn (der Build rückt sie an den Bordstein)
+  if (postOnRoad(city, b)) { city.droppedPosts++; return; }
   put(r, city.render, b, { x: x - 10, y: y - 10, w: 20, h: 20 });
   put(r, city.solids, b, { x: x - b.r, y: y - b.r, w: 2 * b.r, h: 2 * b.r });
   track(city, 'barrier', b); r.drop = () => untrack(city, 'barrier', b);
@@ -399,6 +404,19 @@ export function onRoad(city, x, y, margin = 0) {
   for (const s of city.edgeSegs.query(pt, tmp)) {
     const r = s.e.w / 2 + margin;
     if (segDist2(x, y, s.ax, s.ay, s.bx, s.by) <= r * r) return s.e;
+  }
+  return null;
+}
+
+// Steht ein Poller auf einer Fahrbahn, auf der die KI fährt (oder einer Kreuzungsfläche)? Pollerreihen auf gesperrten
+// Straßen zählen nicht – sie sind die Sperre.
+export function postOnRoad(city, b) {
+  pt.x = b.x; pt.y = b.y;
+  for (const s of city.edgeSegs.query(pt, tmp)) {
+    const e = s.e;
+    if (!e.junction && (e.cls > 8 || e.blocked || e.passage)) continue;
+    const r = e.w / 2 + b.r;
+    if (segDist2(b.x, b.y, s.ax, s.ay, s.bx, s.by) < r * r) return e;
   }
   return null;
 }

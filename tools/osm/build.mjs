@@ -10,7 +10,7 @@ import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, u
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
 import { ringIndex, insideIndex, pointInRings } from '../../web/src/geom.js';
-import { ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA } from '../../web/src/citycodes.js';
+import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA } from '../../web/src/citycodes.js';
 
 const num = (v) => { const m = /^\s*(-?\d+(?:[.,]\d+)?)/.exec(v ?? ''); return m ? parseFloat(m[1].replace(',', '.')) : NaN; };
 
@@ -346,19 +346,37 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], tile 
     }
     return out;
   };
-  const walls = [];
-  for (const wa of water) for (const r of wa.rings) walls.push(...cut([...r.pts, r.pts[0], r.pts[1]]));
-  for (const r of rails) if (!r.br && !r.sub) for (const d of [-2.5 * S, 2.5 * S]) walls.push(...cut(offsetLine(r.p, d)));
+  // Wandzüge mit Art (WALL_KIND in citycodes.js): Ufer, Gleis, Geländer, Zaun – das Spiel und die Tests unterscheiden sie
+  const walls = [], wallKind = [];
+  const addWall = (k) => (p) => { walls.push(p); wallKind.push(k); };
+  for (const wa of water) for (const r of wa.rings) cut([...r.pts, r.pts[0], r.pts[1]]).forEach(addWall(WALL_KIND.quay));
+  const railWalls = [];
+  for (const r of rails) if (!r.br && !r.sub) for (const d of [-2.5 * S, 2.5 * S]) railWalls.push(...cut(offsetLine(r.p, d)));
   // Brückengeländer
-  for (const ed of edges) if (ed.br) { const pts = edgePts(ed); for (const d of [-1, 1]) walls.push(offsetLine(pts, d * (ed.w / 10 * S / 2 + 0.6 * S))); }
+  for (const ed of edges) if (ed.br) { const pts = edgePts(ed); for (const d of [-1, 1]) addWall(WALL_KIND.railing)(offsetLine(pts, d * (ed.w / 10 * S / 2 + 0.6 * S))); }
   step(`${walls.length} Wandzüge, ${buildings.filter((b) => b.walls).length} geöffnete Hauswände`);
 
-  const access = accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, W, H, walls });
+  const fenceWalls = [];
+  const access = accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, W, H, walls: fenceWalls });
+  // Zäune und Gleiswände nicht auf befahrbaren Fahrbahnen: wo die (oft geschätzte) Fahrbahn einen Zaun längs überdeckt,
+  // schrammte die KI daran entlang. Quer sperrende Zäune haben ihre Straße bereits gesperrt (dort wird nichts
+  // ausgeschnitten). Ufer bleiben unangetastet, sonst ginge es dort ins Wasser.
+  const driveCut = makeCutter(edges.filter((ed) => ed.c <= 8 && !ed.blocked && !ed.pass).flatMap((ed) => { const p = edgePts(ed), out = []; for (let i = 0; i < p.length - 2; i += 2) out.push([p[i], p[i + 1], p[i + 2], p[i + 3], ed.w / 10 * S / 2 + 0.3 * S]); return out; }), S);
+  let cutWalls = 0;
+  for (const [list, k] of [[railWalls, WALL_KIND.rail], [fenceWalls, WALL_KIND.fence]]) for (const w0 of list) {
+    const pieces = driveCut(w0);
+    if (pieces.reduce((a, q) => a + lenOf(q), 0) < lenOf(w0) - 0.5 * S) cutWalls++;
+    pieces.forEach(addWall(k));
+  }
+  access.out.fences = access.out.fences.flatMap(([k, p]) => driveCut(p).map((q) => [k, q]));
+  access.stats.waendeAufFahrbahnGekuerzt = cutWalls;
   step(`Zugänge und Regeln ${JSON.stringify(access.stats)}`);
 
   // --- Kreuzungsflächen und Spurkürzung je Knoten (Spiel und Baumregel nutzen dieselben Werte) ----------
   const junctions = junctionsOf(edges, vertices, S);
   const trim = laneTrim(edges, vertices, S, edgePts);
+  const postStats = keepPostsOffCarriageway(access.out, { edges, vertices, junctions, S });
+  access.stats.pollerVerschoben = postStats.moved; access.stats.pollerEntfernt = postStats.dropped;
 
   // --- Bäume, Kiez-Namen ----------------------------------------------------------------
   const trees = [], kieze = [];
@@ -391,7 +409,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], tile 
   step(`Mission: Route ${missionPlaces.routeMeters} m → ${missionPlaces.timeLimit} s`);
 
   const g = {
-    S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, trees, kieze, pois, addresses, junctions, trim,
+    S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, trees, kieze, pois, addresses, junctions, trim,
     border, bezirke, districts, access: access.out,
   };
   const meta = {
@@ -597,8 +615,9 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
         let [bx, by] = p;
         if (hit.i === 0 || hit.i === ed.ids.length - 1) {
           const inward = hit.i === 0 ? 1 : -1;
-          let other = 0; for (const o of allOn.get(nd.id) ?? []) if (o.k !== hit.k) other = Math.max(other, edges[o.k].w / 10 * S / 2);
-          const shift = other ? other + 1 * S : 0;
+          // hinter die Kreuzungsfläche (Radius = größte halbe Breite der Straßen am Knoten + 2 m, siehe junctionsOf)
+          let other = 0; for (const o of allOn.get(nd.id) ?? []) if (edges[o.k].c <= 8 && !edges[o.k].pass) other = Math.max(other, edges[o.k].w / 10 * S / 2);
+          const shift = other ? other + 2.6 * S : 0;
           bx = Math.round(bx + ux * inward * shift); by = Math.round(by + uy * inward * shift);
         }
         barriers.push([bx, by, kind, Math.round(-uy * 1000), Math.round(ux * 1000), n]);
@@ -811,6 +830,69 @@ export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, ju
   }
   trees.length = 0; for (const t of keep) trees.push(t);
   for (const t of trees) if (worstRoad(t.x, t.y, trunkOf(t)) || blocked(t.x, t.y)) throw new Error(`Baum bei ${t.x},${t.y} steht auf der Fahrbahn, in einem Haus oder im Wasser`);
+  return { moved, dropped };
+}
+
+// --- Poller nicht auf die Fahrbahn --------------------------------------------------------------
+// Einzelne Poller stehen in Berlin meist auf der Gehwegkante (gegen Falschparker). Wo die (oft geschätzte) Fahrbahn
+// sie überdeckt, stünden sie mitten im Verkehr: Sie rücken wie Bäume quer zur Straße an den Bordstein ihrer Seite,
+// ohne freien Platz entfallen sie. Maßgeblich sind befahrbare Straßen (Klasse ≤ 8, nicht gesperrt, keine Durchfahrt)
+// und Kreuzungsflächen. Pollerreihen auf gesperrten Straßen bleiben stehen (sie SIND die Sperre).
+export const POST_R = 0.15; // m, wie im Spiel (map.js)
+export function keepPostsOffCarriageway(out, { edges, vertices, junctions, S }) {
+  const vx = (k) => vertices[2 * k], vy = (k) => vertices[2 * k + 1];
+  const grid = boxGrid(300), r = POST_R * S, gap = 0.4 * S;
+  for (const ed of edges) {
+    if (ed.c > 8 || ed.blocked || ed.pass) continue;
+    const pts = [vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)], half = ed.w / 10 * S / 2;
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      const g = { half, ax: pts[i], ay: pts[i + 1], bx: pts[i + 2], by: pts[i + 3] };
+      grid.add(g, Math.min(g.ax, g.bx) - half - r, Math.min(g.ay, g.by) - half - r, Math.max(g.ax, g.bx) + half + r, Math.max(g.ay, g.by) + half + r);
+    }
+  }
+  for (const j of junctions) grid.add({ half: j.r, ax: j.x, ay: j.y, bx: j.x, by: j.y }, j.x - j.r - r, j.y - j.r - r, j.x + j.r + r, j.y + j.r + r);
+  const worst = (x, y) => {
+    let w = null;
+    for (const g of grid.at(x, y)) { const need = g.half + r, d = Math.sqrt(segDist2(x, y, g.ax, g.ay, g.bx, g.by)); if (d < need + 1 && (!w || need - d > w.pen)) w = { g, pen: need - d }; }
+    return w;
+  };
+  const place = (x, y) => { // → [x, y] frei, oder null
+    let hit = worst(x, y);
+    for (let k = 0; k < 6 && hit; k++) {
+      const { g } = hit, dx = g.bx - g.ax, dy = g.by - g.ay, L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - g.ax) * dx + (y - g.ay) * dy) / L2)), px = g.ax + dx * t, py = g.ay + dy * t;
+      let nx = x - px, ny = y - py, n = Math.hypot(nx, ny);
+      if (n < 1e-6) { const L = Math.sqrt(L2); nx = -dy / L; ny = dx / L; n = 1; }
+      x = px + nx / n * (g.half + r + gap); y = py + ny / n * (g.half + r + gap);
+      hit = worst(x, y);
+    }
+    if (hit) return null;
+    const rx = Math.round(x), ry = Math.round(y);
+    return worst(rx, ry) ? null : [rx, ry];
+  };
+  let moved = 0, dropped = 0;
+  const posts = [];
+  for (let i = 0; i < out.posts.length; i += 3) {
+    const x = out.posts[i], y = out.posts[i + 1], kind = out.posts[i + 2];
+    if (!worst(x, y)) { posts.push(x, y, kind); continue; }
+    const p = place(x, y);
+    if (p) { posts.push(p[0], p[1], kind); moved++; } else dropped++;
+  }
+  // Reihen: Poller einzeln prüfen; muss einer weichen, wird die Reihe in Einzelpoller aufgelöst
+  const rows = [];
+  for (let i = 0; i < out.barriers.length; i += 6) {
+    const [x, y, kind, qx, qy, n] = out.barriers.slice(i, i + 6);
+    const poles = []; let bad = false;
+    for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 1.8 * S, px = Math.round(x + qx / 1000 * o), py = Math.round(y + qy / 1000 * o); poles.push([px, py]); if (worst(px, py)) bad = true; }
+    if (!bad) { rows.push(x, y, kind, qx, qy, n); continue; }
+    for (const [px, py] of poles) {
+      if (!worst(px, py)) { posts.push(px, py, kind); continue; }
+      const p = place(px, py);
+      if (p) { posts.push(p[0], p[1], kind); moved++; } else dropped++;
+    }
+  }
+  out.posts = posts; out.barriers = rows;
+  for (let i = 0; i < posts.length; i += 3) if (worst(posts[i], posts[i + 1])) throw new Error(`Poller bei ${posts[i]},${posts[i + 1]} steht auf der Fahrbahn`);
   return { moved, dropped };
 }
 

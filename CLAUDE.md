@@ -88,6 +88,15 @@ change in `web/`.
   as their edges load (hooks `city.hooks.edgeAdd/edgeRemove`; `lane.next` recomputed per `city.gen`) (trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
   polyline with pure pursuit, slows for turns/obstacles, replans via the lane hash. **Population lives around the camera**
   (`TRAFFIC.spawnMin/spawnMax/despawn` in `config.js`, `managePopulation` in `world.js`).
+- **Right of way = reservations, not StVO.** `ai.segs` (lane pieces with `k0`/`kEnd`) drive an entry gate before each lane
+  end: `mayEnter` checks space behind the junction, `world.jres` (unsignalled junction: approach + per-car movement
+  chord; non-conflicting movements may share) and `world.nres` (a narrow = all connected narrow edges of one street,
+  keyed by `narrowKey`, one direction at a time; dead-end narrows one car only). Claims live in `ai.claims` and are
+  released by `releaseClaims` — a car can hold several claims for the same key, only drop it from the set when none
+  remain. Waiting cars stop `GATE_STOP` before the line: the route index advances within 10 px of a point, and a car
+  whose index passes `kEnd` counts as inside. Obstacles are measured along the car's own route (`aheadPath`), not its
+  heading. `tests/traffic.test.js` has soak tests at the tightest spots plus invariant tests; the system is chaotic,
+  so check changes with those, not with a single run.
 - **Pedestrians** walk along road edges at a per-side sidewalk offset (cached, shrunk if it would hit a building), pick the
   next edge at nodes, cross streets, and wait for approaching cars.
 - **Mission** (`mission.js`) is a state machine; save (`save.js`) is one `localStorage` slot, auto-written after a

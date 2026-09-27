@@ -5,7 +5,7 @@ import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage } from './car.js';
-import { placeOnLane, spawnSpot, driveAi } from './traffic.js';
+import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
 import { insideBorder, inBuilding, locationName, hash01 } from './map.js';
@@ -81,7 +81,9 @@ function spawnPed(w, minR, maxR) {
 function managePopulation(w) {
   const cam = w.camera, far = TRAFFIC.despawn;
   const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player';
-  w.cars = w.cars.filter((c) => keep(c) || Math.hypot(c.x - cam.x, c.y - cam.y) < far);
+  // Festgefahrene KI-Autos außerhalb des Bildes abbauen (sie entstehen anderswo neu), damit sich nirgends ein Knoten hält
+  const stuck = (c) => c.driver === 'npc' && c.ai && ((c.ai.stillT ?? 0) > 30 || (c.ai.headOn ?? 0) >= 4) && Math.hypot(c.x - cam.x, c.y - cam.y) > 1100;
+  w.cars = w.cars.filter((c) => keep(c) || (Math.hypot(c.x - cam.x, c.y - cam.y) < far && !stuck(c)));
   w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
   const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
   if (npc < w.carTarget) spawnTraffic(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
@@ -109,10 +111,11 @@ function spawnTraffic(w, minR, maxR) {
   for (let tries = 0; tries < 8; tries++) {
     const sp = spawnSpot(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
     if (!sp) return null;
-    if (!w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 70)) continue;
+    if (!w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 70) || !narrowFree(w, sp.lane)) continue;
     const car = createCar({ x: sp.x, y: sp.y, color: CAR_COLORS[Math.floor(w.rng() * CAR_COLORS.length)] });
     placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
     car.driver = 'npc';
+    claimNarrow(w, car, sp.lane); // auf einer Engstelle geboren: Richtung gleich belegen
     w.cars.push(car);
     return car;
   }
@@ -400,6 +403,7 @@ export function updateWorld(w, input, dt) {
   if (pc && !pc.wrecked && speedOf(pc) > 130) threats.push({ x: pc.x, y: pc.y, vx: pc.vx, vy: pc.vy, r: 90 });
   for (const e of w.events) {
     if (e.type === 'horn' && !e.npc) threats.push({ x: e.x, y: e.y, r: 170, always: true });
+    if (e.type === 'horn' && e.npc) threats.push({ x: e.x, y: e.y, r: 80, always: true }); // KI hupt: wer direkt davor steht, weicht
     if (e.type === 'crash' && e.strength > 0.25) threats.push({ x: e.x, y: e.y, r: 130, always: true });
   }
   for (const ped of w.peds) {

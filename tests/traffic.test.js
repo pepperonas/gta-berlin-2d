@@ -105,7 +105,7 @@ test('Mit Vollgas gegen Hauswand, ins Wasser und über die Gebietsgrenze: das Au
   const a = Math.atan2(shop.cy - g0.y, shop.cx - g0.x);
   ram(g0.x - Math.cos(a) * 60, g0.y - Math.sin(a) * 60, a, (x, y) => inBuilding(city, x, y));
   // Wasser: von einem Kai-Punkt (Wandzug am Wasser) senkrecht ins Wasser
-  const quay = city.list('wall').filter((f) => f.kind === 'wall').map((f) => f.pts).find((wl) => {
+  const quay = city.list('wall').filter((f) => f.sub === 'quay').map((f) => f.pts).find((wl) => {
     const L = Math.hypot(wl[2] - wl[0], wl[3] - wl[1]);
     if (wl.length <= 40 || L <= 60) return false;
     const mx = (wl[0] + wl[2]) / 2, my = (wl[1] + wl[3]) / 2, nx = -(wl[3] - wl[1]) / L, ny = (wl[2] - wl[0]) / L;
@@ -178,4 +178,181 @@ test('Geparkte Autos stehen auf den Parkstreifen, nicht auf den Fahrstreifen', a
     checked++;
   }
   assert.ok(checked >= 5, `${checked} auf der Weserstraße geprüft`);
+});
+
+// Verkehrschaos (gemeldet mit Bild): Autos rammten den Vordermann in der Schlange, fuhren gegen Poller und Zäune auf der
+// Fahrbahn, blockierten sich an Kreuzungen und Engstellen gegenseitig und warteten ewig hinter liegenden Fußgängern.
+test('Kreuzung: Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig hinein', async () => {
+  const { movesConflict } = await import('../web/src/traffic.js');
+  const A = {}, B = {}, C = {};
+  // Nord-Süd-Straße, Knoten bei (0,0), Spuren 14 px rechts der Mitte; Ost-West-Straße kreuzt
+  const southbound = { ax: -14, ay: -60, bx: -14, by: 60, to: A };  // geradeaus nach Süden
+  const northbound = { ax: 14, ay: 60, bx: 14, by: -60, to: B };    // Gegenverkehr geradeaus
+  const northLeft = { ax: 14, ay: 60, bx: -60, by: -14, to: C };    // Gegenverkehr biegt links ab (nach Westen)
+  const northRight = { ax: 14, ay: 60, bx: 60, by: 14, to: C };     // biegt rechts ab (nach Osten)
+  const westIntoSouth = { ax: 60, ay: -14, bx: -14, by: 60, to: A }; // mündet in dieselbe Spur wie southbound
+  assert.equal(movesConflict(southbound, northbound), false, 'Gegenverkehr geradeaus stört sich nicht');
+  assert.equal(movesConflict(southbound, northRight), false, 'Rechtsabbieger des Gegenverkehrs stört nicht');
+  assert.equal(movesConflict(southbound, northLeft), true, 'Linksabbieger kreuzt den Gegenverkehr');
+  assert.equal(movesConflict(southbound, westIntoSouth), true, 'gleiche Zielspur = Konflikt');
+});
+
+test('Verkehr ohne Knoten: 3 min an den engsten Stellen – niemand steht über 90 s, kaum Zusammenstöße', async () => {
+  const { speedOf } = await import('../web/src/car.js');
+  const weser = city.list('edge').find((e) => e.name === 'Weserstraße' && e.len > 600), k = weser.pts.length >> 1 & ~1;
+  // Rixdorf (enge Gassen, Engstellen, dicht aufeinanderfolgende Kreuzungen), Wrangelkiez, Weserstraße (Engstelle Nansenstraße)
+  for (const p of [city.places.pickup, city.places.giver, { x: weser.pts[k], y: weser.pts[k + 1] }]) {
+    const w = createWorld({ city, seed: 5 });
+    w.camera.x = p.x; w.camera.y = p.y;
+    const still = new Map();
+    let crashes = 0, worst = 0;
+    for (let i = 0; i < 180 * 60; i++) {
+      updateWorld(w, idle(), 1 / 60);
+      w.camera.x = p.x; w.camera.y = p.y;
+      crashes += w.events.filter((e) => e.type === 'crash').length;
+      if (i % 30) continue;
+      for (const c of w.cars) {
+        if (c.driver !== 'npc') continue;
+        const t = speedOf(c) < 5 ? (still.get(c.id) ?? 0) + 0.5 : 0;
+        still.set(c.id, t); worst = Math.max(worst, t);
+      }
+    }
+    assert.ok(worst < 90, `ein Auto stand ${worst} s am Stück`);
+    assert.ok(crashes < 15, `${crashes} Zusammenstöße in 3 min`);
+  }
+});
+
+test('Engstellen: nie Gegenverkehr gleichzeitig darin, und wer darin fährt, ist eingetragen', async () => {
+  const { narrowKey, narrowDir } = await import('../web/src/traffic.js');
+  const weser = city.list('edge').find((e) => e.name === 'Weserstraße' && e.len > 600), k = weser.pts.length >> 1 & ~1;
+  let samples = 0;
+  for (const p of [city.places.pickup, { x: weser.pts[k], y: weser.pts[k + 1] }]) {
+    const w = createWorld({ city, seed: 5 });
+    w.camera.x = p.x; w.camera.y = p.y;
+    for (let i = 0; i < 150 * 60; i++) {
+      updateWorld(w, idle(), 1 / 60);
+      w.camera.x = p.x; w.camera.y = p.y;
+      if (i % 15) continue;
+      const dirs = new Map();
+      for (const c of w.cars) {
+        const ai = c.ai;
+        if (c.driver !== 'npc' || c.wrecked || !ai?.segs?.length) continue;
+        let j = 0;
+        for (let q = 0; q < ai.segs.length; q++) if (ai.segs[q].k0 <= ai.i) j = q;
+        const lane = ai.segs[j].lane;
+        if (!lane.narrow || (ai.segs[j].kEnd !== undefined && ai.i > ai.segs[j].kEnd)) continue; // nur wer wirklich auf der Engstelle fährt
+        const nk = narrowKey(city, lane.edge), d = narrowDir(city, lane);
+        samples++;
+        assert.ok(w.nres?.get(nk)?.cars.has(c.id), `t=${w.time.toFixed(1)}: KI#${c.id} fährt auf der Engstelle ${lane.edge.name} ohne Eintrag`);
+        const seen = dirs.get(nk);
+        assert.ok(!seen || seen.d === d, `t=${w.time.toFixed(1)}: Gegenverkehr auf der Engstelle ${lane.edge.name} (KI#${seen?.id} und KI#${c.id})`);
+        dirs.set(nk, { d, id: c.id });
+      }
+    }
+  }
+  assert.ok(samples > 200, `zu wenig Engstellen-Fahrten beobachtet (${samples})`);
+});
+
+test('Engstelle in Gegenrichtung belegt: das Auto wartet vor der Linie und rollt nicht hinein', async () => {
+  const { placeOnLane, narrowKey, narrowDir } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  // Zufahrt ohne Abzweig, die geradewegs in eine Engstelle führt
+  const lane = [...g.lanes].find((l) => !l.narrow && l.len > 500 && l.next.length === 1 && l.next[0].narrow && l.next[0].next.length);
+  assert.ok(lane, 'keine passende Zufahrt gefunden');
+  const nlane = lane.next[0], nk = narrowKey(city, nlane.edge);
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const b = createCar({ x: 0, y: 0 }); b.driver = 'npc'; placeOnLane(b, city, lane, lane.len - 320, w.rng);
+  // der Gegenverkehr: ein Auto auf einer weit entfernten Spur, das die Engstelle in Gegenrichtung hält
+  const far = [...g.lanes].find((l) => l.len > 300 && (Math.hypot(l.pts[0] - b.x, l.pts[1] - b.y) > 900 && Math.hypot(l.pts[0] - b.x, l.pts[1] - b.y) < 1500));
+  const a = createCar({ x: 0, y: 0 }); a.driver = 'npc'; placeOnLane(a, city, far, 100, w.rng);
+  w.cars.push(b, a);
+  const hold = () => {
+    a.vx = a.vy = 0;
+    a.ai.claims = [{ kind: 'n', edge: nk, seg: null, lane: nlane }];
+    w.nres = new Map([[nk, { dir: -narrowDir(city, nlane), cars: new Set([a.id]) }]]);
+    w.nresGen = city.gen;
+  };
+  let entered = false, minGap = Infinity;
+  for (let i = 0; i < 25 * 60; i++) {
+    hold();
+    w.camera.x = b.x; w.camera.y = b.y;
+    updateWorld(w, idle(), 1 / 60);
+    const ai = b.ai;
+    let j = 0;
+    for (let q = 0; q < ai.segs.length; q++) if (ai.segs[q].k0 <= ai.i) j = q;
+    if (ai.segs[j].lane === nlane || (ai.segs[j].kEnd !== undefined && ai.i > ai.segs[j].kEnd)) entered = true;
+    assert.ok(w.cars.includes(a), 'der Gegenverkehr wurde abgebaut – Test ungültig');
+    const e = nlane.pts;
+    minGap = Math.min(minGap, Math.hypot(e[0] - b.x, e[1] - b.y));
+  }
+  assert.equal(entered, false, 'das Auto ist in die belegte Engstelle gerollt');
+  assert.ok(minGap > 30, `hielt nur ${minGap.toFixed(0)} px vor der Engstelle`);
+});
+
+test('Kreuzung von kreuzendem Verkehr belegt: das Auto wartet vor der Linie und rollt nicht hinein', async () => {
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const lane = [...g.lanes].find((l) => !l.narrow && l.len > 500 && !city.signals.has(l.to) && (city.nodes.get(l.to)?.edges.length ?? 0) >= 3
+    && l.next.length === 1 && !l.next[0].narrow);
+  assert.ok(lane, 'keine passende Zufahrt gefunden');
+  const to = lane.next[0], v = lane.to;
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const b = createCar({ x: 0, y: 0 }); b.driver = 'npc'; placeOnLane(b, city, lane, lane.len - 320, w.rng);
+  const far = [...g.lanes].find((l) => l.len > 300 && Math.hypot(l.pts[0] - b.x, l.pts[1] - b.y) > 900 && Math.hypot(l.pts[0] - b.x, l.pts[1] - b.y) < 1500);
+  const a = createCar({ x: 0, y: 0 }); a.driver = 'npc'; placeOnLane(a, city, far, 100, w.rng);
+  w.cars.push(b, a);
+  // a „fährt“ aus einer anderen Zufahrt in dieselbe Zielspur – das kreuzt b in jedem Fall
+  const hold = () => {
+    a.vx = a.vy = 0;
+    a.ai.claims = [{ kind: 'j', v, seg: null }];
+    w.jres = new Map([[v, { approach: 'andere', cars: new Set([a.id]), since: w.time, moves: new Map([[a.id, { ax: 0, ay: 0, bx: 1, by: 1, to }]]) }]]);
+  };
+  let entered = false;
+  for (let i = 0; i < 25 * 60; i++) {
+    hold();
+    w.camera.x = b.x; w.camera.y = b.y;
+    updateWorld(w, idle(), 1 / 60);
+    assert.ok(w.cars.includes(a), 'der Querverkehr wurde abgebaut – Test ungültig');
+    const ai = b.ai;
+    let j = 0;
+    for (let q = 0; q < ai.segs.length; q++) if (ai.segs[q].k0 <= ai.i) j = q;
+    if (ai.segs[j].lane !== lane || (ai.segs[j].kEnd !== undefined && ai.i > ai.segs[j].kEnd)) entered = true;
+  }
+  assert.equal(entered, false, 'das Auto ist in die belegte Kreuzung gerollt');
+  assert.ok(Math.hypot(b.vx, b.vy) < 5, 'das Auto steht nicht');
+});
+
+test('Schlange an der roten Ampel: der Hintermann wartet, statt aufzufahren', async () => {
+  const { signalState } = await import('../web/src/signals.js');
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const { laneDir } = await import('../web/src/roadgraph.js');
+  const { obbVsObb } = await import('../web/src/collision.js');
+  const lane = [...g.lanes].find((l) => city.signals.has(l.to) && l.len > 700 && l.edge.cls <= 5 && l.next.length);
+  const [ux, uy] = laneDir(lane, true), heading = Math.atan2(uy, ux);
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  let t0 = 0.5;
+  while (!(signalState(city, lane.to, heading, t0) === 'red' && signalState(city, lane.to, heading, t0 - 0.5) !== 'red')) t0 += 0.5;
+  w.time = t0;
+  const cars = [0, 1, 2].map((k) => { const c = createCar({ x: 0, y: 0 }); c.driver = 'npc'; placeOnLane(c, city, lane, lane.len - 500 - k * 70, w.rng); w.cars.push(c); return c; });
+  w.camera.x = cars[1].x; w.camera.y = cars[1].y; // sonst gelten die Autos als weit weg und werden abgebaut
+  let crashes = 0, overlap = 0;
+  for (let i = 0; i < 25 * 60; i++) {
+    updateWorld(w, idle(), 1 / 60);
+    w.camera.x = cars[1].x; w.camera.y = cars[1].y;
+    crashes += w.events.filter((e) => e.type === 'crash').length;
+    for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) if (obbVsObb(cars[a], cars[b])) overlap++;
+  }
+  assert.ok(cars.every((c) => Math.hypot(c.vx, c.vy) < 5), 'alle stehen an Rot');
+  assert.equal(crashes, 0, 'niemand fährt auf');
+  assert.equal(overlap, 0, 'keine Berührung');
+});
+
+test('Angefahrene Fußgänger stehen wieder auf (sonst wartet der Verkehr ewig vor ihnen)', async () => {
+  const { knockDown, updatePed, createPed, nearestSpot } = await import('../web/src/pedestrians.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const ped = createPed(city, nearestSpot(city, w.player.x, w.player.y), w.rng);
+  knockDown(ped, ped.x + 30, ped.y);
+  for (let i = 0; i < 5 * 60; i++) updatePed(ped, w, 1 / 60);
+  assert.notEqual(ped.state, 'down', 'nach 5 s wieder auf den Beinen');
 });

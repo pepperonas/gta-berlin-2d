@@ -147,7 +147,7 @@ test('Bäume: kein Stamm auf einer Fahrbahn, in einem Haus oder im Wasser (Krone
 
 // Jede Kachel einzeln geladen (sie enthält alle Straßen, die ihre Bäume berühren): das Sicherheitsnetz im Spiel
 // darf nirgends in Berlin einen Baum wegnehmen müssen. Danach ist alles wieder entladen (keine Rückstände).
-test('ganz Berlin, alle Kacheln: kein Baumstamm auf der Fahrbahn; Entladen hinterlässt nichts', () => {
+test('ganz Berlin, alle Kacheln: kein Baumstamm und kein Poller auf der Fahrbahn; Entladen hinterlässt nichts', () => {
   const c = openRealCity();
   let trees = 0;
   for (const k of c.available) {
@@ -157,6 +157,7 @@ test('ganz Berlin, alle Kacheln: kein Baumstamm auf der Fahrbahn; Entladen hinte
     c.unload(k);
   }
   assert.equal(c.droppedTrees, 0, 'Bäume auf der Fahrbahn gefunden');
+  assert.equal(c.droppedPosts, 0, 'Poller auf einer befahrbaren Fahrbahn gefunden');
   assert.equal(trees, realIndex().meta.counts.trees, 'alle Bäume geladen');
   assert.equal(c.tiles.size + c.reg.size + c.edges.size + c.nodes.size + c.signals.size + c.turnBans.size, 0, 'Reste nach dem Entladen');
   for (const h of [c.render, c.edgeSegs, c.polys, c.poiHash, c.addrHash]) assert.equal(h.map.size, 0, 'Raster nicht leer');
@@ -243,4 +244,29 @@ test('Straßenraum, Ampeln, Durchfahrten, Kataster: Stichproben auf der echten K
   const kat = city.list('tree').filter((t) => t.genus !== 'sonstige').length;
   assert.ok(kat > 60000, `${kat} Bäume mit Gattung aus dem Kataster`);
   assert.match(city.attribution, /Baumbestand/);
+});
+
+test('Keine Poller, Zäune oder Gleiswände auf befahrbaren Fahrbahnen (die KI schrammte sonst daran entlang)', async () => {
+  const { postOnRoad } = await import('../web/src/map.js');
+  const { segDist2 } = await import('../web/src/geom.js');
+  assert.equal(city.droppedPosts, 0);
+  assert.equal(city.list('barrier').filter((b) => postOnRoad(city, b)).length, 0, 'Poller auf der Fahrbahn');
+  const m = realIndex().meta.access;
+  assert.ok(m.pollerVerschoben > 1000 && m.pollerEntfernt < m.pollerVerschoben / 10, 'Build rückt an den Bordstein statt zu löschen');
+  // Wände (Zäune, Gleise) gegen die Fahrbahnen der KI prüfen
+  const drivable = city.list('edge').filter((e) => e.cls <= 8 && !e.blocked && !e.passage);
+  let bad = 0;
+  for (const wl of city.list('wall').filter((f) => f.sub === 'fence' || f.sub === 'rail')) {
+    const p = wl.pts;
+    for (let i = 0; i < p.length - 2; i += 2) {
+      const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2;
+      for (const s of city.edgeSegs.query({ x: mx, y: my, w: 0, h: 0 }, [])) {
+        if (s.e.junction || s.e.cls > 8 || s.e.blocked || s.e.passage) continue;
+        if (segDist2(mx, my, s.ax, s.ay, s.bx, s.by) < (s.e.w / 2 - 1) ** 2) { bad++; break; }
+      }
+    }
+  }
+  assert.equal(bad, 0, `${bad} Zaun-/Gleisstücke auf Fahrbahnen`);
+  assert.ok(city.list('wall').some((f) => f.sub === 'fence') && city.list('wall').some((f) => f.sub === 'quay'), 'Wandarten unterschieden');
+  void drivable;
 });
