@@ -435,7 +435,7 @@ export class Renderer {
     const pois = world.city.poiHash.query(v, this._pq ??= []);
     if (!pois.length) return;
     const list = pois.slice().sort((a, b) => POI_STYLE[a.cat].prio - POI_STYLE[b.cat].prio);
-    const k = H / 720, taken = [];
+    const k = Math.min(W / 1280, H / 720), taken = []; // wie das HUD: 16:9-Grundformat (hud.js BASE)
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.font = `600 ${Math.round(12 * k)}px Segoe UI, system-ui, sans-serif`;

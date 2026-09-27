@@ -5,7 +5,7 @@ import { openCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
-import { Hud } from './hud.js';
+import { Hud, BASE } from './hud.js';
 import { Sound } from './audio.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -184,7 +184,8 @@ function updateDemo(dt) {
 }
 
 function draw() {
-  const worldScale = H / 600;
+  // Welt: immer mindestens den 16:9-Ausschnitt zeigen (wie das HUD), mehr Platz zeigt mehr Stadt
+  const worldScale = Math.min(W / (BASE.w * 600 / BASE.h), H / 600);
   hud.device = input.lastDevice;
   if (!game.world) {
     if (demo) renderer.draw(demo, W, H, worldScale, false);

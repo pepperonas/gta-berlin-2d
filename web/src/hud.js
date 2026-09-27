@@ -1,4 +1,7 @@
-// HUD, Menüs und Overlays. Gezeichnet in einem virtuellen 720 px hohen Raster mit 5 % Title-Safe-Rand (TV).
+// HUD, Menüs und Overlays. Grundformat ist 16:9 (1280 × 720 virtuelle Punkte): Das Raster wird so skaliert, dass diese
+// Fläche in jedes Fenster ganz hineinpasst (Maßstab = min(Breite/1280, Höhe/720)); ist das Fenster breiter oder höher,
+// wächst die virtuelle Fläche mit (vw ≥ 1280, vh ≥ 720). Das Spiel-HUD hängt an den Fensterrändern (5 % Title-Safe-Rand,
+// TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { undelta } from './geom.js';
@@ -15,17 +18,36 @@ const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus
 const FONT = 'Segoe UI, system-ui, -apple-system, sans-serif';
 const YELLOW = '#ffd33d';
 const GLYPH = { A: '#3fb54a', B: '#e2383f', X: '#2f7fe0', Y: '#f2b705' };
+// Grundformat 16:9 in virtuellen HUD-Punkten
+export const BASE = { w: 1280, h: 720 };
+
 const KEYS = { A: 'E', B: 'Esc', X: 'H', Y: 'F', RB: 'Leer', LT: 'S', RT: 'W', MENU: 'Esc', VIEW: 'M' };
 
 export class Hud {
   constructor(ctx) { this.ctx = ctx; this.overview = null; this.device = 'gamepad'; }
 
   begin(W, H) {
-    this.s = H / 720; this.vw = W / this.s; this.vh = 720;
+    this.s = Math.min(W / BASE.w, H / BASE.h); this.vw = W / this.s; this.vh = H / this.s;
+    this.fx = 0; this.fy = 0; // Versatz des 16:9-Rahmens (nur innerhalb von inFrame ≠ 0)
     this.m = { x: this.vw * 0.05, y: this.vh * 0.05 };
     this.ctx.setTransform(this.s, 0, 0, this.s, 0, 0);
-    this.hits = []; // anklickbare Flächen dieses Bildes (virtuelle HUD-Koordinaten), für die Maus in main.js
+    this.fullW = this.vw; this.fullH = this.vh;
+    this.hits = []; // anklickbare Flächen dieses Bildes (virtuelle HUD-Koordinaten des Fensters), für die Maus in main.js
   }
+
+  // Zeichnet fn im zentrierten 16:9-Rahmen (1280 × 720, eigener Title-Safe-Rand); Klickflächen bleiben Fensterkoordinaten.
+  inFrame(fn) {
+    const keep = { vw: this.vw, vh: this.vh, m: this.m, fx: this.fx, fy: this.fy };
+    this.fx = (this.vw - BASE.w) / 2; this.fy = (this.vh - BASE.h) / 2;
+    this.vw = BASE.w; this.vh = BASE.h; this.m = { x: BASE.w * 0.05, y: BASE.h * 0.05 };
+    this.ctx.save(); this.ctx.translate(this.fx, this.fy);
+    try { fn(); } finally { this.ctx.restore(); Object.assign(this, keep); }
+  }
+
+  // ganzes Fenster abdunkeln (auch außerhalb des Rahmens)
+  fillScreen(color) { const c = this.ctx; c.fillStyle = color; c.fillRect(-this.fx, -this.fy, this.fullW ?? this.vw, this.fullH ?? this.vh); }
+
+  addHit(h) { this.hits.push({ ...h, x: h.x + this.fx, y: h.y + this.fy }); }
 
   text(str, x, y, { size = 20, color = '#fff', align = 'left', weight = 600, shadow = true, base = 'alphabetic' } = {}) {
     const c = this.ctx;
@@ -135,6 +157,7 @@ export class Hud {
     const ms = world.mission.state;
     if (obj.text) {
       const w = 420;
+      this.layout = { ...(this.layout ?? {}), mission: { x: vw - m.x - w, y: m.y, w, h: ms === 'toPickup' || ms === 'toDropoff' ? 92 : 58 } };
       this.panel(vw - m.x - w, m.y, w, ms === 'toPickup' || ms === 'toDropoff' ? 92 : 58);
       this.text('AUFTRAG', vw - m.x - w + 16, m.y + 22, { size: 13, color: YELLOW, weight: 800 });
       this.text(obj.text, vw - m.x - w + 16, m.y + 46, { size: 19 });
@@ -153,6 +176,7 @@ export class Hud {
     // Unten rechts: Fahrzeugzustand
     if (car) {
       const w = 250, h = 106, x = vw - m.x - w, y = vh - m.y - h;
+      this.layout = { ...(this.layout ?? {}), car: { x, y, w, h } };
       this.panel(x, y, w, h);
       const kmh = Math.round(speedOf(car) * SPEED_TO_KMH);
       this.text(`${kmh}`, x + 20, y + 52, { size: 44, weight: 800 });
@@ -201,6 +225,7 @@ export class Hud {
   }
 
   drawMinimap(world, target, x, y, size) {
+    this.layout = { ...(this.layout ?? {}), minimap: { x, y, w: size, h: size } };
     const c = this.ctx, p = playerCar(world) ?? world.player, city = world.city;
     const zoom = size / 4000; // Minikarte zeigt ~400 m
     c.save();
@@ -308,7 +333,7 @@ export class Hud {
     v.cy = hh * 2 >= city.height ? city.height / 2 : Math.min(city.height - hh, Math.max(hh, v.cy));
     const ox = x + w / 2 - v.cx * f, oy = y + h / 2 - v.cy * f;
     this.bigMap = { x, y, w, h, f, f0, ox, oy }; // für Mausklicks (virtuelle HUD-Koordinaten)
-    this.hits.push({ kind: 'map', x, y, w, h });
+    this.addHit({ kind: 'map', x, y, w, h });
     const ov = this.overview ?? this.buildOverview(city);
     c.save();
     rr(c, x, y, w, h, 10); c.clip();
@@ -382,7 +407,7 @@ export class Hud {
     const c = this.ctx;
     menu.items.forEach((it, i) => {
       const yy = y + i * 58, sel = i === menu.index, dis = it.enabled === false;
-      if (!dis) this.hits.push({ kind: 'menu', menu, i, x: cx - width / 2, y: yy - 24, w: width, h: 48 });
+      if (!dis) this.addHit({ kind: 'menu', menu, i, x: cx - width / 2, y: yy - 24, w: width, h: 48 });
       if (sel) {
         c.fillStyle = YELLOW; rr(c, cx - width / 2, yy - 24, width, 48, 10); c.fill();
       } else { c.fillStyle = 'rgba(15,17,24,0.7)'; rr(c, cx - width / 2, yy - 24, width, 48, 10); c.fill(); }
@@ -397,7 +422,7 @@ export class Hud {
     const widths = items.map(([, label]) => gw + 8 + c.measureText(label).width);
     let x = this.vw / 2 - (widths.reduce((a, b) => a + b, 0) + 36 * (items.length - 1)) / 2;
     items.forEach(([k, label], i) => {
-      this.hits.push({ kind: 'key', key: k, x: x - 8, y: y - 20, w: widths[i] + 16, h: 36 });
+      this.addHit({ kind: 'key', key: k, x: x - 8, y: y - 20, w: widths[i] + 16, h: 36 });
       this.glyph(k, x + gw / 2, y, 12);
       this.text(label, x + gw + 8, y + 7, { size: 17, weight: 500 });
       x += widths[i] + 36;
@@ -405,11 +430,18 @@ export class Hud {
   }
 
   drawTitle(g) {
-    const c = this.ctx, vw = this.vw, vh = this.vh;
-    const grad = c.createLinearGradient(0, 0, 0, vh);
+    const c = this.ctx;
+    const grad = c.createLinearGradient(0, 0, 0, this.vh);
     grad.addColorStop(0, 'rgba(10,8,30,0.35)'); grad.addColorStop(1, 'rgba(10,8,20,0.85)');
-    c.fillStyle = grad; c.fillRect(0, 0, vw, vh);
-    drawSkyline(c, vw, vh);
+    c.fillStyle = grad; c.fillRect(0, 0, this.vw, this.vh);
+    drawSkyline(c, this.vw, this.vh);
+    this.text(`v${VERSION} · Prototyp`, this.vw - this.m.x, this.vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
+    this.text('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', this.m.x, this.vh - this.m.y, { size: 12, color: '#999', weight: 500 });
+    this.inFrame(() => this.titleContent(g));
+  }
+
+  titleContent(g) {
+    const vw = this.vw;
     this.text('GTA', vw / 2, 150, { size: 64, align: 'center', weight: 900, color: '#fff' });
     this.text('BERLIN', vw / 2, 232, { size: 96, align: 'center', weight: 900, color: YELLOW });
     this.text('Kisten für den Kiez', vw / 2, 272, { size: 22, align: 'center', weight: 500, color: '#ddd' });
@@ -417,13 +449,14 @@ export class Hud {
       this.menu(g.titleMenu, vw / 2, 350);
       this.footerHints([['A', 'Auswählen']]);
     } else this.text(g.loadError ? `Karte nicht ladbar: ${g.loadError}` : 'Lade Berlin …', vw / 2, 380, { size: 22, align: 'center', weight: 600, color: g.loadError ? '#ff8080' : '#ddd' });
-    this.text(`v${VERSION} · Prototyp`, vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
-    this.text('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', this.m.x, vh - this.m.y, { size: 12, color: '#999', weight: 500 });
   }
 
   drawPause(g) {
-    const c = this.ctx;
-    c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(0, 0, this.vw, this.vh);
+    this.fillScreen('rgba(0,0,0,0.6)');
+    this.inFrame(() => this.pauseContent(g));
+  }
+
+  pauseContent(g) {
     this.text('PAUSE', this.vw / 2, 170, { size: 56, align: 'center', weight: 900, color: YELLOW });
     const w = g.world;
     this.text(`Aufträge erledigt: ${w.completed}   ·   Bestzeit: ${w.bestTime ? fmtTime(w.bestTime) : '–'}`, this.vw / 2, 210, { size: 18, align: 'center', weight: 500, color: '#ccc' });
@@ -432,8 +465,12 @@ export class Hud {
   }
 
   drawResult(g) {
-    const c = this.ctx, r = g.world.mission.result, vw = this.vw;
-    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(0, 0, vw, this.vh);
+    this.fillScreen('rgba(0,0,0,0.55)');
+    this.inFrame(() => this.resultContent(g));
+  }
+
+  resultContent(g) {
+    const r = g.world.mission.result, vw = this.vw;
     const ok = r.success;
     this.text(ok ? 'AUFTRAG ERFÜLLT' : 'AUFTRAG GESCHEITERT', vw / 2, 190, { size: 58, align: 'center', weight: 900, color: ok ? '#6fe06a' : '#ff5b5b' });
     if (ok) {
@@ -449,8 +486,12 @@ export class Hud {
   }
 
   drawControls() {
+    this.fillScreen('rgba(5,6,10,0.9)');
+    this.inFrame(() => this.controlsContent());
+  }
+
+  controlsContent() {
     const c = this.ctx, vw = this.vw;
-    c.fillStyle = 'rgba(5,6,10,0.9)'; c.fillRect(0, 0, vw, this.vh);
     this.text('STEUERUNG', vw / 2, 110, { size: 44, align: 'center', weight: 900, color: YELLOW });
     const rows = [
       ['Laufen / Lenken', 'Linker Stick', 'WASD / Pfeile'],
