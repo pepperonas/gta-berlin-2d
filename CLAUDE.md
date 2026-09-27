@@ -61,6 +61,9 @@ change in `web/`.
   (`w.loading`) until they arrive; `findTeleportSpot` returns `{pending}` for unloaded targets; saves resolve lazily.
   Anything cached on edges/nodes (`_walk`, `_slots`, `_marks`) is only computed near the camera, where tiles are complete;
   per-node data needed at the fringe (junction discs, lane trim) comes precomputed from the build.
+- **Big map** (`hud.drawBigMap`, data `overview.json`): vector layers as Path2D per class; labels from
+  `web/src/maplabels.js` (pure: `mapLabels(data, view, measure, blocked)` picks tiers by metres per HUD pixel, places
+  greedily without overlap, street names along chained street runs from `tiles.mjs chainStreets`); cached per view.
 - **Street cross-section** (`tools/osm/crosssection.mjs` → `e.cs` at runtime, lane layout in `web/src/street.js`
   `laneOffsets(cs, unit)`): curb-to-curb width, lanes per direction, parking/cycle lanes per side, maxspeed, surface.
   `unit` is 1 in the build (m) and `city.scale` in the game (px). Lanes (`roadgraph.js`), markings (`render.js`),

@@ -2,6 +2,7 @@
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { undelta } from './geom.js';
+import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
 import { AREA_KIND } from './citycodes.js';
 import { VERSION } from './version.js';
@@ -85,13 +86,24 @@ export class Hud {
     for (const [k, rings] of ov.areas) { let p = areas.get(k); if (!p) areas.set(k, p = new Path2D()); for (const [, d] of rings) ring(p, d); }
     const water = new Path2D(); for (const rings of ov.water) for (const [, d] of rings) ring(water, d);
     const roads = [new Path2D(), new Path2D(), new Path2D(), new Path2D()]; // Autobahn · Hauptstraße · Nebenstraße · Wohnstraße
-    for (const [cls, d] of ov.roads) line(roads[cls <= 2 ? 0 : cls <= 4 ? 1 : cls <= 5 ? 2 : 3], d);
+    for (const [cls, , d] of ov.roads) line(roads[cls <= 2 ? 0 : cls <= 4 ? 1 : cls <= 5 ? 2 : 3], d);
     const rails = new Path2D(); for (const d of ov.rails) line(rails, d);
     const border = ringPath(city.border);
     const bezirke = new Path2D(); for (const b of city.bezirke) for (const r of b.rings) { bezirke.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) bezirke.lineTo(r[i], r[i + 1]); bezirke.closePath(); }
     const outside = new Path2D(); outside.rect(-1e6, -1e6, city.width + 2e6, city.height + 2e6); outside.addPath(border);
-    this.overview = { areas, water, roads, rails, border, bezirke, outside, stations: ov.stations, labels: ov.labels };
+    this.overview = { areas, water, roads, rails, border, bezirke, outside, stations: ov.stations,
+      labelData: { labels: ov.labels, ortsteile: ov.ortsteile ?? [], kieze: ov.kieze ?? [], stations: ov.stations, streets: prepareStreets(ov.roads, ov.names ?? [], undelta) } };
     return this.overview;
+  }
+
+  // Schrift mit dunklem Rand (Beschriftung auf dem Stadtplan), optional gedreht
+  haloText({ text, x, y, angle = 0, size, weight, color, italic }) {
+    const c = this.ctx;
+    c.save(); c.translate(x, y); if (angle) c.rotate(angle);
+    c.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.lineJoin = 'round'; c.lineWidth = 3.2; c.strokeStyle = 'rgba(12,13,17,0.9)'; c.strokeText(text, 0, 0.5);
+    c.fillStyle = color; c.fillText(text, 0, 0.5);
+    c.restore();
   }
 
   // Ansicht des Stadtplans: Zoom (1 = ganz Berlin) und Mittelpunkt in Weltkoordinaten; Mausrad/Ziehen in main.js.
@@ -99,7 +111,7 @@ export class Hud {
     const m = this.bigMap, v = this.mapView;
     if (!m || !v) return;
     const wx = (vx - m.ox) / m.f, wy = (vy - m.oy) / m.f;
-    v.z = Math.min(40, Math.max(1, v.z * factor));
+    v.z = Math.min(64, Math.max(1, v.z * factor)); // 1 = ganz Berlin, 64 ≈ 1 m je Bildpunkt (Straßennamen)
     const f = m.f0 * v.z;
     v.cx = wx - (vx - m.x - m.w / 2) / f; v.cy = wy - (vy - m.y - m.h / 2) / f;
   }
@@ -305,13 +317,22 @@ export class Hud {
       c.strokeStyle = '#ffd33d'; c.lineWidth = W(2.5); c.stroke(ov.border);
       c.restore();
       const S = (wx, wy) => [ox + wx * f, oy + wy * f];
-      for (const [qx, qy, cat, n] of ov.stations) {
+      for (const [qx, qy, cat] of ov.stations) {
         const [sx, sy] = S(qx, qy);
         if (sx < x - 20 || sx > x + w + 20 || sy < y - 20 || sy > y + h + 20) continue;
         this.stationIcon(cat, sx, sy, v.z >= 3 ? 6 : 3.5);
-        if (v.z >= 6) this.text(n, sx + 9, sy + 5, { size: 13, color: '#eee', weight: 600 });
       }
-      if (v.z < 4) for (const [lx, ly, n] of ov.labels) { const [sx, sy] = S(lx, ly); this.text(n, sx, sy, { size: 15, align: 'center', weight: 700, color: 'rgba(255,255,255,0.8)' }); }
+      // Beschriftung je Maßstab: Bezirke → Ortsteile → Kieze und Bahnhöfe → Straßennamen (maplabels.js)
+      const mpp = 1 / (f * city.scale);
+      const measure = (t, st) => { c.font = `${st.italic ? 'italic ' : ''}${st.weight} ${st.size}px ${FONT}`; return c.measureText(t).width; };
+      // nur neu setzen, wenn sich die Ansicht geändert hat (sonst die gemerkten Beschriftungen zeichnen)
+      const key = `${f}|${ox}|${oy}|${w}|${h}`;
+      if (ov.labelKey !== key) {
+        const hint = { x0: x + 10, y0: y + h - 40, x1: x + 10 + 470, y1: y + h - 10 }; // Hinweisleiste unten links
+        ov.labels = mapLabels(ov.labelData, { f, ox, oy, x, y, w, h, mpp }, measure, [hint]);
+        ov.labelKey = key;
+      }
+      for (const l of ov.labels) this.haloText(l);
     } else this.text('Stadtplan lädt …', x + w / 2, y + h / 2, { size: 22, align: 'center', weight: 700 });
     const obj = missionObjective(world.mission, { places: city.places, player: world.player, cars: world.cars });
     const dot = (wx, wy, r, fill) => { c.fillStyle = fill; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(ox + wx * f, oy + wy * f, r, 0, Math.PI * 2); c.fill(); c.stroke(); };

@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.2.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.3.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -72,7 +72,10 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Auto mit der Ware zum Wrack wird. Lohn mit Zeitbonus und Schadensabzug, Bestzeit. Die Orte stehen in
   [`data/places.json`](data/places.json) und lassen sich austauschen.
 - HUD: echter Straßenname (an Kreuzungen „A / B“, sonst Kiez oder Bezirk), Geld, Auftrag und Timer, Minikarte, Richtungspfeil mit Entfernung, Tempo und Fahrzeugzustand,
-  Stadtplan von ganz Berlin auf der Ansicht-Taste (Mausrad zoomt bis auf Straßenebene, Ziehen verschiebt).
+  Stadtplan von ganz Berlin auf der Ansicht-Taste (Mausrad zoomt bis auf Straßenebene, Ziehen verschiebt). Die
+  Beschriftung folgt dem Maßstab wie bei kiez-finder: ganz Berlin mit den 12 Bezirken, näher die Ortsteile (Tegel,
+  Prenzlauer Berg …), dann die Kiez-Namen aus OSM (Flughafenkiez, Reuterkiez … – 568 Kieze) und Bahnhöfe, ab etwa 3 m
+  je Bildpunkt die Namen der Hauptstraßen und ab 2,6 m aller Straßen, entlang der Straße und ohne Überlappung.
   **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
   auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
   neuen Ort. Während eines laufenden Auftrags gesperrt (sonst wäre die Mission trivial). Tastensymbole wechseln zwischen Controller und Tastatur.
@@ -106,7 +109,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 85 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 89 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -248,7 +251,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 85 automatischen Tests grün, darunter:
+- Alle 89 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -259,6 +262,9 @@ in Edge `edge://inspect` mit der Konsole verbinden
     (Alexanderplatz, Rathaus Spandau, Köpenick, Marzahn, Tegel, Zoo, Rathaus Steglitz …) im richtigen Ortsteil und Bezirk
     an der richtigen Straße; Kacheln fügen sich ohne doppelte Straßen oder Gebäude; der PBF-Leser an einer selbst
     erzeugten Datei;
+  - Stadtplan-Beschriftung: je Maßstab die richtigen Ebenen (Bezirke → Ortsteile → Kieze/Bahnhöfe → Straßennamen),
+    Tegel, Prenzlauer Berg, Flughafenkiez, Karl-Marx-Straße, Flughafenstraße an ihren Orten, nichts überlappt oder liegt
+    unter der Hinweisleiste, kein Text kopfüber (gegengeprüft: ohne Kollisionsprüfung schlägt der Test fehl);
   - Nachladen wie im Browser (Kacheln kommen asynchron): Welt steht, bis der Stadtteil da ist, Teleport nach Spandau lädt
     erst das Ziel, das alte Viertel wird danach freigegeben;
   - POIs: jeder U-/S-Bahnhof genau einmal, Neukölln Arcaden in Neukölln, Penny, Mindestzahlen je Kategorie;

@@ -154,9 +154,84 @@ export function overviewOf(g) {
   const rings = (f, tol, minArea) => f.rings.map((r) => { const p = simplify(r.pts, tol); return p.length >= 8 && Math.abs(ringArea(p)) >= minArea ? [r.outer ? 1 : 0, delta(p)] : null; }).filter(Boolean);
   const water = g.water.map((f) => rings(f, 6 * S, 1500 * S * S)).filter((r) => r.some((x) => x[0]));
   const areas = g.areas.filter((a) => GREEN.has(a.k)).map((a) => [a.k, rings(a, 8 * S, 8000 * S * S)]).filter(([, r]) => r.some((x) => x[0]));
-  const roads = g.edges.filter((ed) => ed.c <= 7 && !ed.pass).map((ed) => [ed.c, delta(simplify([vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)], (ed.c <= 5 ? 3 : 6) * S))]);
+  // Straßen mit Namen (eigene Namenstabelle) – der Stadtplan beschriftet sie beim Heranzoomen
+  const names = [], nameIdx = new Map();
+  const nm = (s) => { if (!s) return -1; let k = nameIdx.get(s); if (k === undefined) { k = names.length; names.push(s); nameIdx.set(s, k); } return k; };
+  // Kanten gleichen Namens und gleicher Klasse zu durchgehenden Straßenzügen verketten (eine Kante reicht nur von
+  // Kreuzung zu Kreuzung – zu kurz für einen Namen); an Abzweigen geht es in der geradesten Richtung weiter.
+  const roads = chainStreets(g.edges.filter((ed) => ed.c <= 7 && !ed.pass), g, vx, vy)
+    .map(({ c, n, pts }) => [c, nm(g.names[n]), delta(simplify(pts, (c <= 5 ? 3 : 6) * S))]);
   const rails = g.rails.filter((r) => !r.sub).map((r) => delta(simplify(r.p, 8 * S)));
   const stations = g.pois.filter((q) => q.cat === 'ubahn' || q.cat === 'sbahn').map((q) => [q.x, q.y, q.cat, g.names[q.n]]);
-  const labels = g.bezirke.map((b) => { let x = 0, y = 0, n = 0; const r = b.rings[0]; for (let i = 0; i < r.length; i += 2) { x += r[i]; y += r[i + 1]; n++; } return [Math.round(x / n), Math.round(y / n), b.name]; });
-  return { water, areas, roads, rails, stations, labels };
+  // Beschriftungspunkte: Bezirke, Ortsteile (im Inneren der Fläche, nicht am Schwerpunkt) und Kieze
+  const place = (list) => list.map((d) => { const [x, y, area] = labelPoint(d.rings); return [x, y, d.name, Math.round(area / (S * S) / 1e4)]; }); // Fläche in ha
+  const labels = place(g.bezirke), ortsteile = place(g.districts);
+  const kieze = g.kieze.map((k) => [k.x, k.y, k.n]);
+  return { water, areas, roads, names, rails, stations, labels, ortsteile, kieze };
+}
+
+// Punkt im Inneren einer Fläche, möglichst weit vom Rand (für die Beschriftung; der Schwerpunkt kann bei
+// gebogenen Ortsteilen außerhalb liegen). Grobes Raster, dann verfeinert. Liefert [x, y, Fläche].
+export function labelPoint(rings) {
+  const outer = rings.reduce((a, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(a)) ? r : a), rings[0]);
+  const area = Math.abs(ringArea(outer));
+  const [x0, y0, x1, y1] = bboxOf(outer);
+  const inside = (x, y) => { let c = false; for (let i = 0, j = outer.length - 2; i < outer.length; j = i, i += 2) { const xi = outer[i], yi = outer[i + 1], xj = outer[j], yj = outer[j + 1]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const edgeDist = (x, y) => { let d = Infinity; for (let i = 0; i < outer.length - 2; i += 2) { const ax = outer[i], ay = outer[i + 1], bx = outer[i + 2], by = outer[i + 3], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy; let t = L ? ((x - ax) * dx + (y - ay) * dy) / L : 0; t = Math.max(0, Math.min(1, t)); d = Math.min(d, Math.hypot(ax + t * dx - x, ay + t * dy - y)); } return d; };
+  let best = null, cell = Math.max(x1 - x0, y1 - y0) / 16;
+  let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, span = 8;
+  for (let round = 0; round < 4; round++) {
+    for (let i = -span; i <= span; i++) for (let j = -span; j <= span; j++) {
+      const x = cx + i * cell, y = cy + j * cell;
+      if (!inside(x, y)) continue;
+      const d = edgeDist(x, y);
+      if (!best || d > best.d) best = { x, y, d };
+    }
+    if (!best) break;
+    cx = best.x; cy = best.y; cell /= 4; span = 4;
+  }
+  return best ? [Math.round(best.x), Math.round(best.y), area] : [Math.round((x0 + x1) / 2), Math.round((y0 + y1) / 2), area];
+}
+
+export function chainStreets(edges, g, vx, vy) {
+  const groups = new Map();
+  for (const ed of edges) { const k = ed.n >= 0 ? `${ed.n}|${ed.c}` : null; if (k === null) continue; (groups.get(k) ?? groups.set(k, []).get(k)).push(ed); }
+  const out = edges.filter((ed) => ed.n < 0).map((ed) => ({ c: ed.c, n: ed.n, pts: [vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)] }));
+  const ptsOf = (ed, fromA) => { const p = [vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)]; if (fromA) return p; const r = []; for (let i = p.length - 2; i >= 0; i -= 2) r.push(p[i], p[i + 1]); return r; };
+  for (const list of groups.values()) {
+    const at = new Map();
+    for (const ed of list) for (const v of [ed.a, ed.b]) (at.get(v) ?? at.set(v, []).get(v)).push(ed);
+    const used = new Set();
+    const dirAt = (pts, end) => { const n = pts.length; return end ? Math.atan2(pts[n - 1] - pts[n - 3], pts[n - 2] - pts[n - 4]) : Math.atan2(pts[3] - pts[1], pts[2] - pts[0]); };
+    const extend = (pts, v) => { // am Ende (Knoten v) weiterverketten
+      for (;;) {
+        const heading = dirAt(pts, true);
+        let best = null;
+        for (const ed of at.get(v) ?? []) {
+          if (used.has(ed)) continue;
+          const p = ptsOf(ed, ed.a === v);
+          let d = Math.abs(dirAt(p, false) - heading); if (d > Math.PI) d = 2 * Math.PI - d;
+          if (d < 1.2 && (!best || d < best.d)) best = { ed, p, d };
+        }
+        if (!best) return pts;
+        used.add(best.ed);
+        for (let i = 2; i < best.p.length; i++) pts.push(best.p[i]);
+        v = best.ed.a === v ? best.ed.b : best.ed.a;
+      }
+    };
+    // Start an Enden (Knoten mit nur einer Kante dieses Namens), dann Reste (Ringe)
+    const order = [...list].sort((a, b) => ((at.get(a.a).length === 1 || at.get(a.b).length === 1) ? 0 : 1) - ((at.get(b.a).length === 1 || at.get(b.b).length === 1) ? 0 : 1) || a.a - b.a);
+    for (const ed of order) {
+      if (used.has(ed)) continue;
+      used.add(ed);
+      const fromA = at.get(ed.a).length === 1 || at.get(ed.b).length !== 1;
+      let pts = ptsOf(ed, fromA);
+      pts = extend(pts, fromA ? ed.b : ed.a);
+      // auch nach hinten weiter (falls nicht an einem Ende begonnen)
+      const rev = []; for (let i = pts.length - 2; i >= 0; i -= 2) rev.push(pts[i], pts[i + 1]);
+      pts = extend(rev, fromA ? ed.a : ed.b);
+      out.push({ c: ed.c, n: ed.n, pts });
+    }
+  }
+  return out;
 }

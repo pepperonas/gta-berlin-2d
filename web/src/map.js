@@ -86,14 +86,23 @@ function tilesAround(city, x, y, r) {
   return out;
 }
 
+// Fehlgeschlagene Kacheln erst nach einer Pause erneut anfragen (sonst jedes Bild eine Anfrage und eine Fehlermeldung).
+export const RETRY_MS = [1000, 3000, 10000];
+
 function request(city, key) {
-  if (city.tiles.has(key)) return;
+  const old = city.tiles.get(key);
+  if (old && !(old.state === 'failed' && Date.now() >= old.retryAt)) return;
   const res = city.loader(key);
   if (res && typeof res.then === 'function') {
-    const entry = { state: 'loading' };
+    const entry = { state: 'loading', fails: old?.fails ?? 0 };
     city.tiles.set(key, entry);
     res.then((json) => { if (city.tiles.get(key) === entry) install(city, key, json); })
-      .catch((err) => { if (city.tiles.get(key) === entry) city.tiles.delete(key); console.error(`Kachel ${key}:`, err); });
+      .catch((err) => {
+        if (city.tiles.get(key) !== entry) return;
+        const fails = entry.fails + 1;
+        city.tiles.set(key, { state: 'failed', fails, retryAt: Date.now() + RETRY_MS[Math.min(fails, RETRY_MS.length) - 1] });
+        if (fails === 1) console.error(`Kachel ${key}:`, err); // einmal melden, nicht bei jedem neuen Versuch
+      });
   } else if (res) install(city, key, res);
 }
 

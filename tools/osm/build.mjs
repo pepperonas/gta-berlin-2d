@@ -367,6 +367,18 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], tile 
     if (t.natural === 'tree') { const p = toPx(nd.lat, nd.lon); if (p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H) trees.push({ x: p[0], y: p[1], g: 0, c: 0, r: 0, osm: true }); }
     else if (['neighbourhood', 'quarter'].includes(t.place) && t.name) { const p = toPx(nd.lat, nd.lon); if (insideBorder(p[0], p[1])) kieze.push({ n: t.name, x: p[0], y: p[1] }); }
   }
+  // Kieze, die in OSM als Fläche statt als Punkt eingetragen sind (Schwerpunkt der Außenpunkte)
+  const kiezNames = new Set(kieze.map((k) => k.n));
+  for (const el of [...osm.ways.values(), ...osm.relations]) {
+    const t = el.tags;
+    if (!t || !['neighbourhood', 'quarter'].includes(t.place) || !t.name || kiezNames.has(t.name)) continue;
+    const ids = el.type === 'way' ? el.nodes : el.members.filter((m) => m.type === 'way' && m.role !== 'inner').flatMap((m) => osm.ways.get(m.ref)?.nodes ?? []);
+    let x = 0, y = 0, k = 0;
+    for (const id of new Set(ids)) { const p = P(id); if (p) { x += p[0]; y += p[1]; k++; } }
+    if (!k) continue;
+    x = Math.round(x / k); y = Math.round(y / k);
+    if (insideBorder(x, y)) { kieze.push({ n: t.name, x, y }); kiezNames.add(t.name); }
+  }
   const katStats = mergeKataster(trees, kataster, { toPx, W, H, S });
   const treeStats = { ...katStats, ...keepTreesOffRoads(trees, { edges, vertices, buildings, water, junctions, S }) };
   trees.sort((a, b) => a.y - b.y || a.x - b.x);

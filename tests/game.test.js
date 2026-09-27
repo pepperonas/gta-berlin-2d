@@ -217,3 +217,23 @@ test('Mauszeiger: passender Zeiger je Lage, beim Spielen ausgeblendet, wenn die 
     assert.ok(svg.includes('#ffd33d'), `${k}: Spielgelb`);
   }
 });
+
+test('Kachel lädt nicht: kein erneuter Versuch in jedem Bild, sondern nach einer Pause; dann klappt es', async () => {
+  const { openCity } = await import('../web/src/map.js');
+  const { realIndex, tileLoader } = await import('./helpers/city.js');
+  const sync = tileLoader(), calls = new Map();
+  let offline = true;
+  const c = openCity(realIndex(), (k) => { calls.set(k, (calls.get(k) ?? 0) + 1); return offline ? Promise.reject(new Error('offline')) : Promise.resolve(sync(k)); });
+  const p = c.places.giver, errors = [];
+  const orig = console.error; console.error = (...a) => errors.push(a);
+  try {
+    for (let i = 0; i < 60; i++) { c.focus('w', p.x, p.y); await new Promise((r) => setTimeout(r, 0)); }
+    assert.ok([...calls.values()].every((n) => n === 1), 'jede Kachel nur einmal angefragt');
+    assert.equal(errors.length, calls.size, 'ein Fehler je Kachel, nicht je Bild');
+    assert.ok(!c.ready(p.x, p.y));
+    offline = false;
+    for (const t of c.tiles.values()) t.retryAt = 0; // Pause abgelaufen
+    c.focus('w', p.x, p.y); await new Promise((r) => setTimeout(r, 0));
+    assert.ok(c.ready(p.x, p.y), 'nach der Pause geladen');
+  } finally { console.error = orig; }
+});
