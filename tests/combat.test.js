@@ -194,3 +194,88 @@ test('Eingabe: RT feuert (nicht die W-Taste), B/V treten, LB/RB/Q wechseln, 1–
   f = inp.frame(merge(readKeys(new Set(['ControlLeft', 'KeyR'])), readPad(pad({}))), 1 / 60); assert.ok(f.fire && f.reload);
   f = inp.frame(merge(readKeys(new Set()), readPad(pad({ axes: [0, 0, 0.9, 0] }))), 1 / 60); assert.ok(f.aimX > 0.8);
 });
+
+// --- Stufe 2: Gegenwehr, Lebenspunkte, Krankenhaus ------------------------------------------------------------
+import { isFighter, FIGHT, REGEN, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP, hurtPlayer } from '../web/src/combat.js';
+import { nearestHospital } from '../web/src/world.js';
+
+// Passant mit gewünschtem Charakter (wehrt sich / wehrt sich nicht)
+function pedOfKind(w, x, y, fighter) {
+  for (let i = 0; i < 200; i++) { const q = pedAt(w, x, y); if (isFighter(q) === fighter) return q; w.peds.pop(); }
+  throw new Error('kein passender Passant');
+}
+
+test('Gegenwehr: wer sich wehrt, steht nach dem Schlag auf, kommt zurück und trifft; andere fliehen', () => {
+  const { w, p, ang } = arena();
+  const f = pedOfKind(w, p.x + Math.cos(ang) * 16, p.y + Math.sin(ang) * 16, true);
+  step(w, { aimWorld: { x: f.x, y: f.y }, fire: true, firePressed: true });
+  assert.equal(f.state, 'down');
+  for (let i = 0; i < 60 * 4 && f.state !== 'fight'; i++) step(w);
+  assert.equal(f.state, 'fight', 'schlägt zurück');
+  const hp0 = p.hp;
+  for (let i = 0; i < 60 * 3; i++) step(w);
+  assert.ok(p.hp <= hp0 - FIGHT.dmg, `Spielfigur getroffen (${hp0} → ${p.hp})`);
+  // wer sich nicht wehrt, flieht
+  const { w: w2, p: p2, ang: a2 } = arena();
+  const n = pedOfKind(w2, p2.x + Math.cos(a2) * 16, p2.y + Math.sin(a2) * 16, false);
+  step(w2, { aimWorld: { x: n.x, y: n.y }, fire: true, firePressed: true });
+  for (let i = 0; i < 60 * 4; i++) step(w2);
+  assert.ok(n.state === 'flee' || n.state === 'return' || n.state === 'walk', `flieht (${n.state})`);
+  assert.equal(p2.hp, PLAYER_HP);
+});
+
+test('Gegenwehr: Kämpfer in der Nähe mischen bei einer Schlägerei mit; Lebenspunkte kommen nach einer Pause zurück', () => {
+  const { w, p, ang } = arena();
+  const victim = pedOfKind(w, p.x + Math.cos(ang) * 16, p.y + Math.sin(ang) * 16, false);
+  const buddy = pedOfKind(w, p.x - Math.cos(ang) * 40, p.y - Math.sin(ang) * 40, true);
+  step(w, { aimWorld: { x: victim.x, y: victim.y }, fire: true, firePressed: true });
+  assert.equal(buddy.state, 'fight');
+  hurtPlayer(w, 30, p.x + 10, p.y);
+  const hp = p.hp;
+  w.peds = w.peds.filter((q) => q !== buddy);
+  step(w, {}, Math.round(60 * (REGEN.delay - 1)));
+  assert.equal(Math.round(p.hp), Math.round(hp), 'erst warten');
+  step(w, {}, 60 * 3);
+  assert.ok(p.hp > hp + 5, 'dann heilt es');
+});
+
+test('K. o.: bei 0 Lebenspunkten Neustart am nächsten Krankenhaus, Auftrag gescheitert, 10 % Geld weg', () => {
+  const { w, p } = arena();
+  assert.ok(w.city.hospitals.length >= 40, 'Krankenhäuser im Index');
+  w.money = 1000;
+  w.mission.state = 'toPickup'; w.mission.timer = 500;
+  const h = nearestHospital(w.city, p.x, p.y);
+  hurtPlayer(w, 500, p.x + 5, p.y);
+  assert.ok(p.dead && w.events.some((e) => e.type === 'wasted'));
+  step(w, { moveX: 1, fire: true, firePressed: true }, 30);
+  assert.ok(p.dead, 'liegt');
+  for (let i = 0; i < 60 * (RESPAWN_DELAY + 5) && p.dead; i++) step(w);
+  assert.ok(!p.dead, 'wieder auf den Beinen');
+  assert.equal(p.hp, PLAYER_HP);
+  assert.ok(Math.hypot(p.x - h.x, p.y - h.y) < 3000, `am Krankenhaus ${h.name} (${Math.round(Math.hypot(p.x - h.x, p.y - h.y))} px)`);
+  assert.equal(w.money, 1000 - Math.floor(1000 * HOSPITAL_FEE));
+  assert.equal(w.mission.state, 'failed');
+  assert.match(w.mission.result.reason, /Krankenhaus/);
+});
+
+test('Anfahren verletzt die Spielfigur', () => {
+  const { w, p, ang } = arena();
+  const car = createCar({ x: p.x - Math.cos(ang) * 60, y: p.y - Math.sin(ang) * 60, angle: ang });
+  car.vx = Math.cos(ang) * 250; car.vy = Math.sin(ang) * 250;
+  w.cars.push(car);
+  for (let i = 0; i < 30; i++) { car.vx = Math.cos(ang) * 250; car.vy = Math.sin(ang) * 250; step(w); }
+  assert.ok(p.hp < PLAYER_HP, `Lebenspunkte ${p.hp}`);
+});
+
+test('Im Auto und am Boden keine weiteren Treffer (kein doppeltes K. o.)', () => {
+  const { w, p } = arena();
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  p.inCar = car.id; car.driver = 'player';
+  hurtPlayer(w, 50, p.x + 5, p.y);
+  assert.equal(p.hp, PLAYER_HP, 'im Auto unverletzt');
+  p.inCar = null; car.driver = null;
+  w.events.length = 0;
+  hurtPlayer(w, 500, p.x + 5, p.y);
+  hurtPlayer(w, 500, p.x + 5, p.y);
+  assert.equal(w.events.filter((e) => e.type === 'wasted').length, 1);
+});

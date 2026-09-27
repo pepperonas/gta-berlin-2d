@@ -220,6 +220,10 @@ Kisten) und gegen Passanten (Kreis) und Autos (gedrehtes Rechteck); niedrige Wä
 lassen Kugeln durch. Die Streuung zieht aus dem Welt-Zufall, alles bleibt deterministisch und in Node testbar. Die
 Zielhilfe sucht im Kegel um die Zielrichtung das Ziel mit kleinstem „Winkel × 300 + Abstand“ und verlangt freie Sicht.
 Maus-Zielen rechnet `main.js` in einen Weltpunkt um (`aimWorld`), wie Menüklicks als abstrakte Eingabe.
+Gegenwehr ist ein Passanten-Zustand `fight` (hinlaufen, alle 0,9 s zuschlagen, Aufgeben nach 20 s oder 45 m); ob
+jemand sich wehrt, folgt aus seiner Nummer, nicht aus dem Welt-Zufall. Das K. o. nutzt denselben Ladeweg wie der
+Teleport (`findTeleportSpot`/`teleportTo`): liegt das nächste Krankenhaus in einem ungeladenen Stadtteil, wartet die
+Welt, bis er da ist.
 
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),

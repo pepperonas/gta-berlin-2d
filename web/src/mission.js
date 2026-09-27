@@ -93,6 +93,8 @@ function tick(m, dt, events) {
   if (m.timer <= 0) fail(m, 'Zeit abgelaufen – die Stammgäste sitzen auf dem Trockenen.', events);
 }
 
+export function failMission(m, reason, events) { fail(m, reason, events); }
+
 function fail(m, reason, events) {
   m.state = 'failed';
   m.result = { success: false, reason };

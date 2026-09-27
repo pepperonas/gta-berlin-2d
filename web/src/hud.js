@@ -5,7 +5,7 @@
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
-import { WEAPONS } from './combat.js';
+import { WEAPONS, PLAYER_HP } from './combat.js';
 import { undelta } from './geom.js';
 import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
@@ -143,7 +143,7 @@ export class Hud {
 
   drawWeaponPanel(p) {
     const c = this.ctx, m = this.m;
-    const w = 250, h = 86, x = this.vw - m.x - w, y = this.vh - m.y - h;
+    const w = 250, h = 104, x = this.vw - m.x - w, y = this.vh - m.y - h;
     this.layout = { ...(this.layout ?? {}), weapon: { x, y, w, h } };
     const wp = WEAPONS[p.weapon ?? 0];
     this.panel(x, y, w, h);
@@ -163,6 +163,27 @@ export class Hud {
       const mag = p.mag?.[p.weapon] ?? 0;
       const tw = this.text(`${mag}`, x + 18, y + 68, { size: 34, weight: 800, color: mag <= wp.mag * 0.25 ? '#ff8080' : '#fff' });
       this.text(`/ ${wp.mag}   ∞`, x + 26 + tw, y + 68, { size: 17, color: '#bbb', weight: 600 });
+    }
+    // Lebenspunkte
+    const hp = Math.max(0, (p.hp ?? PLAYER_HP) / PLAYER_HP);
+    c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x + 18, y + 84, w - 36, 9, 4.5); c.fill();
+    c.fillStyle = hp > 0.6 ? '#4cd964' : hp > 0.3 ? '#ffcc00' : '#ff3b30';
+    if (hp > 0) { rr(c, x + 18, y + 84, (w - 36) * hp, 9, 4.5); c.fill(); }
+    this.text('♥', x + w - 16, y + 94, { size: 12, align: 'right', color: '#ff8a8a', weight: 800, shadow: false });
+  }
+
+  // Treffer: roter Rand, K. o.: Bild dunkelrot mit Schrift
+  drawHurt(p) {
+    const c = this.ctx, vw = this.vw, vh = this.vh;
+    const a = p.dead ? Math.min(0.55, (p.deadT ?? 0) * 0.4) : (p.hurtFlash ?? 0) * 0.45;
+    if (a > 0.01) {
+      const g = c.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.3, vw / 2, vh / 2, Math.max(vw, vh) * 0.75);
+      g.addColorStop(0, 'rgba(120,0,0,0)'); g.addColorStop(1, `rgba(150,0,0,${a})`);
+      c.fillStyle = g; c.fillRect(0, 0, vw, vh);
+    }
+    if (p.dead) {
+      this.text('K. O.', vw / 2, vh / 2 - 10, { size: 72, weight: 900, color: '#ff4d4d', align: 'center' });
+      this.text('Du wachst gleich im nächsten Krankenhaus auf …', vw / 2, vh / 2 + 34, { size: 20, align: 'center', color: '#eee' });
     }
   }
 
@@ -218,23 +239,25 @@ export class Hud {
       if (car.cargo) this.text('▣ Kisten', x + w - 20, y + 30, { size: 16, align: 'right', color: '#e0b060', weight: 700 });
     }
 
-    // Unten rechts zu Fuß: Waffe, Magazin, Nachladen
+    // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte
     if (!car) this.drawWeaponPanel(world.player);
+    this.drawHurt(world.player);
 
     // Richtungspfeil zum Ziel (am Bildschirmrand, wenn außer Sicht)
     if (obj.target) this.drawTargetArrow(world, obj.target, g);
 
     // Hinweise unten mittig
     const mission = world.mission;
-    let hint = mission.prompt;
-    if (!hint && world.notice) hint = world.notice.text;
+    let hint = mission.prompt, hintY = vh - m.y - 40;
+    // längere Meldungen über den Eckfeldern (Waffe/Tacho unten rechts), damit sie nicht überlappen
+    if (!hint && world.notice) { hint = world.notice.text; hintY = vh - m.y - 140; }
     if (!hint && !world.player.inCar) {
       const near = world.cars.some((cc) => !cc.wrecked && Math.hypot(cc.x - world.player.x, cc.y - world.player.y) < PLAYER.enterDist);
       if (near) hint = 'Y: Einsteigen';
     }
     if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = 'Y: Aussteigen';
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
-    if (hint) this.prompt(hint, vw / 2, vh - m.y - 40);
+    if (hint) this.prompt(hint, vw / 2, hintY);
     if (mission.load > 0 && mission.state === 'toPickup') {
       const w = 300, x = vw / 2 - w / 2, y = vh - m.y - 92;
       c.fillStyle = 'rgba(0,0,0,0.6)'; rr(c, x, y, w, 14, 7); c.fill();

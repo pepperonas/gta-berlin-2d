@@ -97,6 +97,8 @@ change in `web/`.
   `updatePlayerCombat`). Input fields `fire/firePressed/kick/reload/weaponNext/weaponPrev/weaponSlot/aimX/aimY/aimWorld`
   (see `idle.js`); keyboard fire is Ctrl/mouse, never W (W is throttle/walk). Peds have `hp` and a `'dead'` state
   (ignored by traffic, removed later out of sight). Renderer turns `shot/impact/blood/kill` events into effects.
+  About 15 % of peds fight back (`isFighter`, from the id): state `'fight'` via `updateFight`. Player has `hp`;
+  `hurtPlayer` → `dead` → `world.js updateKnockout` respawns at `nearestHospital` (`city.hospitals` from index.json).
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

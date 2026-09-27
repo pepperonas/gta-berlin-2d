@@ -22,9 +22,34 @@ export const CAR_BULLET_FACTOR = 0.45;     // Kugelschaden auf Autos (Anteil des
 export const ASSIST = { cone: 0.32, coneMouse: 0.1 }; // Zielhilfe: halber Kegelwinkel (rad)
 export const GUNSHOT_SCARE = 420;          // so weit fliehen Passanten vor Schüssen (px)
 export const BODY_KEEP = 60;               // Tote verschwinden frühestens nach 60 s (und nur außer Sicht)
+export const PLAYER_HP = 100;
+export const REGEN = { delay: 8, rate: 4 };   // nach 8 s ohne Treffer 4 LP/s zurück
+export const FIGHTER_SHARE = 0.15;         // so viele Passanten wehren sich mit den Fäusten
+export const FIGHT = { dmg: 9, cooldown: 0.9, reach: 17, giveUp: 20, far: 450 };
+export const RESPAWN_DELAY = 3;            // Sekunden K. o., dann Krankenhaus
+export const HOSPITAL_FEE = 0.1;           // Anteil des Geldes, der dabei verloren geht
+
+// Wehrt sich dieser Passant? Fest je Person (aus der Nummer, nicht aus dem Welt-Zufall).
+export function isFighter(ped) {
+  const x = Math.sin((ped.id ?? 0) * 78.233 + 1.7) * 43758.5453;
+  return x - Math.floor(x) < FIGHTER_SHARE;
+}
+
+// Treffer auf die Spielfigur (Faustschlag, Anfahren); bei 0 LP K. o. (world.js schickt sie ins Krankenhaus)
+export function hurtPlayer(w, dmg, fromX, fromY) {
+  const p = initCombat(w.player);
+  if (p.dead || p.inCar || dmg <= 0) return;
+  p.hp = Math.max(0, p.hp - dmg); p.sinceHurt = 0; p.hurtFlash = 1;
+  w.events.push({ type: 'player-hurt', x: p.x, y: p.y, dmg });
+  w.events.push({ type: 'blood', x: p.x, y: p.y, a: Math.atan2(p.y - fromY, p.x - fromX), n: 3 });
+  if (p.hp <= 0) {
+    p.dead = true; p.deadT = 0; p.fall = Math.atan2(p.y - fromY, p.x - fromX); p.attack = null; p.reloadT = 0;
+    w.events.push({ type: 'wasted', x: p.x, y: p.y });
+  }
+}
 
 export function initCombat(p) {
-  p.hp ??= 100;
+  p.hp ??= PLAYER_HP; p.sinceHurt ??= 99; p.hurtFlash ??= 0;
   p.weapon ??= 0;
   p.mag ??= WEAPONS.map((wp) => wp.mag ?? 0);
   p.cool ??= 0; p.reloadT ??= 0; p.attack ??= null;
@@ -148,6 +173,7 @@ export function hurtPed(w, ped, dmg, fromX, fromY, melee = false) {
     w.events.push({ type: 'kill', x: ped.x, y: ped.y, id: ped.id });
   } else {
     ped.state = 'down'; ped.t = melee ? 1.4 : 2.2; ped.threat = { x: fromX, y: fromY }; ped.fall = a;
+    if (isFighter(ped)) ped.angry = true; // steht auf und schlägt zurück
     if (melee) { ped.x += Math.cos(a) * 6; ped.y += Math.sin(a) * 6; }
   }
 }
@@ -202,7 +228,11 @@ export function updatePlayerCombat(w, input, dt) {
   const p = initCombat(w.player);
   p.cool = Math.max(0, p.cool - dt);
   if (p.attack && (p.attack.t -= dt) <= 0) p.attack = null;
-  if (p.inCar || p.dead) return;
+  p.hurtFlash = Math.max(0, p.hurtFlash - dt * 2);
+  if (p.dead) return;
+  p.sinceHurt += dt;
+  if (p.sinceHurt > REGEN.delay && p.hp < PLAYER_HP) p.hp = Math.min(PLAYER_HP, p.hp + REGEN.rate * dt);
+  if (p.inCar) return;
   const n = WEAPONS.length;
   let sel = p.weapon;
   if (input.weaponSlot >= 1 && input.weaponSlot <= n) sel = input.weaponSlot - 1;
@@ -243,4 +273,29 @@ export function updatePlayerCombat(w, input, dt) {
     p.mag[p.weapon]--;
     shoot(w, p, wp, ang, w.rng);
   }
+}
+
+// --- Passanten, die sich wehren ---------------------------------------------------------------------------------
+
+export function startFight(ped) {
+  if (ped.state === 'dead' || ped.state === 'down') { ped.angry = true; return; }
+  ped.state = 'fight'; ped.fightT = 0; ped.hitCd = 0.4; ped.angry = false;
+}
+
+// Ein Schritt im Zustand 'fight' (aus pedestrians.js): zur Spielfigur laufen, zuschlagen, irgendwann aufgeben.
+export function updateFight(ped, world, dt, move) {
+  const p = world.player;
+  ped.fightT = (ped.fightT ?? 0) + dt;
+  ped.punch = Math.max(0, (ped.punch ?? 0) - dt);
+  const dx = p.x - ped.x, dy = p.y - ped.y, d = Math.hypot(dx, dy);
+  if (p.dead || p.inCar || d > FIGHT.far || ped.fightT > FIGHT.giveUp) return false; // aufgeben
+  ped.facing = Math.atan2(dy, dx);
+  if (d > FIGHT.reach) { const v = Math.min(d - FIGHT.reach + 1, PED.run * 0.85 * dt); move(ped, dx / d * v, dy / d * v, world); }
+  ped.hitCd = (ped.hitCd ?? 0) - dt;
+  if (d <= FIGHT.reach + 2 && ped.hitCd <= 0) {
+    ped.hitCd = FIGHT.cooldown; ped.punch = 0.22;
+    world.events.push({ type: 'swing', x: ped.x, y: ped.y, weapon: 'fists', hit: true, npc: true });
+    hurtPlayer(world, FIGHT.dmg, ped.x, ped.y);
+  }
+  return true;
 }

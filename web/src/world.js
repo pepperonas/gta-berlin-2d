@@ -15,7 +15,8 @@ import { pointAlong } from './geom.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
-import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP } from './combat.js';
+import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
+import { failMission } from './mission.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -352,7 +353,7 @@ export function updateWorld(w, input, dt) {
   }
 
   const p = w.player;
-  if (input.enterExit) { if (p.inCar) tryExit(w); else tryEnter(w); }
+  if (input.enterExit && !p.dead) { if (p.inCar) tryExit(w); else tryEnter(w); }
 
   const pc = playerCar(w);
   if (pc) {
@@ -360,8 +361,9 @@ export function updateWorld(w, input, dt) {
     else applyDriverInput(pc, input);
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else updatePlayerOnFoot(w, input, dt);
+  } else if (!p.dead) updatePlayerOnFoot(w, input, dt);
   updatePlayerCombat(w, input, dt);
+  if (p.dead) updateKnockout(w, dt);
 
   for (const c of w.cars) if (c.driver === 'npc') driveAi(c, w, dt);
   for (const c of w.cars) {
@@ -404,7 +406,7 @@ export function updateWorld(w, input, dt) {
       const mm = circleVsObb(p.x, p.y, PLAYER.radius, c);
       if (!mm) continue;
       p.x += mm.nx * mm.depth; p.y += mm.ny * mm.depth;
-      if (speedOf(c) > 120 && p.stun <= 0) { p.stun = 0.8; w.events.push({ type: 'bump', x: p.x, y: p.y }); }
+      if (speedOf(c) > 120 && p.stun <= 0 && !p.dead) { p.stun = 0.8; w.events.push({ type: 'bump', x: p.x, y: p.y }); hurtPlayer(w, speedOf(c) * 0.12, c.x, c.y); }
     }
   }
 
@@ -416,14 +418,15 @@ export function updateWorld(w, input, dt) {
     if (e.type === 'horn' && e.npc) threats.push({ x: e.x, y: e.y, r: 80, always: true }); // KI hupt: wer direkt davor steht, weicht
     if (e.type === 'crash' && e.strength > 0.25) threats.push({ x: e.x, y: e.y, r: 130, always: true });
     if (e.type === 'shot') threats.push({ x: e.x, y: e.y, r: GUNSHOT_SCARE, always: true });
-    if (e.type === 'blood' || e.type === 'swing') threats.push({ x: e.x, y: e.y, r: e.type === 'blood' ? 220 : 90, always: true });
+    if ((e.type === 'blood' || e.type === 'swing') && !e.npc) threats.push({ x: e.x, y: e.y, r: e.type === 'blood' ? 220 : 90, always: true, melee: e.type === 'swing' });
   }
   for (const ped of w.peds) {
     if (ped.state === 'dead') { updatePed(ped, w, dt); continue; }
-    if (ped.state !== 'down' && ped.state !== 'flee') {
+    if (ped.state !== 'down' && ped.state !== 'flee' && ped.state !== 'fight') {
       for (const t of threats) {
         const d = Math.hypot(ped.x - t.x, ped.y - t.y);
         if (d > t.r) continue;
+        if (t.melee && isFighter(ped) && !p.dead) { startFight(ped); break; } // Schlägerei in der Nähe: mitmischen
         const toward = t.always || ((ped.x - t.x) * t.vx + (ped.y - t.y) * t.vy) > 0;
         if (toward) { scare(ped, t.x, t.y); break; }
       }
@@ -458,6 +461,31 @@ export function updateWorld(w, input, dt) {
   }
 
   updateCamera(w, dt);
+}
+
+// K. o.: nach kurzer Zeit im nächsten Krankenhaus aufwachen (Stadtteil wird bei Bedarf erst geladen),
+// ein laufender Auftrag scheitert, ein Teil des Geldes ist weg.
+export function nearestHospital(city, x, y) {
+  let best = null, bd = Infinity;
+  for (const h of city.hospitals ?? []) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+
+function updateKnockout(w, dt) {
+  const p = w.player;
+  p.deadT += dt;
+  if (p.deadT < RESPAWN_DELAY) return;
+  const h = nearestHospital(w.city, p.x, p.y) ?? w.city.places.playerSpawn;
+  const spot = findTeleportSpot(w, h.x, h.y);
+  if (spot?.pending) { w.loading = true; return; } // Stadtteil des Krankenhauses lädt noch
+  const fee = Math.floor(w.money * HOSPITAL_FEE);
+  w.money -= fee;
+  teleportTo(w, spot ?? { x: w.city.places.playerSpawn.x, y: w.city.places.playerSpawn.y, angle: 0 });
+  Object.assign(p, { dead: false, hp: PLAYER_HP, stun: 0, sinceHurt: 99, hurtFlash: 0, reloadT: 0 });
+  w.notice = { text: `Im Krankenhaus aufgewacht${h.name ? ': ' + h.name : ''}${fee ? ` (−${fee.toLocaleString('de-DE')} €)` : ''}`, t: 5 };
+  w.events.push({ type: 'respawn', x: p.x, y: p.y, hospital: h.name ?? null, fee });
+  const m = w.mission;
+  if (m.state === 'toPickup' || m.state === 'toDropoff') failMission(m, 'K. o. – im Krankenhaus aufgewacht, der Auftrag ist geplatzt.', w.events);
 }
 
 function missionCtx(w, input) {

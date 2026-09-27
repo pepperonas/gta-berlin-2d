@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.11.0] – 2026-09-27
+
+### Hinzugefügt
+- Gegenwehr: Etwa jeder siebte Passant wehrt sich (fest je Person). Wer geschlagen oder angeschossen wird und
+  überlebt, steht auf und kommt mit den Fäusten zurück; Kämpfer in der Nähe einer Schlägerei mischen mit. Sie geben
+  nach 20 s auf, wenn man ins Auto steigt oder über 45 m wegläuft. Alle anderen fliehen.
+- Lebenspunkte der Spielfigur (100, Leiste im Waffenfeld): Faustschläge (9) und Anfahren (nach Tempo) verletzen,
+  roter Bildrand bei Treffern; nach 8 s ohne Treffer heilt es (4 LP/s). Im Auto ist man geschützt.
+- K. o. bei 0 LP: Die Figur geht zu Boden, nach 3 s wacht man am nächsten der 60 Berliner Krankenhäuser auf (der
+  Stadtteil wird bei Bedarf erst geladen), 10 % des Geldes sind weg, ein laufender Auftrag scheitert.
+
 ## [0.10.1] – 2026-09-27
 
 ### Behoben

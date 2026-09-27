@@ -600,9 +600,9 @@ export class Renderer {
     for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
     for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
-    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun }) });
+    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null }) });
     const pl = world.player;
-    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
+    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
     this._depth = list;

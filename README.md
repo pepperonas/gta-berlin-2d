@@ -99,7 +99,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 - **Kämpfen:** zu Fuß Fäuste, Tritte, Baseballschläger, Messer, Pistole, Maschinenpistole und Schrotflinte (alle von
   Anfang an, Munition unbegrenzt mit Nachladen). Zielen in Blickrichtung mit Zielhilfe, mit der Maus auf den Zeiger.
   Kugeln stoppen an Hauswänden, beschädigen Autos bis zum Wrack (der Fahrer flieht); Getroffene fallen um, nach genug
-  Treffern bleiben sie liegen, mit Blut. Schüsse vertreiben die Passanten ringsum.
+  Treffern bleiben sie liegen, mit Blut. Schüsse vertreiben die Passanten ringsum. Etwa jeder siebte Passant wehrt
+  sich mit den Fäusten. Die Spielfigur hat 100 Lebenspunkte (heilen nach einer Pause); bei 0 wacht man im nächsten
+  echten Krankenhaus auf, 10 % des Geldes sind weg, ein laufender Auftrag scheitert.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -137,7 +139,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 136 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 141 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -287,7 +289,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 136 automatischen Tests grün, darunter:
+- Alle 141 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -338,7 +340,9 @@ in Edge `edge://inspect` mit der Konsole verbinden
     nach, Pistole nur Einzelfeuer; Zielhilfe wählt das nächste Ziel im Kegel; beschossene Autos werden zum Wrack, der
     Fahrer flieht; Schüsse erschrecken Passanten; im Auto kein Schießen; Verkehr fährt über Tote; die neuen Tasten sind
     verdrahtet (W feuert nicht); Strahltests; Waffenfeld passt in jedes Fensterformat (acht Mutationsproben, alle
-    erkannt);
+    erkannt); Gegenwehr (wer sich wehrt, schlägt zurück, andere fliehen, Kämpfer in der Nähe mischen mit), Heilen nach
+    der Pause, K. o. mit Neustart am nächsten Krankenhaus samt Geldabzug und gescheitertem Auftrag, Anfahren verletzt,
+    im Auto und am Boden keine weiteren Treffer (neun Mutationsproben, alle erkannt);
   - Gebäude-Regeln im Build: Brückenpfeiler, Kreuzgänge, Dächer und schwebende Teile werden keine Häuser, Bauteile
     nur ohne umgebenden Umriss (das höchste einer Gruppe); an der echten Oberbaumbrücke stehen die Türme (≥ 30 m),
     kein Haus auf der Fahrbahn, ein Brückendeck unter dem POI, das über dem Wasser nicht als Wasser gilt; Krankenhäuser

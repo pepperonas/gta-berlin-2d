@@ -5,6 +5,7 @@ import { PED } from './config.js';
 import { circleVsRect, circleVsCircle, circleVsSegment } from './collision.js';
 import { pointAlong, projectOnPolyline } from './geom.js';
 import { inBuilding, onRoad, nearestEdge } from './map.js';
+import { updateFight } from './combat.js';
 
 const SHIRTS = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c', '#ecf0f1', '#34495e', '#d35400', '#e84393'];
 const SKIN = ['#f2d0b1', '#e0ac69', '#c68642', '#8d5524', '#f5d6c6'];
@@ -234,10 +235,17 @@ export function updatePed(ped, world, dt) {
     case 'dead':
       ped.deadT = (ped.deadT ?? 0) + dt;
       return;
+    case 'fight':
+      if (!updateFight(ped, world, dt, moveWithCollision)) { ped.state = 'idle'; scare(ped, world.player.x, world.player.y, 2); }
+      break;
     case 'down':
       ped.t -= dt;
       // aufstehen und weglaufen (erst den Zustand verlassen – scare() ignoriert Liegende)
-      if (ped.t <= 0) { ped.state = 'idle'; scare(ped, ped.threat.x, ped.threat.y, 2); }
+      if (ped.t <= 0) {
+        ped.state = 'idle';
+        if (ped.angry) { ped.state = 'fight'; ped.fightT = 0; ped.hitCd = 0.5; ped.angry = false; } // Gegenwehr
+        else scare(ped, ped.threat.x, ped.threat.y, 2);
+      }
       break;
   }
   const mx = ped.x - prevX, my = ped.y - prevY;
