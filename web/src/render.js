@@ -13,7 +13,9 @@ import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
-import { nearestEdge } from './map.js';
+import { nearestEdge, surfaceAt, T as SURF } from './map.js';
+import { texture } from './textures.js';
+import { edgeDecals } from './decals.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -80,7 +82,46 @@ function shoreOf(wa) {
 export const pathOf = (f) => (f._path ??= f.pts ? linePath(f.pts) : ringPath(f.rings));
 export { AREA_COLOR, WATER, ASPHALT };
 
-const PARK_COLOR = '#474a50';
+const PARK_COLOR = 'rgba(96,98,104,0.42)'; // Parkstreifen: helleres Grau über dem Asphalt (Textur scheint durch)
+const AREA_TEXTURE = {
+  [AREA_KIND.rail]: 'rail', [AREA_KIND.plaza]: 'plaza', [AREA_KIND.allotments]: 'allotments', [AREA_KIND.cemetery]: 'cemetery',
+  [AREA_KIND.grass]: 'grass', [AREA_KIND.pitch]: 'pitch', [AREA_KIND.sand]: 'sand', [AREA_KIND.wood]: 'wood',
+};
+const GUTTER = '#55575b';
+
+// Decals einer Kante als Pfade je Art (einmal gebaut, Weltkoordinaten)
+function decalPaths(e, city) {
+  if (e._decalPaths !== undefined) return e._decalPaths;
+  const list = edgeDecals(city, e);
+  if (!list.length) return (e._decalPaths = null);
+  const P = { frame: new Path2D(), grate: new Path2D(), lid: new Path2D(), lidIn: new Path2D(), patch: new Path2D(), crack: new Path2D(), oil: new Path2D() };
+  const rect = (path, d, l, w) => {
+    const c = Math.cos(d.a), s = Math.sin(d.a), hx = l / 2, hy = w / 2;
+    path.moveTo(d.x + c * hx - s * hy, d.y + s * hx + c * hy); path.lineTo(d.x - c * hx - s * hy, d.y - s * hx + c * hy);
+    path.lineTo(d.x - c * hx + s * hy, d.y - s * hx - c * hy); path.lineTo(d.x + c * hx + s * hy, d.y + s * hx - c * hy); path.closePath();
+  };
+  for (const d of list) {
+    if (d.t === 'gully') { rect(P.frame, d, d.l, d.w); rect(P.grate, d, d.l * 0.72, d.w * 0.6); }
+    else if (d.t === 'manhole') { P.lid.moveTo(d.x + d.l / 2, d.y); P.lid.arc(d.x, d.y, d.l / 2, 0, Math.PI * 2); P.lidIn.moveTo(d.x + d.l * 0.36, d.y); P.lidIn.arc(d.x, d.y, d.l * 0.36, 0, Math.PI * 2); }
+    else if (d.t === 'patch') rect(P.patch, d, d.l, d.w);
+    else if (d.t === 'oil') { P.oil.moveTo(d.x + d.l / 2, d.y); P.oil.ellipse(d.x, d.y, d.l / 2, d.w / 2, d.a, 0, Math.PI * 2); }
+    else if (d.t === 'crack' && d.pts) {
+      const c = Math.cos(d.a), s = Math.sin(d.a);
+      for (let i = 0; i < d.pts.length; i += 2) {
+        const x = d.x + c * d.pts[i] - s * d.pts[i + 1], y = d.y + s * d.pts[i] + c * d.pts[i + 1];
+        if (i) P.crack.lineTo(x, y); else P.crack.moveTo(x, y);
+      }
+    }
+  }
+  return (e._decalPaths = P);
+}
+
+// Baumscheibe unter Straßenbäumen (Baum steht auf dem Gehweg nahe einer Fahrbahn); einmal je Baum bestimmt
+function treePit(city, tr) {
+  if (tr._pit !== undefined) return tr._pit;
+  const onWalk = surfaceAt(city, tr.x, tr.y) === SURF.SIDEWALK;
+  return (tr._pit = onWalk && !!nearestEdge(city, tr.x, tr.y, 6 * city.scale + 60, (o) => o.cls <= 8));
+}
 const FENCE_STYLE = { 0: ['#8a8f95', 1.5, []], 1: ['#a08f78', 3.5, []], 2: ['#3d6e2f', 7, []], 3: ['#3a3d42', 4, [1, 16]] };
 
 // Zufahrten einer Ampelkreuzung: je Kante die Haltelinie vor der Kreuzung (Mitte bis rechter Bordstein, in Fahrtrichtung).
@@ -336,10 +377,11 @@ export class Renderer {
     }
 
     // 1) Grund: Gehweg/Hof, darauf Flächen (Grün, Plätze, Gleisanlagen)
-    ctx.fillStyle = SIDEWALK;
+    const tex = (k, fallback) => texture(ctx, k) ?? fallback;
+    ctx.fillStyle = tex('sidewalk', SIDEWALK);
     ctx.fillRect(v.x - 5, v.y - 5, v.w + 10, v.h + 10);
     areas.sort((a, b) => a.kind - b.kind);
-    for (const a of areas) { ctx.fillStyle = AREA_COLOR[a.kind]; ctx.fill(pathOf(a), 'evenodd'); }
+    for (const a of areas) { ctx.fillStyle = tex(AREA_TEXTURE[a.kind], AREA_COLOR[a.kind]); ctx.fill(pathOf(a), 'evenodd'); }
 
     // 2) Wasser mit Wellen und Kaikante
     for (const wa of water) {
@@ -354,6 +396,9 @@ export class Renderer {
         for (let x = x0; x <= x1 + 12; x += 12) ctx.lineTo(x, y + Math.sin(x * 0.05 + t * 1.5 + y) * 2);
         ctx.stroke();
       }
+      // zum Ufer hin dunkler (Kaimauer wirft Schatten ins Wasser)
+      ctx.strokeStyle = 'rgba(8,30,55,0.22)'; ctx.lineWidth = 60; ctx.stroke(shoreOf(wa));
+      ctx.lineWidth = 24; ctx.stroke(shoreOf(wa));
       ctx.restore();
       ctx.strokeStyle = '#6f6a60'; ctx.lineWidth = 3; ctx.stroke(shoreOf(wa));
     }
@@ -366,17 +411,23 @@ export class Renderer {
 
     // 4) Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst, Brücken zuletzt
     edges.sort((a, b) => (a.bridge - b.bridge) || (b.cls - a.cls));
+    // Bordstein (heller Stein), davor der dunkle Rinnstein, dann die Fahrbahn
     for (const e of edges) {
       if (e.bridge) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
       else if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
     }
-    ctx.fillStyle = CURB;
-    for (const j of junctions) if (!j.bridge) { ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 2.5, 0, Math.PI * 2); ctx.fill(); }
-    for (const j of junctions) { ctx.fillStyle = j.cobble ? cobblePattern : ASPHALT; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
+    for (const e of edges) if (!e.bridge && e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
+    for (const j of junctions) if (!j.bridge) {
+      ctx.fillStyle = CURB; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = GUTTER; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 0.7, 0, Math.PI * 2); ctx.fill();
+    }
+    const asphalt = tex('asphalt', ASPHALT), cobble = tex('cobble', cobblePattern);
+    for (const j of junctions) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
     for (const e of edges) {
-      ctx.strokeStyle = e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobblePattern : ASPHALT;
+      ctx.strokeStyle = e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobble : asphalt;
       ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
     }
+    if (this.quality === 'high') this.drawDecals(edges, city);
     this.drawStreetMarkings(edges, world.city);
     this.drawCrossings(crossings);
     this.drawSignals(world, v);
@@ -395,6 +446,10 @@ export class Renderer {
       ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.beginPath(); ctx.arc(b.x - 0.6, b.y - 0.8, 1.1, 0, Math.PI * 2); ctx.fill();
     }
     ctx.lineCap = 'butt';
+
+    // Baumscheiben der Straßenbäume
+    ctx.fillStyle = '#5e4c3b'; ctx.strokeStyle = '#8c8578'; ctx.lineWidth = 1.2;
+    for (const tr of trees) if (treePit(city, tr)) { const h = 7 + tr.r; ctx.fillRect(tr.x - h, tr.y - h, 2 * h, 2 * h); ctx.strokeRect(tr.x - h, tr.y - h, 2 * h, 2 * h); }
 
     // 5) Bremsspuren
     ctx.lineWidth = 3; ctx.lineCap = 'round';
@@ -585,6 +640,19 @@ export class Renderer {
 
   // Straßenraum nach Querschnitt: Parkstreifen, Radfahrstreifen, Mittellinie, Spurtrennlinien.
   // An Kreuzungen enden die Markierungen am Rand der Querstraße.
+  drawDecals(edges, city) {
+    const ctx = this.ctx, ps = [];
+    for (const e of edges) { const p = decalPaths(e, city); if (p) ps.push(p); }
+    ctx.fillStyle = 'rgba(18,20,24,0.38)'; for (const p of ps) ctx.fill(p.patch);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 0.8; for (const p of ps) ctx.stroke(p.patch);
+    ctx.fillStyle = 'rgba(8,8,10,0.26)'; for (const p of ps) ctx.fill(p.oil);
+    ctx.strokeStyle = 'rgba(12,12,14,0.55)'; ctx.lineWidth = 0.9; ctx.lineJoin = 'round'; for (const p of ps) ctx.stroke(p.crack);
+    ctx.fillStyle = '#6a6c70'; for (const p of ps) ctx.fill(p.frame);
+    ctx.fillStyle = '#17181b'; for (const p of ps) ctx.fill(p.grate);
+    ctx.fillStyle = '#5c5e62'; for (const p of ps) ctx.fill(p.lid);
+    ctx.fillStyle = '#44464a'; for (const p of ps) ctx.fill(p.lidIn);
+  }
+
   drawStreetMarkings(edges, city) {
     const ctx = this.ctx;
     const marks = edges.map((e) => (e._marks ??= buildMarks(e, city))).filter(Boolean);

@@ -185,6 +185,13 @@ so viele, wie der mittlere Abstand ergibt (OSM zerlegt Straßen in kurze Stücke
 meisten leer), am Bordstein plus 0,7 m. Qualitätsstufe: Median der reinen Zeichenzeit über 120 Bilder; über 14 ms
 entfallen Baumschatten und der zweite Hausdurchgang, unter 8 ms kommen sie zurück.
 
+**Boden** (`web/src/textures.js`, `web/src/decals.js`): Texturen sind Kachelmuster (64–96 px, doppelt aufgelöst,
+per Muster-Transformation halbiert), als `fillStyle`/`strokeStyle` in Weltkoordinaten – sie kleben an der Welt und
+kosten je Form nichts extra. Ein strenges Plattenraster auf dem Gehweg wurde verworfen: es liegt achsparallel über
+schräg verlaufenden Straßen und wirkt wie ein gekachelter Platz. Decals entstehen deterministisch je Kante aus dem
+Querschnitt (Rinnstein am Bordstein, Flicken und Deckel zwischen den Fahrstreifenrändern) und werden als ein Pfad je
+Art zwischengespeichert; in der niedrigen Qualitätsstufe entfallen sie.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

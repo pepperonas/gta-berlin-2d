@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.7.0] – 2026-09-27
+
+### Hinzugefügt
+- Bodentexturen als Muster in Weltkoordinaten (einmal gemalt, deterministisch): Gehweg aus hellem Stein mit feiner
+  Körnung und unregelmäßigen Platten, Asphalt mit Körnung, Großpflaster in versetzten Reihen, Gras/Kleingärten/Friedhof/
+  Sportplatz mit Farbflecken, Wald mit Unterholz, Sand, Plätze mit kleinen Platten, Gleisschotter.
+- Bordstein mit dunklem Rinnstein zur Fahrbahn (auch an den Kreuzungsflächen); Parkstreifen als hellere Tönung, durch
+  die der Asphalt scheint.
+- Kleinteile auf der Fahrbahn, deterministisch je Straßenstück: Gullys am Bordstein (etwa alle 25 m je Seite),
+  Kanaldeckel, Asphaltflicken und Risse (Nebenstraßen flickiger, auf Pflaster keine), Ölflecken auf Parkstreifen.
+  Alles liegt auf der eigenen Fahrbahn und nicht in der Kreuzungsfläche (Test über das ganze Kerngebiet).
+- Baumkronen als lappige Blattballen mit Lichtkante und dunklem Rand (je Gattung drei Varianten, einmal gerendert);
+  Baumscheiben unter Straßenbäumen im Gehweg.
+- Wasser wird zum Ufer hin dunkler (Schatten der Kaimauer).
+
+### Behoben (beim Testen gefunden)
+- Kanaldeckel lagen auf Richtungsfahrbahnen (Einbahn-Hälften breiter Straßen) neben der Fahrbahn: die „Fahrbahnmitte“
+  aus dem Querschnitt liegt dort am Bordstein.
+
 ## [0.6.0] – 2026-09-27
 
 ### Hinzugefügt

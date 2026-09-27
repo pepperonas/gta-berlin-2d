@@ -22,7 +22,7 @@ function recordingContext() {
 }
 
 test('gestrichelte Straßenmarkierungen „fließen“ nicht (kein wandernder Strichversatz)', async () => {
-  globalThis.Path2D ??= class { moveTo() {} lineTo() {} closePath() {} rect() {} addPath() {} arc() {} };
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
   globalThis.OffscreenCanvas ??= class { getContext() { return new Proxy({}, { get: () => () => {} }); } };
   const { Renderer } = await import('../web/src/render.js');
   const { createWorld } = await import('../web/src/world.js');
@@ -74,7 +74,7 @@ test('Gleise maßstäblich und in Ebenen: erst Bett/Viadukt, dann Schwellen, dan
 });
 
 test('Tag/Nacht: bei Tag Hausschatten und keine Lichtkarte, nachts Lichtkarte per „multiply“ mit Scheinwerfern', async () => {
-  globalThis.Path2D ??= class { moveTo() {} lineTo() {} closePath() {} rect() {} addPath() {} arc() {} };
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
   // Offscreen-Ebenen (Schatten, Lichtkarte, Licht-Sprites) brauchen Verläufe
   globalThis.OffscreenCanvas = class {
     constructor(w, h) { this.width = w; this.height = h; }

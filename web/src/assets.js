@@ -130,6 +130,8 @@ export function drawTree(ctx, tr, t, sun) {
   const sway = Math.sin(t * 1.3 + tr.x) * 0.8;
   const cy = tr.y - lift;
   if (sprites.tree) { ctx.drawImage(sprites.tree, tr.x - r + sway, cy - r, r * 2, r * 2); return; }
+  const spr = treeSprite(tr.genus, tr.seed % TREE_VARIANTS);
+  if (spr) { ctx.drawImage(spr, tr.x - r * 1.15 + sway, cy - r * 1.15, r * 2.3, r * 2.3); return; }
   const [c0, c1, c2] = TREE_STYLE[tr.genus] ?? TREE_STYLE.sonstige;
   if (tr.genus === 'Nadel') { // Nadelbaum: gezackte Krone
     ctx.fillStyle = c0; ctx.beginPath();
@@ -141,4 +143,44 @@ export function drawTree(ctx, tr, t, sun) {
   ctx.fillStyle = c0; ctx.beginPath(); ctx.arc(tr.x + sway, cy, r, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(tr.x - r * 0.18 + sway, cy - r * 0.18, r * 0.7, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(tr.x - r * 0.3 + sway, cy - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+}
+
+// Baumkronen-Sprites: je Gattung drei Varianten, einmal in 128 px gezeichnet und beim Zeichnen skaliert.
+// Lappige Krone aus überlappenden Blattballen, Licht von links oben, dunkler Rand – wirkt weicher als drei Kreise.
+export const TREE_VARIANTS = 3;
+const treeSprites = new Map();
+function treeSprite(genus, variant) {
+  const key = genus + '|' + variant;
+  if (treeSprites.has(key)) return treeSprites.get(key);
+  let c = null;
+  try {
+    if (typeof OffscreenCanvas === 'undefined' && typeof document === 'undefined') throw 0;
+    const N = 128, R = N / 2 / 1.15; // Kronenradius im Sprite (Rand für Ausläufer)
+    c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(N, N) : Object.assign(document.createElement('canvas'), { width: N, height: N });
+    const g = c.getContext('2d'), m = N / 2;
+    const [c0, c1, c2] = TREE_STYLE[genus] ?? TREE_STYLE.sonstige;
+    let a = (variant * 2654435761) >>> 0; const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const blob = (x, y, rr, col) => { g.fillStyle = col; g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill(); };
+    if (genus === 'Nadel') {
+      g.fillStyle = shade(c0, -0.25); g.beginPath();
+      for (let k = 0; k < 20; k++) { const an = k / 20 * Math.PI * 2, rr = (k % 2 ? 0.7 : 1.02) * R; g.lineTo(m + Math.cos(an) * rr, m + Math.sin(an) * rr); }
+      g.fill();
+      g.fillStyle = c0; g.beginPath();
+      for (let k = 0; k < 20; k++) { const an = k / 20 * Math.PI * 2 + 0.1, rr = (k % 2 ? 0.6 : 0.92) * R; g.lineTo(m + Math.cos(an) * rr, m + Math.sin(an) * rr); }
+      g.fill();
+      blob(m - R * 0.15, m - R * 0.15, R * 0.45, c1);
+      blob(m - R * 0.25, m - R * 0.25, R * 0.18, c2);
+    } else {
+      const lobes = 7 + (variant % 2);
+      // Rand (etwas dunkler, leicht größer) → Kontur ohne Strich
+      for (let k = 0; k < lobes; k++) { const an = k / lobes * Math.PI * 2 + rnd() * 0.5; blob(m + Math.cos(an) * R * 0.5, m + Math.sin(an) * R * 0.5, R * (0.5 + rnd() * 0.08), shade(c0, -0.22)); }
+      blob(m, m, R * 0.62, shade(c0, -0.22));
+      for (let k = 0; k < lobes; k++) { const an = k / lobes * Math.PI * 2 + rnd() * 0.5; blob(m + Math.cos(an) * R * 0.46, m + Math.sin(an) * R * 0.46, R * (0.45 + rnd() * 0.08), c0); }
+      blob(m, m, R * 0.58, c0);
+      for (let k = 0; k < 5; k++) { const an = rnd() * Math.PI * 2, d = R * rnd() * 0.35; blob(m - R * 0.12 + Math.cos(an) * d, m - R * 0.12 + Math.sin(an) * d, R * (0.24 + rnd() * 0.1), c1); }
+      for (let k = 0; k < 4; k++) blob(m - R * (0.25 + rnd() * 0.2), m - R * (0.25 + rnd() * 0.2), R * (0.09 + rnd() * 0.08), c2);
+    }
+  } catch { c = null; }
+  treeSprites.set(key, c);
+  return c;
 }

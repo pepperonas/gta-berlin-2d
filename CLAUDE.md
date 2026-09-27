@@ -83,6 +83,9 @@ change in `web/`.
   windows and lamp heads. `drawBuilding(b, cam, ctx, night)` serves both passes. Street lamps: `lamps.js edgeLamps`
   (pure, cached as `e._lamps`). `Renderer.quality` drops to `'low'` when the median draw time exceeds `RENDER.budgetMs`.
   `?uhr=HH:MM` sets the clock of each new world; `globalThis.__renderer` exposes `stats`/`quality`.
+- **Ground detail:** `textures.js texture(ctx, kind)` (world-space patterns, cached per context, `null` without a
+  canvas → flat colour); `decals.js edgeDecals` (pure, cached `e._decals`, Path2D per kind in `e._decalPaths`); tree
+  crowns are per-genus sprites in `assets.js`. Test stubs for `Path2D`/`OffscreenCanvas` must accept any method.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

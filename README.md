@@ -87,6 +87,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   ein Teil der Fenster ist erleuchtet, Ampeln und Schaufenster leuchten, fahrende Autos haben Scheinwerferkegel und
   Rücklichter, der Auftragsort leuchtet; Häuser verdecken, was dahinter am Boden leuchtet. Zum Anschauen:
   `http://localhost:8080/?uhr=21:30` stellt die Uhr jeder neuen Welt.
+- **Boden mit Details:** Gehweg, Asphalt, Kopfsteinpflaster, Gras, Wald, Sand, Plätze und Gleisschotter haben
+  Texturen; Bordsteine mit Rinnstein, Gullys, Kanaldeckel, Asphaltflicken, Risse und Ölflecken auf den Parkstreifen;
+  Baumscheiben unter Straßenbäumen, Baumkronen als Blattballen, dunkleres Wasser am Ufer.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -119,7 +122,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 114 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 117 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -172,6 +175,8 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/daylight.js    Tageslicht aus der Spieluhr (Sonnenstand, Umgebungslicht; ohne Canvas)
   src/lighting.js    Schattenwurf und Lichtkarte (eigene Bildschirm-Ebenen)
   src/lamps.js       Standorte der Straßenlaternen (ohne Canvas)
+  src/decals.js      Gullys, Kanaldeckel, Flicken, Risse, Ölflecken je Straße (ohne Canvas)
+  src/textures.js    Bodentexturen als Muster
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
   src/audio.js       synthetisierte Klänge
   src/assets.js      Platzhaltergrafiken + Austausch per manifest.json
@@ -264,7 +269,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 114 automatischen Tests grün, darunter:
+- Alle 117 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -299,6 +304,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
     Ausleger über der Fahrbahn, Gaslaternen warm, Grundstückszufahrten keine Kreuzungen, deterministisch; Nachtfenster
     je Haus fest und abends zahlreicher als nachts; Laternen in der Lichtkarte, Häuser verdecken Bodenlicht nur in hoher
     Qualitätsstufe; Qualitätsstufe mit Hysterese (sechs Mutationsproben, alle erkannt);
+  - Boden: über 20 000 Gullys, Kanaldeckel, Flicken, Risse und Ölflecken im Kerngebiet liegen alle auf der eigenen
+    Fahrbahn und außerhalb der Kreuzungsfläche, auf Pflaster keine Flicken, Ölflecken nur mit Parkstreifen,
+    deterministisch; jede Bodentextur genau einmal je Zeichenfläche gemalt, ohne Canvas einfarbiger Rückfall (fünf
+    Mutationsproben, alle erkannt);
   - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
     gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
     belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig
