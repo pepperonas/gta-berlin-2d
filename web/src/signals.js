@@ -8,8 +8,11 @@ function axisOf(city, v) {
   const cache = (city._signalAxis ??= new Map());
   let a = cache.get(v);
   if (a === undefined) {
-    const nd = city.nodes[v];
-    const e = nd.edges.map((k) => city.edges[k]).find((x) => x.cls <= 8) ?? city.edges[nd.edges[0]];
+    const nd = city.nodes.get(v);
+    if (!nd) return 0;
+    const es = nd.edges.map((k) => city.edges.get(k)).filter(Boolean); // nach Nummer sortiert (map.js)
+    const e = es.find((x) => x.cls <= 8) ?? es[0];
+    if (!e) return 0;
     const p = e.pts, atStart = e.a === v;
     const [x0, y0, x1, y1] = atStart ? [p[0], p[1], p[2], p[3]] : [p[p.length - 2], p[p.length - 1], p[p.length - 4], p[p.length - 3]];
     a = Math.atan2(y1 - y0, x1 - x0);

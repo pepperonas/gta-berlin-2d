@@ -1,7 +1,7 @@
 // Browser-Einstieg: Canvas, Hauptschleife (fester 60-Hz-Takt), Eingabequellen, Xbox-Hüllen-Brücke.
 import { DT } from './config.js';
 import { createGame, updateGame, setCity, requestTeleport, confirmTeleport } from './game.js';
-import { decodeCity } from './map.js';
+import { openCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
@@ -35,15 +35,18 @@ try { storage = window.localStorage; storage.getItem('probe'); } catch { storage
 const game = createGame({ storage, canQuit: !!host });
 globalThis.__gta = game; // für Tests/Debug in der Konsole
 
-// Karte laden (web/data/city.json, ~6 MB). Bis dahin zeigt der Titel „Lade …“.
-// Titelbildschirm-Hintergrund: eine laufende Demo-Welt mit Kamerafahrt über echte Straßen.
+// Karte laden: web/data/berlin/index.json (Grenzen, Orte, ~1 MB), die Kacheln (640 × 640 m) holt die Stadt selbst
+// nach, sobald eine Kamera in ihre Nähe kommt; den Stadtplan (overview.json) erst im Hintergrund.
+// Bis der Index da ist, zeigt der Titel „Lade …“. Titelbildschirm-Hintergrund: eine laufende Demo-Welt mit Kamerafahrt.
 let demo = null;
-fetch('data/city.json').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then((json) => {
-  const city = decodeCity(json);
+const getJson = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); });
+getJson('data/berlin/index.json').then((index) => {
+  const city = openCity(index, (key) => getJson(`data/berlin/tiles/${key}.json`));
   setCity(game, city);
   globalThis.__city = city;
   demo = createWorld({ city, seed: 1989, cars: 14, pedestrians: 30 });
   demo.mission.state = 'idle';
+  getJson('data/berlin/overview.json').then((ov) => { city.overview = ov; hud.overview = null; }).catch((err) => console.error(err));
 }).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
 
 let manifest = {};
@@ -58,21 +61,39 @@ addEventListener('blur', () => keys.clear());
 addEventListener('pointerdown', () => sound.unlock());
 
 // Maus: Klick auf den Stadtplan wählt ein Teleport-Ziel, Klick auf Ja/Nein im Dialog bestätigt.
+// Auf dem Stadtplan: Mausrad zoomt (um den Mauszeiger), Ziehen verschiebt.
+const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
+const inside = (b, vx, vy) => b && vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h;
+let drag = null;
 canvas.addEventListener('pointerdown', (e) => {
   if (!hud.s) return;
-  const r = canvas.getBoundingClientRect();
-  const vx = (e.clientX - r.left) * (canvas.width / r.width) / hud.s, vy = (e.clientY - r.top) * (canvas.height / r.height) / hud.s;
-  const inside = (b) => b && vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h;
+  const [vx, vy] = toHud(e);
   if (game.teleport) {
-    if (inside(hud.dialogButtons?.yes)) { confirmTeleport(game, true); sound.play('ui'); }
-    else if (inside(hud.dialogButtons?.no)) { confirmTeleport(game, false); sound.play('ui-back'); }
+    if (inside(hud.dialogButtons?.yes, vx, vy)) { confirmTeleport(game, true); sound.play('ui'); }
+    else if (inside(hud.dialogButtons?.no, vx, vy)) { confirmTeleport(game, false); sound.play('ui-back'); }
     return;
   }
-  const m = hud.bigMap;
-  if (game.screen === 'playing' && game.showBigMap && inside(m)) {
-    if (requestTeleport(game, (vx - m.x) / m.f, (vy - m.y) / m.f)) sound.play('ui');
-  }
+  if (game.screen === 'playing' && game.showBigMap && inside(hud.bigMap, vx, vy)) { drag = { vx, vy, moved: 0 }; canvas.setPointerCapture(e.pointerId); }
 });
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const [vx, vy] = toHud(e);
+  drag.moved += Math.hypot(vx - drag.vx, vy - drag.vy);
+  hud.panBigMap(vx - drag.vx, vy - drag.vy);
+  drag.vx = vx; drag.vy = vy;
+});
+canvas.addEventListener('pointerup', () => {
+  const d = drag; drag = null;
+  if (!d || d.moved > 6 || !game.showBigMap || game.teleport) return; // gezogen, nicht geklickt
+  const m = hud.bigMap;
+  if (requestTeleport(game, (d.vx - m.ox) / m.f, (d.vy - m.oy) / m.f)) sound.play('ui');
+});
+canvas.addEventListener('wheel', (e) => {
+  if (!game.showBigMap || !hud.s) return;
+  e.preventDefault();
+  const [vx, vy] = toHud(e);
+  hud.zoomBigMap(Math.exp(-e.deltaY * 0.0015), vx, vy);
+}, { passive: false });
 
 let W = 0, H = 0, dpr = 1;
 function resize() {
@@ -151,7 +172,7 @@ function draw() {
     if (game.screen === 'playing') {
       hud.drawGameplay(game.world, game);
       canvas.style.cursor = game.showBigMap && !game.teleport ? 'crosshair' : '';
-      if (game.showBigMap) hud.drawBigMap(game.world);
+      if (game.showBigMap) hud.drawBigMap(game.world); else hud.mapView = null;
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);

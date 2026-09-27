@@ -84,45 +84,65 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 - Weg B: Device Portal (`https://<xbox-ip>:11443`) → *Add* → `.msix`/`.appx` plus Abhängigkeiten (VCLibs, Microsoft.UI.Xaml,
   .NET Native Runtime/Framework aus dem `Dependencies\x64`-Ordner des Pakets) hochladen.
 
-## Karte: Kreuzberg und Nord-Neukölln aus offenen Daten (Stand 27.09.2026)
+## Karte: ganz Berlin aus offenen Daten (Stand 27.09.2026)
 
 **Quellen**
 
 | Was | Quelle | Lizenz |
 |---|---|---|
-| Gebietsgrenzen | Geoportal Berlin, WFS `lor_2021` (`c_lor_pgr_2021`, LOR-Prognoseräume 2021): 0210/0220/0230 = Kreuzberg, 0810 „Neukölln“ = Nord-Neukölln | Datenlizenz Deutschland – Zero 2.0 |
-| Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen, POIs, Hausnummern, Ampeln, Querungen, Poller, Zäune, Abbiegeverbote | OpenStreetMap über die Overpass-API (Hüllrechteck + 250 m, zwei Abfragen) | ODbL 1.0 |
-| Straßen- und Anlagenbäume (Gattung, Höhe, Kronendurchmesser, Stammumfang) | Geoportal Berlin, WFS `baumbestand` | Datenlizenz Deutschland – Zero 2.0 |
+| Stadtgrenze, Bezirke | Geoportal Berlin, WFS `lor_2021` (`c_lor_pgr_2021`, alle 58 LOR-Prognoseräume 2021; Bezirk aus dem Feld `bez`) | Datenlizenz Deutschland – Zero 2.0 |
+| Ortsteile (97), Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen, POIs, Hausnummern, Ampeln, Querungen, Poller, Zäune, Abbiegeverbote | OpenStreetMap, Berlin-Auszug von Geofabrik (`berlin-latest.osm.pbf`, täglich, ~100 MB) | ODbL 1.0 |
+| Straßen- und Anlagenbäume (Gattung, Höhe, Kronendurchmesser, Stammumfang), 962 545 Bäume | Geoportal Berlin, WFS `baumbestand` | Datenlizenz Deutschland – Zero 2.0 |
 
-„Nord-Neukölln“ ist kein Ortsteil, sondern die übliche Bezeichnung für den LOR-Prognoseraum 0810 nördlich der Ringbahn
-(plus Köllnische Heide). Die Grenzen Kreuzbergs entsprechen den drei Kreuzberger Prognoseräumen.
+Warum Geofabrik statt Overpass: ganz Berlin ergäbe über Overpass mehrere GB JSON in Dutzenden Abfragen und sprengt die
+Nutzungsgrenzen der öffentlichen Server (~1 GB/Tag). Der Auszug enthält dieselben OSM-Daten mit allen Tags; Ortsteile
+kommen als `boundary=administrative`, `admin_level=10` mit.
 
 **Pipeline** (`tools/osm/`, nur Node, keine Abhängigkeiten)
 
-1. `fetch.mjs` lädt beides nach `data/raw/` (gitignored, ca. 95 MB, Abruf ~15 s).
-2. `build.mjs` projiziert WGS84 mit einer transversalen Mercator-Projektion (Krüger-Reihen, GRS80, Mittelmeridian =
-   Gebietsmitte) in Meter und dann in Spiel-Pixel (10 px = 1 m). Norden ist oben, der Kartenausschnitt ist nicht gedreht.
-   - Grenze: die vier LOR-Polygone werden vereinigt, indem gemeinsame Kanten wegfallen (die Geoportal-Daten sind
-     topologisch sauber).
+1. `fetch.mjs` lädt den PBF-Auszug, die LOR-Prognoseräume und den Baumbestand (seitenweise zu 20 000, nach `gisid`
+   sortiert, damit die Seiten stabil sind) nach `data/raw/` (gitignored, ~160 MB, Abruf ~2 min).
+2. `pbf.mjs` liest das PBF-Format selbst (Protocol Buffers von Hand, Blöcke mit `node:zlib`): 7,9 Mio. Knoten in ~5 s.
+   `store.mjs` hält die Koordinaten aller Knoten in typisierten Feldern (nach ID sortiert, Suche per Halbierung, ~130 MB)
+   und nur getaggte Knoten, relevante Wege und Relationen als Objekte.
+3. `build.mjs` projiziert WGS84 mit einer transversalen Mercator-Projektion (Krüger-Reihen, GRS80, Mittelmeridian =
+   Stadtmitte; Längenfehler am Stadtrand < 10⁻⁵) in Meter und dann in Spiel-Pixel (10 px = 1 m). Norden ist oben.
+   - Grenze: die 58 LOR-Polygone werden vereinigt, indem gemeinsame Kanten wegfallen (die Geoportal-Daten sind
+     topologisch sauber); Ergebnis ist ein einziger Ring. Bezirke ebenso je Bezirk.
    - Straßen werden an gemeinsam genutzten Knoten in Kanten geteilt (Graph für Verkehr, Passanten, Navigation, Namen);
-     Breite aus `width`, sonst `lanes` × 3,3 m (+ Parkstreifen), sonst Standard je Klasse; Einbahn aus `oneway`,
-     `junction=roundabout`, Autobahn. Tunnel und Durchfahrten entfallen.
+     Querschnitt siehe unten. Einbahn aus `oneway`, `junction=roundabout`, Autobahn. Tunnel entfallen, Tordurchfahrten
+     bleiben.
    - Gebäude inkl. Multipolygone mit Innenhöfen; Höhe aus `height`, sonst `building:levels` × 3,2 m + 1 m, sonst Standard
      nach Gebäudetyp. Douglas-Peucker mit 0,3 m.
    - Wände: Uferlinien und ebenerdige Gleise (±2,5 m) werden in 1-m-Stücke zerlegt; Stücke in Brücken-Korridoren und an
      Bahnübergängen entfallen. Brücken bekommen Geländer.
-   - Bäume: Ein Stamm (0,5 m) darf keine Fahrbahn bis Klasse „service“ berühren. Bäume darauf werden quer zur Straße
-     an den Bordstein ihrer Seite geschoben (Reihen bleiben Reihen), sonst verworfen; ebenso Bäume in Häusern/Wasser.
-     Abschließende Prüfung, bei Verstoß bricht der Build ab. Ursache sind meist geschätzte Fahrbahnbreiten mit
-     Parkstreifen, auf denen in Wirklichkeit die Baumscheiben liegen (Stand 27.09.: 7 251 verschoben, 490 verworfen).
+   - Kreuzungsflächen (Knoten mit ≥ 3 Straßen oder einem Knick, Radius = größte halbe Breite + 2 m) und die Spurkürzung
+     je Knoten werden im Build berechnet, damit das Spiel sie auch am Rand des Geladenen richtig kennt.
+   - Bäume: Ein Stamm darf keine Fahrbahn bis Klasse „service“ und keine Kreuzungsfläche berühren. Bäume darauf werden
+     quer zur Straße an den Bordstein ihrer Seite geschoben (Reihen bleiben Reihen), sonst verworfen; ebenso Bäume in
+     Häusern/Wasser. Abschließende Prüfung, bei Verstoß bricht der Build ab (Stand 27.09.: 95 202 verschoben, 2 429
+     verworfen). OSM-Bäume nur, wo das Kataster im Umkreis von 4 m keinen Baum kennt.
    - POIs (Knoten, Wege, Relationen mit `shop`, `amenity`, `tourism`, Bahnhöfen, Bushaltestellen) in 13 Kategorien,
      Position = Knoten bzw. Schwerpunkt; Bahnhöfe je Name im Umkreis von 400 m, Bushaltestellen von 80 m nur einmal.
      Hausnummern aus `addr:housenumber` + `addr:street`, Gebäude und Eingangsknoten mit derselben Nummer einmal.
    - Missionsorte aus `data/places.json` rasten auf die nächste Straße ein; das Zeitlimit folgt aus der kürzesten Route
-     (Dijkstra) mit 12 m/s + 40 s.
-   - Ausgabe `web/data/city.json`: ganzzahlige, delta-kodierte Koordinaten, deterministisch (zweimal bauen = gleiche Datei).
-3. Im Spiel dekodiert `web/src/map.js` die Datei (~0,5 s) und legt Raster-Hashes für Darstellung, Straßensegmente,
-   Flächen und Kollision an. Kollision mit Gebäuden läuft über Wandsegmente, dafür ist keine Triangulierung nötig.
+     (Dijkstra mit Binärheap) mit 10 m/s + 60 s.
+   - Abdeckung: je Bezirk werden alle Datenschichten gezählt (und wie viel des Hauptnetzes gemessene Breiten, Parkstreifen,
+     Tempo und Belag trägt) und in `index.json` unter `meta.coverage` abgelegt.
+4. `tiles.mjs` zerlegt das Ergebnis in Kacheln zu 640 × 640 m (`web/data/berlin/tiles/<x>_<y>.json`):
+   - Straßenkanten, Gebäude, Wege, Gleise, Wände, Zäune und kleine Flächen liegen in jeder Kachel, die ihr Hüllrechteck
+     berührt (Straßen samt halber Breite + 1 m), und tragen eine globale Nummer; lange Linien werden vorher in Stücke
+     geteilt. Große Flächen (Seen, Wälder) werden je Kachel abgeschnitten (Sutherland–Hodgman, 1 m Überlappung).
+   - Punkte (Bäume, POIs, Hausnummern, Poller, Querungen, Ampeln, Abbiegeverbote) gehören genau einer Kachel.
+   - Eine Kachel enthält damit alle Straßen, die einen ihrer Bäume berühren könnten; die Baumregel lässt sich Kachel für
+     Kachel prüfen.
+   - Dazu `index.json` (Grenze, Bezirke, Ortsteile, Kieze, Missionsorte, Abdeckung, Liste der Kacheln) und
+     `overview.json` (Stadtplan: vereinfachte Flächen, Straßen bis Wohnstraße, Bahnen, Bahnhöfe). Alles deterministisch.
+5. Im Spiel setzt `web/src/map.js` die Kacheln um die Kamera zusammen (`city.focus`): bis 400 m muss alles geladen sein
+   (sonst steht die Welt still), bis 700 m wird vorgeladen, jenseits 1,1 km freigegeben. Mehrfach abgelegte Objekte
+   werden nur einmal angelegt (Referenzzähler) und mit ihren Raster-Einträgen entfernt, wenn keine Kachel sie mehr
+   hält. Spurgraph (`roadgraph.js`) wächst mit: Spuren entstehen mit ihrer Kante, Nachfolger werden nach jedem Nachladen
+   neu bestimmt. Knoten kennen ihre Kanten nach Nummer sortiert, damit das Verhalten nicht von der Ladefolge abhängt.
 
 **Straßenquerschnitt** (`tools/osm/crosssection.mjs`, zur Laufzeit `web/src/street.js`): Bordstein-zu-Bordstein-Breite
 aus `width:carriageway` › `width` › Summe aus Fahrstreifen, Parkstreifen (`parking:<seite>` + `:orientation`; parallel
@@ -151,4 +171,5 @@ keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straß
    eventuell doch funktioniert.
 5. Ob ein kostenloses Einzelentwicklerkonto die Dev-Mode-Aktivierung erlaubt (die Doku sagt nur „fully registered“).
 6. Bildrate auf der Konsole. Auf dem Mac hält der Browser mit der echten Karte bei 1280×720 und 1920×1080 die volle Bildwiederholrate (Frame-Abstand Median 10,0 ms, p95 10,9 ms, gemessen im Playwright-Chromium); über die Xbox sagt das nichts aus.
-7. Ladezeit (9,7 MB JSON, ~1 s Dekodieren auf dem Mac) und Speicher (JS-Heap ~280 MB im Browser) auf der Konsole.
+7. Nachladen und Speicher auf der Konsole: Auf dem Mac bleiben 10–20 Kacheln geladen (JS-Heap 45–110 MB), eine Kachel
+   ist höchstens 0,21 MB groß; das App-Paket wird durch die Karte ~140 MB größer.

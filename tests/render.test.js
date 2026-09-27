@@ -44,7 +44,7 @@ test('Gleise maßstäblich und in Ebenen: erst Bett/Viadukt, dann Schwellen, dan
   const city = realCity();
   const w = createWorld({ city, cars: 0, pedestrians: 0 });
   // Kottbusser Tor: U1-Viadukt mit zwei Gleisen
-  const kotti = city.pois.find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
+  const kotti = city.list('poi').find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
   w.camera.x = kotti.x; w.camera.y = kotti.y;
   const strokes = [];
   let dash = [];

@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A top-down open-world game (HTML5 Canvas 2D + Web Audio, plain ES modules, **zero dependencies**) set in **Kreuzberg and
-Nord-Neukölln at 1:1 scale, built from OpenStreetMap**. It runs in the browser on the Mac and inside a C# UWP/WebView2 shell for an Xbox Series X|S in Developer Mode (private sideloading).
+A top-down open-world game (HTML5 Canvas 2D + Web Audio, plain ES modules, **zero dependencies**) set in **all of Berlin at 1:1
+scale, built from OpenStreetMap** (streamed in tiles). It runs in the browser on the Mac and inside a C# UWP/WebView2 shell for an Xbox Series X|S in Developer Mode (private sideloading).
 UI text, README and docs are German. `README.md` covers controls and the full Xbox install walkthrough;
 `docs/TECHNIK.md` explains why UWP+WebView2 was chosen, cites sources, and lists what is only verifiable on real hardware.
 
@@ -19,12 +19,12 @@ npm test                               # node --test tests/
 node --test tests/mission.test.js      # single file
 node --test --test-name-pattern="Menü" tests/   # single test by name
 node tools/prepare-xbox.mjs            # copy web/ → xbox/GtaBerlin/Web/ and generate package logos (PNG, no libs)
-npm run map:fetch                      # LOR boundaries (Geoportal WFS) + OSM (Overpass) → data/raw/ (gitignored, needs network)
-npm run map:build                      # data/raw/ + data/places.json → web/data/city.json (deterministic, ~3 s)
-npm run map:preview -- out.svg [x y w h]   # SVG of the map (or a px window) for visual checks
+npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries + tree cadastre (Geoportal WFS) → data/raw/ (gitignored, needs network)
+npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
+npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
 ```
 
-`web/data/city.json` is committed; only rebuild it when the data or `data/places.json` (mission spots) should change.
+`web/data/berlin/` (index.json, overview.json, ~2 900 tiles, 138 MB) is committed; only rebuild it when the data or `data/places.json` (mission spots) should change.
 The build fails loudly if a mission spot lands in a building, outside the area, or unconnected by road.
 
 The UWP shell (`xbox/`) can only be built/signed on Windows with Visual Studio (Release, x64). It has **never been
@@ -47,15 +47,20 @@ change in `web/`.
   to a standard gamepad. The page sends `{type:'ready'}` and `{type:'quit'}` (menu "Beenden", only shown when
   `chrome.webview` exists → `canQuit`). The shell also swallows `BackRequested` and `VirtualKey.Gamepad*` so B doesn't
   close the app and focus stays in the WebView. Changing the message format means changing both sides.
-- **Map is data, not code.** `tools/osm/build.mjs` projects OSM + LOR boundaries (transverse Mercator, 10 px = 1 m,
-  north up) into a compact delta-encoded JSON (road graph with class/width/name/oneway/bridge, buildings with holes and
-  heights, water, areas, walls, trees, border, districts, mission places + route-based `timeLimit`). Codes shared with the
-  game live in `web/src/citycodes.js`, geometry helpers in `web/src/geom.js` (imported by the build too).
-  `map.js` `decodeCity()` builds `SpatialHash`es: `render` (culling), `edgeSegs` (road queries), `polys` (surface /
-  in-building), `solids` (collision). Queries: `surfaceAt` (replaces the old tile lookup; `car.js` uses it for friction),
-  `inBuilding`, `insideBorder`, `districtAt`, `nearestEdge`, `locationName`. The decoded city is shared read-only by the
-  title demo world and the game world; `createWorld({ city })` / `createGame({ city })` / `setCity()` take it explicitly
-  (the browser loads it async in `main.js`).
+- **Map is data, not code, and streamed.** `tools/osm/pbf.mjs` (hand-written PBF reader) → `store.mjs` (typed-array
+  node coords) → `build.mjs` projects OSM + LOR boundaries (transverse Mercator, 10 px = 1 m, north up) into global
+  feature arrays → `tiles.mjs` cuts them into 640 m tiles (lines/buildings/small areas multi-homed with a global `gid`,
+  points single-homed, big areas clipped per tile) plus `index.json` (border, Bezirke, Ortsteile, mission places,
+  per-Bezirk coverage) and `overview.json` (big map). Codes shared with the game live in `web/src/citycodes.js`, geometry
+  helpers in `web/src/geom.js` (imported by the build too). `map.js` `openCity(index, loadTile)` returns a city that loads
+  tiles around a focus (`city.focus(key, x, y)` → ready?; `STREAM` radii), refcounts shared objects (`city.reg`) and
+  removes their `SpatialHash` entries on unload. `city.edges`/`city.nodes` are **Maps by global id**; whole-layer lists
+  only via `city.list(layer)` (loaded area). Hashes: `render`, `edgeSegs`, `polys`, `solids`, `poiHash`, `addrHash`.
+  Queries: `surfaceAt`, `inBuilding`, `insideBorder`, `districtAt` (Ortsteil), `bezirkAt`, `nearestEdge`, `locationName`.
+  `world.js` calls `streamWorld` each step: if tiles near the camera are missing (browser, async fetch) the world freezes
+  (`w.loading`) until they arrive; `findTeleportSpot` returns `{pending}` for unloaded targets; saves resolve lazily.
+  Anything cached on edges/nodes (`_walk`, `_slots`, `_marks`) is only computed near the camera, where tiles are complete;
+  per-node data needed at the fringe (junction discs, lane trim) comes precomputed from the build.
 - **Street cross-section** (`tools/osm/crosssection.mjs` → `e.cs` at runtime, lane layout in `web/src/street.js`
   `laneOffsets(cs, unit)`): curb-to-curb width, lanes per direction, parking/cycle lanes per side, maxspeed, surface.
   `unit` is 1 in the build (m) and `city.scale` in the game (px). Lanes (`roadgraph.js`), markings (`render.js`),
@@ -77,7 +82,7 @@ change in `web/`.
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.
 - **Traffic:** `roadgraph.js` turns drivable in-area edges (`cls <= TRAFFIC_MAX_CLASS`) into lanes per the cross-section
-  (trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
+  as their edges load (hooks `city.hooks.edgeAdd/edgeRemove`; `lane.next` recomputed per `city.gen`) (trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
   polyline with pure pursuit, slows for turns/obstacles, replans via the lane hash. **Population lives around the camera**
   (`TRAFFIC.spawnMin/spawnMax/despawn` in `config.js`, `managePopulation` in `world.js`).
 - **Pedestrians** walk along road edges at a per-side sidewalk offset (cached, shrunk if it would hit a building), pick the
@@ -98,7 +103,9 @@ minor for features), gets a CHANGELOG entry, is tagged `vX.Y.Z` and pushed with 
 
 ## Tests
 
-`node:test` only. Tests load the real map once per process via `tests/helpers/city.js` (`realCity()`, ~0.5 s).
+`node:test` only. Tests load the real map via `tests/helpers/city.js`: `realCity()` pins the Kreuzberg + Neukölln tiles
+(~1 s, like the old single-file map), `openRealCity()` gives a fresh streaming city with a synchronous disk loader. A
+sweep test loads every tile of Berlin once (tree rule, no leftovers after unload, ~11 s).
 `tests/helpers/bot.js` is an **autopilot** that plays the full mission through the same abstract inputs a player uses
 (A* over the real road graph); there are also soak tests with traffic/pedestrians, full-throttle ram tests against walls,
 quays and the border (checked every step), and `tests/osm-build.test.js`, which runs the build on a tiny synthetic OSM

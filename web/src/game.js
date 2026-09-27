@@ -38,14 +38,26 @@ export function requestTeleport(g, x, y) {
   const st = g.world.mission.state;
   if (st === 'toPickup' || st === 'toDropoff' || st === 'briefing') { g.toast = { text: 'Während eines Auftrags nicht möglich', t: 2 }; return false; }
   const spot = findTeleportSpot(g.world, x, y);
-  if (!spot) { g.toast = { text: 'Dort kann man nicht hin (außerhalb des Gebiets)', t: 2 }; return false; }
-  g.teleport = spot;
+  if (!spot) { g.toast = { text: 'Dort kann man nicht hin (außerhalb von Berlin)', t: 2 }; return false; }
+  g.teleport = spot; // { pending } solange der Stadtteil dort noch lädt
   return true;
+}
+
+// Wartet ein Teleport-Ziel auf seine Kacheln, erneut nachsehen.
+function resolveTeleport(g) {
+  const t = g.teleport;
+  if (!t?.pending) return;
+  const spot = findTeleportSpot(g.world, t.x, t.y);
+  if (spot?.pending) return;
+  if (!spot) { g.toast = { text: 'Dort kann man nicht hin', t: 2 }; g.teleport = null; g.world.city.release('teleport'); return; }
+  g.teleport = spot;
 }
 
 export function confirmTeleport(g, yes) {
   if (!g.teleport) return;
+  if (yes && g.teleport.pending) return; // Ziel lädt noch
   if (yes) { teleportTo(g.world, g.teleport); g.showBigMap = false; g.toast = { text: `Teleportiert: ${g.teleport.name}`, t: 2.5 }; }
+  else g.world.city.release('teleport');
   g.teleport = null;
 }
 
@@ -135,6 +147,8 @@ export function updateGame(g, input, dt) {
       const w = g.world, m = w.mission;
       // Bestätigungsdialog für den Teleport: Welt steht still, A/Enter = ja, B/Esc = nein.
       if (g.teleport) {
+        resolveTeleport(g);
+        if (!g.teleport) break;
         if (input.confirm) { confirmTeleport(g, true); ev.push({ type: 'ui' }); }
         else if (input.back || input.pause) { confirmTeleport(g, false); ev.push({ type: 'ui-back' }); }
         break;

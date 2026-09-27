@@ -91,7 +91,7 @@ test('Teleport: Klick auf den Stadtplan, Bestätigung, Abbruch, Sperren', async 
   const g = createGame({ storage: memoryStorage(), city });
   press(g, { confirm: true });
   const w = g.world;
-  const kotti = city.pois.find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
+  const kotti = city.list('poi').find((q) => q.cat === 'ubahn' && q.name === 'Kottbusser Tor');
   assert.equal(requestTeleport(g, kotti.x, kotti.y), false, 'nur bei offenem Stadtplan');
   g.showBigMap = true;
   // außerhalb des Gebiets
@@ -117,7 +117,7 @@ test('Teleport: Klick auf den Stadtplan, Bestätigung, Abbruch, Sperren', async 
   const car = w.cars.find((c) => c.id === w.playerCarId);
   w.player.inCar = car.id; car.driver = 'player';
   g.showBigMap = true;
-  const arc = city.pois.find((q) => q.name === 'Neukölln Arcaden');
+  const arc = city.list('poi').find((q) => q.name === 'Neukölln Arcaden');
   assert.ok(requestTeleport(g, arc.x, arc.y));
   confirmTeleport(g, true);
   assert.equal(playerCar(w), car);
@@ -129,3 +129,52 @@ test('Teleport: Klick auf den Stadtplan, Bestätigung, Abbruch, Sperren', async 
   assert.equal(requestTeleport(g, kotti.x, kotti.y), false);
   assert.match(g.toast.text, /Auftrag/);
 });
+
+test('Teleport in einen noch nicht geladenen Stadtteil: Ziel lädt erst, dann Dialog (asynchrone Kacheln wie im Browser)', async () => {
+  const { requestTeleport } = await import('../web/src/game.js');
+  const { openCity, inBuilding, insideBorder, districtAt } = await import('../web/src/map.js');
+  const { realIndex, tileLoader } = await import('./helpers/city.js');
+  const sync = tileLoader();
+  const pending = [];
+  // Kacheln kommen erst, wenn der Test sie freigibt (wie ein langsames Netz)
+  const slow = openCity(realIndex(), (k) => new Promise((res) => pending.push(() => res(sync(k)))));
+  const flush = async () => { while (pending.length) pending.shift()(); await new Promise((r) => setTimeout(r, 0)); };
+  const g = createGame({ storage: memoryStorage(), city: slow });
+  press(g, { confirm: true });
+  assert.ok(g.world.loading, 'Start: Stadtteil lädt noch');
+  const t0 = g.world.time;
+  press(g, {});
+  assert.equal(g.world.time, t0, 'Welt steht, solange nichts geladen ist');
+  await flush(); press(g, {}); await flush(); press(g, {});
+  assert.ok(!g.world.loading && g.world.time > t0, 'nach dem Laden läuft die Welt');
+  assert.ok(g.world.cars.some((c) => c.driver === 'npc'), 'Verkehr aufgebaut');
+  // Rathaus Spandau (15 km entfernt): Ziel lädt erst
+  const [x, y] = await pxOf(slow, 52.5354, 13.2006);
+  g.showBigMap = true;
+  assert.ok(requestTeleport(g, x, y));
+  assert.ok(g.teleport.pending, 'Ziel noch nicht geladen');
+  press(g, { confirm: true });
+  assert.ok(g.teleport?.pending, 'bestätigen geht erst, wenn das Ziel da ist');
+  for (let i = 0; i < 5 && g.teleport?.pending; i++) { await flush(); press(g, {}); }
+  assert.ok(g.teleport && !g.teleport.pending, 'Dialog mit Ortsnamen');
+  assert.match(g.teleport.name, /\S/);
+  press(g, { confirm: true });
+  const w = g.world;
+  assert.ok(Math.hypot(w.player.x - x, w.player.y - y) < 600, 'in Spandau angekommen');
+  assert.equal(districtAt(slow, w.player.x, w.player.y), 'Spandau');
+  assert.ok(insideBorder(slow, w.player.x, w.player.y) && !inBuilding(slow, w.player.x, w.player.y));
+  // Das alte Viertel wird irgendwann freigegeben
+  for (let i = 0; i < 40; i++) { await flush(); press(g, {}); }
+  const giver = slow.places.giver;
+  assert.ok(![...slow.tiles.keys()].some((k) => { const [tx, ty] = k.split('_').map(Number); return Math.abs(tx * slow.tile - giver.x) < slow.tile && Math.abs(ty * slow.tile - giver.y) < slow.tile; }), 'Kacheln am Späti entladen');
+});
+
+async function pxOf(city, lat, lon) {
+  const { makeProjection } = await import('../tools/osm/geo.mjs');
+  const { lat0, lon0, bbox: [s, w, n, e] } = city.meta.origin;
+  const proj = makeProjection(lat0, lon0);
+  const c = [proj(s, w), proj(s, e), proj(n, w), proj(n, e)];
+  const minX = Math.min(...c.map((q) => q[0])), maxY = Math.max(...c.map((q) => q[1]));
+  const [px, py] = proj(lat, lon);
+  return [(px - minX) * city.scale, (maxY - py) * city.scale];
+}

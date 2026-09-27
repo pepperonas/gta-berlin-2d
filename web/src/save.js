@@ -1,6 +1,6 @@
 // Spielstand: ein Speicherplatz in localStorage (in der Xbox-Hülle: WebView2-Profil im App-Datenordner).
 // storage ist injizierbar (Tests nutzen eine Map-Attrappe).
-import { playerCar } from './world.js';
+import { playerCar, resetPopulation } from './world.js';
 import { insideBorder, inBuilding } from './map.js';
 
 const MAX_XY = 1e7; // grobe Plausibilität; ob die Position in der Stadt liegt, prüft applySave
@@ -41,8 +41,21 @@ export function readSave(storage) {
 }
 
 // Übernimmt einen Spielstand in eine frisch erzeugte Welt (Spieler steht zu Fuß neben seinem Auto).
+// Der gespeicherte Ort kann in einem noch nicht geladenen Stadtteil liegen: dann gilt er vorläufig und wird geprüft,
+// sobald die Kacheln dort da sind (resolveSave, aufgerufen von updateWorld).
 export function applySave(w, s) {
   w.money = s.money; w.completed = s.completed; w.bestTime = s.bestTime;
+  w.pendingSave = s;
+  const p = s.car ?? s.player;
+  if (p && insideBorder(w.city, p.x, p.y)) { w.camera.x = p.x; w.camera.y = p.y; }
+  resolveSave(w);
+}
+
+export function resolveSave(w) {
+  const s = w.pendingSave;
+  if (!s) return true;
+  if (!w.city.focus(w.focusKey, w.camera.x, w.camera.y)) return false;
+  w.pendingSave = null;
   const car = w.cars.find((c) => c.id === w.playerCarId);
   const valid = (p) => p && insideBorder(w.city, p.x, p.y) && !inBuilding(w.city, p.x, p.y);
   if (s.car && car && valid(s.car)) {
@@ -54,6 +67,8 @@ export function applySave(w, s) {
     }
   } else if (valid(s.player)) { w.player.x = s.player.x; w.player.y = s.player.y; }
   w.camera.x = w.player.x; w.camera.y = w.player.y;
+  resetPopulation(w); // Verkehr am (neuen) Ort aufbauen
+  return true;
 }
 
 export function memoryStorage() {

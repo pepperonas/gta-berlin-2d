@@ -100,3 +100,13 @@ function segDist2local(px, py, ax, ay, bx, by) {
   const qx = ax + t * dx - px, qy = ay + t * dy - py;
   return qx * qx + qy * qy;
 }
+
+// Hüllrechteck (S, W, N, O in Grad) über GeoJSON-Polygone, erweitert um marginM Meter.
+export function bboxOfFeatures(features, marginM = 250) {
+  let s = 90, w = 180, n = -90, e = -180;
+  for (const f of features) for (const poly of f.geometry.coordinates) for (const ring of poly) for (const [x, y] of ring) {
+    s = Math.min(s, y); n = Math.max(n, y); w = Math.min(w, x); e = Math.max(e, x);
+  }
+  const dLat = marginM / 110574, dLon = marginM / (111320 * Math.cos(((s + n) / 2) * Math.PI / 180));
+  return [s - dLat, w - dLon, n + dLat, e + dLon];
+}

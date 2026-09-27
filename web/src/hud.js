@@ -1,6 +1,7 @@
 // HUD, Menüs und Overlays. Gezeichnet in einem virtuellen 720 px hohen Raster mit 5 % Title-Safe-Rand (TV).
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
+import { undelta } from './geom.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
 import { AREA_KIND } from './citycodes.js';
 import { VERSION } from './version.js';
@@ -73,29 +74,35 @@ export class Hud {
     this.text(body, x, y + 8, { size: 22 });
   }
 
-  // Stadtplan-Übersicht einmalig vorrendern (2000 px breit, ~4 m je Pixel).
+  // Stadtplan (ganz Berlin) aus overview.json: je Schicht ein Pfad in Weltkoordinaten, einmal gebaut.
   buildOverview(city) {
-    const k = 2000 / city.width, w = 2000, h = Math.round(city.height * k);
-    const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
-    const c = cv.getContext('2d');
-    c.fillStyle = '#3a3d44'; c.fillRect(0, 0, w, h);
-    c.setTransform(k, 0, 0, k, 0, 0);
-    for (const a of city.areas) if (a.kind !== AREA_KIND.plaza) { c.fillStyle = MINI_AREA[a.kind] ?? '#2f5a2a'; c.fill(pathOf(a), 'evenodd'); }
-    c.fillStyle = '#2b2d33';
-    for (const b of city.buildings) c.fill(pathOf(b), 'evenodd');
-    c.fillStyle = '#1f4f78';
-    for (const wa of city.water) c.fill(pathOf(wa), 'evenodd');
-    c.lineCap = 'round'; c.lineJoin = 'round';
-    for (const e of [...city.edges].sort((a, b) => b.cls - a.cls)) {
-      if (e.cls > 9) continue;
-      c.strokeStyle = e.cls <= 4 ? '#b9a66a' : '#8d919a';
-      c.lineWidth = Math.max(e.w, e.cls <= 4 ? 90 : e.cls <= 7 ? 55 : 30); c.stroke(pathOf(e));
-    }
-    const outside = new Path2D(); outside.rect(0, 0, city.width, city.height); outside.addPath(ringPath(city.border));
-    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fill(outside, 'evenodd');
-    c.strokeStyle = '#ffd33d'; c.lineWidth = 110; c.stroke(ringPath(city.border));
-    this.overview = { cv, k, w, h };
+    const ov = city.overview;
+    if (!ov) return null;
+    const ring = (p, d) => { const r = undelta(d); p.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) p.lineTo(r[i], r[i + 1]); p.closePath(); };
+    const line = (p, d) => { const r = undelta(d); p.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) p.lineTo(r[i], r[i + 1]); };
+    const areas = new Map();
+    for (const [k, rings] of ov.areas) { let p = areas.get(k); if (!p) areas.set(k, p = new Path2D()); for (const [, d] of rings) ring(p, d); }
+    const water = new Path2D(); for (const rings of ov.water) for (const [, d] of rings) ring(water, d);
+    const roads = [new Path2D(), new Path2D(), new Path2D(), new Path2D()]; // Autobahn · Hauptstraße · Nebenstraße · Wohnstraße
+    for (const [cls, d] of ov.roads) line(roads[cls <= 2 ? 0 : cls <= 4 ? 1 : cls <= 5 ? 2 : 3], d);
+    const rails = new Path2D(); for (const d of ov.rails) line(rails, d);
+    const border = ringPath(city.border);
+    const bezirke = new Path2D(); for (const b of city.bezirke) for (const r of b.rings) { bezirke.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) bezirke.lineTo(r[i], r[i + 1]); bezirke.closePath(); }
+    const outside = new Path2D(); outside.rect(-1e6, -1e6, city.width + 2e6, city.height + 2e6); outside.addPath(border);
+    this.overview = { areas, water, roads, rails, border, bezirke, outside, stations: ov.stations, labels: ov.labels };
+    return this.overview;
   }
+
+  // Ansicht des Stadtplans: Zoom (1 = ganz Berlin) und Mittelpunkt in Weltkoordinaten; Mausrad/Ziehen in main.js.
+  zoomBigMap(factor, vx, vy) {
+    const m = this.bigMap, v = this.mapView;
+    if (!m || !v) return;
+    const wx = (vx - m.ox) / m.f, wy = (vy - m.oy) / m.f;
+    v.z = Math.min(40, Math.max(1, v.z * factor));
+    const f = m.f0 * v.z;
+    v.cx = wx - (vx - m.x - m.w / 2) / f; v.cy = wy - (vy - m.y - m.h / 2) / f;
+  }
+  panBigMap(dx, dy) { if (this.bigMap && this.mapView) { this.mapView.cx -= dx / this.bigMap.f; this.mapView.cy -= dy / this.bigMap.f; } }
 
   drawGameplay(world, g) {
     const c = this.ctx, m = this.m, vw = this.vw, vh = this.vh;
@@ -165,6 +172,7 @@ export class Hud {
       c.fillStyle = YELLOW; rr(c, x, y, w * Math.min(1, mission.load / MISSION.loadTime), 14, 7); c.fill();
     }
     if (mission.state === 'briefing') this.drawBriefing();
+    if (world.loading) { this.panel(vw / 2 - 150, vh / 2 - 26, 300, 52, 0.8); this.text('Lade Stadtteil …', vw / 2, vh / 2 + 8, { size: 22, align: 'center', weight: 700 }); }
   }
 
   drawMinimap(world, target, x, y, size) {
@@ -264,25 +272,56 @@ export class Hud {
 
   drawBigMap(world) {
     const c = this.ctx, city = world.city;
-    if (!this.overview) this.buildOverview(city);
-    const ov = this.overview;
-    c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, 0, this.vw, this.vh);
-    const hh = this.vh - this.m.y * 2 - 60, ww = hh * ov.w / ov.h;
-    const x = this.vw / 2 - ww / 2, y = this.m.y + 30;
-    c.drawImage(ov.cv, x, y, ww, hh);
-    const f = ww / city.width;
-    this.bigMap = { x, y, w: ww, h: hh, f }; // für Mausklicks (virtuelle HUD-Koordinaten)
-    for (const q of city.pois) if (q.cat === 'ubahn' || q.cat === 'sbahn') this.stationIcon(q.cat, x + q.x * f, y + q.y * f, 5);
-    const obj = missionObjective(world.mission, { places: city.places, player: world.player, cars: world.cars });
-    c.fillStyle = '#e03b3b'; c.beginPath(); c.arc(x + city.places.giver.x * f, y + city.places.giver.y * f, 5, 0, Math.PI * 2); c.fill();
-    if (obj.target) { c.fillStyle = YELLOW; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(x + obj.target.x * f, y + obj.target.y * f, 8, 0, Math.PI * 2); c.fill(); c.stroke(); }
+    c.fillStyle = 'rgba(12,13,16,0.94)'; c.fillRect(0, 0, this.vw, this.vh);
+    const x = this.m.x, y = this.m.y + 30, w = this.vw - 2 * this.m.x, h = this.vh - this.m.y * 2 - 60;
     const p = playerCar(world) ?? world.player;
-    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(x + p.x * f, y + p.y * f, 6, 0, Math.PI * 2); c.fill(); c.stroke();
-    this.text('Stadtplan · Kreuzberg und Nord-Neukölln', x, y - 8, { size: 20, weight: 800 });
-    this.text('rot = Späti · gelb = Ziel · weiß = du · U/S = Bahnhof', x + ww, y - 8, { size: 15, align: 'right', color: '#ccc', weight: 500 });
-    this.text(city.attribution, x + ww, y + hh + 20, { size: 12, align: 'right', color: '#aaa', weight: 500 });
-    this.panel(x + 10, y + hh - 40, 300, 30, 0.75);
-    this.text('Klick auf die Karte: dorthin teleportieren', x + 22, y + hh - 20, { size: 14, color: '#eee', weight: 600 });
+    const v = (this.mapView ??= { z: 1, cx: city.width / 2, cy: city.height / 2 });
+    const f0 = Math.min(w / city.width, h / city.height), f = f0 * v.z;
+    // nicht über den Rand von Berlin hinausschieben
+    const hw = w / 2 / f, hh = h / 2 / f;
+    v.cx = hw * 2 >= city.width ? city.width / 2 : Math.min(city.width - hw, Math.max(hw, v.cx));
+    v.cy = hh * 2 >= city.height ? city.height / 2 : Math.min(city.height - hh, Math.max(hh, v.cy));
+    const ox = x + w / 2 - v.cx * f, oy = y + h / 2 - v.cy * f;
+    this.bigMap = { x, y, w, h, f, f0, ox, oy }; // für Mausklicks (virtuelle HUD-Koordinaten)
+    const ov = this.overview ?? this.buildOverview(city);
+    c.save();
+    rr(c, x, y, w, h, 10); c.clip();
+    c.fillStyle = '#3a3d44'; c.fillRect(x, y, w, h);
+    const W = (pxOnScreen) => pxOnScreen / f; // Linienbreite in Bildschirmpunkten
+    if (ov) {
+      c.save(); c.transform(f, 0, 0, f, ox, oy);
+      for (const [k, path] of ov.areas) { c.fillStyle = MINI_AREA[k] ?? '#2f5a2a'; c.fill(path); }
+      c.fillStyle = '#1f4f78'; c.fill(ov.water);
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      c.strokeStyle = '#6b6f78'; c.lineWidth = W(v.z >= 4 ? 1.4 : 0.6); c.stroke(ov.roads[3]);
+      c.strokeStyle = '#8d919a'; c.lineWidth = W(v.z >= 4 ? 2.2 : 1.1); c.stroke(ov.roads[2]);
+      c.strokeStyle = '#b9a66a'; c.lineWidth = W(v.z >= 4 ? 3.2 : 1.6); c.stroke(ov.roads[1]);
+      c.strokeStyle = '#e0a84a'; c.lineWidth = W(v.z >= 4 ? 4 : 2.2); c.stroke(ov.roads[0]);
+      c.strokeStyle = 'rgba(40,36,32,0.9)'; c.lineWidth = W(1.2); c.stroke(ov.rails);
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fill(ov.outside, 'evenodd');
+      c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = W(1); c.stroke(ov.bezirke);
+      c.strokeStyle = '#ffd33d'; c.lineWidth = W(2.5); c.stroke(ov.border);
+      c.restore();
+      const S = (wx, wy) => [ox + wx * f, oy + wy * f];
+      for (const [qx, qy, cat, n] of ov.stations) {
+        const [sx, sy] = S(qx, qy);
+        if (sx < x - 20 || sx > x + w + 20 || sy < y - 20 || sy > y + h + 20) continue;
+        this.stationIcon(cat, sx, sy, v.z >= 3 ? 6 : 3.5);
+        if (v.z >= 6) this.text(n, sx + 9, sy + 5, { size: 13, color: '#eee', weight: 600 });
+      }
+      if (v.z < 4) for (const [lx, ly, n] of ov.labels) { const [sx, sy] = S(lx, ly); this.text(n, sx, sy, { size: 15, align: 'center', weight: 700, color: 'rgba(255,255,255,0.8)' }); }
+    } else this.text('Stadtplan lädt …', x + w / 2, y + h / 2, { size: 22, align: 'center', weight: 700 });
+    const obj = missionObjective(world.mission, { places: city.places, player: world.player, cars: world.cars });
+    const dot = (wx, wy, r, fill) => { c.fillStyle = fill; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(ox + wx * f, oy + wy * f, r, 0, Math.PI * 2); c.fill(); c.stroke(); };
+    dot(city.places.giver.x, city.places.giver.y, 5, '#e03b3b');
+    if (obj.target) dot(obj.target.x, obj.target.y, 8, YELLOW);
+    dot(p.x, p.y, 6, '#fff');
+    c.restore();
+    this.text('Stadtplan · Berlin', x, y - 8, { size: 20, weight: 800 });
+    this.text('rot = Späti · gelb = Ziel · weiß = du · U/S = Bahnhof', x + w, y - 8, { size: 15, align: 'right', color: '#ccc', weight: 500 });
+    this.text(city.attribution, x + w, y + h + 20, { size: 12, align: 'right', color: '#aaa', weight: 500 });
+    this.panel(x + 10, y + h - 40, 470, 30, 0.75);
+    this.text('Mausrad: zoomen · Ziehen: verschieben · Klick: dorthin teleportieren', x + 22, y + h - 20, { size: 14, color: '#eee', weight: 600 });
   }
 
   // Bestätigung vor dem Teleport; die Knopfflächen merkt sich der HUD für Mausklicks.
@@ -291,7 +330,7 @@ export class Hud {
     c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(0, 0, this.vw, this.vh);
     this.panel(x, y, w, h, 0.92);
     this.text('HIERHIN TELEPORTIEREN?', this.vw / 2, y + 44, { size: 22, align: 'center', weight: 800, color: YELLOW });
-    this.text(spot.name, this.vw / 2, y + 84, { size: 20, align: 'center', weight: 600 });
+    this.text(spot.pending ? 'Lade den Stadtteil …' : spot.name, this.vw / 2, y + 84, { size: 20, align: 'center', weight: 600, color: spot.pending ? '#bbb' : '#fff' });
     const bw = 200, bh = 46, by = y + h - bh - 22;
     this.dialogButtons = { yes: { x: this.vw / 2 - bw - 12, y: by, w: bw, h: bh }, no: { x: this.vw / 2 + 12, y: by, w: bw, h: bh } };
     for (const [k, label, glyph, bg] of [['yes', 'Ja', 'A', YELLOW], ['no', 'Nein', 'B', 'rgba(255,255,255,0.12)']]) {
@@ -339,7 +378,7 @@ export class Hud {
     if (g.city) {
       this.menu(g.titleMenu, vw / 2, 350);
       this.footerHints([['A', 'Auswählen']]);
-    } else this.text(g.loadError ? `Karte nicht ladbar: ${g.loadError}` : 'Lade Kreuzberg und Nord-Neukölln …', vw / 2, 380, { size: 22, align: 'center', weight: 600, color: g.loadError ? '#ff8080' : '#ddd' });
+    } else this.text(g.loadError ? `Karte nicht ladbar: ${g.loadError}` : 'Lade Berlin …', vw / 2, 380, { size: 22, align: 'center', weight: 600, color: g.loadError ? '#ff8080' : '#ddd' });
     this.text(`v${VERSION} · Prototyp`, vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
     this.text('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', this.m.x, vh - this.m.y, { size: 12, color: '#999', weight: 500 });
   }

@@ -152,15 +152,27 @@ let STAMP = 0;
 export class SpatialHash {
   constructor(cell = 96) { this.cell = cell; this.map = new Map(); }
   _key(cx, cy) { return cx * 65536 + cy; }
+  // Liefert die belegten Zellen (für remove), damit nachgeladene Kartenteile wieder entfernt werden können.
   insert(item, box) {
-    const c = this.cell;
+    const c = this.cell, keys = [];
     for (let y = Math.floor(box.y / c); y <= Math.floor((box.y + box.h) / c); y++) {
       for (let x = Math.floor(box.x / c); x <= Math.floor((box.x + box.w) / c); x++) {
         const k = this._key(x, y);
         let list = this.map.get(k);
         if (!list) { list = []; this.map.set(k, list); }
         list.push(item);
+        keys.push(k);
       }
+    }
+    return keys;
+  }
+  remove(item, keys) {
+    for (const k of keys) {
+      const list = this.map.get(k);
+      if (!list) continue;
+      const i = list.lastIndexOf(item);
+      if (i >= 0) list.splice(i, 1);
+      if (!list.length) this.map.delete(k);
     }
   }
   query(box, out = []) {

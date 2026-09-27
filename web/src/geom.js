@@ -102,3 +102,55 @@ export function undelta(d) {
   for (let i = 0; i < d.length; i++) out[i] = i < 2 ? d[i] : d[i] + out[i - 2];
   return out;
 }
+
+// Schneller Punkt-in-Polygon-Test für große Ringe (Stadtgrenze, Ortsteile): Kanten nach waagerechten Bändern
+// einsortiert, je Anfrage nur die Kanten des eigenen Bands (gerade/ungerade-Regel wie pointInRings).
+export function ringIndex(rings, band = 2000) {
+  const bands = new Map();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of rings) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+    const ax = r[j], ay = r[j + 1], bx = r[i], by = r[i + 1];
+    x0 = Math.min(x0, bx); x1 = Math.max(x1, bx); y0 = Math.min(y0, by); y1 = Math.max(y1, by);
+    if (ay === by) continue;
+    for (let k = Math.floor(Math.min(ay, by) / band); k <= Math.floor(Math.max(ay, by) / band); k++) {
+      let list = bands.get(k); if (!list) bands.set(k, list = []);
+      list.push(ax, ay, bx, by);
+    }
+  }
+  return { band, bands, x0, y0, x1, y1 };
+}
+
+export function insideIndex(ix, x, y) {
+  if (x < ix.x0 || x > ix.x1 || y < ix.y0 || y > ix.y1) return false;
+  const list = ix.bands.get(Math.floor(y / ix.band));
+  if (!list) return false;
+  let inside = false;
+  for (let i = 0; i < list.length; i += 4) {
+    const xi = list[i + 2], yi = list[i + 3], xj = list[i], yj = list[i + 1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Ring (flach, geschlossen gedacht) an einem achsenparallelen Rechteck abschneiden (Sutherland–Hodgman).
+// Liefert den Teil im Rechteck; an der Schnittkante entstehen Kanten entlang des Rechtecks.
+export function clipRing(r, x0, y0, x1, y1) {
+  let pts = r;
+  const edges = [[0, x0, 1], [0, x1, -1], [1, y0, 1], [1, y1, -1]]; // Achse, Wert, Richtung (innen = +)
+  for (const [ax, v, dir] of edges) {
+    const out = [], n = pts.length;
+    if (!n) break;
+    for (let i = 0; i < n; i += 2) {
+      const j = (i + n - 2) % n;
+      const px = pts[j], py = pts[j + 1], cx = pts[i], cy = pts[i + 1];
+      const pin = ((ax ? py : px) - v) * dir >= 0, cin = ((ax ? cy : cx) - v) * dir >= 0;
+      if (cin !== pin) {
+        const t = (v - (ax ? py : px)) / ((ax ? cy : cx) - (ax ? py : px));
+        out.push(ax ? px + (cx - px) * t : v, ax ? v : py + (cy - py) * t);
+      }
+      if (cin) out.push(cx, cy);
+    }
+    pts = out;
+  }
+  return pts;
+}

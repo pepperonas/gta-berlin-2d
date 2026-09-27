@@ -14,6 +14,7 @@ import { PARK } from './citycodes.js';
 import { pointAlong } from './geom.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
+import { resolveSave } from './save.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -35,10 +36,37 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
 
   w.carTarget = cars; w.pedTarget = pedestrians;
   w.camera.x = w.player.x; w.camera.y = w.player.y;
-  // Startbevölkerung: im ganzen Umkreis verteilt (auch im Bild), danach nur noch außerhalb der Sicht.
-  for (let k = 0; k < cars; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
-  for (let k = 0; k < pedestrians; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
+  w.focusKey = `world${++worldCount}`;
+  w.loading = !city.focus(w.focusKey, w.camera.x, w.camera.y);
+  if (!w.loading) populate(w);
   return w;
+}
+let worldCount = 0;
+
+// Verkehr, Passanten und Parker verwerfen (nach einem Ortswechsel); am neuen Ort baut streamWorld sie neu auf.
+export function resetPopulation(w, keepCar = null) {
+  w.cars = w.cars.filter((c) => {
+    const keep = c === keepCar || c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked';
+    if (!keep && c.parkKey) w.parkedKeys?.delete(c.parkKey); // Stellplatz wieder frei
+    return keep;
+  });
+  w.peds = [];
+  w.populated = false;
+}
+
+// Startbevölkerung: im ganzen Umkreis verteilt (auch im Bild), danach nur noch außerhalb der Sicht.
+function populate(w) {
+  w.populated = true;
+  for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
+  for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
+}
+
+// Kacheln um die Kamera nachladen. false = der Stadtteil hier ist noch nicht da (im Browser kommt er asynchron),
+// die Welt steht dann still, bis er geladen ist.
+export function streamWorld(w) {
+  w.loading = !w.city.focus(w.focusKey, w.camera.x, w.camera.y);
+  if (!w.loading && !w.populated) populate(w);
+  return !w.loading;
 }
 
 function spawnPed(w, minR, maxR) {
@@ -93,9 +121,11 @@ function spawnTraffic(w, minR, maxR) {
 
 // Teleport-Ziel zu einem Kartenpunkt: im Auto auf die nächste Fahrspur (in Fahrtrichtung), zu Fuß auf den nächsten
 // Gehweg. null, wenn der Punkt außerhalb des Spielgebiets liegt oder nichts Passendes in der Nähe ist.
+// Liegt das Ziel in einem noch nicht geladenen Stadtteil, kommt { pending: true } zurück (später erneut fragen).
 export function findTeleportSpot(w, x, y) {
   const city = w.city;
   if (!insideBorder(city, x, y)) return null;
+  if (!city.focus('teleport', x, y)) return { pending: true, x, y };
   let spot = null;
   if (playerCar(w)) {
     const hit = nearestLane(buildLaneGraph(city), x, y, undefined, 3000);
@@ -118,10 +148,9 @@ export function teleportTo(w, spot) {
   p.x = spot.x; p.y = spot.y;
   w.camera.x = spot.x; w.camera.y = spot.y;
   // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
-  w.cars = w.cars.filter((c) => c === car || c.id === w.playerCarId || c.cargo || c.role === 'parked');
-  w.peds = [];
-  for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
-  for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
+  resetPopulation(w, car);
+  streamWorld(w);
+  w.city.release('teleport');
 }
 
 // --- Geparkte Autos am Straßenrand -------------------------------------------------------
@@ -133,7 +162,7 @@ export function parkingSlots(city, e) {
   const S = city.scale, slots = [];
   if (e.inside && e.cls <= 8 && !e.bridge) {
     // StVO § 12: kein Parken bis 5 m vor/nach der Ecke einer Kreuzung (Ecke = halbe Breite der Querstraße vom Knoten)
-    const cornerGap = (n) => { const nd = city.nodes[n]; let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2); return nd.edges.length > 2 ? r + 5 * S : 2 * S; };
+    const cornerGap = (n) => { const nd = city.nodes.get(n); if (!nd) return 5 * S; let r = 0; for (const k of nd.edges) { const o = city.edges.get(k); if (o && o !== e) r = Math.max(r, o.w / 2); } return nd.edges.length > 2 ? r + 5 * S : 2 * S; };
     const m0 = cornerGap(e.a), m1 = cornerGap(e.b), p = { x: 0, y: 0, ux: 1, uy: 0 };
     const avoid = [city.places.dropoff, city.places.playerCar, city.places.pickup, ...(city.parked ?? [])];
     for (const side of [-1, 1]) {
@@ -196,8 +225,10 @@ export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar
 export function restartMission(w) {
   for (const c of w.cars) c.cargo = false;
   resetMission(w.mission);
+  const far = Math.hypot(w.camera.x - w.city.places.playerSpawn.x, w.camera.y - w.city.places.playerSpawn.y) > TRAFFIC.despawn;
   spawnPlayerAndCar(w);
   w.camera.x = w.player.x; w.camera.y = w.player.y;
+  if (far) { resetPopulation(w); streamWorld(w); }
 }
 
 const tmp = [];
@@ -302,6 +333,8 @@ function applyDriverInput(car, input) {
 // Ein fester Simulationsschritt. input: siehe input.js (abstrakte Aktionen).
 export function updateWorld(w, input, dt) {
   w.events.length = 0;
+  if (w.pendingSave && !resolveSave(w)) { w.loading = true; return; }
+  if (!streamWorld(w)) return;
   w.time += dt;
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;

@@ -57,6 +57,22 @@ export function linePath(pts) {
   return p;
 }
 // Path2D je Kartenobjekt einmal erzeugen und am Objekt merken.
+// Uferlinie: bei an der Kachelgrenze abgeschnittenen Wasserflächen ohne die Schnittkanten (sonst Kaimauer quer im Wasser).
+function shoreOf(wa) {
+  if (!wa.clip) return pathOf(wa);
+  if (wa._shore) return wa._shore;
+  const { x0, y0, x1, y1 } = wa.clip, p = new Path2D();
+  const on = (ax, ay, bx, by) => (ax === x0 && bx === x0) || (ax === x1 && bx === x1) || (ay === y0 && by === y0) || (ay === y1 && by === y1);
+  for (const r of wa.rings) {
+    const n = r.length;
+    for (let i = 0; i < n; i += 2) {
+      const ax = r[i], ay = r[i + 1], bx = r[(i + 2) % n], by = r[(i + 3) % n];
+      if (on(ax, ay, bx, by)) continue;
+      p.moveTo(ax, ay); p.lineTo(bx, by);
+    }
+  }
+  return (wa._shore = p);
+}
 export const pathOf = (f) => (f._path ??= f.pts ? linePath(f.pts) : ringPath(f.rings));
 export { AREA_COLOR, WATER, ASPHALT };
 
@@ -65,8 +81,10 @@ const FENCE_STYLE = { 0: ['#8a8f95', 1.5, []], 1: ['#a08f78', 3.5, []], 2: ['#3d
 
 // Zufahrten einer Ampelkreuzung: je Kante die Haltelinie vor der Kreuzung (Mitte bis rechter Bordstein, in Fahrtrichtung).
 function signalApproaches(city, n) {
-  const nd = city.nodes[n], out = [];
-  const es = nd.edges.map((k) => city.edges[k]).filter((e) => e.cls <= 8);
+  const nd = city.nodes.get(n), out = [];
+  if (!nd) return out;
+  const es = nd.edges.map((k) => city.edges.get(k)).filter((e) => e && e.cls <= 8);
+  if (!es.length) return out;
   const r = Math.max(...es.map((e) => e.w / 2)) + 2 * city.scale;
   for (const e of es) {
     const incoming = e.b === n ? e.oneway !== -1 : e.oneway !== 1; // darf man auf dieser Kante zur Kreuzung fahren?
@@ -95,9 +113,9 @@ function makeCobblePattern(ctx) {
 function buildMarks(e, city) {
   if (e.cls > 8 || e.bridge && e.w < 50) return null;
   const cs = e.cs, trim = (n) => {
-    const nd = city.nodes[n];
-    if (nd.edges.length < 3) return 0;
-    let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2);
+    const nd = city.nodes.get(n);
+    if (!nd || nd.edges.length < 3) return 0;
+    let r = 0; for (const k of nd.edges) { const o = city.edges.get(k); if (o && o !== e) r = Math.max(r, o.w / 2); }
     return r + 10;
   };
   const L = e.len, s0 = trim(e.a), s1 = L - trim(e.b);
@@ -229,7 +247,7 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.restore();
-      ctx.strokeStyle = '#6f6a60'; ctx.lineWidth = 3; ctx.stroke(p);
+      ctx.strokeStyle = '#6f6a60'; ctx.lineWidth = 3; ctx.stroke(shoreOf(wa));
     }
 
     // 3) Wege (Parks, Fußwege) und ebenerdige Gleise
@@ -354,7 +372,11 @@ export class Renderer {
   // Ampeln: Haltelinie auf der Zufahrtsseite und ein Signal am rechten Fahrbahnrand, Farbe nach aktuellem Umlauf.
   drawSignals(world, v) {
     const ctx = this.ctx, city = world.city;
-    const list = (city._signalList ??= [...city.signals].map((n) => ({ n, x: city.nodes[n].x, y: city.nodes[n].y, app: signalApproaches(city, n) })));
+    if (city._signalGen !== city.gen) { // nach jedem Nachladen neu (Kreuzungen am Rand des Geladenen sind erst dann vollständig)
+      city._signalGen = city.gen;
+      city._signalList = [...city.signals].map((n) => { const nd = city.nodes.get(n); return nd && { n, x: nd.x, y: nd.y, app: signalApproaches(city, n) }; }).filter(Boolean);
+    }
+    const list = city._signalList;
     for (const s of list) {
       if (s.x < v.x - 150 || s.x > v.x + v.w + 150 || s.y < v.y - 150 || s.y > v.y + v.h + 150) continue;
       for (const a of s.app) {

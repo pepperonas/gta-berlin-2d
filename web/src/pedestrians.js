@@ -16,9 +16,9 @@ export const walkable = (e) => e.inside && e.cls >= 3 && e.cls <= 10 && e.cls !=
 export function walkRange(city, e) {
   if (e._walk) return e._walk;
   const corner = (n) => {
-    const nd = city.nodes[n];
-    if (nd.edges.length < 3) return 1 * city.scale;
-    let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2);
+    const nd = city.nodes.get(n);
+    if (!nd || nd.edges.length < 3) return 1 * city.scale;
+    let r = 0; for (const k of nd.edges) { const o = city.edges.get(k); if (o && o !== e) r = Math.max(r, o.w / 2); }
     return r + 1 * city.scale;
   };
   let a = corner(e.a), b = e.len - corner(e.b);
@@ -67,12 +67,6 @@ export function createPed(city, spot, rng) {
     skin: SKIN[Math.floor(rng() * SKIN.length)],
     threat: null, target: null, step: 0,
   };
-}
-
-function groupCrossings(city) {
-  const m = new Map();
-  for (const c of city.crossings ?? []) (m.get(c.edge.id) ?? m.set(c.edge.id, []).get(c.edge.id)).push(c);
-  return m;
 }
 
 // Nächster Gehweg-Platz zu einer Position.
@@ -133,7 +127,7 @@ function nextLeg(ped, world) {
   const city = world.city, rng = world.rng, e = ped.edge;
   const node = ped.dirSign > 0 ? e.b : e.a;
   const hasWalk = (o) => sidewalkOffset(city, o, 1) !== null || sidewalkOffset(city, o, -1) !== null;
-  const opts = city.nodes[node].edges.map((k) => city.edges[k]).filter((o) => walkable(o) && o !== e && hasWalk(o));
+  const opts = (city.nodes.get(node)?.edges ?? []).map((k) => city.edges.get(k)).filter((o) => o && walkable(o) && o !== e && hasWalk(o));
   const next = opts.length ? opts[Math.floor(rng() * opts.length)] : e;
   const dirSign = next === e ? -ped.dirSign : next.a === node ? 1 : -1;
   const [w0, w1] = walkRange(city, next);
@@ -147,7 +141,7 @@ function nextLeg(ped, world) {
   if (sidewalkOffset(city, next, side) === null) side = -side;
   // Liegt auf der neuen Straße in der Nähe ein Zebrastreifen oder eine Ampelquerung, dort hinübergehen.
   if (side !== sameSide && sidewalkOffset(city, next, sameSide) !== null) {
-    const z = (city.crossingsByEdge ??= groupCrossings(city)).get(next.id)?.find((c) => Math.abs(c.s - s) < 30 * city.scale);
+    const z = next.crossings?.find((c) => Math.abs(c.s - s) < 30 * city.scale);
     if (z) {
       ped.state = 'cross';
       const t = sidewalkPoint(city, next, side, z.s);

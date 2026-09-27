@@ -1,5 +1,5 @@
 // Fahrspurgraph für den KI-Verkehr aus dem Straßengraphen der Karte.
-// Rechtsverkehr: je Richtung eine Spur, bei Gegenverkehr um ein Viertel der Fahrbahnbreite nach rechts versetzt.
+// Rechtsverkehr: Spuren je Richtung aus dem Straßenquerschnitt (street.js laneOffsets).
 // An Kreuzungen werden die Spuren gekürzt; Abbiegeverbinder sind kubische Bézierkurven.
 import { offsetPolyline, polylineLength } from './geom.js';
 import { SpatialHash } from './collision.js';
@@ -28,60 +28,101 @@ export function cutPolyline(pts, s0, s1) { // Teilstück zwischen den Bogenläng
   return out;
 }
 
+// Spurgraph, mitwachsend mit den nachgeladenen Kacheln: Spuren entstehen, wenn ihre Kante geladen wird, und
+// verschwinden mit ihr. Nachfolger (lane.next) werden bei Bedarf berechnet und bis zum nächsten Nachladen gemerkt.
 export function buildLaneGraph(city) {
   if (city.lanes) return city.lanes;
-  const S = city.scale;
-  const edges = city.edges.filter(drivable);
-  const deg = new Map();
-  const radius = new Map();
-  for (const e of edges) for (const n of [e.a, e.b]) {
-    deg.set(n, (deg.get(n) ?? 0) + 1);
-    radius.set(n, Math.max(radius.get(n) ?? 0, e.w / 2));
-  }
-  const trimAt = (n) => (deg.get(n) >= 3 ? radius.get(n) + 1 * S : 0);
-  const lanes = [], out = new Map();
-  for (const e of edges) {
-    const lo = laneOffsets(e.cs, S);
-    for (const dir of [1, -1]) {
-      const n = dir === 1 ? e.cs.fwd : e.cs.bwd;
-      if (!n) continue;
-      const base = dir === 1 ? e.pts : reverse(e.pts);
-      const from = dir === 1 ? e.a : e.b, to = dir === 1 ? e.b : e.a;
-      for (let k = 0; k < n; k++) {
-        // Querlage aus dem Querschnitt (rechts positiv in Kantenrichtung; bei Gegenrichtung gespiegelt)
-        const off = dir === 1 ? lo.fwd[k] : -lo.bwd[k];
-        const raw = offsetPolyline(base, off);
-        const L = polylineLength(raw);
-        let s0 = trimAt(from), s1 = L - trimAt(to);
-        if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
-        const pts = cutPolyline(raw, s0, s1);
-        if (pts.length < 4) continue;
-        const lane = { id: lanes.length, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), next: null };
-        lanes.push(lane);
-        (out.get(from) ?? out.set(from, []).get(from)).push(lane);
+  const g = { lanes: new Set(), hash: new SpatialHash(320), out: new Map(), byEdge: new Map() };
+  city.lanes = g;
+  const add = (e) => {
+    if (!drivable(e)) return;
+    const made = makeLanes(city, e, g);
+    if (!made.length) return;
+    g.byEdge.set(e.id, made);
+    for (const l of made) {
+      g.lanes.add(l);
+      addOut(g.out, l.from, l);
+      l.cells = [];
+      for (let i = 0; i < l.pts.length - 2; i += 2) {
+        const ax = l.pts[i], ay = l.pts[i + 1], bx = l.pts[i + 2], by = l.pts[i + 3];
+        const sg = { lane: l, i, ax, ay, bx, by };
+        l.cells.push(sg, g.hash.insert(sg, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) }));
       }
     }
+  };
+  const remove = (e) => {
+    const made = g.byEdge.get(e.id);
+    if (!made) return;
+    g.byEdge.delete(e.id);
+    for (const l of made) {
+      g.lanes.delete(l);
+      const list = g.out.get(l.from);
+      if (list) { list.splice(list.indexOf(l), 1); if (!list.length) g.out.delete(l.from); }
+      for (let i = 0; i < l.cells.length; i += 2) g.hash.remove(l.cells[i], l.cells[i + 1]);
+      l.removed = true;
+    }
+  };
+  city.hooks.edgeAdd.push(add);
+  city.hooks.edgeRemove.push(remove);
+  for (const e of [...city.edges.values()].sort((a, b) => a.id - b.id)) add(e);
+  return g;
+}
+
+// Spurlisten je Knoten nach Kante und Spur sortiert: gleiche Nachfolger, egal in welcher Folge Kacheln laden.
+function addOut(out, n, l) {
+  let list = out.get(n);
+  if (!list) out.set(n, list = []);
+  let i = list.length;
+  while (i > 0 && (list[i - 1].edge.id > l.edge.id || (list[i - 1].edge.id === l.edge.id && list[i - 1].key > l.key))) i--;
+  list.splice(i, 0, l);
+}
+
+let laneId = 0;
+function makeLanes(city, e, g) {
+  const S = city.scale, lo = laneOffsets(e.cs, S), made = [];
+  const trimAt = (n) => city.nodes.get(n)?.trim ?? 0; // vom Karten-Build: größte halbe Breite + 1 m an Kreuzungen
+  for (const dir of [1, -1]) {
+    const n = dir === 1 ? e.cs.fwd : e.cs.bwd;
+    if (!n) continue;
+    const base = dir === 1 ? e.pts : reverse(e.pts);
+    const from = dir === 1 ? e.a : e.b, to = dir === 1 ? e.b : e.a;
+    for (let k = 0; k < n; k++) {
+      // Querlage aus dem Querschnitt (rechts positiv in Kantenrichtung; bei Gegenrichtung gespiegelt)
+      const off = dir === 1 ? lo.fwd[k] : -lo.bwd[k];
+      const raw = offsetPolyline(base, off);
+      const L = polylineLength(raw);
+      let s0 = trimAt(from), s1 = L - trimAt(to);
+      if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
+      const pts = cutPolyline(raw, s0, s1);
+      if (pts.length < 4) continue;
+      made.push(new Lane(city, g, { id: laneId++, key: (dir === 1 ? 0 : 100) + k, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed) }));
+    }
   }
-  const banned = city.turnBans ?? new Set(); // „vonKante>überKnoten>nachKante“ (Abbiegeverbote)
-  for (const l of lanes) {
-    const all = (out.get(l.to) ?? []).filter((m) => m.edge !== l.edge && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
-    // Rechts abbiegen nur von der äußersten, links nur von der innersten Spur; geradeaus spurtreu.
-    const ok = all.filter((m) => {
-      const a = turnAngle(l, m);
-      if (a > 0.5) return l.k === l.n - 1 && m.k === m.n - 1;
-      if (a < -0.5) return l.k === 0 && m.k === 0;
-      return m.k === Math.min(l.k, m.n - 1);
-    });
-    l.next = ok.length ? ok : all.length ? all : (out.get(l.to) ?? []).filter((m) => m !== l && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
-    if (!l.next.length) l.next = (out.get(l.to) ?? []).filter((m) => m !== l);
+  return made;
+}
+
+class Lane {
+  constructor(city, g, props) { Object.assign(this, props); this._city = city; this._g = g; this._gen = -1; this._next = null; }
+  get next() {
+    if (this._gen !== this._city.gen) { this._next = nextLanes(this, this._g, this._city.turnBans); this._gen = this._city.gen; }
+    return this._next;
   }
-  const hash = new SpatialHash(256);
-  for (const l of lanes) for (let i = 0; i < l.pts.length - 2; i += 2) {
-    const ax = l.pts[i], ay = l.pts[i + 1], bx = l.pts[i + 2], by = l.pts[i + 3];
-    hash.insert({ lane: l, i, ax, ay, bx, by }, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
-  }
-  city.lanes = { lanes, hash, out };
-  return city.lanes;
+}
+
+function nextLanes(l, g, banned) {
+  const at = g.out.get(l.to) ?? [];
+  const all = at.filter((m) => m.edge !== l.edge && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
+  // Rechts abbiegen nur von der äußersten, links nur von der innersten Spur; geradeaus spurtreu.
+  const ok = all.filter((m) => {
+    const a = turnAngle(l, m);
+    if (a > 0.5) return l.k === l.n - 1 && m.k === m.n - 1;
+    if (a < -0.5) return l.k === 0 && m.k === 0;
+    return m.k === Math.min(l.k, m.n - 1);
+  });
+  if (ok.length) return ok;
+  if (all.length) return all;
+  const any = at.filter((m) => m !== l && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
+  return any.length ? any : at.filter((m) => m !== l);
 }
 
 function reverse(pts) { const r = []; for (let i = pts.length - 2; i >= 0; i -= 2) r.push(pts[i], pts[i + 1]); return r; }

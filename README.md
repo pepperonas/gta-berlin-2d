@@ -1,7 +1,7 @@
 # GTA Berlin
 
-Spielbares Top-down-Open-World-Spiel mit schräger Draufsicht in **Kreuzberg und Nord-Neukölln, 1:1 aus OpenStreetMap**:
-echte Straßen, Gebäude, Spree, Landwehrkanal, Parks und Bäume, dazu Verkehr, Passanten, fahrbare Autos und eine
+Spielbares Top-down-Open-World-Spiel mit schräger Draufsicht in **ganz Berlin, 1:1 aus OpenStreetMap**:
+echte Straßen, Gebäude, Spree, Havel, Seen, Wälder, Parks und rund eine Million Bäume, dazu Verkehr, Passanten, fahrbare Autos und eine
 vollständige Mission. Läuft im Browser (Entwicklung auf dem Mac)
 und in einer UWP-Hülle für die **Xbox Series X|S im Developer Mode** (privat, Sideloading).
 
@@ -9,8 +9,8 @@ Alle Grafiken und Klänge sind selbst erzeugte Platzhalter (Canvas-Zeichnung, We
 [`web/assets/README.md`](web/assets/README.md). Keine Namen, Grafiken, Musik, Karten oder Dialoge aus fremden Spielen.
 
 **Kartendaten © OpenStreetMap-Mitwirkende (ODbL)**, Bezirksgrenzen und Baumbestand: Geoportal Berlin (LOR 2021, Straßen- und Anlagenbäume; dl-de/zero-2.0). Die
-Attribution steht im Titelbildschirm und auf dem Stadtplan. `web/data/city.json` ist eine aus OSM abgeleitete Datenbank und
-steht unter der ODbL; bei einer Veröffentlichung gilt Share-Alike für diese Datei. Geschäfte im Spiel (Späti „Zum Kiez“,
+Attribution steht im Titelbildschirm und auf dem Stadtplan. `web/data/berlin/` ist eine aus OSM abgeleitete Datenbank und
+steht unter der ODbL; bei einer Veröffentlichung gilt Share-Alike für diese Dateien. Geschäfte im Spiel (Späti „Zum Kiez“,
 „Lager 7“) sind erfunden.
 
 > Hinweis zum Titel: „GTA“ ist eine Marke von Take-Two/Rockstar. Für ein privates Projekt auf der eigenen Konsole ist das
@@ -20,35 +20,43 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.0.1** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.1.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
 
-- **Karte:** Kreuzberg (LOR-Prognoseräume Kreuzberg Nord/Süd/Ost) und Nord-Neukölln (Prognoseraum 0810 „Neukölln“:
-  Schillerpromenade, Neuköllner Mitte, Reuterstraße, Rixdorf, Köllnische Heide) im Maßstab 1:1 (10 px = 1 m), ca.
-  8 × 6 km. Rund 27 500 Gebäude mit echter Grundfläche und Höhe (Geschosszahl aus OSM), 29 500 Straßenstücke mit Namen,
-  Breite, Einbahnregeln und Brücken, Spree und Kanäle mit Kaimauern, Parks, Friedhöfe, Kleingärten, Gleisanlagen,
-  U1-Hochbahn (jedes Gleis einzeln und maßstäblich, wie in OSM erfasst; mehrere Linien teilen sich dieselben Gleise),
-  42 000 Straßenbäume. **Kein Baumstamm steht auf einer Fahrbahn** (die Krone darf überragen): OSM-Bäume
+- **Karte:** ganz Berlin (alle 12 Bezirke, 97 Ortsteile; Stadtgrenze aus den LOR-Prognoseräumen) im Maßstab 1:1
+  (10 px = 1 m), ca. 46 × 38 km. 529 000 Gebäude mit echter Grundfläche und Höhe (Geschosszahl aus OSM), 323 000
+  Straßenstücke mit Namen, Breite, Einbahnregeln und Brücken, Spree, Havel, Kanäle und Seen mit Uferwänden, Wälder, Parks,
+  Friedhöfe, Kleingärten, Gleisanlagen, Hochbahnen (jedes Gleis einzeln und maßstäblich, wie in OSM erfasst).
+  **Kein Baumstamm steht auf einer Fahrbahn** (die Krone darf überragen): OSM-Bäume
   auf der geschätzten Fahrbahnbreite rückt der Karten-Build an den Bordstein ihrer Straßenseite, ohne freien Platz
-  entfallen sie; der Build bricht bei einem Verstoß ab, das Spiel verwirft solche Bäume beim Laden, Tests prüfen beides.
+  entfallen sie; der Build bricht bei einem Verstoß ab, das Spiel verwirft solche Bäume beim Laden, Tests prüfen beides
+  für jede Kachel von Berlin.
+- **Nachladen:** Die Karte liegt in 2 920 Kacheln zu 640 × 640 m (zusammen 138 MB, größte Kachel 0,21 MB). Das Spiel
+  lädt nur die Kacheln um die Kamera (bis 700 m) und gibt ferne wieder frei; im Browser bleiben so ca. 10–20 Kacheln und
+  60–110 MB JS-Heap geladen. Fehlt beim Teleport oder nach dem Laden eines Spielstands noch ein Stadtteil, steht die Welt
+  kurz still („Lade Stadtteil …“).
 - **Straßenraum wie in echt:** Fahrbahnbreite Bordstein zu Bordstein (`width:carriageway`/`width`, in Berlin meist aus
   ALKIS), Fahrstreifen je Richtung, Parkstreifen je Seite (parallel, schräg, senkrecht, halb auf dem Gehweg) **mit geparkten
   Autos** (übernehmbar), Radfahrstreifen, Tempo 30/50 je Straße, Kopfsteinpflaster (optisch und fahrdynamisch),
   Kreuzungsflächen mit Eckradius, Markierungen (Mittellinie, Spurtrenner, Radstreifen, Parkstreifen).
-- **Verkehrsregeln:** 550 Ampelkreuzungen mit Umlauf (die KI hält bei Rot an der Haltelinie), 1 661 Querungen
-  (Zebrastreifen: die KI hält für Fußgänger, Passanten queren bevorzugt dort), 183 Abbiegeverbote, mehrspurige
+- **Verkehrsregeln:** 4 032 Ampelkreuzungen mit Umlauf (die KI hält bei Rot an der Haltelinie), 12 883 Querungen
+  (Zebrastreifen: die KI hält für Fußgänger, Passanten queren bevorzugt dort), 1 336 Abbiegeverbote, mehrspurige
   Hauptstraßen (rechts abbiegen von der rechten, links von der linken Spur). Der Spieler darf bei Rot fahren.
-- **Zugänge:** 1 718 Tordurchfahrten in Hinterhöfe (Hauswand dort offen), Poller und Modalfilter (auch Diagonalsperren)
-  sperren Straßen für Autos, Fußgänger kommen durch; rund 9 000 Zäune, Mauern und Hecken; 5 857 Hauseingänge als Türen.
-- **Bäume aus dem Berliner Baumbestand:** 76 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
+- **Zugänge:** 4 676 Tordurchfahrten in Hinterhöfe (Hauswand dort offen), Poller und Modalfilter (auch Diagonalsperren)
+  sperren Straßen für Autos, Fußgänger kommen durch; rund 47 000 Zäune, Mauern und Hecken; 41 000 Hauseingänge als Türen.
+- **Bäume aus dem Berliner Baumbestand:** alle 962 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
   und Stammdicke; OSM-Bäume nur noch, wo das Kataster keinen Baum kennt.
-- **POIs und Hausnummern:** rund 8 700 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
+- **POIs und Hausnummern:** rund 50 000 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
   Arcaden), Supermärkte (Penny …), Läden, Restaurants, Bars, Cafés, Dienstleister, Kultur, Hotels – als Schilder über den
-  Dächern, Bahnhöfe auch auf Minikarte und Stadtplan; im HUD steht der nächste Ort („Bar: …“). 25 000 Hausnummern:
+  Dächern, Bahnhöfe auch auf Minikarte und Stadtplan; im HUD steht der nächste Ort („Bar: …“). 415 000 Hausnummern:
   der Straßenname im HUD trägt die Nummer des nächsten Hauses („Karl-Marx-Straße 3“).
-- Die Bezirksgrenze ist eine unsichtbare Wand; ein 250-m-Streifen außerhalb wird
+- **Vollständigkeit:** Der Karten-Build zählt jede Datenschicht je Bezirk (Straßen, gemessene Breiten, Parkstreifen,
+  Tempo, Belag, Gebäude, Höhen, Bäume, POIs, Haltestellen, Bahnhöfe, Hausnummern, Ampeln, Querungen, Abbiegeverbote,
+  Poller, Zäune, Durchfahrten, Türen, Kreuzungen) und gibt die Tabelle aus; ein Test verlangt jede Schicht in allen 12
+  Bezirken.
+- Die Stadtgrenze ist eine unsichtbare Wand; ein 250-m-Streifen außerhalb wird
   abgedunkelt dargestellt. Alles mit Kollisionen (Hauswände, Ufer, Gleise, Bäume).
 - Spielfigur zu Fuß (gehen, sprinten), Auto: einsteigen, aussteigen, Gas, Bremse, Rückwärtsgang, Lenken, Handbremse/Drift,
   Hupe, Schaden bis zum Wrack, Bremsspuren, Funken, Rauch.
@@ -59,12 +67,13 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 - Passanten gehen die Gehwege entlang der echten Straßen, biegen ab, überqueren Straßen (und warten auf fahrende Autos),
   fliehen vor Rasern, Hupen und Unfällen, stehen nach einem Anfahren wieder auf.
 - Mission „Kisten für den Kiez“: Auftrag am Späti in der Wrangelstraße (Wrangelkiez) annehmen → zur Lagerhalle in
-  Nord-Neukölln fahren → dort anhalten und **A halten** zum Einladen → zurück zur Wrangelstraße → abliefern. Das Zeitlimit
-  berechnet der Karten-Build aus der kürzesten Route (derzeit 8,6 km → 760 s). Scheitern bei Zeitablauf oder wenn das
+  Neukölln fahren → dort anhalten und **A halten** zum Einladen → zurück zur Wrangelstraße → abliefern. Das Zeitlimit
+  berechnet der Karten-Build aus der kürzesten Route (derzeit 8,7 km → 930 s). Scheitern bei Zeitablauf oder wenn das
   Auto mit der Ware zum Wrack wird. Lohn mit Zeitbonus und Schadensabzug, Bestzeit. Die Orte stehen in
   [`data/places.json`](data/places.json) und lassen sich austauschen.
 - HUD: echter Straßenname (an Kreuzungen „A / B“, sonst Kiez oder Bezirk), Geld, Auftrag und Timer, Minikarte, Richtungspfeil mit Entfernung, Tempo und Fahrzeugzustand,
-  Stadtplan auf der Ansicht-Taste. **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
+  Stadtplan von ganz Berlin auf der Ansicht-Taste (Mausrad zoomt bis auf Straßenebene, Ziehen verschiebt).
+  **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
   auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
   neuen Ort. Während eines laufenden Auftrags gesperrt (sonst wäre die Mission trivial). Tastensymbole wechseln zwischen Controller und Tastatur.
 - Startmenü, Pause, Mission neu starten, Speichern (ein Speicherplatz, automatisch nach jedem erfüllten Auftrag), Fortsetzen.
@@ -82,6 +91,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Aktion (Auftrag, Einladen, Abliefern) | A | E / Enter |
 | Hupe | X | H |
 | Stadtplan | Ansicht-Taste | M |
+| Stadtplan zoomen / verschieben | – | Mausrad / Ziehen |
 | Teleport (auf dem Stadtplan) | – | Mausklick auf die Karte, dann Ja/Nein (Maus, A/Enter, B/Esc) |
 | Pause | Menü-Taste | Esc / P |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
@@ -92,19 +102,23 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 76 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 82 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
 
-Die fertige Karte liegt als `web/data/city.json` (9,7 MB, gzip ca. 3,2 MB) im Repository; dafür ist kein Netz nötig.
+Die fertige Karte liegt in `web/data/berlin/` (`index.json` mit Grenzen, Ortsteilen und Missionsorten, `overview.json`
+für den Stadtplan, `tiles/<x>_<y>.json` je 640 × 640 m; zusammen 138 MB) im Repository; dafür ist kein Netz nötig.
 Neu bauen, z. B. für aktuellere OSM-Daten oder andere Missionsorte:
 
 ```bash
-npm run map:fetch                     # LOR-Grenzen + Baumbestand (WFS Geoportal Berlin) + OSM (Overpass, 2 Abfragen, Ausweich-Server) → data/raw/ (~100 MB, gitignored)
-npm run map:build                     # data/raw/ + data/places.json → web/data/city.json (deterministisch, ~3 s)
-npm run map:preview -- out.svg        # Sichtprüfung als SVG (optional Ausschnitt: out.svg x y breite höhe in px)
+npm run map:fetch                     # OSM-Auszug Berlin (Geofabrik, PBF ~100 MB), LOR-Grenzen und Baumbestand (WFS Geoportal Berlin) → data/raw/ (gitignored, ~2 min)
+npm run map:build                     # data/raw/ + data/places.json → web/data/berlin/ (deterministisch, ~40 s, braucht ~6 GB Arbeitsspeicher)
+npm run map:preview -- out.svg        # Sichtprüfung als SVG (Standard 4 × 4 km um den Späti; Ausschnitt: out.svg x y breite höhe in px)
 ```
+
+Der Build liest die PBF-Datei mit einem eigenen Leser (`tools/osm/pbf.mjs`, ohne Abhängigkeiten) und gibt am Ende die
+Abdeckung je Bezirk aus.
 
 `map:build` bricht mit einer Meldung ab, wenn ein Missionsort in einem Haus, außerhalb des Gebiets oder ohne
 Straßenverbindung liegt. Maßstab ändern: `node tools/osm/build.mjs --scale 5` (dann auch `PX_PER_M` in
@@ -123,8 +137,8 @@ mit Verkehr und Passanten.
 web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-Hülle)
   index.html
   src/config.js      alle Spielkonstanten
-  data/city.json     die Karte (aus tools/osm/build.mjs)
-  src/map.js         Karte dekodieren, Raster-Hashes, Untergrund, Straßennamen
+  data/berlin/       die Karte (aus tools/osm/build.mjs): index.json, overview.json, tiles/
+  src/map.js         Kacheln nachladen und freigeben, Raster-Hashes, Untergrund, Straßennamen
   src/geom.js        Polylinien/Polygone (geteilt mit dem Karten-Build)
   src/citycodes.js   Klassen-Codes des Kartenformats
   src/collision.js   Kreis / Rechteck / gedrehte Box / Wandsegment (SAT), Raster-Hash
@@ -144,7 +158,7 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   assets/            manifest.json, eigene Sprites/Sounds
 xbox/                UWP-Hülle (C#, WinUI 2 WebView2) für Visual Studio
 data/places.json     Missionsorte (lat/lon bzw. OSM-Weg der Lagerhalle)
-tools/osm/           Kartenpipeline: fetch.mjs, build.mjs, preview.mjs, geo.mjs
+tools/osm/           Kartenpipeline: fetch.mjs, pbf.mjs (PBF-Leser), store.mjs, build.mjs, crosssection.mjs, tiles.mjs, preview.mjs, geo.mjs
 tools/serve.mjs      Dev-Server
 tools/prepare-xbox.mjs  kopiert web/ in die Hülle, erzeugt Paket-Logos
 tests/               node:test
@@ -230,19 +244,25 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 76 automatischen Tests grün, darunter:
+- Alle 82 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
   - Bäume: auf der ausgelieferten Karte kein Stamm auf einer Fahrbahn, in einem Haus oder im Wasser; das Spiel verwirft
     solche Bäume auch aus einer fremden Karte (gegengeprüft: ohne die Schutzfunktion schlagen die Tests fehl);
-  - POIs: jeder U-/S-Bahnhof genau einmal, Neukölln Arcaden in Nord-Neukölln, Penny, Mindestzahlen je Kategorie;
+  - ganz Berlin: jede Kachel einzeln geladen, kein Baumstamm auf einer Fahrbahn (alle 1 030 333 Bäume), danach alles
+    wieder entladen ohne Rückstände; jede Datenschicht in allen 12 Bezirken gefüllt; bekannte Orte in allen Bezirken
+    (Alexanderplatz, Rathaus Spandau, Köpenick, Marzahn, Tegel, Zoo, Rathaus Steglitz …) im richtigen Ortsteil und Bezirk
+    an der richtigen Straße; Kacheln fügen sich ohne doppelte Straßen oder Gebäude; der PBF-Leser an einer selbst
+    erzeugten Datei;
+  - Nachladen wie im Browser (Kacheln kommen asynchron): Welt steht, bis der Stadtteil da ist, Teleport nach Spandau lädt
+    erst das Ziel, das alte Viertel wird danach freigegeben;
+  - POIs: jeder U-/S-Bahnhof genau einmal, Neukölln Arcaden in Neukölln, Penny, Mindestzahlen je Kategorie;
     Hausnummern der Oranienstraße liegen an der Oranienstraße und erscheinen im Straßennamen;
-  - die echte Karte: bekannte Orte (Kottbusser Tor, Hermannplatz, Rathaus Neukölln, Mehringdamm) liegen im richtigen
-    Bezirk an der richtigen Straße, Oranienstraße/Sonnenallee/Kottbusser Damm/Karl-Marx-Straße sind durchgängig
+  - die echte Karte: Oranienstraße/Sonnenallee/Kottbusser Damm/Karl-Marx-Straße sind durchgängig
     vorhanden, Brücken sind befahrbar, Kreuzungen nennen beide Straßen;
-  - der vollständige Missionsablauf per Autopilot über die echte Route Wrangelstraße → Nord-Neukölln → zurück
-    (ca. 427 s von 760 s, ohne Verkehr), Scheitern durch Zeitablauf und Totalschaden;
+  - der vollständige Missionsablauf per Autopilot über die echte Route Wrangelstraße → Neukölln → zurück
+    (ohne Verkehr, innerhalb von 930 s), Scheitern durch Zeitablauf und Totalschaden;
   - Vollgas gegen Hauswand, Kaimauer und Gebietsgrenze (jeder Schritt geprüft);
   - ein 90-s-Dauertest mit 24 Autos und 55 Passanten (0,0 % der Stichproben neben der Fahrbahn, kein Auto in einer Hauswand,
     kein Passant in einem Gebäude) und ein Test, dass die Bevölkerung der Kamera folgt;
@@ -263,7 +283,9 @@ in Edge `edge://inspect` mit der Konsole verbinden
   Stadtplan; Stichproben an Kottbusser Tor (U1-Hochbahn), Admiralbrücke, Hermannplatz, Kottbusser Damm. Volle
   Bildwiederholrate bei 1280×720 und 1920×1080 auch bei Höchsttempo (Frame-Abstand Median 10,0 ms, p95 10,9 ms),
   JS-Heap ca. 110 MB. Mit Straßenraum, 86 000 Bäumen und geparkten Autos (Stand 27.09.): Oranienplatz bei 1920×1080
-  Median 8,3 ms je Bild, p95 9,3 ms, JS-Heap ca. 280 MB.
+  Median 8,3 ms je Bild, p95 9,3 ms, JS-Heap ca. 280 MB. Ganz Berlin mit Nachladen (Stand 27.09.): JS-Heap 45–110 MB;
+  Teleport nach Spandau; Schnellfahrt über 12 km mit 1,2 km/s (36-fache Höchstgeschwindigkeit) ohne Ladepause, Bildzeit
+  Median 8,3 ms, p99 10,3 ms, höchstens 17,9 ms; 0 Konsolenfehler.
 - Die Controller-Brücke der Xbox-Hülle ist auf der **Web-Seite** getestet: Mit einer Attrappe von `chrome.webview`, die
   Lesungen im Format der C#-Hülle schickt, lief der Weg Menü → Spiel → Auftrag annehmen → Pause → B → Speichern →
   Hauptmenü → Beenden (schickt `quit` an die Hülle).
@@ -280,12 +302,12 @@ in Edge `edge://inspect` mit der Konsole verbinden
 - Ob die Hülle startet und die WebView2 das Spiel lädt.
 - Controller über `Windows.Gaming.Input` inkl. B-Taste (darf die App nicht schließen) und Fokus.
 - Ton ohne Nutzergeste (Autoplay-Argument), Spielstand über Neustarts, Bildrate und Latenz auf der Konsole,
-  Darstellung auf dem Fernseher (Title-Safe-Rand). Ladezeit und Speicher der 5,8-MB-Karte auf der Konsole.
+  Darstellung auf dem Fernseher (Title-Safe-Rand). Ladezeit der Kacheln und Speicher auf der Konsole.
 
 **Bekannte Grenzen der Karte:** Straßenbreiten sind aus OSM geschätzt (`width`/`lanes`, sonst Standard je Straßenklasse),
 die Ampeln laufen mit einem festen Zwei-Phasen-Umlauf statt echter Signalpläne, Diagonalsperren sind für die KI ganz
-gesperrt (erlaubte Abbiegungen dort meidet sie), die Spree-Brücken zu Friedrichshain
-(Oberbaumbrücke u. a.) liegen auf der Bezirksgrenze und sind darum nicht befahrbar, und Gebäude ohne Geschossangabe
-bekommen eine Standardhöhe (16 m).
+gesperrt (erlaubte Abbiegungen dort meidet sie), Gebäude ohne Geschossangabe bekommen eine Standardhöhe (16 m, Einfamilienhäuser
+8 m), und nur rund ein Fünftel des Hauptnetzes hat eine gemessene Breite (der Rest ist aus Spuren, Park- und
+Radstreifen berechnet). Die Mission bleibt in Kreuzberg/Neukölln; der Rest der Stadt ist frei befahrbar.
 
 Details und Quellen: [`docs/TECHNIK.md`](docs/TECHNIK.md).

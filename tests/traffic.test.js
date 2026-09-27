@@ -13,15 +13,16 @@ const city = realCity();
 const g = buildLaneGraph(city);
 
 test('Spurgraph: Rechtsverkehr, Einbahnstraßen nur in Fahrtrichtung', () => {
-  const twoWay = g.lanes.find((l) => !l.edge.oneway && l.dir === 1 && l.edge.len > 400 && l.edge.pts.length === 4);
+  const lanes = [...g.lanes];
+  const twoWay = lanes.find((l) => !l.edge.oneway && l.dir === 1 && l.edge.len > 400 && l.edge.pts.length === 4);
   assert.ok(twoWay, 'gerade Straße mit Gegenverkehr gefunden');
   const e = twoWay.edge, ux = (e.pts[2] - e.pts[0]) / e.len, uy = (e.pts[3] - e.pts[1]) / e.len;
   const mx = (twoWay.pts[0] + twoWay.pts[2]) / 2 - (e.pts[0] + e.pts[2]) / 2, my = (twoWay.pts[1] + twoWay.pts[3]) / 2 - (e.pts[1] + e.pts[3]) / 2;
   // rechts in Fahrtrichtung bei y nach unten: (-uy, ux)
   assert.ok(mx * -uy + my * ux > e.w / 8, 'Spur liegt rechts der Mitte');
-  const oneway = city.edges.filter((x) => x.inside && x.oneway === 1 && x.cls <= 7);
+  const oneway = city.list('edge').filter((x) => x.inside && x.oneway === 1 && x.cls <= 7);
   assert.ok(oneway.length > 50);
-  for (const x of oneway) assert.ok(!g.lanes.some((l) => l.edge === x && l.dir === -1), 'Gegenspur auf Einbahnstraße');
+  for (const x of oneway) assert.ok(!lanes.some((l) => l.edge === x && l.dir === -1), 'Gegenspur auf Einbahnstraße');
 });
 
 test('Abbiegen: keine Wende außer in der Sackgasse; meist geradeaus', () => {
@@ -86,6 +87,7 @@ test('Mit Vollgas gegen Hauswand, ins Wasser und über die Gebietsgrenze: das Au
   // Jeder Schritt wird geprüft (am Ende allein könnte das Auto schon auf der anderen Seite wieder herausgekommen sein).
   const ram = (x, y, angle, bad) => {
     Object.assign(car, { x, y, angle, vx: 0, vy: 0, angVel: 0, health: 100, wrecked: false });
+    w.camera.x = x; w.camera.y = y; // die Kamera folgt dem Auto; dort lädt die Stadt nach
     let moved = 0;
     for (let i = 0; i < 4 * 60; i++) {
       const px = car.x, py = car.y;
@@ -98,20 +100,30 @@ test('Mit Vollgas gegen Hauswand, ins Wasser und über die Gebietsgrenze: das Au
   };
   // Hauswand: vom Abgabeort (Fahrbahn) quer zum Späti
   const { BUILDING_KIND } = await import('../web/src/citycodes.js');
-  const shop = city.buildings.find((b) => b.kind === BUILDING_KIND.spaeti);
+  const shop = city.list('building').find((b) => b.kind === BUILDING_KIND.spaeti);
   const g0 = city.places.giver;
   const a = Math.atan2(shop.cy - g0.y, shop.cx - g0.x);
   ram(g0.x - Math.cos(a) * 60, g0.y - Math.sin(a) * 60, a, (x, y) => inBuilding(city, x, y));
   // Wasser: von einem Kai-Punkt (Wandzug am Wasser) senkrecht ins Wasser
-  const quay = city.walls.find((wl) => wl.length > 40 && Math.hypot(wl[2] - wl[0], wl[3] - wl[1]) > 60);
+  const quay = city.list('wall').filter((f) => f.kind === 'wall').map((f) => f.pts).find((wl) => {
+    const L = Math.hypot(wl[2] - wl[0], wl[3] - wl[1]);
+    if (wl.length <= 40 || L <= 60) return false;
+    const mx = (wl[0] + wl[2]) / 2, my = (wl[1] + wl[3]) / 2, nx = -(wl[3] - wl[1]) / L, ny = (wl[2] - wl[0]) / L;
+    const a = surfaceAt(city, mx + nx * 30, my + ny * 30), b = surfaceAt(city, mx - nx * 30, my - ny * 30);
+    return (a === T.WATER) !== (b === T.WATER) && [a, b].some((t) => t === T.SIDEWALK || t === T.PLAZA); // Kai: Wasser auf einer Seite, Gehweg auf der anderen
+  });
   const qx = (quay[0] + quay[2]) / 2, qy = (quay[1] + quay[3]) / 2, L = Math.hypot(quay[2] - quay[0], quay[3] - quay[1]);
   const nx = -(quay[3] - quay[1]) / L, ny = (quay[2] - quay[0]) / L;
   const side = surfaceAt(city, qx + nx * 30, qy + ny * 30) === T.WATER ? 1 : -1; // Normale zeigt ins Wasser
   ram(qx - nx * side * 40, qy - ny * side * 40, Math.atan2(ny * side, nx * side), (x, y) => surfaceAt(city, x, y) === T.WATER);
   // Gebietsgrenze
-  const b = city.border[0], bx = (b[0] + b[2]) / 2, by = (b[1] + b[3]) / 2;
-  const inward = insideBorder(city, bx + 50, by) ? [1, 0] : insideBorder(city, bx - 50, by) ? [-1, 0] : insideBorder(city, bx, by + 50) ? [0, 1] : [0, -1];
-  ram(bx + inward[0] * 60, by + inward[1] * 60, Math.atan2(-inward[1], -inward[0]), (x, y) => !insideBorder(city, x, y));
+  // Stadtgrenze: ein längeres Grenzstück, senkrecht darauf zu
+  const b = city.border[0];
+  let i = 0; while (Math.hypot(b[i + 2] - b[i], b[i + 3] - b[i + 1]) < 400) i += 2;
+  const bx = (b[i] + b[i + 2]) / 2, by = (b[i + 1] + b[i + 3]) / 2, bl = Math.hypot(b[i + 2] - b[i], b[i + 3] - b[i + 1]);
+  let bnx = -(b[i + 3] - b[i + 1]) / bl, bny = (b[i + 2] - b[i]) / bl;
+  if (!insideBorder(city, bx + bnx * 50, by + bny * 50)) { bnx = -bnx; bny = -bny; } // Normale zeigt nach Berlin hinein
+  ram(bx + bnx * 60, by + bny * 60, Math.atan2(-bny, -bnx), (x, y) => !insideBorder(city, x, y));
 });
 
 test('Ampel: KI-Auto hält bei Rot an der Haltelinie und fährt bei Grün', async () => {
@@ -120,7 +132,7 @@ test('Ampel: KI-Auto hält bei Rot an der Haltelinie und fährt bei Grün', asyn
   const { createCar } = await import('../web/src/car.js');
   const { laneDir } = await import('../web/src/roadgraph.js');
   // eine gerade, lange Zufahrt auf eine Ampelkreuzung
-  const lane = g.lanes.find((l) => city.signals.has(l.to) && l.len > 700 && l.edge.cls <= 5 && l.next.length);
+  const lane = [...g.lanes].find((l) => city.signals.has(l.to) && l.len > 700 && l.edge.cls <= 5 && l.next.length);
   assert.ok(lane, 'Zufahrt gefunden');
   const [ux, uy] = laneDir(lane, true), heading = Math.atan2(uy, ux);
   const w = createWorld({ city, cars: 0, pedestrians: 0 });
@@ -151,7 +163,7 @@ test('Geparkte Autos stehen auf den Parkstreifen, nicht auf den Fahrstreifen', a
   const { parkingStrip } = await import('../web/src/street.js');
   const { nearestEdge } = await import('../web/src/map.js');
   const w = createWorld({ city, cars: 0, pedestrians: 0 });
-  const e = city.edges.find((x) => x.name === 'Weserstraße' && x.len > 800);
+  const e = city.list('edge').find((x) => x.name === 'Weserstraße' && x.len > 800);
   const m = (e.pts.length / 2 | 0) & ~1;
   w.camera.x = w.player.x = e.pts[m]; w.camera.y = w.player.y = e.pts[m + 1];
   for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);

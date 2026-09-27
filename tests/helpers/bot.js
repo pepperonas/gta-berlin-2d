@@ -16,7 +16,7 @@ const usable = (e) => e.inside && e.cls <= 9 && !(e.cls === 9 && e.w < 40) && !e
 export function route(city, from, to) {
   const a = nearestEdge(city, from.x, from.y, 800, usable), b = nearestEdge(city, to.x, to.y, 800, usable);
   const starts = [a.e.a, a.e.b], goals = new Set([b.e.a, b.e.b]);
-  const nd = (k) => city.nodes[k];
+  const nd = (k) => city.nodes.get(k);
   const g = new Map(), prev = new Map(), open = [];
   for (const s of starts) { const d = Math.hypot(nd(s).x - from.x, nd(s).y - from.y); g.set(s, d); open.push([d, s]); prev.set(s, null); }
   let goal = null;
@@ -25,7 +25,7 @@ export function route(city, from, to) {
     const [, u] = open.pop();
     if (goals.has(u)) { goal = u; break; }
     for (const k of nd(u).edges) {
-      const e = city.edges[k];
+      const e = city.edges.get(k);
       if (!usable(e)) continue;
       const v = e.a === u ? e.b : e.a, dv = g.get(u) + e.len;
       if (dv < (g.get(v) ?? Infinity)) {
