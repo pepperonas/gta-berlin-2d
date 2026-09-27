@@ -16,6 +16,7 @@ import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
+import { roofOf } from './roofs.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -183,6 +184,46 @@ function buildMarks(e, city) {
   return m;
 }
 
+// Fassaden am Tag je Stil (Fensterkachel in Fassadenkoordinaten: x entlang der Wand, y nach oben; 1 Geschoss ≈ 15 px)
+const facadeCache = new WeakMap();
+export const FACADE_STYLES = ['altbau', 'platte', 'modern', 'industry'];
+function facadePatterns(ctx) {
+  let f = facadeCache.get(ctx);
+  if (f) return f;
+  const mk = (w, h, paint) => { const c = makeCanvas(w, h); paint(c.getContext('2d')); return ctx.createPattern(c, 'repeat'); };
+  const glass = ['#2d3440', '#3a4658', '#33404f'];
+  f = {
+    altbau: glass.map((gl) => mk(16, 16, (g) => { // hohe Fenster, Gesims je Geschoss
+      g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(0, 0, 16, 1.2);
+      g.fillStyle = 'rgba(0,0,0,0.10)'; g.fillRect(4.5, 2.2, 7, 10.6);
+      g.fillStyle = gl; g.fillRect(5.5, 3, 5, 9);
+    })),
+    platte: glass.map((gl) => mk(14, 15, (g) => { // Raster mit Balkonbändern
+      g.fillStyle = gl; g.fillRect(3.5, 7, 7, 5);
+      g.fillStyle = 'rgba(0,0,0,0.13)'; g.fillRect(0, 2, 14, 3);
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, 5, 14, 0.8);
+    })),
+    modern: glass.map((gl) => mk(20, 15, (g) => { // durchgehendes Fensterband mit Pfosten
+      g.fillStyle = gl; g.fillRect(0, 5, 20, 6.5);
+      g.fillStyle = 'rgba(220,230,240,0.25)'; g.fillRect(0, 5, 20, 0.8); g.fillRect(9.6, 5, 0.8, 6.5); g.fillRect(19.2, 5, 0.8, 6.5);
+    })),
+    industry: glass.map((gl) => mk(24, 20, (g) => { // Oberlichtband, Wandfelder
+      g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(11.6, 0, 0.8, 20);
+      g.fillStyle = shade('#5b6b7a', 0); g.fillRect(2, 13, 20, 4);
+    })),
+  };
+  facadeCache.set(ctx, f);
+  return f;
+}
+
+const ROOF_TILE = ['#9c5a44', '#a8664c', '#8f5240', '#b0725a', '#74655e'];
+const ROOF_FLAT = '#8b857d';
+function mix(hexA, hexB, t) {
+  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
+  const c = (sh) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t);
+  return `#${((1 << 24) | (c(16) << 16) | (c(8) << 8) | c(0)).toString(16).slice(1)}`;
+}
+
 let windowPatterns = null;
 function makeWindowPatterns(ctx) {
   const mk = (lit) => {
@@ -248,6 +289,24 @@ function shopGlowPoint(city, q) {
   }
   q._glow = gp;
   return gp;
+}
+
+// Dachaufbau (Mittelpunkt, Länge entlang der Hauptachse, Breite, Winkel)
+const DECOR_COLOR = { chimney: ['#7a4a3a', '#3a2620'], shaft: ['#c8c3ba', '#2a2c30'], skylight: ['#d0d4d8', '#8fb3c9'],
+  ac: ['#b9bdc1', '#8a8f94'], solar: ['#5b7390', '#223047'], terrace: ['#8a6a48', '#a47e56'] };
+function drawDecor(ctx, d) {
+  const [outer, inner] = DECOR_COLOR[d.t];
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a);
+  const l = d.l, w = d.w;
+  if (d.t === 'chimney' || d.t === 'ac') { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-l / 2 + 1.5, -w / 2 + 1.5, l, w); }
+  ctx.fillStyle = outer; ctx.fillRect(-l / 2, -w / 2, l, w);
+  ctx.fillStyle = inner;
+  if (d.t === 'chimney') ctx.fillRect(-l / 4, -w / 4, l / 2, w / 2);
+  else if (d.t === 'ac') { ctx.beginPath(); ctx.arc(l / 5, 0, w * 0.32, 0, Math.PI * 2); ctx.fill(); }
+  else if (d.t === 'solar') { ctx.fillRect(-l / 2 + 0.8, -w / 2 + 0.8, l - 1.6, w - 1.6); ctx.fillStyle = 'rgba(160,190,230,0.35)'; for (let x = -l / 2 + l / 5; x < l / 2; x += l / 5) ctx.fillRect(x, -w / 2, 0.6, w); }
+  else if (d.t === 'terrace') { for (let y = -w / 2 + 2; y < w / 2; y += 4) ctx.fillRect(-l / 2 + 1, y, l - 2, 1.6); }
+  else ctx.fillRect(-l / 2 + 1.5, -w / 2 + 1.5, l - 3, w - 3);
+  ctx.restore();
 }
 
 // Straßenlaterne: Mast (schräge Ansicht wie die Häuser: Höhe wächst nach oben), Ausleger zur Fahrbahn, Leuchte
@@ -640,6 +699,44 @@ export class Renderer {
 
   // Straßenraum nach Querschnitt: Parkstreifen, Radfahrstreifen, Mittellinie, Spurtrennlinien.
   // An Kreuzungen enden die Markierungen am Rand der Querstraße.
+  // Dach in Dachkoordinaten (bereits um die Schrägansicht verschoben)
+  drawRoof(ctx, b, col, roof, p) {
+    ctx.fillStyle = col.roof; ctx.fill(p, 'evenodd');
+    const hi = this.quality === 'high';
+    if (roof.style === 'pitched' || roof.style === 'corrugated') {
+      const a = roof.axis, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+      const r = b.rings[0];
+      let t0 = Infinity, t1 = -Infinity, wmax = 0;
+      for (let i = 0; i < r.length; i += 2) {
+        const qx = r[i] - b.cx, qy = r[i + 1] - b.cy, t = qx * ux + qy * uy, w = Math.abs(qx * nx + qy * ny);
+        if (t < t0) t0 = t; if (t > t1) t1 = t; if (w > wmax) wmax = w;
+      }
+      ctx.save(); ctx.clip(p, 'evenodd');
+      if (roof.style === 'pitched') { // Satteldach: eine Dachhälfte im Schatten, First entlang der Hauptachse
+        const B = 1e4;
+        ctx.fillStyle = col.roofB; ctx.beginPath();
+        ctx.moveTo(b.cx - ux * B, b.cy - uy * B); ctx.lineTo(b.cx + ux * B, b.cy + uy * B);
+        ctx.lineTo(b.cx + ux * B + nx * B, b.cy + uy * B + ny * B); ctx.lineTo(b.cx - ux * B + nx * B, b.cy - uy * B + ny * B); ctx.fill();
+        const inset = Math.min(wmax * 0.9, (t1 - t0) / 2);
+        ctx.strokeStyle = col.parapet; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(b.cx + ux * (t0 + inset), b.cy + uy * (t0 + inset)); ctx.lineTo(b.cx + ux * (t1 - inset), b.cy + uy * (t1 - inset)); ctx.stroke();
+      } else if (hi) { // Wellblech: Rillen quer zur Hauptachse
+        ctx.strokeStyle = 'rgba(0,0,0,0.13)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let t = Math.ceil(t0 / 6) * 6; t < t1; t += 6) {
+          ctx.moveTo(b.cx + ux * t - nx * wmax, b.cy + uy * t - ny * wmax); ctx.lineTo(b.cx + ux * t + nx * wmax, b.cy + uy * t + ny * wmax);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      if (hi) { const gr = texture(ctx, 'gravel'); if (gr) { ctx.fillStyle = gr; ctx.fill(p, 'evenodd'); } }
+      if (roof.style === 'berlin') { ctx.strokeStyle = col.rim; ctx.lineWidth = 7; ctx.stroke(p); } // Ziegelrand zur Straße und zum Hof
+      ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p);                            // Attika
+    }
+    if (hi) for (const d of roof.decor) drawDecor(ctx, d);
+    ctx.strokeStyle = col.line; ctx.lineWidth = 1.3; ctx.stroke(p);
+  }
+
   drawDecals(edges, city) {
     const ctx = this.ctx, ps = [];
     for (const e of edges) { const p = decalPaths(e, city); if (p) ps.push(p); }
@@ -734,11 +831,18 @@ export class Renderer {
     const H = Math.max(18, b.height * RENDER.heightScale);
     const dx = (b.cx - cam.x) * H * 0.0005;
     const dy = -H * 0.5 + (b.cy - cam.y) * H * 0.00025;
+    const roof = roofOf(b);
     if (!b._col) {
       const pal = WALLS[b.kind] ?? WALLS[0];
       const wall = pal[b.seed % pal.length];
-      b._col = { roof: shade(wall, b.kind === BUILDING_KIND.warehouse ? -0.05 : 0.08), line: shade(wall, -0.3),
-        faces: [shade(wall, -0.12), shade(wall, -0.24), shade(wall, -0.36)], pat: windowPatterns[b.seed % 3] };
+      const tile = ROOF_TILE[(b.seed >> 3) % ROOF_TILE.length];
+      const K = BUILDING_KIND;
+      const base = roof.style === 'pitched' ? (b.kind === K.church ? ((b.seed >> 5) % 3 ? '#555b64' : '#5f8f7f') : b.kind === K.small ? mix(wall, '#6f6a62', 0.5) : tile)
+        : roof.style === 'corrugated' ? (b.kind === K.warehouse ? '#7f8a93' : mix(wall, '#9aa2a8', 0.6))
+          : b.kind === K.spaeti ? shade(wall, 0.08) : mix(wall, ROOF_FLAT, 0.55);
+      b._col = { roof: base, roofB: shade(base, -0.2), rim: tile, parapet: shade(base, 0.2), line: shade(wall, -0.3),
+        faces: [shade(wall, -0.12), shade(wall, -0.24), shade(wall, -0.36)],
+        pat: facadePatterns(ctx)[roof.facade][(b.seed >> 7) % 3] };
     }
     const col = b._col;
     const faces = this._faces ??= [];
@@ -773,6 +877,12 @@ export class Renderer {
         ctx.restore();
       }
       if (lightMode) continue;
+      // Kontaktschatten am Fuß der Fassade
+      ctx.save();
+      ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, f.L, 2.5);
+      ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, 2.5, f.L, 3);
+      ctx.restore();
       if (b.doors) for (const [dr, de, dt] of b.doors) if (dr === f.ri && de === f.ei) { // Hauseingang
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
@@ -799,8 +909,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(dx, dy);
     const p = pathOf(b);
-    ctx.fillStyle = col.roof; ctx.fill(p, 'evenodd');
-    ctx.strokeStyle = col.line; ctx.lineWidth = 2; ctx.stroke(p);
+    this.drawRoof(ctx, b, col, roof, p);
     if (b.kind === BUILDING_KIND.warehouse) {
       ctx.fillStyle = '#e8e8e8'; ctx.font = 'bold 18px Segoe UI, system-ui, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('LAGER 7', b.cx, b.cy + 6);

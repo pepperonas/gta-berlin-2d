@@ -87,6 +87,11 @@ function paintCobble(g, rnd, size) {
   }
 }
 
+// Dachkies/Bitumen: nur Körnung auf durchsichtigem Grund (über die Dachfarbe gelegt)
+function paintGravel(g, rnd, size) {
+  speckle(g, rnd, size, 420, ['rgba(0,0,0,0.13)', 'rgba(255,255,255,0.10)', 'rgba(60,40,20,0.08)'], 0.3, 0.9);
+}
+
 // kind → [Kachelgröße (px), Seed, Maler]
 const DEFS = {
   sidewalk: [64, 11, paintSidewalk],
@@ -100,6 +105,7 @@ const DEFS = {
   sand: [64, 19, paintSand],
   plaza: [64, 20, paintPlaza],
   rail: [64, 21, paintRailBed],
+  gravel: [48, 22, paintGravel],
 };
 export const TEXTURE_KINDS = Object.keys(DEFS);
 

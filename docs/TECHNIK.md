@@ -192,6 +192,13 @@ schräg verlaufenden Straßen und wirkt wie ein gekachelter Platz. Decals entste
 Querschnitt (Rinnstein am Bordstein, Flicken und Deckel zwischen den Fahrstreifenrändern) und werden als ein Pfad je
 Art zwischengespeichert; in der niedrigen Qualitätsstufe entfallen sie.
 
+**Häuser** (`web/src/roofs.js`, gezeichnet in `render.js drawRoof`): OSM kennt Dachformen in Berlin nur lückenhaft,
+deshalb entscheidet das Spiel aus Gebäudeart, Höhe und Seed: Altbau (12–24 m) meist mit „Berliner Dach“, niedrige
+Wohnhäuser meist Satteldach, Industrie Wellblech. Aufbauten werden je Haus einmal gewürfelt (Anzahl nach Grundfläche)
+und nur angenommen, wenn ein 5 × 5-Punkteraster über der Fläche samt Rand im Grundriss liegt. Alles hängt am
+Gebäudeobjekt und verschwindet mit ihm, wenn seine Kachel entladen wird. Niedrige Qualitätsstufe: ohne Aufbauten,
+Kiesmuster und Wellblechrillen.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

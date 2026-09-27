@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.8.0] – 2026-09-27
+
+### Hinzugefügt
+- Dächer nach Gebäudeart, Höhe und Seed (ohne neue Kartendaten): Altbauten mit „Berliner Dach“ (Ziegelrand, flache
+  Mitte aus Kies/Bitumen), Flachdächer mit Attika, Satteldächer mit First entlang der Hauptachse und verschatteter
+  Dachhälfte (Einfamilien- und Reihenhäuser bis 9 m, Schuppen, Kirchen in Schiefer oder Kupfergrün), Wellblech auf
+  Industrie und Lagern.
+- Dachaufbauten: Schornsteine, Lichtschächte, Oberlichter, Lüftungsgeräte, Solarmodule und Dachterrassen – nur
+  innerhalb des Grundrisses, ohne Überlappung, an der Hauptachse ausgerichtet (im Kerngebiet rund 200 000).
+- Fassaden je Stil: Altbau (hohe Fenster, Gesims je Geschoss), Plattenbau (Raster mit Balkonbändern, nur über 24 m),
+  Neubau (Fensterband mit Pfosten), Industrie (Oberlichtband); Fenster in drei Glastönen.
+- Kontaktschatten am Fuß jeder sichtbaren Fassade.
+
+### Behoben (beim Testen gefunden)
+- Dachaufbauten konnten bei eingebuchteten Grundrissen über die Hauskante ragen, weil nur die vier Ecken geprüft
+  wurden; jetzt ein 5 × 5-Raster über die ganze Fläche.
+
 ## [0.7.0] – 2026-09-27
 
 ### Hinzugefügt
