@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Missionsorte als WGS84-Koordinaten. Der Build (tools/osm/build.mjs) rastet sie auf die nächste Straße ein. Geschäfte sind fiktiv.",
+  "giver":   { "lat": 52.50205, "lon": 13.43385, "name": "Späti „Zum Kiez“", "street": "Wrangelstraße" },
+  "pickup":  { "osmWay": 75017203, "name": "Lagerhalle Neukölln" },
+  "dropoff": { "name": "Parkplatz am Späti" }
+}

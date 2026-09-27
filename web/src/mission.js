@@ -21,7 +21,7 @@ export function resetMission(m) {
 
 const inZone = (x, y, p, r = MISSION.zoneRadius) => Math.hypot(x - p.x, y - p.y) <= r;
 
-// ctx: { places, player, cars, input: { action, actionHeld } } – liefert Ereignisse für Audio/HUD.
+// ctx: { places, player, cars, timeLimit, input: { action, actionHeld } } – liefert Ereignisse für Audio/HUD.
 export function updateMission(m, ctx, dt) {
   const events = [];
   const { places, player, input } = ctx;
@@ -38,7 +38,8 @@ export function updateMission(m, ctx, dt) {
     case 'briefing':
       if (input.action) {
         m.state = 'toPickup';
-        m.timer = MISSION.timeLimit;
+        m.timer = ctx.timeLimit ?? MISSION.timeLimit;
+        m.timeLimit = m.timer;
         m.elapsed = 0;
         events.push({ type: 'mission-start' });
       }
@@ -99,7 +100,8 @@ function fail(m, reason, events) {
 }
 
 function succeed(m, car, events) {
-  const bonus = Math.round(m.timer * MISSION.timeBonus);
+  // Zeitbonus auf das 120-s-Referenzlimit normiert, damit lange Routen nicht mehr Bonus bringen.
+  const bonus = Math.round(m.timer / (m.timeLimit || MISSION.timeLimit) * 120 * MISSION.timeBonus);
   const damagePenalty = Math.round((100 - car.health) * 2);
   const reward = Math.max(100, MISSION.reward + bonus - damagePenalty);
   car.cargo = false;

@@ -1,6 +1,7 @@
 // Browser-Einstieg: Canvas, Hauptschleife (fester 60-Hz-Takt), Eingabequellen, Xbox-Hüllen-Brücke.
-import { DT, WORLD_W, WORLD_H } from './config.js';
-import { createGame, updateGame } from './game.js';
+import { DT } from './config.js';
+import { createGame, updateGame, setCity } from './game.js';
+import { decodeCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
@@ -34,9 +35,16 @@ try { storage = window.localStorage; storage.getItem('probe'); } catch { storage
 const game = createGame({ storage, canQuit: !!host });
 globalThis.__gta = game; // für Tests/Debug in der Konsole
 
-// Titelbildschirm-Hintergrund: eine laufende Demo-Stadt mit Kamerafahrt.
-let demo = createWorld({ seed: 1989 });
-demo.mission.state = 'idle';
+// Karte laden (web/data/city.json, ~6 MB). Bis dahin zeigt der Titel „Lade …“.
+// Titelbildschirm-Hintergrund: eine laufende Demo-Welt mit Kamerafahrt über echte Straßen.
+let demo = null;
+fetch('data/city.json').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then((json) => {
+  const city = decodeCity(json);
+  setCity(game, city);
+  globalThis.__city = city;
+  demo = createWorld({ city, seed: 1989, cars: 14, pedestrians: 30 });
+  demo.mission.state = 'idle';
+}).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
 
 let manifest = {};
 fetch('assets/manifest.json').then((r) => r.json()).then(async (m) => { manifest = m; sound.setManifest(m); await loadSprites(m); }).catch(() => {});
@@ -99,19 +107,23 @@ function frame(now) {
 
 let demoT = 0;
 function updateDemo(dt) {
+  if (!demo) return;
   demoT += dt;
+  // Kamerafahrt: langsame Schleife um den Späti (Wrangelkiez) – vor dem Weltschritt, damit Verkehr mitwandert.
+  const c = demo.city.places.giver;
+  demo.camera.x = c.x + Math.cos(demoT * 0.05) * 2500; demo.camera.y = c.y + Math.sin(demoT * 0.07) * 1800; demo.camera.zoom = 0.8;
+  const cam = { ...demo.camera };
   updateWorld(demo, idleInput, dt);
+  Object.assign(demo.camera, cam);
   renderer.update(demo, dt);
-  const cx = WORLD_W / 2 + Math.cos(demoT * 0.05) * WORLD_W * 0.3;
-  const cy = WORLD_H / 2 + Math.sin(demoT * 0.07) * WORLD_H * 0.3;
-  demo.camera.x = cx; demo.camera.y = cy; demo.camera.zoom = 0.8;
 }
 
 function draw() {
   const worldScale = H / 600;
   hud.device = input.lastDevice;
   if (!game.world) {
-    renderer.draw(demo, W, H, worldScale, false);
+    if (demo) renderer.draw(demo, W, H, worldScale, false);
+    else { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H); }
     hud.begin(W, H);
     if (game.screen === 'controls') hud.drawControls(); else hud.drawTitle(game);
     if (!sound.ready && !host) hud.text('Taste drücken für Ton', hud.vw / 2, hud.vh - hud.m.y - 40, { size: 15, align: 'center', color: '#aaa', weight: 500 });

@@ -84,6 +84,48 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 - Weg B: Device Portal (`https://<xbox-ip>:11443`) → *Add* → `.msix`/`.appx` plus Abhängigkeiten (VCLibs, Microsoft.UI.Xaml,
   .NET Native Runtime/Framework aus dem `Dependencies\x64`-Ordner des Pakets) hochladen.
 
+## Karte: Kreuzberg und Nord-Neukölln aus offenen Daten (Stand 27.09.2026)
+
+**Quellen**
+
+| Was | Quelle | Lizenz |
+|---|---|---|
+| Gebietsgrenzen | Geoportal Berlin, WFS `lor_2021` (`c_lor_pgr_2021`, LOR-Prognoseräume 2021): 0210/0220/0230 = Kreuzberg, 0810 „Neukölln“ = Nord-Neukölln | Datenlizenz Deutschland – Zero 2.0 |
+| Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen | OpenStreetMap über die Overpass-API (Hüllrechteck + 250 m) | ODbL 1.0 |
+
+„Nord-Neukölln“ ist kein Ortsteil, sondern die übliche Bezeichnung für den LOR-Prognoseraum 0810 nördlich der Ringbahn
+(plus Köllnische Heide). Die Grenzen Kreuzbergs entsprechen den drei Kreuzberger Prognoseräumen.
+
+**Pipeline** (`tools/osm/`, nur Node, keine Abhängigkeiten)
+
+1. `fetch.mjs` lädt beides nach `data/raw/` (gitignored, ca. 95 MB, Abruf ~15 s).
+2. `build.mjs` projiziert WGS84 mit einer transversalen Mercator-Projektion (Krüger-Reihen, GRS80, Mittelmeridian =
+   Gebietsmitte) in Meter und dann in Spiel-Pixel (10 px = 1 m). Norden ist oben, der Kartenausschnitt ist nicht gedreht.
+   - Grenze: die vier LOR-Polygone werden vereinigt, indem gemeinsame Kanten wegfallen (die Geoportal-Daten sind
+     topologisch sauber).
+   - Straßen werden an gemeinsam genutzten Knoten in Kanten geteilt (Graph für Verkehr, Passanten, Navigation, Namen);
+     Breite aus `width`, sonst `lanes` × 3,3 m (+ Parkstreifen), sonst Standard je Klasse; Einbahn aus `oneway`,
+     `junction=roundabout`, Autobahn. Tunnel und Durchfahrten entfallen.
+   - Gebäude inkl. Multipolygone mit Innenhöfen; Höhe aus `height`, sonst `building:levels` × 3,2 m + 1 m, sonst Standard
+     nach Gebäudetyp. Douglas-Peucker mit 0,3 m.
+   - Wände: Uferlinien und ebenerdige Gleise (±2,5 m) werden in 1-m-Stücke zerlegt; Stücke in Brücken-Korridoren und an
+     Bahnübergängen entfallen. Brücken bekommen Geländer.
+   - Bäume: Ein Stamm (0,5 m) darf keine Fahrbahn bis Klasse „service“ berühren. Bäume darauf werden quer zur Straße
+     an den Bordstein ihrer Seite geschoben (Reihen bleiben Reihen), sonst verworfen; ebenso Bäume in Häusern/Wasser.
+     Abschließende Prüfung, bei Verstoß bricht der Build ab. Ursache sind meist geschätzte Fahrbahnbreiten mit
+     Parkstreifen, auf denen in Wirklichkeit die Baumscheiben liegen (Stand 27.09.: 7 251 verschoben, 490 verworfen).
+   - POIs (Knoten, Wege, Relationen mit `shop`, `amenity`, `tourism`, Bahnhöfen, Bushaltestellen) in 13 Kategorien,
+     Position = Knoten bzw. Schwerpunkt; Bahnhöfe je Name im Umkreis von 400 m, Bushaltestellen von 80 m nur einmal.
+     Hausnummern aus `addr:housenumber` + `addr:street`, Gebäude und Eingangsknoten mit derselben Nummer einmal.
+   - Missionsorte aus `data/places.json` rasten auf die nächste Straße ein; das Zeitlimit folgt aus der kürzesten Route
+     (Dijkstra) mit 12 m/s + 40 s.
+   - Ausgabe `web/data/city.json`: ganzzahlige, delta-kodierte Koordinaten, deterministisch (zweimal bauen = gleiche Datei).
+3. Im Spiel dekodiert `web/src/map.js` die Datei (~0,5 s) und legt Raster-Hashes für Darstellung, Straßensegmente,
+   Flächen und Kollision an. Kollision mit Gebäuden läuft über Wandsegmente, dafür ist keine Triangulierung nötig.
+
+**Bewusste Vereinfachungen:** eine Spur je Richtung für den KI-Verkehr (versetzt um ein Viertel der Fahrbahnbreite), keine
+Ampeln, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.
+
 ## Offene Punkte, nur auf echter Hardware prüfbar
 
 1. Ob WebView2 auf der Konsole ohne Zusatzpaket startet: Die Runtime stellt das Xbox-OS bereit, nicht belegt.
@@ -93,4 +135,5 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 4. Ob die Controller-Weiterleitung mit 8-ms-Timer flüssig genug ist (Latenz) und ob die Web-Gamepad-API inzwischen
    eventuell doch funktioniert.
 5. Ob ein kostenloses Einzelentwicklerkonto die Dev-Mode-Aktivierung erlaubt (die Doku sagt nur „fully registered“).
-6. Bildrate auf der Konsole. Auf dem Mac hält der Browser bei 1280×720 die volle Bildwiederholrate (Frame-Abstand Median 10,0 ms, p95 10,7 ms, gemessen im Playwright-Chromium); über die Xbox sagt das nichts aus.
+6. Bildrate auf der Konsole. Auf dem Mac hält der Browser mit der echten Karte bei 1280×720 und 1920×1080 die volle Bildwiederholrate (Frame-Abstand Median 10,0 ms, p95 10,9 ms, gemessen im Playwright-Chromium); über die Xbox sagt das nichts aus.
+7. Ladezeit (6,6 MB JSON, ~0,5 s Dekodieren auf dem Mac) und Speicher (JS-Heap ~110 MB im Browser) auf der Konsole.

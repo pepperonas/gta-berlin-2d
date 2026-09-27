@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { createWorld, updateWorld, playerCar } from '../web/src/world.js';
 import { MISSION } from '../web/src/config.js';
 import { idle, route, driveTo } from './helpers/bot.js';
+import { realCity } from './helpers/city.js';
+
+const city = realCity();
 
 const DT = 1 / 60;
 function step(w, patch = {}) { updateWorld(w, { ...idle(), ...patch }, DT); }
@@ -34,7 +37,7 @@ function enterOwnCar(w) {
 }
 
 // Fährt über Kreuzungen zum Ziel und hält in der Zone an.
-function driveRoute(w, target, maxSecs = 90) {
+function driveRoute(w, target, maxSecs = 600) {
   const car = playerCar(w);
   const pts = [...route(w.city, car, target), target];
   for (let i = 0; i < maxSecs * 60; i++) {
@@ -49,10 +52,9 @@ function driveRoute(w, target, maxSecs = 90) {
 }
 
 test('kompletter Missionsablauf: annehmen → abholen → abliefern → Erfolg', () => {
-  const w = createWorld({ cars: 0, pedestrians: 0 });
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
   acceptMission(w);
   enterOwnCar(w);
-  // Ausparken: erst auf die Straße südlich des Parkplatzes.
   const car = playerCar(w);
   assert.ok(driveRoute(w, w.city.places.pickup), 'Lagerhalle nicht erreicht');
   assert.equal(w.mission.prompt, 'A gedrückt halten: Kisten einladen');
@@ -66,12 +68,12 @@ test('kompletter Missionsablauf: annehmen → abholen → abliefern → Erfolg',
   assert.equal(w.mission.state, 'success');
   assert.ok(w.mission.result.reward >= 100);
   assert.ok(w.money > 0 && w.completed === 1 && w.bestTime > 0);
-  assert.ok(w.mission.result.time < MISSION.timeLimit, `Zeit ${w.mission.result.time.toFixed(1)} s`);
-  console.log(`# Bot-Missionszeit ${w.mission.result.time.toFixed(1)} s von ${MISSION.timeLimit} s, Belohnung ${w.mission.result.reward} €`);
+  assert.ok(w.mission.result.time < city.timeLimit, `Zeit ${w.mission.result.time.toFixed(1)} s`);
+  console.log(`# Bot-Missionszeit ${w.mission.result.time.toFixed(1)} s von ${city.timeLimit} s, Belohnung ${w.mission.result.reward} €`);
 });
 
 test('Einladen scheitert zu Fuß und bei zu hoher Geschwindigkeit', () => {
-  const w = createWorld({ cars: 0, pedestrians: 0 });
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
   acceptMission(w);
   w.player.x = w.city.places.pickup.x; w.player.y = w.city.places.pickup.y;
   step(w, { actionHeld: true });
@@ -85,15 +87,15 @@ test('Einladen scheitert zu Fuß und bei zu hoher Geschwindigkeit', () => {
 });
 
 test('Zeit läuft ab → gescheitert', () => {
-  const w = createWorld({ cars: 0, pedestrians: 0 });
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
   acceptMission(w);
-  for (let i = 0; i < (MISSION.timeLimit + 1) * 60; i++) step(w);
+  for (let i = 0; i < (city.timeLimit + 1) * 60; i++) step(w);
   assert.equal(w.mission.state, 'failed');
   assert.match(w.mission.result.reason, /Zeit/);
 });
 
 test('Wrack mit Ware → gescheitert', () => {
-  const w = createWorld({ cars: 0, pedestrians: 0 });
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
   acceptMission(w);
   enterOwnCar(w);
   const car = playerCar(w);
@@ -108,7 +110,7 @@ test('Wrack mit Ware → gescheitert', () => {
 
 test('Aussteigen und wieder Einsteigen; Zielpfeil zeigt dann auf das Auto mit der Ware', async () => {
   const { missionObjective } = await import('../web/src/mission.js');
-  const w = createWorld({ cars: 0, pedestrians: 0 });
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
   acceptMission(w);
   enterOwnCar(w);
   const car = playerCar(w);

@@ -1,14 +1,6 @@
-// Zentrale Spielkonstanten. Welt-Einheit = Pixel bei Zoom 1; 10 px ≈ 1 m.
-export const TILE = 24;
-export const ROAD_W = 4;              // Straßenbreite in Kacheln (2 Fahrspuren à 2 Kacheln)
-export const GRID = 18;               // Abstand zweier Straßen in Kacheln
-export const BLOCK_W = GRID - ROAD_W; // Häuserblock inkl. Gehweg-Ring
-export const COLS = 7;                // Blöcke horizontal
-export const ROWS = 6;                // Blöcke vertikal
-export const MAP_W = COLS * GRID + ROAD_W; // Kacheln
-export const MAP_H = ROWS * GRID + ROAD_W;
-export const WORLD_W = MAP_W * TILE;
-export const WORLD_H = MAP_H * TILE;
+// Zentrale Spielkonstanten. Welt-Einheit = Pixel bei Zoom 1; 10 px = 1 m (muss zum Karten-Build passen,
+// tools/osm/build.mjs --scale). Die Weltgröße kommt aus der Karte (city.width/height).
+export const PX_PER_M = 10;
 
 export const DT = 1 / 60;             // fester Simulationsschritt
 
@@ -27,7 +19,7 @@ export const PLAYER = { radius: 7, walk: 80, run: 155, enterDist: 40 };
 export const PED = { radius: 6, walk: 36, run: 120 };
 
 export const MISSION = {
-  timeLimit: 120,     // Sekunden ab Annahme
+  timeLimit: 120,     // Rückfall; das echte Limit berechnet der Karten-Build aus der Route
   loadTime: 2.0,      // A gedrückt halten zum Einladen
   reward: 500,
   timeBonus: 5,       // € je Restsekunde
@@ -36,6 +28,10 @@ export const MISSION = {
   giverRadius: 30,
 };
 
-export const TRAFFIC = { cars: 16, pedestrians: 48 };
+// Bevölkerung lebt nur um die Kamera: Erzeugen im Ring spawnMin…spawnMax, Abbau jenseits despawn (px).
+export const TRAFFIC = { cars: 22, pedestrians: 55, spawnMin: 750, spawnMax: 1800, despawn: 2400 };
+
+// Darstellung: reale Gebäudehöhen (1 m = 10 px) werden für die Schrägansicht gestaucht.
+export const RENDER = { heightScale: 0.5 };
 
 export const SPEED_TO_KMH = 0.36;

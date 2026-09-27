@@ -1,16 +1,21 @@
 // HUD, Menüs und Overlays. Gezeichnet in einem virtuellen 720 px hohen Raster mit 5 % Title-Safe-Rand (TV).
-import { WORLD_W, WORLD_H, MAP_W, MAP_H, TILE, SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
-import { T, locationName } from './map.js';
+import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
+import { locationName, nearestPoi } from './map.js';
+import { pathOf, ringPath, POI_STYLE } from './render.js';
+import { AREA_KIND } from './citycodes.js';
 import { missionObjective, BRIEFING } from './mission.js';
 import { playerCar, speedOf } from './world.js';
 
+const MINI_AREA = { [AREA_KIND.rail]: '#4a4640', [AREA_KIND.allotments]: '#35602c', [AREA_KIND.cemetery]: '#2f5a2a', [AREA_KIND.grass]: '#2f5a2a', [AREA_KIND.pitch]: '#2f5a2a', [AREA_KIND.sand]: '#6b6040', [AREA_KIND.wood]: '#284d22' };
+const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus: 'Bushaltestelle', mall: 'Einkaufszentrum',
+  supermarket: 'Markt', shop: 'Laden', food: 'Essen', drink: 'Bar', cafe: 'Café', service: 'Service', culture: 'Kultur', hotel: 'Hotel' };
 const FONT = 'Segoe UI, system-ui, -apple-system, sans-serif';
 const YELLOW = '#ffd33d';
 const GLYPH = { A: '#3fb54a', B: '#e2383f', X: '#2f7fe0', Y: '#f2b705' };
 const KEYS = { A: 'E', B: 'Esc', X: 'H', Y: 'F', RB: 'Leer', LT: 'S', RT: 'W', MENU: 'Esc', VIEW: 'M' };
 
 export class Hud {
-  constructor(ctx) { this.ctx = ctx; this.minimap = null; this.device = 'gamepad'; }
+  constructor(ctx) { this.ctx = ctx; this.overview = null; this.device = 'gamepad'; }
 
   begin(W, H) {
     this.s = H / 720; this.vw = W / this.s; this.vh = 720;
@@ -67,17 +72,32 @@ export class Hud {
     this.text(body, x, y + 8, { size: 22 });
   }
 
-  buildMinimap(city) {
-    const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(MAP_W, MAP_H) : Object.assign(document.createElement('canvas'), { width: MAP_W, height: MAP_H });
+  // Stadtplan-Übersicht einmalig vorrendern (2000 px breit, ~4 m je Pixel).
+  buildOverview(city) {
+    const k = 2000 / city.width, w = 2000, h = Math.round(city.height * k);
+    const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
     const c = cv.getContext('2d');
-    const col = { [T.ROAD]: '#6c7079', [T.SIDEWALK]: '#3a3d44', [T.BUILDING]: '#23252b', [T.GRASS]: '#2f5a2a', [T.WATER]: '#1f4f78', [T.PLAZA]: '#50545c' };
-    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) { c.fillStyle = col[city.tiles[y * MAP_W + x]]; c.fillRect(x, y, 1, 1); }
-    this.minimap = cv;
+    c.fillStyle = '#3a3d44'; c.fillRect(0, 0, w, h);
+    c.setTransform(k, 0, 0, k, 0, 0);
+    for (const a of city.areas) if (a.kind !== AREA_KIND.plaza) { c.fillStyle = MINI_AREA[a.kind] ?? '#2f5a2a'; c.fill(pathOf(a), 'evenodd'); }
+    c.fillStyle = '#2b2d33';
+    for (const b of city.buildings) c.fill(pathOf(b), 'evenodd');
+    c.fillStyle = '#1f4f78';
+    for (const wa of city.water) c.fill(pathOf(wa), 'evenodd');
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const e of [...city.edges].sort((a, b) => b.cls - a.cls)) {
+      if (e.cls > 9) continue;
+      c.strokeStyle = e.cls <= 4 ? '#b9a66a' : '#8d919a';
+      c.lineWidth = Math.max(e.w, e.cls <= 4 ? 90 : e.cls <= 7 ? 55 : 30); c.stroke(pathOf(e));
+    }
+    const outside = new Path2D(); outside.rect(0, 0, city.width, city.height); outside.addPath(ringPath(city.border));
+    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fill(outside, 'evenodd');
+    c.strokeStyle = '#ffd33d'; c.lineWidth = 110; c.stroke(ringPath(city.border));
+    this.overview = { cv, k, w, h };
   }
 
   drawGameplay(world, g) {
     const c = this.ctx, m = this.m, vw = this.vw, vh = this.vh;
-    if (!this.minimap) this.buildMinimap(world.city);
     const car = playerCar(world);
     const ctx = { places: world.city.places, player: world.player, cars: world.cars };
     const obj = missionObjective(world.mission, ctx);
@@ -85,6 +105,10 @@ export class Hud {
     // Oben links: Ort + Geld
     this.text(locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
     this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
+    // Geschäft/Lokal/Haltestelle in unmittelbarer Nähe
+    const here = playerCar(world) ?? world.player;
+    const poi = nearestPoi(world.city, here.x, here.y, car ? 120 : 180);
+    if (poi) this.text(`${POI_LABEL[poi.cat]}: ${poi.name}`, m.x, m.y + 78, { size: 16, color: '#d8d8d8', weight: 600 });
 
     // Oben rechts: Missionsziel + Zeit
     const ms = world.mission.state;
@@ -143,14 +167,31 @@ export class Hud {
   }
 
   drawMinimap(world, target, x, y, size) {
-    const c = this.ctx, p = playerCar(world) ?? world.player;
-    const zoom = size / 1700; // Minikarte zeigt ~1700 Welt-px
+    const c = this.ctx, p = playerCar(world) ?? world.player, city = world.city;
+    const zoom = size / 4000; // Minikarte zeigt ~400 m
     c.save();
-    rr(c, x, y, size, size, 12); c.fillStyle = '#15171c'; c.fill(); c.clip();
-    c.imageSmoothingEnabled = false;
-    const k = TILE * zoom;
-    c.drawImage(this.minimap, x + size / 2 - (p.x / TILE) * k, y + size / 2 - (p.y / TILE) * k, MAP_W * k, MAP_H * k);
-    c.imageSmoothingEnabled = true;
+    rr(c, x, y, size, size, 12); c.fillStyle = '#3a3d44'; c.fill(); c.clip();
+    c.save();
+    c.transform(zoom, 0, 0, zoom, x + size / 2 - p.x * zoom, y + size / 2 - p.y * zoom);
+    const R = 2200;
+    const q = city.render.query({ x: p.x - R, y: p.y - R, w: 2 * R, h: 2 * R }, this._mq ??= []);
+    for (const f of q) if (f.layer === 'area' && f.kind !== AREA_KIND.plaza) { c.fillStyle = MINI_AREA[f.kind] ?? '#2f5a2a'; c.fill(pathOf(f), 'evenodd'); }
+    c.fillStyle = '#2b2d33';
+    for (const f of q) if (f.layer === 'building') c.fill(pathOf(f), 'evenodd');
+    c.fillStyle = '#1f4f78';
+    for (const f of q) if (f.layer === 'water') c.fill(pathOf(f), 'evenodd');
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const f of q) if (f.layer === 'edge' && f.cls <= 9) {
+      c.strokeStyle = f.cls <= 4 ? '#b9a66a' : '#8d919a'; c.lineWidth = Math.max(f.w, 28); c.stroke(pathOf(f));
+    }
+    c.strokeStyle = '#ffd33d'; c.lineWidth = 30; c.stroke(city._borderPath ??= ringPath(city.border));
+    c.restore();
+    // Bahnhöfe auf der Minikarte
+    for (const q of city.poiHash.query({ x: p.x - R, y: p.y - R, w: 2 * R, h: 2 * R }, [])) {
+      if (q.cat !== 'ubahn' && q.cat !== 'sbahn') continue;
+      const mx = x + size / 2 + (q.x - p.x) * zoom, my = y + size / 2 + (q.y - p.y) * zoom;
+      this.stationIcon(q.cat, mx, my, 6);
+    }
     const toMini = (wx, wy) => [x + size / 2 + (wx - p.x) * zoom, y + size / 2 + (wy - p.y) * zoom];
     for (const car of world.cars) {
       if (car === playerCar(world)) continue;
@@ -174,6 +215,14 @@ export class Hud {
     c.restore();
     c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 2; rr(c, x, y, size, size, 12); c.stroke();
     this.text('N', x + size / 2, y + 16, { size: 13, align: 'center', weight: 800, color: '#ddd' });
+  }
+
+  stationIcon(cat, x, y, r) {
+    const c = this.ctx, st = POI_STYLE[cat];
+    c.fillStyle = st.bg;
+    if (cat === 'ubahn') c.fillRect(x - r, y - r, 2 * r, 2 * r); else { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); }
+    c.fillStyle = st.fg; c.font = `800 ${Math.round(r * 1.5)}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(st.glyph, x, y + 0.5);
   }
 
   drawTargetArrow(world, target, g) {
@@ -213,18 +262,23 @@ export class Hud {
   }
 
   drawBigMap(world) {
-    const c = this.ctx;
-    c.fillStyle = 'rgba(0,0,0,0.7)'; c.fillRect(0, 0, this.vw, this.vh);
-    const hh = this.vh - this.m.y * 2 - 40, k = hh / MAP_H, ww = MAP_W * k;
+    const c = this.ctx, city = world.city;
+    if (!this.overview) this.buildOverview(city);
+    const ov = this.overview;
+    c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, 0, this.vw, this.vh);
+    const hh = this.vh - this.m.y * 2 - 60, ww = hh * ov.w / ov.h;
     const x = this.vw / 2 - ww / 2, y = this.m.y + 30;
-    c.imageSmoothingEnabled = false; c.drawImage(this.minimap, x, y, ww, hh); c.imageSmoothingEnabled = true;
-    const f = k / TILE;
-    const obj = missionObjective(world.mission, { places: world.city.places, player: world.player, cars: world.cars });
-    if (obj.target) { c.fillStyle = YELLOW; c.beginPath(); c.arc(x + obj.target.x * f, y + obj.target.y * f, 8, 0, Math.PI * 2); c.fill(); }
+    c.drawImage(ov.cv, x, y, ww, hh);
+    const f = ww / city.width;
+    for (const q of city.pois) if (q.cat === 'ubahn' || q.cat === 'sbahn') this.stationIcon(q.cat, x + q.x * f, y + q.y * f, 5);
+    const obj = missionObjective(world.mission, { places: city.places, player: world.player, cars: world.cars });
+    c.fillStyle = '#e03b3b'; c.beginPath(); c.arc(x + city.places.giver.x * f, y + city.places.giver.y * f, 5, 0, Math.PI * 2); c.fill();
+    if (obj.target) { c.fillStyle = YELLOW; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(x + obj.target.x * f, y + obj.target.y * f, 8, 0, Math.PI * 2); c.fill(); c.stroke(); }
     const p = playerCar(world) ?? world.player;
-    c.fillStyle = '#fff'; c.beginPath(); c.arc(x + p.x * f, y + p.y * f, 6, 0, Math.PI * 2); c.fill();
-    this.text('Stadtplan', x, y - 8, { size: 20, weight: 800 });
-    this.text(`Späti = Auftraggeber · gelb = aktuelles Ziel`, x + ww, y - 8, { size: 15, align: 'right', color: '#ccc', weight: 500 });
+    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(x + p.x * f, y + p.y * f, 6, 0, Math.PI * 2); c.fill(); c.stroke();
+    this.text('Stadtplan · Kreuzberg und Nord-Neukölln', x, y - 8, { size: 20, weight: 800 });
+    this.text('rot = Späti · gelb = Ziel · weiß = du · U/S = Bahnhof', x + ww, y - 8, { size: 15, align: 'right', color: '#ccc', weight: 500 });
+    this.text(city.attribution, x + ww, y + hh + 20, { size: 12, align: 'right', color: '#aaa', weight: 500 });
   }
 
   // --- Menüs --------------------------------------------------------------
@@ -261,9 +315,12 @@ export class Hud {
     this.text('GTA', vw / 2, 150, { size: 64, align: 'center', weight: 900, color: '#fff' });
     this.text('BERLIN', vw / 2, 232, { size: 96, align: 'center', weight: 900, color: YELLOW });
     this.text('Kisten für den Kiez', vw / 2, 272, { size: 22, align: 'center', weight: 500, color: '#ddd' });
-    this.menu(g.titleMenu, vw / 2, 350);
-    this.footerHints([['A', 'Auswählen']]);
-    this.text('v0.1 · Prototyp', vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
+    if (g.city) {
+      this.menu(g.titleMenu, vw / 2, 350);
+      this.footerHints([['A', 'Auswählen']]);
+    } else this.text(g.loadError ? `Karte nicht ladbar: ${g.loadError}` : 'Lade Kreuzberg und Nord-Neukölln …', vw / 2, 380, { size: 22, align: 'center', weight: 600, color: g.loadError ? '#ff8080' : '#ddd' });
+    this.text('v0.2 · Prototyp', vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
+    this.text('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', this.m.x, vh - this.m.y, { size: 12, color: '#999', weight: 500 });
   }
 
   drawPause(g) {
@@ -358,4 +415,3 @@ function rr(c, x, y, w, h, r) {
   c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
 }
 
-export { WORLD_W, WORLD_H };

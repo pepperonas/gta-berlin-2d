@@ -1,10 +1,12 @@
 // Spielstand: ein Speicherplatz in localStorage (in der Xbox-Hülle: WebView2-Profil im App-Datenordner).
 // storage ist injizierbar (Tests nutzen eine Map-Attrappe).
 import { playerCar } from './world.js';
-import { WORLD_W, WORLD_H } from './config.js';
+import { insideBorder, inBuilding } from './map.js';
+
+const MAX_XY = 1e7; // grobe Plausibilität; ob die Position in der Stadt liegt, prüft applySave
 
 export const SAVE_KEY = 'gta-berlin.save';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // 2 = echte Karte (Kreuzberg + Nord-Neukölln); Stände der Rasterstadt werden verworfen
 
 export function makeSave(w, now = Date.now()) {
   const car = w.cars.find((c) => c.id === w.playerCarId);
@@ -23,9 +25,9 @@ export function validateSave(s) {
   if (!s || typeof s !== 'object' || s.version !== SAVE_VERSION) return null;
   if (!num(s.money, 0, 1e9) || !num(s.completed, 0, 1e6)) return null;
   if (s.bestTime !== null && !num(s.bestTime, 0, 1e5)) return null;
-  if (!s.player || !num(s.player.x, 0, WORLD_W) || !num(s.player.y, 0, WORLD_H)) return null;
+  if (!s.player || !num(s.player.x, 0, MAX_XY) || !num(s.player.y, 0, MAX_XY)) return null;
   let car = null;
-  if (s.car && num(s.car.x, 0, WORLD_W) && num(s.car.y, 0, WORLD_H) && num(s.car.angle, -100, 100) && num(s.car.health, 1, 100)) car = s.car;
+  if (s.car && num(s.car.x, 0, MAX_XY) && num(s.car.y, 0, MAX_XY) && num(s.car.angle, -100, 100) && num(s.car.health, 1, 100)) car = s.car;
   return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, player: s.player, car };
 }
 
@@ -42,11 +44,15 @@ export function readSave(storage) {
 export function applySave(w, s) {
   w.money = s.money; w.completed = s.completed; w.bestTime = s.bestTime;
   const car = w.cars.find((c) => c.id === w.playerCarId);
-  if (s.car && car) {
+  const valid = (p) => p && insideBorder(w.city, p.x, p.y) && !inBuilding(w.city, p.x, p.y);
+  if (s.car && car && valid(s.car)) {
     Object.assign(car, { x: s.car.x, y: s.car.y, angle: s.car.angle, health: s.car.health, vx: 0, vy: 0 });
-    w.player.x = s.car.x - Math.sin(s.car.angle) * 24;
-    w.player.y = s.car.y + Math.cos(s.car.angle) * 24;
-  } else { w.player.x = s.player.x; w.player.y = s.player.y; }
+    for (const side of [1, -1, 0]) { // neben dem Auto, aber nicht in einem Haus
+      w.player.x = s.car.x - Math.sin(s.car.angle) * 24 * side;
+      w.player.y = s.car.y + Math.cos(s.car.angle) * 24 * side;
+      if (!inBuilding(w.city, w.player.x, w.player.y)) break;
+    }
+  } else if (valid(s.player)) { w.player.x = s.player.x; w.player.y = s.player.y; }
   w.camera.x = w.player.x; w.camera.y = w.player.y;
 }
 

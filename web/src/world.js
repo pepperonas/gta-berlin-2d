@@ -1,24 +1,20 @@
 // Spielwelt: verbindet Stadt, Spieler, Autos, Passanten und Mission zu einem Simulationsschritt.
 // Enthält kein DOM – Eingaben kommen als abstrakter Zustand (siehe input.js), Ausgaben als Ereignisse.
-import { PLAYER, PED, TRAFFIC, CAR, WORLD_W, WORLD_H } from './config.js';
+import { PLAYER, PED, TRAFFIC, CAR } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
-import { buildCity } from './map.js';
-import { SpatialHash, circleVsRect, circleVsCircle, circleVsObb, obbVsRect, obbVsObb } from './collision.js';
+import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage } from './car.js';
-import { placeOnSegment, driveAi } from './traffic.js';
-import { createPed, updatePed, scare, knockDown } from './pedestrians.js';
+import { placeOnLane, spawnSpot, driveAi } from './traffic.js';
+import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
 
-export function createWorld({ seed = 1989, layout, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
-  const city = buildCity({ seed, layout });
+// city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
+export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
+  if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
-  const solids = new SpatialHash(96);
-  for (const r of city.rects) solids.insert(r, r);
-  for (const t of city.trees) solids.insert(t, { x: t.x - t.r, y: t.y - t.r, w: 2 * t.r, h: 2 * t.r });
-
   const w = {
-    city, rng, solids, cars: [], peds: [], events: [], time: 0,
+    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -31,15 +27,31 @@ export function createWorld({ seed = 1989, layout, cars = TRAFFIC.cars, pedestri
   const pc = city.parked[0];
   w.cars.push(createCar({ x: pc.x, y: pc.y, angle: pc.angle, color: '#16a085', role: 'parked' }));
 
-  for (let k = 0; k < cars; k++) spawnTraffic(w);
-  const walkable = city.blocks;
-  w.pedTarget = pedestrians;
-  for (let k = 0; k < pedestrians; k++) {
-    const b = walkable[Math.floor(rng() * walkable.length)];
-    w.peds.push(createPed(b, rng));
-  }
+  w.carTarget = cars; w.pedTarget = pedestrians;
   w.camera.x = w.player.x; w.camera.y = w.player.y;
+  // Startbevölkerung: im ganzen Umkreis verteilt (auch im Bild), danach nur noch außerhalb der Sicht.
+  for (let k = 0; k < cars; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
+  for (let k = 0; k < pedestrians; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
   return w;
+}
+
+function spawnPed(w, minR, maxR) {
+  const sp = pedSpawnSpot(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
+  if (!sp) return null;
+  const ped = createPed(w.city, sp, w.rng);
+  w.peds.push(ped);
+  return ped;
+}
+
+// Bevölkerung um die Kamera halten: Fernes abbauen, Fehlendes im Ring außerhalb der Sicht erzeugen.
+function managePopulation(w) {
+  const cam = w.camera, far = TRAFFIC.despawn;
+  const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.driver === 'player';
+  w.cars = w.cars.filter((c) => keep(c) || Math.hypot(c.x - cam.x, c.y - cam.y) < far);
+  w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
+  const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
+  if (npc < w.carTarget) spawnTraffic(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
+  if (w.peds.length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
 }
 
 function spawnPlayerAndCar(w) {
@@ -59,17 +71,18 @@ function spawnPlayerAndCar(w) {
   car.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 }
 
-function spawnTraffic(w, avoid) {
-  const car = createCar({ x: 0, y: 0, color: CAR_COLORS[Math.floor(w.rng() * CAR_COLORS.length)] });
-  for (let tries = 0; tries < 30; tries++) {
-    placeOnSegment(car, w.city, w.rng);
-    const clear = w.cars.every((o) => Math.hypot(o.x - car.x, o.y - car.y) > 70);
-    const far = !avoid || Math.hypot(avoid.x - car.x, avoid.y - car.y) > 700;
-    if (clear && far) break;
+function spawnTraffic(w, minR, maxR) {
+  for (let tries = 0; tries < 8; tries++) {
+    const sp = spawnSpot(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
+    if (!sp) return null;
+    if (!w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 70)) continue;
+    const car = createCar({ x: sp.x, y: sp.y, color: CAR_COLORS[Math.floor(w.rng() * CAR_COLORS.length)] });
+    placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
+    car.driver = 'npc';
+    w.cars.push(car);
+    return car;
   }
-  car.driver = 'npc';
-  w.cars.push(car);
-  return car;
+  return null;
 }
 
 export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar) ?? null; }
@@ -86,7 +99,7 @@ const tmp = [];
 function pushCircleOutOfWorld(w, obj, r) {
   const box = { x: obj.x - r - 2, y: obj.y - r - 2, w: 2 * r + 4, h: 2 * r + 4 };
   for (const s of w.solids.query(box, tmp)) {
-    const m = s.r !== undefined ? circleVsCircle(obj.x, obj.y, r, s.x, s.y, s.r) : circleVsRect(obj.x, obj.y, r, s);
+    const m = s.seg ? circleVsSegment(obj.x, obj.y, r, s) : s.r !== undefined ? circleVsCircle(obj.x, obj.y, r, s.x, s.y, s.r) : circleVsRect(obj.x, obj.y, r, s);
     if (m) { obj.x += m.nx * m.depth; obj.y += m.ny * m.depth; }
   }
 }
@@ -94,7 +107,7 @@ function pushCircleOutOfWorld(w, obj, r) {
 function spotFree(w, x, y, r, ignoreCar) {
   const box = { x: x - r, y: y - r, w: 2 * r, h: 2 * r };
   for (const s of w.solids.query(box, tmp)) {
-    const m = s.r !== undefined ? circleVsCircle(x, y, r, s.x, s.y, s.r) : circleVsRect(x, y, r, s);
+    const m = s.seg ? circleVsSegment(x, y, r, s) : s.r !== undefined ? circleVsCircle(x, y, r, s.x, s.y, s.r) : circleVsRect(x, y, r, s);
     if (m) return false;
   }
   return w.cars.every((c) => c === ignoreCar || !circleVsObb(x, y, r, c));
@@ -111,11 +124,8 @@ function tryEnter(w) {
   if (!best) return false;
   if (best.driver === 'npc') {
     // Fahrer steigt aus und flieht.
-    const ped = createPed(nearestBlock(w, best.x, best.y), w.rng);
-    const side = sideSpot(best, -1, 14);
-    ped.x = side.x; ped.y = side.y;
-    scare(ped, p.x, p.y, 3.5);
-    w.peds.push(ped);
+    const ped = fleeingDriver(w, best, p.x, p.y, 3.5);
+    if (ped) w.peds.push(ped);
     w.events.push({ type: 'carjack', x: best.x, y: best.y });
   }
   best.driver = 'player'; best.ai = null;
@@ -149,13 +159,14 @@ function tryExit(w) {
   return true;
 }
 
-function nearestBlock(w, x, y) {
-  let best = w.city.blocks[0], bd = Infinity;
-  for (const b of w.city.blocks) {
-    const d = (b.x + b.w / 2 - x) ** 2 + (b.y + b.h / 2 - y) ** 2;
-    if (d < bd) { bd = d; best = b; }
-  }
-  return best;
+// Fahrer steigt aus und flieht (wird danach ein normaler Passant).
+function fleeingDriver(w, car, fromX, fromY, secs) {
+  const sp = nearestSpot(w.city, car.x, car.y);
+  if (!sp) return null;
+  const ped = createPed(w.city, sp, w.rng);
+  const s = sideSpot(car, -1, 14); ped.x = s.x; ped.y = s.y;
+  scare(ped, fromX, fromY, secs);
+  return ped;
 }
 
 function updatePlayerOnFoot(w, input, dt) {
@@ -172,7 +183,7 @@ function updatePlayerOnFoot(w, input, dt) {
     p.step += speed * dt;
   }
   pushCircleOutOfWorld(w, p, PLAYER.radius);
-  p.x = clamp(p.x, 8, WORLD_W - 8); p.y = clamp(p.y, 8, WORLD_H - 8);
+  p.x = clamp(p.x, 8, w.city.width - 8); p.y = clamp(p.y, 8, w.city.height - 8);
 }
 
 function applyDriverInput(car, input) {
@@ -226,18 +237,13 @@ export function updateWorld(w, input, dt) {
     c.wreckT += dt;
     if (c.driver === 'npc') {
       c.driver = null; c.ai = null;
-      const ped = createPed(nearestBlock(w, c.x, c.y), w.rng);
-      const s = sideSpot(c, -1, 14); ped.x = s.x; ped.y = s.y;
-      scare(ped, c.x, c.y, 3); w.peds.push(ped);
+      const ped = fleeingDriver(w, c, c.x, c.y, 3);
+      if (ped) w.peds.push(ped);
     }
   }
   const cam = w.camera;
-  w.cars = w.cars.filter((c) => {
-    const gone = c.wrecked && c.wreckT > 20 && c.id !== w.playerCarId && c.id !== p.inCar && !c.cargo
-      && Math.hypot(c.x - cam.x, c.y - cam.y) > 900;
-    if (gone) spawnTraffic(w, cam);
-    return !gone;
-  });
+  w.cars = w.cars.filter((c) => !(c.wrecked && c.wreckT > 20 && c.id !== w.playerCarId && c.id !== p.inCar && !c.cargo
+      && Math.hypot(c.x - cam.x, c.y - cam.y) > 900));
 
   // Spieler zu Fuß gegen Autos.
   if (!p.inCar) {
@@ -282,6 +288,7 @@ export function updateWorld(w, input, dt) {
     const idx = w.peds.findIndex((q) => q.state === 'walk' && Math.hypot(q.x - cam.x, q.y - cam.y) > 900);
     if (idx >= 0) w.peds.splice(idx, 1);
   }
+  managePopulation(w);
 
   w.events.push(...updateMission(m, missionCtx(w, input), dt));
   if (m.state === 'success') {
@@ -294,7 +301,7 @@ export function updateWorld(w, input, dt) {
 }
 
 function missionCtx(w, input) {
-  return { places: w.city.places, player: w.player, cars: w.cars, input };
+  return { places: w.city.places, player: w.player, cars: w.cars, timeLimit: w.city.timeLimit, input };
 }
 
 export function updateCamera(w, dt) {

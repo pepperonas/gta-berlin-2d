@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { createGame, updateGame, createMenu, menuInput } from '../web/src/game.js';
 import { memoryStorage } from '../web/src/save.js';
 import { idle } from './helpers/bot.js';
+import { realCity } from './helpers/city.js';
+
+const city = realCity();
 
 const press = (g, patch) => updateGame(g, { ...idle(), ...patch }, 1 / 60);
 
@@ -17,7 +20,7 @@ test('Menü überspringt deaktivierte Einträge und läuft rund', () => {
 
 test('Titel → Neues Spiel → Pause → Speichern → Hauptmenü → Fortsetzen (nur Controller-Aktionen)', () => {
   const st = memoryStorage();
-  const g = createGame({ storage: st });
+  const g = createGame({ storage: st, city });
   assert.equal(g.titleMenu.items[0].enabled, false, 'Fortsetzen ohne Spielstand deaktiviert');
   assert.equal(g.titleMenu.items[g.titleMenu.index].id, 'new');
   press(g, { confirm: true });
@@ -38,7 +41,7 @@ test('Titel → Neues Spiel → Pause → Speichern → Hauptmenü → Fortsetze
 });
 
 test('B im Pausemenü setzt fort; Steuerungsseite kehrt zum Aufrufer zurück', () => {
-  const g = createGame({ storage: memoryStorage() });
+  const g = createGame({ storage: memoryStorage(), city });
   press(g, { confirm: true });
   press(g, { pause: true });
   press(g, { back: true });
@@ -52,15 +55,15 @@ test('B im Pausemenü setzt fort; Steuerungsseite kehrt zum Aufrufer zurück', (
 });
 
 test('Beenden nur, wenn die Hülle es anbietet', () => {
-  assert.ok(!createGame({ storage: memoryStorage() }).titleMenu.items.some((i) => i.id === 'quit'));
-  const g = createGame({ storage: memoryStorage(), canQuit: true });
+  assert.ok(!createGame({ storage: memoryStorage(), city }).titleMenu.items.some((i) => i.id === 'quit'));
+  const g = createGame({ storage: memoryStorage(), canQuit: true, city });
   for (let i = 0; i < 2; i++) press(g, { menuDown: true });
   press(g, { confirm: true });
   assert.ok(g.quitRequested);
 });
 
 test('Gescheiterte Mission: „Erneut versuchen“ setzt zurück zum Späti', () => {
-  const g = createGame({ storage: memoryStorage() });
+  const g = createGame({ storage: memoryStorage(), city });
   press(g, { confirm: true });
   const m = g.world.mission;
   m.state = 'failed'; m.result = { success: false, reason: 'x' };
@@ -69,4 +72,14 @@ test('Gescheiterte Mission: „Erneut versuchen“ setzt zurück zum Späti', ()
   press(g, { confirm: true });
   assert.equal(m.state, 'available');
   assert.ok(Math.hypot(g.world.player.x - g.world.city.places.playerSpawn.x, g.world.player.y - g.world.city.places.playerSpawn.y) < 1);
+});
+
+test('ohne Karte bleibt der Titel stehen, bis sie geladen ist', async () => {
+  const { setCity } = await import('../web/src/game.js');
+  const g = createGame({ storage: memoryStorage() });
+  press(g, { confirm: true });
+  assert.equal(g.screen, 'title');
+  setCity(g, city);
+  press(g, { confirm: true });
+  assert.equal(g.screen, 'playing');
 });

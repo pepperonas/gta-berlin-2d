@@ -46,3 +46,27 @@ test('SpatialHash liefert jedes Objekt nur einmal', () => {
   assert.equal(out.length, 1);
   assert.equal(h.query({ x: 1000, y: 1000, w: 10, h: 10 }).length, 0);
 });
+
+test('Wandsegmente: Kreis und Box werden zur richtigen Seite hinausgeschoben', async () => {
+  const { circleVsSegment, obbVsSegment } = await import('../web/src/collision.js');
+  const wall = { ax: 0, ay: 0, bx: 100, by: 0 };
+  const m = circleVsSegment(50, 4, 7, wall);
+  assert.ok(m && m.ny > 0.99 && Math.abs(m.depth - 3) < 1e-9);
+  assert.equal(circleVsSegment(50, 8, 7, wall), null);
+  assert.ok(circleVsSegment(50, -4, 7, wall).ny < -0.99, 'von der anderen Seite zurück');
+  const car = { x: 50, y: 8, angle: 0, hw: 21, hh: 10 };
+  const b = obbVsSegment(car, wall);
+  assert.ok(b && b.ny > 0.99 && Math.abs(b.depth - 2) < 1e-9);
+  assert.equal(obbVsSegment({ ...car, y: 12 }, wall), null);
+  // schräg stehende Box am Wandende
+  assert.ok(obbVsSegment({ x: 115, y: 0, angle: 0.5, hw: 21, hh: 10 }, wall));
+});
+
+test('Raster-Hash: ein Objekt darf in mehreren Hashes stehen', async () => {
+  const { SpatialHash } = await import('../web/src/collision.js');
+  const a = new SpatialHash(50), b = new SpatialHash(50), it = { id: 1 };
+  a.insert(it, { x: 0, y: 0, w: 10, h: 10 }); b.insert(it, { x: 0, y: 0, w: 10, h: 10 });
+  assert.equal(a.query({ x: 0, y: 0, w: 5, h: 5 }).length, 1);
+  assert.equal(b.query({ x: 0, y: 0, w: 5, h: 5 }).length, 1);
+  assert.equal(a.query({ x: 0, y: 0, w: 200, h: 200 }).length, 1, 'keine Doppelten über Zellen');
+});

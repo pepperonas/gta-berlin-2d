@@ -23,11 +23,14 @@ export function menuInput(menu, input) {
   return null;
 }
 
-export function createGame({ storage, canQuit = false, seed = 1989 } = {}) {
-  const g = { screen: 'title', world: null, storage, canQuit, seed, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false };
+// city: dekodierte Karte; im Browser kommt sie asynchron nach (setCity), bis dahin zeigt der Titel „Lade Stadt …“.
+export function createGame({ storage, canQuit = false, seed = 1989, city = null } = {}) {
+  const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false };
   g.titleMenu = buildTitleMenu(g);
   return g;
 }
+
+export function setCity(g, city) { g.city = city; }
 
 function buildTitleMenu(g) {
   const hasSave = !!readSave(g.storage);
@@ -59,14 +62,14 @@ function resultMenu(success) {
 }
 
 export function startNewGame(g) {
-  g.world = createWorld({ seed: g.seed });
+  g.world = createWorld({ city: g.city, seed: g.seed });
   g.screen = 'playing';
 }
 
 export function continueGame(g) {
   const s = readSave(g.storage);
   if (!s) return false;
-  g.world = createWorld({ seed: g.seed });
+  g.world = createWorld({ city: g.city, seed: g.seed });
   applySave(g.world, s);
   g.screen = 'playing';
   g.toast = { text: 'Spielstand geladen', t: 2 };
@@ -91,6 +94,7 @@ export function updateGame(g, input, dt) {
 
   switch (g.screen) {
     case 'title': {
+      if (!g.city) break; // Karte lädt noch
       const r = pick(g.titleMenu);
       if (r === 'continue') continueGame(g);
       else if (r === 'new') startNewGame(g);

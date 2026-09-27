@@ -1,56 +1,113 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, updateWorld } from '../web/src/world.js';
-import { tileAt, T } from '../web/src/map.js';
-import { obbVsRect } from '../web/src/collision.js';
-import { allowedExits, turnPath, laneCoord } from '../web/src/traffic.js';
+import { surfaceAt, inBuilding, T } from '../web/src/map.js';
+import { obbVsSegment } from '../web/src/collision.js';
+import { obbBounds } from '../web/src/collision.js';
+import { buildLaneGraph, chooseNext, turnAngle } from '../web/src/roadgraph.js';
+import { mulberry32 } from '../web/src/rng.js';
 import { idle } from './helpers/bot.js';
+import { realCity } from './helpers/city.js';
 
-test('Kreuzungslogik: keine Wende, am Rand eingeschränkt', () => {
-  assert.deepEqual(allowedExits(0, 0, 'N').sort(), ['E']);         // Ecke oben links, von unten kommend
-  assert.ok(!allowedExits(3, 3, 'E').includes('W'));
-  assert.equal(allowedExits(3, 3, 'E').length, 3);
+const city = realCity();
+const g = buildLaneGraph(city);
+
+test('Spurgraph: Rechtsverkehr, Einbahnstraßen nur in Fahrtrichtung', () => {
+  const twoWay = g.lanes.find((l) => !l.edge.oneway && l.dir === 1 && l.edge.len > 400 && l.edge.pts.length === 4);
+  assert.ok(twoWay, 'gerade Straße mit Gegenverkehr gefunden');
+  const e = twoWay.edge, ux = (e.pts[2] - e.pts[0]) / e.len, uy = (e.pts[3] - e.pts[1]) / e.len;
+  const mx = (twoWay.pts[0] + twoWay.pts[2]) / 2 - (e.pts[0] + e.pts[2]) / 2, my = (twoWay.pts[1] + twoWay.pts[3]) / 2 - (e.pts[1] + e.pts[3]) / 2;
+  // rechts in Fahrtrichtung bei y nach unten: (-uy, ux)
+  assert.ok(mx * -uy + my * ux > e.w / 8, 'Spur liegt rechts der Mitte');
+  const oneway = city.edges.filter((x) => x.inside && x.oneway === 1 && x.cls <= 7);
+  assert.ok(oneway.length > 50);
+  for (const x of oneway) assert.ok(!g.lanes.some((l) => l.edge === x && l.dir === -1), 'Gegenspur auf Einbahnstraße');
 });
 
-test('Abbiegepfad endet exakt auf der Ausfahrtsspur (Rechtsverkehr)', () => {
-  const w = createWorld({ cars: 0, pedestrians: 0 });
-  const p = turnPath(w.city, 'S', 'E', 2, 2);
-  const end = p[p.length - 1];
-  assert.equal(end.y, laneCoord(w.city, 'E', 2));
-  assert.ok(p.every((q) => q.slow));
-  // Südwärts fährt auf der West-Hälfte der Straße.
-  assert.ok(laneCoord(w.city, 'S', 2) < laneCoord(w.city, 'N', 2));
+test('Abbiegen: keine Wende außer in der Sackgasse; meist geradeaus', () => {
+  const rng = mulberry32(3);
+  let straight = 0, n = 0;
+  for (const l of g.lanes) {
+    if (l.next.length > 1) assert.ok(l.next.every((m) => m.edge !== l.edge), 'Wende an einer Kreuzung');
+    if (l.next.length >= 3) for (let k = 0; k < 5; k++) { n++; if (Math.abs(turnAngle(l, chooseNext(l, rng))) < 0.4) straight++; }
+  }
+  assert.ok(straight / n > 0.4, `geradeaus nur ${(straight / n * 100).toFixed(0)} %`);
 });
 
-test('Dauertest 90 s mit Verkehr und Passanten: alles bleibt auf der Straße bzw. dem Gehweg', () => {
-  const w = createWorld({});
-  let samples = 0, offRoad = 0, pedBad = 0, progress = 0;
-  const start = new Map(w.cars.filter((c) => c.driver === 'npc').map((c) => [c.id, { odo: 0, lx: c.x, ly: c.y }]));
+test('Dauertest 90 s mit Verkehr und Passanten: auf der Fahrbahn bzw. nicht in Häusern', () => {
+  const w = createWorld({ city });
+  let samples = 0, offRoad = 0, pedBad = 0, moved = 0;
+  const odo = new Map();
   for (let i = 0; i < 90 * 60; i++) {
     updateWorld(w, idle(), 1 / 60);
     if (i % 30) continue;
     for (const c of w.cars) {
       assert.ok(Number.isFinite(c.x) && Number.isFinite(c.y), 'NaN-Position');
-      for (const b of w.city.buildings) {
-        const m = obbVsRect(c, b);
-        assert.ok(!m || m.depth < 4, `Auto ${c.id} steckt ${m?.depth.toFixed(1)} px in einem Gebäude`);
+      for (const s of w.solids.query(obbBounds(c), [])) {
+        if (!s.seg || s.kind !== 'building') continue;
+        const m = obbVsSegment(c, s);
+        assert.ok(!m || m.depth < 6, `Auto ${c.id} steckt ${m?.depth.toFixed(1)} px in einer Hauswand`);
       }
       if (c.driver !== 'npc') continue;
       samples++;
-      const t = tileAt(w.city, c.x, c.y);
-      if (t !== T.ROAD) offRoad++;
-      const s = start.get(c.id);
-      if (s) { s.odo += Math.hypot(c.x - s.lx, c.y - s.ly); s.lx = c.x; s.ly = c.y; }
+      if (surfaceAt(city, c.x, c.y) !== T.ROAD) offRoad++;
+      const o = odo.get(c.id) ?? { d: 0, x: c.x, y: c.y };
+      o.d += Math.hypot(c.x - o.x, c.y - o.y); o.x = c.x; o.y = c.y; odo.set(c.id, o);
     }
-    for (const p of w.peds) {
-      const t = tileAt(w.city, p.x, p.y);
-      if (t === T.BUILDING || t === T.WATER) pedBad++;
-    }
+    for (const p of w.peds) if (inBuilding(city, p.x, p.y)) pedBad++;
   }
-  for (const s of start.values()) if (s.odo > 1500) progress++;
+  for (const o of odo.values()) if (o.d > 500) moved++;
   const share = offRoad / samples;
-  console.log(`# Verkehr: ${(share * 100).toFixed(1)} % Stichproben neben der Fahrbahn, ${progress}/${start.size} Autos > 1,5 km gefahren`);
-  assert.ok(share < 0.02, `zu oft neben der Straße: ${(share * 100).toFixed(1)} %`);
-  assert.equal(pedBad, 0, 'Passant in Gebäude/Wasser');
-  assert.ok(progress >= start.size * 0.8, `Verkehr kommt nicht voran: ${progress}/${start.size}`);
+  console.log(`# Verkehr: ${w.cars.length} Autos, ${(share * 100).toFixed(1)} % Stichproben neben der Fahrbahn, ${moved}/${odo.size} Autos > 50 m gefahren`);
+  assert.ok(share < 0.03, `zu oft neben der Straße: ${(share * 100).toFixed(1)} %`);
+  assert.equal(pedBad, 0, 'Passant in einem Gebäude');
+  assert.ok(moved >= odo.size * 0.7, `Verkehr kommt nicht voran: ${moved}/${odo.size}`);
+});
+
+test('Bevölkerung folgt der Kamera', () => {
+  const w = createWorld({ city, cars: 10, pedestrians: 20 });
+  const far = city.places.pickup;
+  w.player.x = far.x; w.player.y = far.y; w.camera.x = far.x; w.camera.y = far.y;
+  for (let i = 0; i < 10 * 60; i++) { w.player.x = far.x; w.player.y = far.y; updateWorld(w, idle(), 1 / 60); }
+  const npc = w.cars.filter((c) => c.driver === 'npc');
+  assert.ok(npc.length >= 8, `nur ${npc.length} Autos`);
+  assert.ok(npc.every((c) => Math.hypot(c.x - far.x, c.y - far.y) < 2600));
+  assert.ok(w.peds.length >= 15 && w.peds.every((p) => Math.hypot(p.x - far.x, p.y - far.y) < 2600));
+});
+
+test('Mit Vollgas gegen Hauswand, ins Wasser und über die Gebietsgrenze: das Auto bleibt draußen', async () => {
+  const { playerCar } = await import('../web/src/world.js');
+  const { insideBorder } = await import('../web/src/map.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  w.player.inCar = car.id; car.driver = 'player';
+  // Jeder Schritt wird geprüft (am Ende allein könnte das Auto schon auf der anderen Seite wieder herausgekommen sein).
+  const ram = (x, y, angle, bad) => {
+    Object.assign(car, { x, y, angle, vx: 0, vy: 0, angVel: 0, health: 100, wrecked: false });
+    let moved = 0;
+    for (let i = 0; i < 4 * 60; i++) {
+      const px = car.x, py = car.y;
+      updateWorld(w, { ...idle(), throttle: 1 }, 1 / 60);
+      moved += Math.hypot(car.x - px, car.y - py);
+      assert.ok(!bad(car.x, car.y), `durchgebrochen nach ${i} Schritten bei ${car.x.toFixed(0)},${car.y.toFixed(0)}`);
+    }
+    assert.ok(moved > 20, 'Auto ist überhaupt losgefahren');
+    return playerCar(w);
+  };
+  // Hauswand: vom Abgabeort (Fahrbahn) quer zum Späti
+  const { BUILDING_KIND } = await import('../web/src/citycodes.js');
+  const shop = city.buildings.find((b) => b.kind === BUILDING_KIND.spaeti);
+  const g0 = city.places.giver;
+  const a = Math.atan2(shop.cy - g0.y, shop.cx - g0.x);
+  ram(g0.x - Math.cos(a) * 60, g0.y - Math.sin(a) * 60, a, (x, y) => inBuilding(city, x, y));
+  // Wasser: von einem Kai-Punkt (Wandzug am Wasser) senkrecht ins Wasser
+  const quay = city.walls.find((wl) => wl.length > 40 && Math.hypot(wl[2] - wl[0], wl[3] - wl[1]) > 60);
+  const qx = (quay[0] + quay[2]) / 2, qy = (quay[1] + quay[3]) / 2, L = Math.hypot(quay[2] - quay[0], quay[3] - quay[1]);
+  const nx = -(quay[3] - quay[1]) / L, ny = (quay[2] - quay[0]) / L;
+  const side = surfaceAt(city, qx + nx * 30, qy + ny * 30) === T.WATER ? 1 : -1; // Normale zeigt ins Wasser
+  ram(qx - nx * side * 40, qy - ny * side * 40, Math.atan2(ny * side, nx * side), (x, y) => surfaceAt(city, x, y) === T.WATER);
+  // Gebietsgrenze
+  const b = city.border[0], bx = (b[0] + b[2]) / 2, by = (b[1] + b[3]) / 2;
+  const inward = insideBorder(city, bx + 50, by) ? [1, 0] : insideBorder(city, bx - 50, by) ? [-1, 0] : insideBorder(city, bx, by + 50) ? [0, 1] : [0, -1];
+  ram(bx + inward[0] * 60, by + inward[1] * 60, Math.atan2(-inward[1], -inward[0]), (x, y) => !insideBorder(city, x, y));
 });

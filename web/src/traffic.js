@@ -1,117 +1,107 @@
-// Verkehr: Rechtsverkehr auf dem Straßenraster. KI-Fahrer folgen Wegpunkten durch Kreuzungen,
-// bremsen vor Hindernissen, lösen Blockaden und fahren sich frei, wenn sie stecken.
-import { TILE, COLS, ROWS } from './config.js';
+// Verkehr: Rechtsverkehr auf dem echten Straßennetz. KI-Fahrer folgen ihrer Spur (Pure Pursuit),
+// wählen an Kreuzungen die nächste Spur, bremsen vor Kurven und Hindernissen, lösen Blockaden,
+// fahren sich frei und suchen nach einem Unfall die nächste passende Spur.
 import { clamp, wrapAngle } from './math.js';
 import { forwardSpeed } from './car.js';
+import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane } from './roadgraph.js';
 
-export const DIRS = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
-export const OPP = { N: 'S', S: 'N', E: 'W', W: 'E' };
-const ANGLE = { E: 0, S: Math.PI / 2, W: Math.PI, N: -Math.PI / 2 };
-const NV = COLS + 1, NH = ROWS + 1; // Anzahl senkrechter / waagerechter Straßen
+const LOOKAHEAD = 420; // so viel Route (px) hält die KI im Voraus
 
-// Spurmitte: Südwärts links (West-Hälfte), nordwärts rechts; ostwärts unten, westwärts oben.
-export function laneCoord(city, dir, idx) {
-  if (dir === 'S') return city.vRoads[idx] + TILE;
-  if (dir === 'N') return city.vRoads[idx] + 3 * TILE;
-  if (dir === 'E') return city.hRoads[idx] + 3 * TILE;
-  return city.hRoads[idx] + TILE;
+// Kurventempo aus dem Abbiegewinkel: geradeaus unbegrenzt, rechtwinklig ~ 55 px/s.
+function turnSpeed(angle) {
+  const a = Math.abs(angle);
+  if (a < 0.25) return Infinity;
+  return clamp(150 - a * 70, 38, 140);
 }
 
-export function box(city, i, j) {
-  return { x: city.vRoads[i], y: city.hRoads[j], w: city.roadW, h: city.roadW };
-}
-
-export function entryPoint(city, dir, i, j) {
-  const b = box(city, i, j);
-  if (dir === 'S') return { x: laneCoord(city, 'S', i), y: b.y };
-  if (dir === 'N') return { x: laneCoord(city, 'N', i), y: b.y + b.h };
-  if (dir === 'E') return { x: b.x, y: laneCoord(city, 'E', j) };
-  return { x: b.x + b.w, y: laneCoord(city, 'W', j) };
-}
-
-export function exitPoint(city, dir, i, j) {
-  const b = box(city, i, j);
-  if (dir === 'S') return { x: laneCoord(city, 'S', i), y: b.y + b.h };
-  if (dir === 'N') return { x: laneCoord(city, 'N', i), y: b.y };
-  if (dir === 'E') return { x: b.x + b.w, y: laneCoord(city, 'E', j) };
-  return { x: b.x, y: laneCoord(city, 'W', j) };
-}
-
-export function neighbor(i, j, dir) {
-  const [dx, dy] = DIRS[dir];
-  const ni = i + dx, nj = j + dy;
-  return ni >= 0 && nj >= 0 && ni < NV && nj < NH ? [ni, nj] : null;
-}
-
-export function allowedExits(i, j, din) {
-  const out = Object.keys(DIRS).filter((d) => d !== OPP[din] && neighbor(i, j, d));
-  return out.length ? out : [OPP[din]];
-}
-
-// Wegpunkte durch die Kreuzung (i,j): von der Einfahrt in din zur Ausfahrt in dout.
-export function turnPath(city, din, dout, i, j) {
-  const a = entryPoint(city, din, i, j), b = exitPoint(city, dout, i, j);
-  if (din === dout) return [{ ...b, slow: false }];
-  const corner = (din === 'N' || din === 'S') ? { x: a.x, y: b.y } : { x: b.x, y: a.y };
-  const pts = [];
-  for (const t of [0.35, 0.7, 1]) {
-    const u = 1 - t;
-    pts.push({ x: u * u * a.x + 2 * u * t * corner.x + t * t * b.x, y: u * u * a.y + 2 * u * t * corner.y + t * t * b.y, slow: true });
+function appendLane(ai, lane, fromS = 0) {
+  const p = lane.pts;
+  let acc = 0;
+  for (let i = 0; i < p.length; i += 2) {
+    if (i > 0) acc += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
+    if (acc < fromS && i < p.length - 2) continue;
+    ai.route.push(p[i], p[i + 1]); ai.cap.push(lane.cruise);
   }
-  return pts;
+  ai.lane = lane;
 }
 
-function chooseExit(i, j, din, rng) {
-  const opts = allowedExits(i, j, din);
-  if (opts.includes(din) && rng() < 0.5) return din;
-  return opts[Math.floor(rng() * opts.length)];
+function extendRoute(ai, rng) {
+  const next = chooseNext(ai.lane, rng);
+  if (!next) return false;
+  const v = Math.min(turnSpeed(turnAngle(ai.lane, next)), next.cruise, ai.lane.cruise);
+  const con = connector(ai.lane, next);
+  if (ai.cap.length) ai.cap[ai.cap.length - 1] = Math.min(ai.cap[ai.cap.length - 1], v);
+  for (let i = 0; i < con.length; i += 2) { ai.route.push(con[i], con[i + 1]); ai.cap.push(v); }
+  appendLane(ai, next);
+  return true;
 }
 
-// Setzt ein Auto auf ein zufälliges (oder vorgegebenes) Straßensegment.
-export function placeOnSegment(car, city, rng, seg) {
-  let i, j, dir, n;
-  for (let tries = 0; tries < 50; tries++) {
-    i = seg?.i ?? Math.floor(rng() * NV);
-    j = seg?.j ?? Math.floor(rng() * NH);
-    dir = seg?.dir ?? ['N', 'S', 'E', 'W'][Math.floor(rng() * 4)];
-    n = neighbor(i, j, dir);
-    if (n) break;
-  }
-  const a = exitPoint(city, dir, i, j), b = entryPoint(city, dir, n[0], n[1]);
-  const t = seg?.t ?? (0.2 + rng() * 0.6);
-  car.x = a.x + (b.x - a.x) * t;
-  car.y = a.y + (b.y - a.y) * t;
-  car.angle = ANGLE[dir];
-  car.vx = car.vy = car.angVel = 0;
-  initAi(car, city, dir, n[0], n[1], rng);
+function remaining(ai, car) {
+  const r = ai.route;
+  let L = Math.hypot(r[2 * ai.i + 2] - car.x, r[2 * ai.i + 3] - car.y);
+  for (let k = ai.i + 1; k < r.length / 2 - 1 && L < LOOKAHEAD; k++) L += Math.hypot(r[2 * k + 2] - r[2 * k], r[2 * k + 3] - r[2 * k + 1]);
+  return L;
 }
 
-function initAi(car, city, dir, ti, tj, rng) {
+export function initAi(car, lane, s, rng) {
   car.ai = {
-    dir, ti, tj,
-    nextTurn: chooseExit(ti, tj, dir, rng),
-    waypoints: [entryPoint(city, dir, ti, tj)],
-    cruise: 125 + rng() * 45,
+    route: [], cap: [], i: 0, lane: null,
+    cruiseK: 0.85 + rng() * 0.3,
     blockedT: 0, ignoreT: 0, stuckT: 0, reverseT: 0, hornT: 0,
   };
+  appendLane(car.ai, lane, s);
+  if (car.ai.route.length < 4) extendRoute(car.ai, rng);
 }
 
-// Nächstes Straßensegment zum Auto finden (nach Unfall / Abdrängen).
-export function replan(car, city, rng) {
-  let best = null;
-  for (let i = 0; i < NV; i++) for (let j = 0; j < NH; j++) for (const dir of ['N', 'S', 'E', 'W']) {
-    const n = neighbor(i, j, dir);
-    if (!n) continue;
-    const a = exitPoint(city, dir, i, j), b = entryPoint(city, dir, n[0], n[1]);
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const t = clamp(((car.x - a.x) * (b.x - a.x) + (car.y - a.y) * (b.y - a.y)) / (len * len), 0, 1);
-    const px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t;
-    const d = Math.hypot(car.x - px, car.y - py) + Math.abs(wrapAngle(ANGLE[dir] - car.angle)) * 40;
-    if (!best || d < best.d) best = { d, dir, n };
+// Setzt ein Auto auf eine Spur (Bogenlänge s) und richtet es aus.
+export function placeOnLane(car, city, lane, s, rng) {
+  const p = lane.pts;
+  let acc = 0;
+  for (let i = 0; i < p.length - 2; i += 2) {
+    const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+    if (acc + L >= s || i === p.length - 4) {
+      const t = L ? clamp((s - acc) / L, 0, 1) : 0;
+      car.x = p[i] + (p[i + 2] - p[i]) * t; car.y = p[i + 1] + (p[i + 3] - p[i + 1]) * t;
+      car.angle = Math.atan2(p[i + 3] - p[i + 1], p[i + 2] - p[i]);
+      break;
+    }
+    acc += L;
   }
-  car.ai.dir = best.dir; car.ai.ti = best.n[0]; car.ai.tj = best.n[1];
-  car.ai.nextTurn = chooseExit(best.n[0], best.n[1], best.dir, rng);
-  car.ai.waypoints = [entryPoint(city, best.dir, best.n[0], best.n[1])];
+  car.vx = car.vy = car.angVel = 0;
+  initAi(car, lane, s, rng);
+}
+
+// Zufällige Spur mit Abstand minR…maxR zu (cx, cy).
+export function spawnSpot(city, rng, cx, cy, minR, maxR) {
+  const g = buildLaneGraph(city);
+  const segs = g.hash.query({ x: cx - maxR, y: cy - maxR, w: 2 * maxR, h: 2 * maxR }, []);
+  for (let tries = 0; tries < 40 && segs.length; tries++) {
+    const sg = segs[Math.floor(rng() * segs.length)];
+    const t = rng();
+    const x = sg.ax + (sg.bx - sg.ax) * t, y = sg.ay + (sg.by - sg.ay) * t;
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < minR || d > maxR) continue;
+    let s = 0;
+    const p = sg.lane.pts;
+    for (let i = 0; i < sg.i; i += 2) s += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+    s += Math.hypot(x - sg.ax, y - sg.ay);
+    return { lane: sg.lane, s, x, y };
+  }
+  return null;
+}
+
+// Nächste Spur zum Auto finden (nach Unfall / Abdrängen / Übernahme durch die KI).
+export function replan(car, city, rng) {
+  const g = buildLaneGraph(city);
+  const hit = nearestLane(g, car.x, car.y, car.angle, 600) ?? nearestLane(g, car.x, car.y, car.angle, 3000);
+  if (!hit) { car.ai = null; return; }
+  let s = 0;
+  const p = hit.lane.pts;
+  for (let i = 0; i < hit.i; i += 2) s += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+  s += Math.hypot(hit.x - p[hit.i], hit.y - p[hit.i + 1]) + 30;
+  const keep = car.ai;
+  initAi(car, hit.lane, s, rng);
+  if (keep) Object.assign(car.ai, { cruiseK: keep.cruiseK });
 }
 
 // Hindernisabstand vor dem Auto (Kegel), getrennt nach KI-Autos und „ehrlichen“ Hindernissen.
@@ -120,6 +110,7 @@ function obstacleAhead(car, world) {
   let dCar = Infinity, dOther = Infinity, playerBlock = false;
   const check = (ox, oy, lat, isAiCar, isPlayer) => {
     const rx = ox - car.x, ry = oy - car.y;
+    if (rx * rx + ry * ry > 12100) return;
     const along = rx * c + ry * s;
     if (along <= 0 || along > 110) return;
     const side = Math.abs(-rx * s + ry * c);
@@ -138,37 +129,44 @@ function obstacleAhead(car, world) {
 }
 
 export function driveAi(car, world, dt) {
-  const ai = car.ai, city = world.city, ctl = car.controls;
-  if (!ai || car.wrecked) return;
-  if (!ai.waypoints.length || !ai.waypoints[0]) replan(car, city, world.rng);
-  const vf = forwardSpeed(car);
+  let ai = car.ai;
+  const city = world.city, ctl = car.controls;
+  if (car.wrecked) return;
+  if (!ai || ai.route.length < 4) { replan(car, city, world.rng); ai = car.ai; if (!ai) return; }
+  const r = ai.route;
 
-  // Wegpunkt erreicht → nächsten planen.
-  let wp = ai.waypoints[0];
-  if (Math.hypot(wp.x - car.x, wp.y - car.y) < 16) {
-    ai.waypoints.shift();
-    if (!ai.waypoints.length) {
-      const dout = ai.nextTurn;
-      ai.waypoints = turnPath(city, ai.dir, dout, ai.ti, ai.tj);
-      const n = neighbor(ai.ti, ai.tj, dout);
-      ai.dir = dout; ai.ti = n[0]; ai.tj = n[1];
-      ai.nextTurn = chooseExit(ai.ti, ai.tj, ai.dir, world.rng);
-      ai.waypoints.push(entryPoint(city, ai.dir, ai.ti, ai.tj));
-    }
-    wp = ai.waypoints[0];
+  // Fortschritt auf der Route: zum Segment weiterschalten, das vor dem Auto liegt.
+  let t = 0, px = car.x, py = car.y;
+  for (;;) {
+    const ax = r[2 * ai.i], ay = r[2 * ai.i + 1], bx = r[2 * ai.i + 2], by = r[2 * ai.i + 3];
+    if (bx === undefined) break;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+    t = ((car.x - ax) * dx + (car.y - ay) * dy) / L2;
+    px = ax + dx * clamp(t, 0, 1); py = ay + dy * clamp(t, 0, 1);
+    if (t > 1 || Math.hypot(bx - car.x, by - car.y) < 10) { ai.i++; if (2 * ai.i + 3 >= r.length) { if (!extendRoute(ai, world.rng)) break; } continue; }
+    break;
   }
-  const dWp = Math.hypot(wp.x - car.x, wp.y - car.y);
-  if (dWp > 320) { replan(car, city, world.rng); return; }
-  // Spurhalten: auf geraden Stücken einen Punkt auf der Spurmitte ~70 px voraus ansteuern.
-  let aim = wp;
-  if (!wp.slow) {
-    const [ux, uy] = DIRS[ai.dir];
-    const look = Math.min(70, dWp);
-    aim = ux !== 0
-      ? { x: car.x + ux * look, y: laneCoord(city, ai.dir, ai.tj) }
-      : { x: laneCoord(city, ai.dir, ai.ti), y: car.y + uy * look };
+  if (ai.i > 24) { r.splice(0, 2 * (ai.i - 2)); ai.cap.splice(0, ai.i - 2); ai.i = 2; }
+  while (remaining(ai, car) < LOOKAHEAD) if (!extendRoute(ai, world.rng)) break;
+  if (Math.hypot(px - car.x, py - car.y) > 260) { replan(car, city, world.rng); return; }
+
+  // Zielpunkt voraus auf der Route (Pure Pursuit), plus Tempolimit aus Kurven voraus.
+  const vf = forwardSpeed(car);
+  const look = clamp(Math.abs(vf) * 0.35, 36, 90);
+  let aimX = px, aimY = py, acc = 0, found = false;
+  let target = (ai.cap[ai.i] ?? 100) * ai.cruiseK;
+  let x0 = px, y0 = py;
+  for (let k = ai.i + 1; k < r.length / 2; k++) {
+    const x1 = r[2 * k], y1 = r[2 * k + 1], L = Math.hypot(x1 - x0, y1 - y0);
+    if (!found && acc + L >= look) { const u = (look - acc) / (L || 1); aimX = x0 + (x1 - x0) * u; aimY = y0 + (y1 - y0) * u; found = true; }
+    acc += L;
+    const cap = ai.cap[k];
+    if (acc < 220 && cap < target) target = Math.min(target, Math.sqrt(cap * cap + 2 * 260 * Math.max(0, acc - 20)));
+    x0 = x1; y0 = y1;
+    if (acc > 240 && found) break;
   }
-  const dx = aim.x - car.x, dy = aim.y - car.y;
+  if (!found) { aimX = x0; aimY = y0; }
+  const dx = aimX - car.x, dy = aimY - car.y;
 
   if (ai.reverseT > 0) {
     ai.reverseT -= dt;
@@ -179,11 +177,7 @@ export function driveAi(car, world, dt) {
 
   const diff = wrapAngle(Math.atan2(dy, dx) - car.angle);
   ctl.steer = clamp(diff * 2.4, -1, 1);
-
-  let target = ai.cruise;
-  if (wp.slow) target = 70;
-  else if (ai.nextTurn !== ai.dir && ai.waypoints.length === 1 && dWp < 110) target = 75;
-  if (Math.abs(diff) > 0.6) target = Math.min(target, 60);
+  if (Math.abs(diff) > 0.6) target = Math.min(target, 55);
 
   const { dCar, dOther, playerBlock } = obstacleAhead(car, world);
   ai.ignoreT = Math.max(0, ai.ignoreT - dt);
@@ -211,5 +205,3 @@ export function driveAi(car, world, dt) {
     if (ai.stuckT > 1.8) { ai.reverseT = 1.0; ai.stuckT = 0; }
   } else ai.stuckT = 0;
 }
-
-export { NV, NH, ANGLE };

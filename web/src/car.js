@@ -1,8 +1,8 @@
 // Arcade-Fahrphysik: Längs-/Querzerlegung der Geschwindigkeit, Quergrip, geschwindigkeitsabhängige Lenkung.
 import { CAR } from './config.js';
 import { clamp, sign } from './math.js';
-import { obbVsRect, obbVsObb, circleVsObb, obbBounds } from './collision.js';
-import { T, tileAt } from './map.js';
+import { obbVsRect, obbVsObb, circleVsObb, obbVsSegment, obbBounds } from './collision.js';
+import { T, surfaceAt } from './map.js';
 
 let nextId = 1;
 export const CAR_COLORS = ['#c0392b', '#2e86de', '#f1c40f', '#27ae60', '#ecf0f1', '#8e44ad', '#34495e', '#e67e22', '#16a085', '#7f8c8d'];
@@ -33,7 +33,7 @@ const SURFACE = {
 
 export function stepCar(car, dt, city) {
   const ctl = car.wrecked ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : car.controls;
-  const surf = SURFACE[city ? tileAt(city, car.x, car.y) : T.ROAD] ?? SURFACE[T.ROAD];
+  const surf = SURFACE[city ? surfaceAt(city, car.x, car.y) : T.ROAD] ?? SURFACE[T.ROAD];
   let c = Math.cos(car.angle), s = Math.sin(car.angle);
   let vf = car.vx * c + car.vy * s;
   let vr = -car.vx * s + car.vy * c;
@@ -98,7 +98,7 @@ export function collideCarWorld(car, world, events) {
     let hit = false;
     const box = obbBounds(car);
     for (const r of world.solids.query(box, tmp)) {
-      const m = r.r !== undefined ? invert(circleVsObb(r.x, r.y, r.r, car)) : obbVsRect(car, r);
+      const m = r.seg ? obbVsSegment(car, r) : r.r !== undefined ? invert(circleVsObb(r.x, r.y, r.r, car)) : obbVsRect(car, r);
       if (!m) continue;
       car.x += m.nx * m.depth; car.y += m.ny * m.depth;
       applyImpact(car, m.nx, m.ny, events);

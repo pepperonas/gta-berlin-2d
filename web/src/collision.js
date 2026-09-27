@@ -1,4 +1,5 @@
-// Kollisionen: Kreis, achsenparallele Rechtecke (AABB) und gedrehte Boxen (OBB, für Autos).
+// Kollisionen: Kreis, achsenparallele Rechtecke (AABB), gedrehte Boxen (OBB, für Autos) und Wandsegmente
+// (Gebäudekanten, Ufer, Gleise, Gebietsgrenze).
 // Alle Tests liefern { nx, ny, depth }: Normale zeigt vom Hindernis weg zum ersten Objekt.
 // Das erste Objekt wird um depth entlang (nx, ny) herausgeschoben.
 
@@ -63,8 +64,9 @@ function sat(axisList, projA, projB, ax, ay, bx, by) {
   for (const [nx, ny] of axisList) {
     const [a0, a1] = projA(nx, ny);
     const [b0, b1] = projB(nx, ny);
-    const overlap = Math.min(a1, b1) - Math.max(a0, b0);
-    if (overlap <= 0) return null;
+    if (a1 <= b0 || b1 <= a0) return null;
+    // Eindringtiefe = kürzester Weg hinaus (auch wenn ein Intervall das andere enthält, z. B. eine Wand)
+    const overlap = Math.min(a1 - b0, b1 - a0);
     if (overlap < best) { best = overlap; bnx = nx; bny = ny; }
   }
   if ((ax - bx) * bnx + (ay - by) * bny < 0) { bnx = -bnx; bny = -bny; }
@@ -118,10 +120,38 @@ export function circleVsObb(cx, cy, r, o) {
   return { nx: nlx * fx + nly * rx, ny: nlx * fy + nly * ry, depth };
 }
 
-// Raster-Hash für statische Hindernisse.
+// Wandsegment: { ax, ay, bx, by }. Normale zeigt von der Wand zum Kreis.
+export function circleVsSegment(cx, cy, r, s) {
+  const dx = s.bx - s.ax, dy = s.by - s.ay, l2 = dx * dx + dy * dy;
+  let t = l2 ? ((cx - s.ax) * dx + (cy - s.ay) * dy) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const px = s.ax + dx * t, py = s.ay + dy * t;
+  const ex = cx - px, ey = cy - py, d2 = ex * ex + ey * ey;
+  if (d2 >= r * r) return null;
+  if (d2 > 1e-9) { const d = Math.sqrt(d2); return { nx: ex / d, ny: ey / d, depth: r - d }; }
+  const L = Math.sqrt(l2) || 1;
+  return { nx: -dy / L, ny: dx / L, depth: r };
+}
+
+// Box gegen Wandsegment (SAT mit den beiden Box-Achsen und der Segmentnormale).
+export function obbVsSegment(o, s) {
+  const axes = obbAxes(o);
+  const dx = s.bx - s.ax, dy = s.by - s.ay, L = Math.hypot(dx, dy) || 1;
+  const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+  return sat(
+    [[axes[0], axes[1]], [axes[2], axes[3]], [-dy / L, dx / L]],
+    (nx, ny) => projObb(o, axes, nx, ny),
+    (nx, ny) => { const a = s.ax * nx + s.ay * ny, b = s.bx * nx + s.by * ny; return a < b ? [a, b] : [b, a]; },
+    o.x, o.y, mx, my,
+  );
+}
+
+// Raster-Hash für statische Hindernisse und Sichtbarkeitsabfragen.
+// Der Zeitstempel ist global, damit ein Objekt in mehreren Hashes stehen darf.
+let STAMP = 0;
 export class SpatialHash {
-  constructor(cell = 96) { this.cell = cell; this.map = new Map(); this.stamp = 0; }
-  _key(cx, cy) { return cx * 73856093 ^ cy * 19349663; }
+  constructor(cell = 96) { this.cell = cell; this.map = new Map(); }
+  _key(cx, cy) { return cx * 65536 + cy; }
   insert(item, box) {
     const c = this.cell;
     for (let y = Math.floor(box.y / c); y <= Math.floor((box.y + box.h) / c); y++) {
@@ -134,7 +164,7 @@ export class SpatialHash {
     }
   }
   query(box, out = []) {
-    const c = this.cell, stamp = ++this.stamp;
+    const c = this.cell, stamp = ++STAMP;
     out.length = 0;
     for (let y = Math.floor(box.y / c); y <= Math.floor((box.y + box.h) / c); y++) {
       for (let x = Math.floor(box.x / c); x <= Math.floor((box.x + box.w) / c); x++) {
