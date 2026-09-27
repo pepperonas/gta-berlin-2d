@@ -104,4 +104,15 @@ const SYNTH = {
   'mission-success': (s) => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => s.tone(f, 0.22, { type: 'square', gain: 0.09, at: i * 0.11 })),
   'mission-fail': (s) => [392, 330, 262, 196].forEach((f, i) => s.tone(f, 0.3, { type: 'sawtooth', gain: 0.08, at: i * 0.18 })),
   carjack: (s) => s.tone(700, 0.3, { type: 'sawtooth', gain: 0.05, slide: 400 }),
+  // Waffen: Knall aus gefiltertem Rauschen plus tiefer Schlag
+  pistol: (s) => { s.burst(0.16, { freq: 2600, gain: 0.45 }); s.tone(140, 0.12, { type: 'sine', gain: 0.3, slide: -90 }); },
+  smg: (s) => { s.burst(0.07, { freq: 3200, gain: 0.32 }); s.tone(170, 0.06, { type: 'sine', gain: 0.18, slide: -80 }); },
+  shotgun: (s) => { s.burst(0.42, { freq: 1500, gain: 0.6 }); s.tone(80, 0.3, { type: 'sine', gain: 0.4, slide: -40 }); },
+  swing: (s) => s.burst(0.12, { freq: 900, gain: 0.12, type: 'bandpass' }),
+  punch: (s) => { s.burst(0.08, { freq: 500, gain: 0.35 }); s.tone(110, 0.1, { type: 'sine', gain: 0.3, slide: -50 }); },
+  thud: (s) => { s.burst(0.1, { freq: 1200, gain: 0.25, type: 'bandpass' }); s.tone(90, 0.12, { type: 'triangle', gain: 0.2 }); },
+  impact: (s) => s.burst(0.05, { freq: 3500, gain: 0.12, type: 'highpass' }),
+  reload: (s) => { s.tone(1400, 0.04, { gain: 0.06 }); s.tone(900, 0.05, { gain: 0.06, at: 0.12 }); },
+  reloaded: (s) => s.tone(1800, 0.04, { gain: 0.07 }),
+  weapon: (s) => s.tone(1100, 0.04, { type: 'triangle', gain: 0.07 }),
 };

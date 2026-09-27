@@ -99,13 +99,14 @@ export function pedSpawnSpot(city, rng, cx, cy, minR, maxR) {
 }
 
 export function scare(ped, fromX, fromY, duration = 2.5) {
-  if (ped.state === 'down') return;
+  if (ped.state === 'down' || ped.state === 'dead') return;
   ped.state = 'flee';
   ped.t = duration;
   ped.threat = { x: fromX, y: fromY };
 }
 
 export function knockDown(ped, fromX, fromY) {
+  if (ped.state === 'dead') return;
   ped.state = 'down';
   ped.t = 3;
   ped.threat = { x: fromX, y: fromY };
@@ -230,6 +231,9 @@ export function updatePed(ped, world, dt) {
       else moveWithCollision(ped, dx / d * v, dy / d * v, world);
       break;
     }
+    case 'dead':
+      ped.deadT = (ped.deadT ?? 0) + dt;
+      return;
     case 'down':
       ped.t -= dt;
       // aufstehen und weglaufen (erst den Zustand verlassen – scare() ignoriert Liegende)

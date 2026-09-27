@@ -29,8 +29,10 @@ export function readPad(gp) {
   const b = (i) => !!gp.buttons[i]?.pressed;
   const v = (i) => gp.buttons[i]?.value ?? (b(i) ? 1 : 0);
   const [lx, ly] = radialDeadzone(gp.axes[0] ?? 0, gp.axes[1] ?? 0);
+  const [rx, ry] = radialDeadzone(gp.axes[2] ?? 0, gp.axes[3] ?? 0);
   return {
-    lx, ly, lt: v(BTN.LT), rt: v(BTN.RT),
+    lx, ly, rx, ry, lt: v(BTN.LT), rt: v(BTN.RT),
+    fire: v(BTN.RT) > 0.5, kick: b(BTN.B), reload: b(BTN.X), wpnNext: b(BTN.RB), wpnPrev: b(BTN.LB),
     a: b(BTN.A), b: b(BTN.B), x: b(BTN.X), y: b(BTN.Y), lb: b(BTN.LB), rb: b(BTN.RB),
     view: b(BTN.VIEW), menu: b(BTN.MENU), up: b(BTN.UP), down: b(BTN.DOWN), left: b(BTN.LEFT), right: b(BTN.RIGHT),
   };
@@ -47,10 +49,13 @@ export function readKeys(k) {
     lb: false, rb: any('Space'), view: any('KeyM'), menu: any('Escape', 'KeyP'),
     up: any('ArrowUp', 'KeyW'), down: any('ArrowDown', 'KeyS'), left: any('ArrowLeft', 'KeyA'), right: any('ArrowRight', 'KeyD'),
     sprint: any('ShiftLeft', 'ShiftRight'), confirmKey: any('Enter', 'Space'),
+    fire: any('ControlLeft', 'ControlRight'), kick: any('KeyV'), reload: any('KeyR'), wpnNext: any('KeyQ'),
+    slot: [1, 2, 3, 4, 5, 6].find((d) => k.has('Digit' + d)) ?? 0,
   };
 }
 
-const EMPTY = { lx: 0, ly: 0, lt: 0, rt: 0, a: false, b: false, x: false, y: false, lb: false, rb: false, view: false, menu: false, up: false, down: false, left: false, right: false, sprint: false, confirmKey: false };
+const EMPTY = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, a: false, b: false, x: false, y: false, lb: false, rb: false, view: false, menu: false, up: false, down: false, left: false, right: false, sprint: false, confirmKey: false,
+  fire: false, kick: false, reload: false, wpnNext: false, wpnPrev: false, slot: 0 };
 
 export function merge(a, b) {
   const out = { ...EMPTY };
@@ -84,6 +89,10 @@ export class InputState {
       menuUp: menuDir === 'up', menuDown: menuDir === 'down', menuLeft: menuDir === 'left', menuRight: menuDir === 'right',
       confirm: edge('a') || edge('confirmKey'), back: edge('b'),
       menuHover: null, menuPick: null, // Maus (setzt main.js)
+      // Kampf (nur zu Fuß wirksam): RT/Strg/linke Maustaste, B/V, X/R, LB/RB/Q/Mausrad, 1–6, rechter Stick/Maus
+      fire: raw.fire, firePressed: edge('fire'), kick: edge('kick'), reload: edge('reload'),
+      weaponNext: edge('wpnNext'), weaponPrev: edge('wpnPrev'), weaponSlot: raw.slot !== p.slot ? raw.slot : 0,
+      aimX: raw.rx, aimY: raw.ry, aimWorld: null, // Mausziel (Weltpunkt) setzt main.js
     };
     this.prev = { ...raw };
     return out;

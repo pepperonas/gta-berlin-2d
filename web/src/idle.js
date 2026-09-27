@@ -4,4 +4,6 @@ export const idleInput = Object.freeze({
   action: false, actionHeld: false, enterExit: false, pause: false, mapToggle: false,
   menuUp: false, menuDown: false, menuLeft: false, menuRight: false, confirm: false, back: false,
   menuHover: null, menuPick: null,
+  fire: false, firePressed: false, kick: false, reload: false, weaponNext: false, weaponPrev: false, weaponSlot: 0,
+  aimX: 0, aimY: 0, aimWorld: null,
 });

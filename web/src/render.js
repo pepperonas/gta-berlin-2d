@@ -17,6 +17,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
+import { WEAPONS } from './combat.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -275,6 +276,21 @@ export function nightVariant(b, windowsLit) {
   return f < 0.1 ? -1 : Math.min(NIGHT_DENSITY.length - 1, Math.floor(f * NIGHT_DENSITY.length));
 }
 
+const STAIN_LIFE = 90, STAIN_MAX = 160;
+
+// Fadenkreuz: nur mit Schusswaffe; sitzt in Zielrichtung auf Reichweite der Hand (Zielhilfe dreht die Figur)
+function drawCrosshair(ctx, pl) {
+  const wp = WEAPONS[pl.weapon ?? 0];
+  if (!wp || wp.melee) return;
+  const d = 95, x = pl.x + Math.cos(pl.aim ?? pl.angle) * d, y = pl.y + Math.sin(pl.aim ?? pl.angle) * d;
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = pl.reloadT > 0 ? 'rgba(255,255,255,0.5)' : '#ffd33d'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
+  for (const [a, b] of [[-10, -3], [3, 10]]) { ctx.moveTo(x + a, y); ctx.lineTo(x + b, y); ctx.moveTo(x, y + a); ctx.lineTo(x, y + b); }
+  ctx.stroke();
+}
+
 const SIGNAL_RGB = { red: '255,60,48', yellow: '255,204,0', green: '52,199,89' };
 const SHOP_GLOW = new Set(['mall', 'supermarket', 'shop', 'food', 'drink', 'cafe', 'hotel', 'ubahn', 'sbahn']);
 
@@ -343,6 +359,7 @@ export class Renderer {
     this.ctx = ctx;
     this.skids = [];
     this.particles = [];
+    this.stains = []; this.tracers = []; this.flashes = [];
     this.lighting = new Lighting();
     this.stats = { shadows: 0, lights: 0, ms: 0 };
     this.quality = 'high';
@@ -352,6 +369,23 @@ export class Renderer {
   // Ereignisse der Simulation in Effekte übersetzen.
   handleEvents(events) {
     for (const e of events) {
+      if (e.type === 'shot') {
+        for (const [x1, y1] of e.traces) this.tracers.push({ x0: e.x, y0: e.y, x1, y1, life: 0.07, max: 0.07 });
+        this.flashes.push({ x: e.x, y: e.y, a: e.a, life: 0.06, big: e.weapon === 'shotgun' });
+      }
+      if (e.type === 'impact') for (let i = 0; i < (e.metal ? 5 : 3); i++) {
+        const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 90;
+        this.particles.push({ kind: e.metal ? 'spark' : 'dust', x: e.x, y: e.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.25, max: 0.25, r: 2 });
+      }
+      if (e.type === 'blood') {
+        for (let i = 0; i < e.n * 2; i++) {
+          const a = e.a + (Math.random() - 0.5) * 1.1, v = 30 + Math.random() * 110;
+          this.particles.push({ kind: 'blood', x: e.x, y: e.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.35, max: 0.35, r: 1.2 + Math.random() * 1.4 });
+        }
+        this.addStain(e.x + Math.cos(e.a) * 8, e.y + Math.sin(e.a) * 8, 3 + e.n * 0.6, 0);
+      }
+      if (e.type === 'kill') this.addStain(e.x, e.y, 13, 3); // Lache wächst unter dem Körper
+
       if (e.type === 'crash') for (let i = 0; i < 6 + e.strength * 14; i++) {
         const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 160 * e.strength;
         this.particles.push({ kind: 'spark', x: e.x, y: e.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.35, max: 0.35 });
@@ -362,7 +396,18 @@ export class Renderer {
     }
   }
 
+  addStain(x, y, r, grow) {
+    this.stains.push({ x, y, r: grow ? 2 : r, to: r, grow, life: STAIN_LIFE, seed: Math.random() * 6.28 });
+    if (this.stains.length > STAIN_MAX) this.stains.splice(0, this.stains.length - STAIN_MAX);
+  }
+
   update(world, dt) {
+    for (const st of this.stains) { st.life -= dt; if (st.r < st.to) st.r = Math.min(st.to, st.r + dt * st.to / (st.grow || 1)); }
+    this.stains = this.stains.filter((st) => st.life > 0);
+    for (const t of this.tracers) t.life -= dt;
+    this.tracers = this.tracers.filter((t) => t.life > 0);
+    for (const f of this.flashes) f.life -= dt;
+    this.flashes = this.flashes.filter((f) => f.life > 0);
     for (const c of world.cars) {
       const hard = c.skid > 0.2 || (c.controls.handbrake && speedOf(c) > 60) || (c.controls.brake > 0.8 && speedOf(c) > 150 && c.driver);
       if (hard) {
@@ -384,7 +429,7 @@ export class Renderer {
     this.skids = this.skids.filter((s) => s.life > 0);
     for (const p of this.particles) {
       p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
-      if (p.kind === 'spark') { p.vx *= 0.9; p.vy *= 0.9; } else p.r += dt * 8;
+      if (p.kind === 'spark' || p.kind === 'blood' || p.kind === 'dust') { p.vx *= 0.88; p.vy *= 0.88; } else p.r += dt * 8;
     }
     this.particles = this.particles.filter((p) => p.life > 0);
   }
@@ -526,6 +571,14 @@ export class Renderer {
       this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : []);
     }
 
+    // Blut am Boden (verblasst langsam)
+    for (const st of this.stains) {
+      const a = Math.min(1, st.life / 20) * 0.75;
+      ctx.fillStyle = `rgba(105,8,10,${a})`;
+      ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(st.x + Math.cos(st.seed) * st.r * 0.6, st.y + Math.sin(st.seed) * st.r * 0.6, st.r * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
+
     // 6) Missionsmarker am Boden
     if (overlayMarkers) this.drawZones(world);
 
@@ -540,9 +593,9 @@ export class Renderer {
     for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
     for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
-    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down', sun: L.sun }) });
+    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun }) });
     const pl = world.player;
-    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0, sun: L.sun }) });
+    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
     this._depth = list;
@@ -554,8 +607,27 @@ export class Renderer {
     for (const p of this.particles) {
       const a = p.life / p.max;
       if (p.kind === 'spark') { ctx.fillStyle = `rgba(255,${180 + (a * 75) | 0},60,${a})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
+      else if (p.kind === 'blood') { ctx.fillStyle = `rgba(150,10,12,${Math.min(1, a * 1.5)})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
+      else if (p.kind === 'dust') { ctx.fillStyle = `rgba(200,195,185,${a * 0.8})`; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); }
       else { ctx.fillStyle = `rgba(70,70,70,${a * 0.45})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
     }
+    // Leuchtspuren und Mündungsfeuer
+    ctx.lineCap = 'round';
+    for (const tr of this.tracers) {
+      ctx.strokeStyle = `rgba(255,236,170,${tr.life / tr.max * 0.85})`; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(tr.x0, tr.y0); ctx.lineTo(tr.x1, tr.y1); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    for (const f of this.flashes) {
+      const k = f.big ? 1.6 : 1;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.a);
+      ctx.fillStyle = 'rgba(255,220,120,0.95)';
+      ctx.beginPath(); ctx.moveTo(0, -3 * k); ctx.lineTo(12 * k, 0); ctx.lineTo(0, 3 * k); ctx.lineTo(3 * k, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,230,0.9)'; ctx.beginPath(); ctx.arc(2, 0, 2.5 * k, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (overlayMarkers && !pl.inCar && !pl.dead) drawCrosshair(ctx, pl);
+
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
     this.stats.lights = 0;
     if (L.dark > 0.02) {
@@ -637,6 +709,7 @@ export class Renderer {
     }
     const pl = world.player;
     if (!pl.inCar) out.push({ x: pl.x, y: pl.y, r: 70, rgb: '255,210,170', a: 0.35 * k });
+    for (const f of this.flashes) out.push({ x: f.x, y: f.y, r: f.big ? 150 : 100, rgb: '255,210,120', a: Math.max(0.6, k) });
     if (markers) {
       const m = world.mission, p = world.city.places;
       const spots = m.state === 'toPickup' ? [p.pickup] : m.state === 'toDropoff' ? [p.dropoff] : m.state === 'idle' || m.state === 'briefing' ? [p.giver] : [];

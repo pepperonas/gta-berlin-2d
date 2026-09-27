@@ -5,6 +5,7 @@
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
+import { WEAPONS } from './combat.js';
 import { undelta } from './geom.js';
 import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
@@ -140,6 +141,31 @@ export class Hud {
   }
   panBigMap(dx, dy) { if (this.bigMap && this.mapView) { this.mapView.cx -= dx / this.bigMap.f; this.mapView.cy -= dy / this.bigMap.f; } }
 
+  drawWeaponPanel(p) {
+    const c = this.ctx, m = this.m;
+    const w = 250, h = 86, x = this.vw - m.x - w, y = this.vh - m.y - h;
+    this.layout = { ...(this.layout ?? {}), weapon: { x, y, w, h } };
+    const wp = WEAPONS[p.weapon ?? 0];
+    this.panel(x, y, w, h);
+    this.text(wp.name.toUpperCase(), x + 18, y + 28, { size: 16, weight: 800, color: YELLOW });
+    // Waffenleiste: 6 Punkte, der gewählte hell
+    for (let i = 0; i < WEAPONS.length; i++) {
+      c.fillStyle = i === p.weapon ? YELLOW : 'rgba(255,255,255,0.25)';
+      c.beginPath(); c.arc(x + w - 18 - (WEAPONS.length - 1 - i) * 13, y + 22, 4, 0, Math.PI * 2); c.fill();
+    }
+    if (wp.melee) this.text('Nahkampf', x + 18, y + 64, { size: 22, weight: 700 });
+    else if (p.reloadT > 0) {
+      const u = 1 - p.reloadT / wp.reload;
+      this.text('NACHLADEN', x + 18, y + 56, { size: 13, weight: 800, color: '#bbb' });
+      c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x + 18, y + 64, w - 36, 9, 4.5); c.fill();
+      c.fillStyle = YELLOW; rr(c, x + 18, y + 64, (w - 36) * u, 9, 4.5); c.fill();
+    } else {
+      const mag = p.mag?.[p.weapon] ?? 0;
+      const tw = this.text(`${mag}`, x + 18, y + 68, { size: 34, weight: 800, color: mag <= wp.mag * 0.25 ? '#ff8080' : '#fff' });
+      this.text(`/ ${wp.mag}   ∞`, x + 26 + tw, y + 68, { size: 17, color: '#bbb', weight: 600 });
+    }
+  }
+
   drawGameplay(world, g) {
     const c = this.ctx, m = this.m, vw = this.vw, vh = this.vh;
     const car = playerCar(world);
@@ -191,6 +217,9 @@ export class Hud {
       if (hp > 0) { rr(c, x + 20, y + 84, (w - 40) * hp, 10, 5); c.fill(); }
       if (car.cargo) this.text('▣ Kisten', x + w - 20, y + 30, { size: 16, align: 'right', color: '#e0b060', weight: 700 });
     }
+
+    // Unten rechts zu Fuß: Waffe, Magazin, Nachladen
+    if (!car) this.drawWeaponPanel(world.player);
 
     // Richtungspfeil zum Ziel (am Bildschirmrand, wenn außer Sicht)
     if (obj.target) this.drawTargetArrow(world, obj.target, g);

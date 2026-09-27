@@ -40,6 +40,13 @@ test('HUD skaliert das 16:9-Grundformat in jedes Fenster: Minikarte, Auftrag und
       const L = hud.layout;
       for (const k of ['minimap', 'mission', 'car']) assert.ok(inside(L[k], hud.vw, hud.vh), `${W}×${H}: ${k} ragt aus dem Bild (${JSON.stringify(L[k])}, ${hud.vw.toFixed(0)}×${hud.vh.toFixed(0)})`);
       assert.ok(!overlap(L.minimap, L.car) && !overlap(L.minimap, L.mission) && !overlap(L.car, L.mission), `${W}×${H}: HUD-Elemente überlappen`);
+      // zu Fuß: Waffenfeld statt Fahrzeugzustand
+      w.player.inCar = null; car.driver = null; w.player.weapon = 3;
+      const hud2 = new Hud(fakeCtx()); hud2.begin(W, H); hud2.drawGameplay(w, g);
+      const L2 = hud2.layout;
+      assert.ok(inside(L2.weapon, hud2.vw, hud2.vh), `${W}×${H}: Waffenfeld ragt aus dem Bild`);
+      assert.ok(!overlap(L2.weapon, L2.minimap) && !overlap(L2.weapon, L2.mission), `${W}×${H}: Waffenfeld überlappt`);
+      w.player.inCar = car.id; car.driver = 'player';
     }
   });
 });

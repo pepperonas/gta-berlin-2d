@@ -166,7 +166,7 @@ function obstacleAhead(car, world) {
     const parkedLike = o.driver === null && Math.abs(o.vx) + Math.abs(o.vy) < 10;
     check(o.x, o.y, parkedLike ? 18 : 22, o.driver === 'npc' && !o.wrecked, o.driver === 'player', o);
   }
-  for (const p of world.peds) if (p.state !== 'gone') check(p.x, p.y, 16, false, false, p, true);
+  for (const p of world.peds) if (p.state !== 'gone' && p.state !== 'dead') check(p.x, p.y, 16, false, false, p, true); // über Tote fahren (sonst stünde der Verkehr ewig)
   const pl = world.player;
   if (!pl.inCar) check(pl.x, pl.y, 17, false, true);
   return { dCar, dOther, playerBlock, blocker, pedBlock };

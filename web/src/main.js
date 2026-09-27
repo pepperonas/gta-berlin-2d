@@ -74,7 +74,9 @@ addEventListener('pointerdown', () => sound.unlock());
 // (menuHover/menuPick) durch dieselbe Spiellogik wie Controller und Tastatur.
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
 const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
-const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '' };
+const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0 };
+const playingOnFoot = () => game.screen === 'playing' && game.world && !game.world.player.inCar && !game.showBigMap && !game.teleport && !game.resultMenu;
+addEventListener('blur', () => { pointer.fire = false; });
 const activeMenu = () => (game.screen === 'title' ? game.titleMenu : game.screen === 'paused' ? game.pauseMenu : game.screen === 'playing' ? game.resultMenu : null);
 canvas.addEventListener('pointermove', (e) => {
   if (!hud.s) return;
@@ -91,19 +93,24 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!hud.s || e.button !== 0) return;
   const [vx, vy] = toHud(e);
   const h = hitAt(vx, vy);
-  if (!h) return;
+  if (!h) { // im Spiel zu Fuß: linke Maustaste feuert (Ziel = Mauszeiger)
+    if (playingOnFoot()) { pointer.fire = true; pointer.firePressed = true; }
+    return;
+  }
   if (h.kind === 'dialog') { confirmTeleport(game, h.yes); sound.play(h.yes ? 'ui' : 'ui-back'); }
   else if (h.kind === 'map') { pointer.drag = { vx, vy, moved: 0 }; canvas.setPointerCapture(e.pointerId); }
   else if (h.kind === 'menu') pointer.pick = h;
   else if (h.kind === 'key') pointer.key = h.key;
 });
 canvas.addEventListener('pointerup', () => {
+  pointer.fire = false;
   const d = pointer.drag; pointer.drag = null;
   if (!d || d.moved > 6 || !game.showBigMap || game.teleport) return; // gezogen, nicht geklickt
   const m = hud.bigMap;
   if (requestTeleport(game, (d.vx - m.ox) / m.f, (d.vy - m.oy) / m.f)) sound.play('ui');
 });
 canvas.addEventListener('wheel', (e) => {
+  if (playingOnFoot()) { e.preventDefault(); pointer.wheel = Math.sign(e.deltaY); return; } // Waffe wechseln
   if (!game.showBigMap || !hud.s) return;
   e.preventDefault();
   const [vx, vy] = toHud(e);
@@ -115,6 +122,17 @@ function applyPointer(inp) {
   const menu = activeMenu();
   if (pointer.hover) { if (pointer.hover.menu === menu) inp.menuHover = pointer.hover.i; pointer.hover = null; }
   if (pointer.pick) { if (pointer.pick.menu === menu) inp.menuPick = pointer.pick.i; pointer.pick = null; }
+  // Kampf mit der Maus: zielen auf den Zeiger (solange die Maus zuletzt benutzt wurde), linke Taste, Mausrad
+  if (playingOnFoot()) {
+    inp.fire = inp.fire || pointer.fire;
+    inp.firePressed = inp.firePressed || pointer.firePressed;
+    if (pointer.wheel > 0) inp.weaponNext = true; else if (pointer.wheel < 0) inp.weaponPrev = true;
+    const cam = game.world.camera, s = (game.worldScale ?? 1) * cam.zoom;
+    if (input.lastDevice === 'keyboard' && pointer.vx >= 0 && hud.s && s) {
+      inp.aimWorld = { x: cam.x + (pointer.vx * hud.s - W / 2) / s, y: cam.y + (pointer.vy * hud.s - H / 2) / s };
+    }
+  }
+  pointer.firePressed = false; pointer.wheel = 0;
   if (pointer.key === 'A') inp.confirm = true;
   if (pointer.key === 'B') inp.back = true;
   pointer.key = null;
@@ -123,7 +141,7 @@ function applyPointer(inp) {
 // Zeiger im Stil des Spiels; beim Fahren/Laufen verschwindet er, wenn die Maus 2 s ruht.
 function updateCursor() {
   const playing = game.screen === 'playing' && !game.showBigMap && !game.teleport && !game.resultMenu;
-  const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, idle: (performance.now() - pointer.moved) / 1000 });
+  const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, aiming: playing && playingOnFoot(), idle: (performance.now() - pointer.moved) / 1000 });
   if (kind !== pointer.cursor) { pointer.cursor = kind; canvas.style.cursor = cursorCss(kind); }
 }
 
@@ -220,6 +238,9 @@ function draw() {
 
 function playEvent(e) {
   const map = { crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit' };
+  if (e.type === 'shot') map.shot = e.weapon;
+  if (e.type === 'swing') map.swing = e.hit ? 'punch' : 'swing';
+  Object.assign(map, { thud: 'thud', impact: 'impact', reload: 'reload', reloaded: 'reloaded', weapon: 'weapon' });
   if (!map[e.type]) return;
   if (e.type === 'horn' && e.npc) { if (game.world && Math.hypot(e.x - game.world.camera.x, e.y - game.world.camera.y) < 500) sound.play('horn', 0.5); return; }
   if (e.x !== undefined && game.world && Math.hypot(e.x - game.world.camera.x, e.y - game.world.camera.y) > 700) return;

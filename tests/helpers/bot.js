@@ -3,12 +3,11 @@
 import { playerCar, speedOf } from '../../web/src/world.js';
 import { nearestEdge } from '../../web/src/map.js';
 import { wrapAngle, clamp } from '../../web/src/math.js';
+import { idleInput } from '../../web/src/idle.js';
 import { offsetPolyline } from '../../web/src/geom.js';
 import { laneOffsets } from '../../web/src/street.js';
 
-export const idle = () => ({ moveX: 0, moveY: 0, steer: 0, throttle: 0, brake: 0, handbrake: false, sprint: false, horn: false,
-  action: false, actionHeld: false, enterExit: false, pause: false, mapToggle: false,
-  menuUp: false, menuDown: false, menuLeft: false, menuRight: false, confirm: false, back: false, menuHover: null, menuPick: null });
+export const idle = () => ({ ...idleInput });
 
 const usable = (e) => e.inside && e.cls <= 9 && !(e.cls === 9 && e.w < 40) && !e.blocked && !e.passage;
 

@@ -92,7 +92,7 @@ export function drawCar(ctx, car, t, sun) {
   ctx.restore();
 }
 
-export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false, sun = null }) {
+export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false, dead = false, sun = null, weapon = null, attack = null }) {
   ctx.save();
   ctx.translate(p.x, p.y);
   const [sx, sy, sa] = smallShadow(sun, down ? 4 : 17);
@@ -102,8 +102,13 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   const key = player ? 'player' : 'pedestrian';
   if (sprites[key]) { ctx.drawImage(sprites[key], -8, -8, 16, 16); ctx.restore(); return; }
   if (down) {
+    if (dead) ctx.rotate((p.fall ?? 0) - (p.facing ?? p.angle ?? 0) + 0.6); // in Schlagrichtung gefallen, verdreht
+    const look = personLook(p, hair);
+    ctx.fillStyle = look.pants; ctx.fillRect(-12, -3, 6, 2.4); ctx.fillRect(-12, 0.8, 6, 2.4);
     ctx.fillStyle = shirt; ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(9, 0, 3, 0, Math.PI * 2); ctx.fill();
+    if (dead) { ctx.fillStyle = shade(shirt, -0.2); ctx.fillRect(-2, -8, 3, 5); ctx.fillRect(2, 3, 3, 5); } // Arme ausgebreitet
+    ctx.fillStyle = look.hair; ctx.beginPath(); ctx.arc(9.5, 0, 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(9, 0, 2.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore(); return;
   }
   // Aussehen je Person fest (aus ihrer Nummer): Hose, Haare, manchmal Tasche oder Rucksack
@@ -114,6 +119,12 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   ctx.fillRect(swing - 1.6, -3.4, 3.4, 2.4); ctx.fillRect(-swing - 1.6, 1.0, 3.4, 2.4);
   ctx.fillStyle = '#1e2126';
   ctx.fillRect(swing + 1.4, -3.4, 1.2, 2.4); ctx.fillRect(-swing + 1.4, 1.0, 1.2, 2.4); // Schuhe
+  // Tritt: ein Bein nach vorn
+  if (attack?.kind === 'kick') { ctx.fillStyle = look.pants; ctx.fillRect(3, 0.8, 9, 3); ctx.fillStyle = '#1e2126'; ctx.fillRect(11, 0.8, 2.4, 3); }
+  const gun = weapon === 'pistol' || weapon === 'smg' || weapon === 'shotgun';
+  if (gun || (attack && attack.kind !== 'kick') || weapon === 'bat' || weapon === 'knife') {
+    drawArmsWithWeapon(ctx, weapon, attack, shirt, skin, arm);
+  } else {
   // Arme gegengleich zu den Beinen
   ctx.fillStyle = shade(shirt, -0.18);
   ctx.beginPath(); ctx.ellipse(-arm, -5.2, 2.2, 1.3, 0, 0, Math.PI * 2); ctx.fill();
@@ -121,6 +132,7 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(-arm + 1.8, -5.3, 1, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(arm + 1.8, 5.3, 1, 0, Math.PI * 2); ctx.fill();
+  }
   // Rumpf, Rucksack/Tasche, Kopf
   ctx.fillStyle = shirt;
   ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.fill();
@@ -131,6 +143,36 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(1.5, 0, 2.1, 0, Math.PI * 2); ctx.fill();
   if (player) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.stroke(); }
   ctx.restore();
+}
+
+// Arme mit Waffe (lokal: +x = Blickrichtung, rechte Hand bei +y). attack.t läuft von der Dauer auf 0.
+function drawArmsWithWeapon(ctx, weapon, attack, shirt, skin, arm) {
+  const sl = shade(shirt, -0.18);
+  const hand = (x, y) => { ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x, y, 1.1, 0, Math.PI * 2); ctx.fill(); };
+  const sleeve = (x, y) => { ctx.fillStyle = sl; ctx.beginPath(); ctx.ellipse(x, y, 2.4, 1.3, 0, 0, Math.PI * 2); ctx.fill(); };
+  if (weapon === 'pistol' || weapon === 'smg' || weapon === 'shotgun') { // beide Hände vorn an der Waffe, Rückstoß beim Schuss
+    const kick = attack?.kind === 'shot' ? -1.5 : 0;
+    const len = weapon === 'pistol' ? 6 : weapon === 'smg' ? 9 : 15;
+    ctx.fillStyle = weapon === 'shotgun' ? '#5a3b22' : '#1b1d21'; ctx.fillRect(4 + kick, -0.3, len, 2.4);
+    if (weapon === 'smg') ctx.fillRect(7 + kick, 1.8, 2, 3);
+    if (weapon === 'shotgun') { ctx.fillStyle = '#1b1d21'; ctx.fillRect(9 + kick, -0.1, 10, 1.6); }
+    sleeve(3 + kick, -2.6); sleeve(3 + kick, 3.2); hand(5.5 + kick, 0); hand(6.5 + kick, 2);
+    return;
+  }
+  const u = attack ? 1 - Math.max(0, attack.t) / 0.22 : 0; // 0 … 1 im Schlag
+  if (weapon === 'bat') { // Schläger schwingt von hinten links nach vorn rechts
+    const a = attack ? -1.6 + u * 2.6 : 2.3;
+    sleeve(1.5, 4.2); hand(3, 5);
+    ctx.save(); ctx.translate(3, 5); ctx.rotate(a);
+    ctx.fillStyle = '#9b6a3a'; ctx.fillRect(0, -1, 16, 2.2); ctx.fillStyle = '#7a4f28'; ctx.fillRect(10, -1.4, 6, 2.8);
+    ctx.restore();
+    sleeve(-arm * 0.3, -5.2);
+    return;
+  }
+  const reach = attack ? Math.sin(u * Math.PI) * 7 : 0; // Faust/Messer stößt vor und zurück
+  sleeve(-arm * 0.3, -5.2); hand(-arm * 0.3 + 1.8, -5.3);
+  sleeve(2 + reach, 4.2); hand(4 + reach, 4.4);
+  if (weapon === 'knife') { ctx.fillStyle = '#c9ced4'; ctx.fillRect(4.5 + reach, 3.8, 5, 1.2); ctx.fillStyle = '#222'; ctx.fillRect(3.5 + reach, 3.7, 1.4, 1.4); }
 }
 
 const PANTS = ['#2c3e50', '#34495e', '#1f2a36', '#5d4e3c', '#3d5a80', '#6b6b6b', '#2b2b2b', '#7a5c3a'];

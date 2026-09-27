@@ -15,6 +15,7 @@ import { pointAlong } from './geom.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
+import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP } from './combat.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -30,6 +31,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
     prompt: null, notice: null,
   };
 
+  initCombat(w.player);
   spawnPlayerAndCar(w);
   const pc = city.parked[0];
   w.cars.push(createCar({ x: pc.x, y: pc.y, angle: pc.angle, color: '#16a085', role: 'parked' }));
@@ -87,7 +89,7 @@ function managePopulation(w) {
   w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
   const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
   if (npc < w.carTarget) spawnTraffic(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
-  if (w.peds.length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
+  if (w.peds.filter((q) => q.state !== 'dead').length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
 }
 
 function spawnPlayerAndCar(w) {
@@ -359,6 +361,7 @@ export function updateWorld(w, input, dt) {
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
   } else updatePlayerOnFoot(w, input, dt);
+  updatePlayerCombat(w, input, dt);
 
   for (const c of w.cars) if (c.driver === 'npc') driveAi(c, w, dt);
   for (const c of w.cars) {
@@ -377,6 +380,12 @@ export function updateWorld(w, input, dt) {
 
   // Wracks: KI-Fahrer steigt aus und flieht, Wrack verschwindet später außer Sicht.
   for (const c of w.cars) {
+    if (c.shotAt && c.driver === 'npc' && !c.wrecked) { // beschossen: Fahrer steigt aus und rennt weg
+      c.driver = null; c.ai = null;
+      const ped = fleeingDriver(w, c, c.shotAt.x, c.shotAt.y, 5);
+      if (ped) w.peds.push(ped);
+    }
+    c.shotAt = null;
     if (!c.wrecked) continue;
     c.wreckT += dt;
     if (c.driver === 'npc') {
@@ -406,8 +415,11 @@ export function updateWorld(w, input, dt) {
     if (e.type === 'horn' && !e.npc) threats.push({ x: e.x, y: e.y, r: 170, always: true });
     if (e.type === 'horn' && e.npc) threats.push({ x: e.x, y: e.y, r: 80, always: true }); // KI hupt: wer direkt davor steht, weicht
     if (e.type === 'crash' && e.strength > 0.25) threats.push({ x: e.x, y: e.y, r: 130, always: true });
+    if (e.type === 'shot') threats.push({ x: e.x, y: e.y, r: GUNSHOT_SCARE, always: true });
+    if (e.type === 'blood' || e.type === 'swing') threats.push({ x: e.x, y: e.y, r: e.type === 'blood' ? 220 : 90, always: true });
   }
   for (const ped of w.peds) {
+    if (ped.state === 'dead') { updatePed(ped, w, dt); continue; }
     if (ped.state !== 'down' && ped.state !== 'flee') {
       for (const t of threats) {
         const d = Math.hypot(ped.x - t.x, ped.y - t.y);
@@ -428,6 +440,8 @@ export function updateWorld(w, input, dt) {
     }
     updatePed(ped, w, dt);
   }
+  // Tote verschwinden nach einer Weile, aber nur außer Sicht (spätestens nach 5 min)
+  w.peds = w.peds.filter((q) => q.state !== 'dead' || (q.deadT < BODY_KEEP || Math.hypot(q.x - cam.x, q.y - cam.y) < 900) && q.deadT < 300);
   // Überzählige (geflohene Fahrer) wieder abbauen, wenn außer Sicht.
   if (w.peds.length > w.pedTarget + 8) {
     const idx = w.peds.findIndex((q) => q.state === 'walk' && Math.hypot(q.x - cam.x, q.y - cam.y) > 900);
@@ -450,9 +464,11 @@ function missionCtx(w, input) {
   return { places: w.city.places, player: w.player, cars: w.cars, timeLimit: w.city.timeLimit, input };
 }
 
+export const FOOT_ZOOM = 1.3;
+
 export function updateCamera(w, dt) {
   const cam = w.camera, p = w.player, car = playerCar(w);
-  let tx = p.x, ty = p.y, zoom = 1;
+  let tx = p.x, ty = p.y, zoom = FOOT_ZOOM; // zu Fuß näher dran (Nahkampf, Zielen)
   if (car) {
     tx = car.x + car.vx * 0.45; ty = car.y + car.vy * 0.45;
     zoom = 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28;

@@ -33,10 +33,11 @@ export function cursorCss(kind) {
 
 // Welcher Zeiger gerade passt: über welcher Fläche er steht (hit aus hud.hits), ob gezogen wird, ob gespielt wird
 // und wie lange die Maus ruht (s).
-export function cursorKind({ hit = null, dragging = false, playing = false, idle = 0 } = {}) {
+export function cursorKind({ hit = null, dragging = false, playing = false, aiming = false, idle = 0 } = {}) {
   if (dragging) return 'move';
   if (hit?.kind === 'map') return 'target';
   if (hit) return 'hot';
+  if (aiming && idle <= 2) return 'target'; // zu Fuß: Zielkreuz am Mauszeiger
   if (playing && idle > 2) return 'none';
   return 'arrow';
 }

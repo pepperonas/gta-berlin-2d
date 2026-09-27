@@ -205,6 +205,14 @@ Karosserien sind je Modell × Farbe zwischengespeicherte Sprites (höchstens 160
 Blinker kommen jedes Bild dazu. Der Blinker (`ai.blink`) ist das einzige neue Feld in der Simulation, rein
 abgeleitet aus Route und Abbiegewinkel, ohne Zufall. Ein Sprite in `assets/manifest.json` ersetzt weiterhin alles.
 
+**Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
+Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
+Strahlen ab der Körpermitte gegen die vorhandenen Kollisionsdaten (Hauswand-Segmente, Stadtgrenze, Baumkreise,
+Kisten) und gegen Passanten (Kreis) und Autos (gedrehtes Rechteck); niedrige Wände (Zaun, Gleis, Kai, Geländer)
+lassen Kugeln durch. Die Streuung zieht aus dem Welt-Zufall, alles bleibt deterministisch und in Node testbar. Die
+Zielhilfe sucht im Kegel um die Zielrichtung das Ziel mit kleinstem „Winkel × 300 + Abstand“ und verlangt freie Sicht.
+Maus-Zielen rechnet `main.js` in einen Weltpunkt um (`aimWorld`), wie Menüklicks als abstrakte Eingabe.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

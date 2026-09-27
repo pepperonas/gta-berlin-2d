@@ -4,6 +4,28 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.10.0] – 2026-09-27
+
+### Hinzugefügt
+- Kämpfen zu Fuß: Fäuste, Baseballschläger, Messer, Pistole, Maschinenpistole und Schrotflinte, alle von Anfang an,
+  dazu Treten mit jeder Waffe. Munition unbegrenzt, Magazine werden nachgeladen (automatisch, wenn leer).
+  - Pistole und Schrotflinte feuern je Druck, die MP im Dauerfeuer; die Schrotflinte fächert 8 Kugeln.
+  - Schüsse sind sofortige Strahlen: Sie stoppen an Hauswänden, der Stadtgrenze, Bäumen und Kisten (über Zäune,
+    Gleise und Kaikanten fliegen sie hinweg) und treffen das erste Ziel. Nahkampf trifft in einem Bogen vor der Figur.
+  - Zielen in Blickrichtung mit Zielhilfe (rastet auf das nächste Ziel in einem Kegel mit freier Sicht ein); mit der
+    Maus zielt die Figur auf den Zeiger (engere Zielhilfe), mit dem Controller zielt der rechte Stick.
+- Treffer: Passanten fallen um, nach genug Treffern bleiben sie liegen (Blutlache) und verschwinden nach frühestens
+  60 s außer Sicht. Blutspritzer in Schussrichtung, Blut am Boden verblasst langsam. Schüsse erschrecken Passanten im
+  Umkreis von 42 m. Kugeln beschädigen Autos bis zum Wrack; der Fahrer eines beschossenen Autos steigt aus und flieht.
+  Der Verkehr fährt über Tote hinweg, statt ewig davor zu warten.
+- Darstellung: Waffe in der Hand, Schlag-, Stich-, Schwung- und Trittbewegung, Rückstoß, Mündungsfeuer (nachts als
+  Lichtquelle), Leuchtspuren, Einschlagfunken, Fadenkreuz. HUD unten rechts zu Fuß: Waffe, Waffenleiste, Magazin,
+  Nachladebalken. Zu Fuß zoomt die Kamera etwas heran (1,3-fach).
+- Klänge je Waffe (synthetisiert), Schlag, Schwung, Einschlag, Nachladen, Waffenwechsel.
+
+Steuerung zu Fuß (im Auto unverändert): RT / Strg / linke Maustaste angreifen · rechter Stick / Maus zielen ·
+B / V treten · LB, RB / Q, Mausrad Waffe wechseln · 1–6 Waffe wählen · X / R nachladen.
+
 ## [0.9.0] – 2026-09-27
 
 ### Hinzugefügt

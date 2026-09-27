@@ -93,6 +93,10 @@ change in `web/`.
   wheels/lights/blinkers per frame); `ai.blink` comes from `traffic.js blinkFor` (no RNG). Person looks come from
   `assets.js personLook(p)` (hash of `p.id`). Never draw visual variety from `world.rng` — it would change the
   simulation (traffic, tests).
+- **Combat:** `combat.js` (pure: `WEAPONS`, `KICK`, `castRay`, `aimAssist`, `strike`, `shoot`, `hurtPed`, `hurtCar`,
+  `updatePlayerCombat`). Input fields `fire/firePressed/kick/reload/weaponNext/weaponPrev/weaponSlot/aimX/aimY/aimWorld`
+  (see `idle.js`); keyboard fire is Ctrl/mouse, never W (W is throttle/walk). Peds have `hp` and a `'dead'` state
+  (ignored by traffic, removed later out of sight). Renderer turns `shot/impact/blood/kill` events into effects.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

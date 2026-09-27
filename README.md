@@ -96,6 +96,10 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 - **Autos und Menschen:** fünf Automodelle (Kleinwagen, Limousine, Kombi, Transporter, Berliner Taxi) mit Scheiben,
   Spiegeln und lenkenden Vorderrädern, Blinker der KI vor dem Abbiegen, Rückfahrlicht; Passanten mit Armen und Beinen
   im Gang, verschiedener Kleidung und Haarfarbe, manche mit Rucksack oder Tasche.
+- **Kämpfen:** zu Fuß Fäuste, Tritte, Baseballschläger, Messer, Pistole, Maschinenpistole und Schrotflinte (alle von
+  Anfang an, Munition unbegrenzt mit Nachladen). Zielen in Blickrichtung mit Zielhilfe, mit der Maus auf den Zeiger.
+  Kugeln stoppen an Hauswänden, beschädigen Autos bis zum Wrack (der Fahrer flieht); Getroffene fallen um, nach genug
+  Treffern bleiben sie liegen, mit Blut. Schüsse vertreiben die Passanten ringsum.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -119,6 +123,11 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Menüs | Steuerkreuz, A / B | Maus: zeigen wählt aus, Klick bestätigt; Tastenhinweise (A/B) sind anklickbar |
 | Stadtplan zoomen / verschieben | – | Mausrad / Ziehen |
 | Teleport (auf dem Stadtplan) | – | Mausklick auf die Karte, dann Ja/Nein (Maus, A/Enter, B/Esc) |
+| Angreifen / Schießen (zu Fuß) | RT | linke Maustaste oder Strg |
+| Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
+| Treten (zu Fuß) | B | V |
+| Waffe wechseln / wählen | LB / RB | Q, Mausrad / 1–6 |
+| Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
 
@@ -128,7 +137,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 124 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 134 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -185,6 +194,7 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/textures.js    Bodentexturen als Muster
   src/roofs.js       Dachform, Fassadenstil und Dachaufbauten je Gebäude (ohne Canvas)
   src/vehicles.js    Automodelle, Sprite-Cache, Räder, Licht, Blinker
+  src/combat.js      Waffen, Zielhilfe, Schüsse (Strahltest), Nahkampf, Treffer (ohne DOM)
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
   src/audio.js       synthetisierte Klänge
   src/assets.js      Platzhaltergrafiken + Austausch per manifest.json
@@ -277,7 +287,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 124 automatischen Tests grün, darunter:
+- Alle 134 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -323,6 +333,12 @@ in Edge `edge://inspect` mit der Konsole verbinden
     die KI blinkt vor dem Rechts- bzw. Linksabbiegen richtig, geradeaus und weit vor der Kreuzung nicht; Sprite-Cache
     bleibt begrenzt, ohne Canvas flacher Rückfall; Aussehen der Passanten je Person fest und vielfältig (sechs
     Mutationsproben, alle erkannt);
+  - Kampf: Faust trifft vorn, nicht hinten, Tritt trifft; drei Pistolentreffer töten, Tote liegen und verschwinden erst
+    später außer Sicht; Kugeln stoppen an Hauswänden; Schrotflinte fächert 8 Kugeln, MP feuert Dauerfeuer und lädt
+    nach, Pistole nur Einzelfeuer; Zielhilfe wählt das nächste Ziel im Kegel; beschossene Autos werden zum Wrack, der
+    Fahrer flieht; Schüsse erschrecken Passanten; im Auto kein Schießen; Verkehr fährt über Tote; die neuen Tasten sind
+    verdrahtet (W feuert nicht); Strahltests; Waffenfeld passt in jedes Fensterformat (acht Mutationsproben, alle
+    erkannt);
   - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
     gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
     belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig
