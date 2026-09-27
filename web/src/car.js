@@ -25,6 +25,7 @@ export const speedOf = (c) => Math.hypot(c.vx, c.vy);
 const SURFACE = {
   [T.ROAD]: { drag: 1, grip: 1, top: 1 },
   [T.PLAZA]: { drag: 1, grip: 1, top: 1 },
+  [T.COBBLE]: { drag: 1.25, grip: 0.85, top: 0.92 }, // Kopfsteinpflaster
   [T.SIDEWALK]: { drag: 1.3, grip: 0.95, top: 0.9 },
   [T.GRASS]: { drag: 3.2, grip: 0.55, top: 0.5 },
   [T.WATER]: { drag: 4, grip: 0.4, top: 0.3 },

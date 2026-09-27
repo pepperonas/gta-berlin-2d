@@ -3,7 +3,9 @@
 // fahren sich frei und suchen nach einem Unfall die nächste passende Spur.
 import { clamp, wrapAngle } from './math.js';
 import { forwardSpeed } from './car.js';
-import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane } from './roadgraph.js';
+import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane, laneDir } from './roadgraph.js';
+import { signalState } from './signals.js';
+import { pointAlong } from './geom.js';
 
 const LOOKAHEAD = 420; // so viel Route (px) hält die KI im Voraus
 
@@ -17,12 +19,21 @@ function turnSpeed(angle) {
 function appendLane(ai, lane, fromS = 0) {
   const p = lane.pts;
   let acc = 0;
+  if (fromS > 0) { // Einstieg mitten auf der Spur: Route beginnt am Einstiegspunkt, nicht erst am nächsten Stützpunkt
+    const q = pointAlong(p, Math.min(fromS, lane.len));
+    ai.route.push(q.x, q.y); ai.cap.push(lane.cruise);
+  }
   for (let i = 0; i < p.length; i += 2) {
     if (i > 0) acc += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
-    if (acc < fromS && i < p.length - 2) continue;
+    if (acc <= fromS && fromS > 0) continue;
     ai.route.push(p[i], p[i + 1]); ai.cap.push(lane.cruise);
   }
   ai.lane = lane;
+  // Haltelinie am Spurende einer Ampelkreuzung merken (Index des letzten Spurpunkts in der Route)
+  if (ai.signals?.has(lane.to)) {
+    const [ux, uy] = laneDir(lane, true);
+    ai.stops.push({ k: ai.route.length / 2 - 1, v: lane.to, heading: Math.atan2(uy, ux) });
+  }
 }
 
 function extendRoute(ai, rng) {
@@ -43,9 +54,9 @@ function remaining(ai, car) {
   return L;
 }
 
-export function initAi(car, lane, s, rng) {
+export function initAi(car, lane, s, rng, city) {
   car.ai = {
-    route: [], cap: [], i: 0, lane: null,
+    route: [], cap: [], i: 0, lane: null, stops: [], signals: city?.signals ?? null,
     cruiseK: 0.85 + rng() * 0.3,
     blockedT: 0, ignoreT: 0, stuckT: 0, reverseT: 0, hornT: 0,
   };
@@ -68,7 +79,7 @@ export function placeOnLane(car, city, lane, s, rng) {
     acc += L;
   }
   car.vx = car.vy = car.angVel = 0;
-  initAi(car, lane, s, rng);
+  initAi(car, lane, s, rng, city);
 }
 
 // Zufällige Spur mit Abstand minR…maxR zu (cx, cy).
@@ -100,8 +111,23 @@ export function replan(car, city, rng) {
   for (let i = 0; i < hit.i; i += 2) s += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
   s += Math.hypot(hit.x - p[hit.i], hit.y - p[hit.i + 1]) + 30;
   const keep = car.ai;
-  initAi(car, hit.lane, s, rng);
+  initAi(car, hit.lane, s, rng, city);
   if (keep) Object.assign(car.ai, { cruiseK: keep.cruiseK });
+}
+
+// Abstand zum nächsten Zebrastreifen voraus, an dem ein Fußgänger steht oder geht (Infinity = keiner).
+function zebraAhead(car, world) {
+  const c = Math.cos(car.angle), s = Math.sin(car.angle);
+  const box = { x: car.x - 200, y: car.y - 200, w: 400, h: 400 };
+  let best = Infinity;
+  for (const z of world.city.render.query(box, world._zq ??= [])) {
+    if (z.layer !== 'crossing' || z.kind !== 'zebra') continue;
+    const rx = z.x - car.x, ry = z.y - car.y, along = rx * c + ry * s;
+    if (along <= 0 || along > 200 || Math.abs(-rx * s + ry * c) > z.edge.w / 2 + 20) continue;
+    const reach = z.edge.w / 2 + 25;
+    if (world.peds.some((p) => p.state !== 'down' && Math.hypot(p.x - z.x, p.y - z.y) < reach)) best = Math.min(best, along);
+  }
+  return best;
 }
 
 // Hindernisabstand vor dem Auto (Kegel), getrennt nach KI-Autos und „ehrlichen“ Hindernissen.
@@ -120,7 +146,7 @@ function obstacleAhead(car, world) {
   };
   for (const o of world.cars) {
     if (o === car) continue;
-    check(o.x, o.y, 22, o.driver === 'npc' && !o.wrecked, o.driver === 'player');
+    check(o.x, o.y, o.role === 'curb' && o.driver === null ? 18 : 22, o.driver === 'npc' && !o.wrecked, o.driver === 'player');
   }
   for (const p of world.peds) if (p.state !== 'gone') check(p.x, p.y, 16, false, false);
   const pl = world.player;
@@ -146,7 +172,8 @@ export function driveAi(car, world, dt) {
     if (t > 1 || Math.hypot(bx - car.x, by - car.y) < 10) { ai.i++; if (2 * ai.i + 3 >= r.length) { if (!extendRoute(ai, world.rng)) break; } continue; }
     break;
   }
-  if (ai.i > 24) { r.splice(0, 2 * (ai.i - 2)); ai.cap.splice(0, ai.i - 2); ai.i = 2; }
+  if (ai.i > 24) { const n = ai.i - 2; r.splice(0, 2 * n); ai.cap.splice(0, n); ai.i = 2; for (const st of ai.stops) st.k -= n; }
+
   while (remaining(ai, car) < LOOKAHEAD) if (!extendRoute(ai, world.rng)) break;
   if (Math.hypot(px - car.x, py - car.y) > 260) { replan(car, city, world.rng); return; }
 
@@ -179,6 +206,25 @@ export function driveAi(car, world, dt) {
   ctl.steer = clamp(diff * 2.4, -1, 1);
   if (Math.abs(diff) > 0.6) target = Math.min(target, 55);
 
+  // Ampel: bei Rot (und bei Gelb, wenn noch Bremsweg bleibt) an der Haltelinie halten
+  // Haltelinie erst verwerfen, wenn das Auto sie wirklich überfahren hat (vorzeichenbehafteter Abstand in Fahrtrichtung)
+  const along = (q) => (r[2 * q.k] - car.x) * Math.cos(q.heading) + (r[2 * q.k + 1] - car.y) * Math.sin(q.heading);
+  while (ai.stops.length && (ai.stops[0].k < ai.i - 3 || along(ai.stops[0]) < -8)) ai.stops.shift();
+  const st = ai.stops[0];
+  if (st) {
+    let dist = along(st);
+    if (st.k > ai.i + 1) { dist = Math.hypot(r[2 * (ai.i + 1)] - car.x, r[2 * (ai.i + 1) + 1] - car.y); for (let k = ai.i + 1; k < st.k && dist < 400; k++) dist += Math.hypot(r[2 * k + 2] - r[2 * k], r[2 * k + 3] - r[2 * k + 1]); }
+    if (dist < 400) {
+      const light = signalState(city, st.v, st.heading, world.time);
+      const brakeDist = vf * vf / (2 * 300);
+      if (light === 'red' || (light === 'yellow' && dist > brakeDist + 10)) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, dist - 15))); // Bremsweg v²/2a mit a ≈ 0,9 m/s² (Regler bremst träge)
+      ai.light = light; ai.lightDist = dist;
+    }
+  }
+  // Zebrastreifen: vor wartenden oder querenden Fußgängern halten
+  const zc = zebraAhead(car, world);
+  if (zc < 200) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, zc - 30)));
+
   const { dCar, dOther, playerBlock } = obstacleAhead(car, world);
   ai.ignoreT = Math.max(0, ai.ignoreT - dt);
   const d = Math.min(dOther, ai.ignoreT > 0 ? Infinity : dCar);
@@ -194,6 +240,7 @@ export function driveAi(car, world, dt) {
   } else ai.blockedT = 0;
   ai.hornT -= dt;
 
+  if (target < 3) { ctl.throttle = 0; ctl.brake = vf > 1 ? 1 : 0; ctl.handbrake = false; if (Math.abs(vf) < 2) { car.vx *= 0.5; car.vy *= 0.5; } return; } // halten (Ampel, Stau)
   if (vf < target - 8) { ctl.throttle = clamp((target - vf) / 60, 0.25, 1); ctl.brake = 0; }
   else if (vf > target + 8) { ctl.throttle = 0; ctl.brake = clamp((vf - target) / 70, 0.25, 1); }
   else { ctl.throttle = 0.15; ctl.brake = 0; }

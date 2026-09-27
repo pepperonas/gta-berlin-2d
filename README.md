@@ -8,7 +8,7 @@ und in einer UWP-Hülle für die **Xbox Series X|S im Developer Mode** (privat, 
 Alle Grafiken und Klänge sind selbst erzeugte Platzhalter (Canvas-Zeichnung, Web-Audio-Synthese) und austauschbar, siehe
 [`web/assets/README.md`](web/assets/README.md). Keine Namen, Grafiken, Musik, Karten oder Dialoge aus fremden Spielen.
 
-**Kartendaten © OpenStreetMap-Mitwirkende (ODbL)**, Bezirksgrenzen: Geoportal Berlin, LOR 2021 (dl-de/zero-2.0). Die
+**Kartendaten © OpenStreetMap-Mitwirkende (ODbL)**, Bezirksgrenzen und Baumbestand: Geoportal Berlin (LOR 2021, Straßen- und Anlagenbäume; dl-de/zero-2.0). Die
 Attribution steht im Titelbildschirm und auf dem Stadtplan. `web/data/city.json` ist eine aus OSM abgeleitete Datenbank und
 steht unter der ODbL; bei einer Veröffentlichung gilt Share-Alike für diese Datei. Geschäfte im Spiel (Späti „Zum Kiez“,
 „Lager 7“) sind erfunden.
@@ -28,6 +28,17 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
   42 000 Straßenbäume. **Kein Baumstamm steht auf einer Fahrbahn** (die Krone darf überragen): OSM-Bäume
   auf der geschätzten Fahrbahnbreite rückt der Karten-Build an den Bordstein ihrer Straßenseite, ohne freien Platz
   entfallen sie; der Build bricht bei einem Verstoß ab, das Spiel verwirft solche Bäume beim Laden, Tests prüfen beides.
+- **Straßenraum wie in echt:** Fahrbahnbreite Bordstein zu Bordstein (`width:carriageway`/`width`, in Berlin meist aus
+  ALKIS), Fahrstreifen je Richtung, Parkstreifen je Seite (parallel, schräg, senkrecht, halb auf dem Gehweg) **mit geparkten
+  Autos** (übernehmbar), Radfahrstreifen, Tempo 30/50 je Straße, Kopfsteinpflaster (optisch und fahrdynamisch),
+  Kreuzungsflächen mit Eckradius, Markierungen (Mittellinie, Spurtrenner, Radstreifen, Parkstreifen).
+- **Verkehrsregeln:** 550 Ampelkreuzungen mit Umlauf (die KI hält bei Rot an der Haltelinie), 1 661 Querungen
+  (Zebrastreifen: die KI hält für Fußgänger, Passanten queren bevorzugt dort), 183 Abbiegeverbote, mehrspurige
+  Hauptstraßen (rechts abbiegen von der rechten, links von der linken Spur). Der Spieler darf bei Rot fahren.
+- **Zugänge:** 1 718 Tordurchfahrten in Hinterhöfe (Hauswand dort offen), Poller und Modalfilter (auch Diagonalsperren)
+  sperren Straßen für Autos, Fußgänger kommen durch; rund 9 000 Zäune, Mauern und Hecken; 5 857 Hauseingänge als Türen.
+- **Bäume aus dem Berliner Baumbestand:** 76 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
+  und Stammdicke; OSM-Bäume nur noch, wo das Kataster keinen Baum kennt.
 - **POIs und Hausnummern:** rund 8 700 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
   Arcaden), Supermärkte (Penny …), Läden, Restaurants, Bars, Cafés, Dienstleister, Kultur, Hotels – als Schilder über den
   Dächern, Bahnhöfe auch auf Minikarte und Stadtplan; im HUD steht der nächste Ort („Bar: …“). 25 000 Hausnummern:
@@ -76,16 +87,16 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 61 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 73 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
 
-Die fertige Karte liegt als `web/data/city.json` (6,6 MB, gzip ca. 2,3 MB) im Repository; dafür ist kein Netz nötig.
+Die fertige Karte liegt als `web/data/city.json` (9,7 MB, gzip ca. 3,2 MB) im Repository; dafür ist kein Netz nötig.
 Neu bauen, z. B. für aktuellere OSM-Daten oder andere Missionsorte:
 
 ```bash
-npm run map:fetch                     # LOR-Grenzen (WFS Geoportal Berlin) + OSM (Overpass, mit Ausweich-Servern) → data/raw/ (~113 MB, gitignored)
+npm run map:fetch                     # LOR-Grenzen + Baumbestand (WFS Geoportal Berlin) + OSM (Overpass, 2 Abfragen, Ausweich-Server) → data/raw/ (~100 MB, gitignored)
 npm run map:build                     # data/raw/ + data/places.json → web/data/city.json (deterministisch, ~3 s)
 npm run map:preview -- out.svg        # Sichtprüfung als SVG (optional Ausschnitt: out.svg x y breite höhe in px)
 ```
@@ -214,7 +225,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 61 automatischen Tests grün, darunter:
+- Alle 73 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -234,13 +245,20 @@ in Edge `edge://inspect` mit der Konsole verbinden
     Dialogs, Ziel zu Fuß auf dem Gehweg bzw. im Auto auf der Fahrbahn, während eines Auftrags gesperrt;
   - Gleise maßstäblich (Spurweite 1435 mm, zwei Schienen je Gleis) und in Ebenen gezeichnet (Bett → Schwellen →
     Schienen über alle Gleise), damit parallele Gleise und Weichen sich nicht übermalen;
+  - Straßenquerschnitt aus Tag-Kombinationen (Breite, Park-/Radstreifen, Spuren, Tempo, Belag, enge Straßen);
+    Tordurchfahrt öffnet die Hauswand, Poller sperren eine Straße, Ampel wird der Kreuzung zugeordnet, Abbiegeverbot
+    filtert die Folgespur, Baumkataster ersetzt den OSM-Baum; KI hält bei Rot und fährt bei Grün; geparkte Autos
+    stehen auf dem Parkstreifen; Stichproben auf der echten Karte (Ampeln an Kottbusser Tor und Hermannplatz,
+    Durchfahrten, Zebrastreifen, Kataster). Für acht dieser Schutzprüfungen wurde gegengeprüft, dass sie fehlschlagen,
+    wenn man die jeweilige Funktion absichtlich abschaltet;
   - gestrichelte Straßenmarkierungen haben in jedem Bild den Strichversatz 0 (aufzeichnender Canvas-Ersatz; vorher
     übernahmen sie den animierten Versatz des Missionskreises und „flossen“);
   - Speichern/Laden inkl. kaputter, alter (Rasterstadt) und ungültiger Positionen, Menüführung nur mit Controller-Aktionen.
 - Im Browser (Chromium via Playwright): Titel mit Ladeanzeige, Spiel, HUD mit echtem Straßennamen, Minikarte,
   Stadtplan; Stichproben an Kottbusser Tor (U1-Hochbahn), Admiralbrücke, Hermannplatz, Kottbusser Damm. Volle
   Bildwiederholrate bei 1280×720 und 1920×1080 auch bei Höchsttempo (Frame-Abstand Median 10,0 ms, p95 10,9 ms),
-  JS-Heap ca. 110 MB.
+  JS-Heap ca. 110 MB. Mit Straßenraum, 86 000 Bäumen und geparkten Autos (Stand 27.09.): Oranienplatz bei 1920×1080
+  Median 8,3 ms je Bild, p95 9,3 ms, JS-Heap ca. 280 MB.
 - Die Controller-Brücke der Xbox-Hülle ist auf der **Web-Seite** getestet: Mit einer Attrappe von `chrome.webview`, die
   Lesungen im Format der C#-Hülle schickt, lief der Weg Menü → Spiel → Auftrag annehmen → Pause → B → Speichern →
   Hauptmenü → Beenden (schickt `quit` an die Hülle).
@@ -260,7 +278,8 @@ in Edge `edge://inspect` mit der Konsole verbinden
   Darstellung auf dem Fernseher (Title-Safe-Rand). Ladezeit und Speicher der 5,8-MB-Karte auf der Konsole.
 
 **Bekannte Grenzen der Karte:** Straßenbreiten sind aus OSM geschätzt (`width`/`lanes`, sonst Standard je Straßenklasse),
-es gibt keine Ampeln und Fahrspurmarkierungen außer der Mittellinie, die Spree-Brücken zu Friedrichshain
+die Ampeln laufen mit einem festen Zwei-Phasen-Umlauf statt echter Signalpläne, Diagonalsperren sind für die KI ganz
+gesperrt (erlaubte Abbiegungen dort meidet sie), die Spree-Brücken zu Friedrichshain
 (Oberbaumbrücke u. a.) liegen auf der Bezirksgrenze und sind darum nicht befahrbar, und Gebäude ohne Geschossangabe
 bekommen eine Standardhöhe (16 m).
 

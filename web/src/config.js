@@ -29,6 +29,9 @@ export const MISSION = {
 };
 
 // Bevölkerung lebt nur um die Kamera: Erzeugen im Ring spawnMin…spawnMax, Abbau jenseits despawn (px).
+// Am Straßenrand geparkte Autos (auf OSM-Parkstreifen): Anteil belegter Stellplätze, Umkreis um die Kamera (px).
+export const PARKED = { share: 0.6, radius: 1300, despawn: 1800 };
+
 export const TRAFFIC = { cars: 22, pedestrians: 55, spawnMin: 750, spawnMax: 1800, despawn: 2400 };
 
 // Darstellung: reale Gebäudehöhen (1 m = 10 px) werden für die Schrägansicht gestaucht.

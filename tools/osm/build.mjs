@@ -4,8 +4,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { crossSection, maxspeedOf, surfaceOf } from './crosssection.mjs';
 import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, unionOutline, delta } from './geo.mjs';
-import { ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT } from '../../web/src/citycodes.js';
+import { ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA } from '../../web/src/citycodes.js';
 
 const DISTRICT_OF = { '0210': 'Kreuzberg', '0220': 'Kreuzberg', '0230': 'Kreuzberg', '0810': 'Nord-Neukölln' };
 
@@ -20,7 +21,7 @@ function roadWidth(t, base) {
   if (t.service === 'parking_aisle') w = 5.5; else if (t.service === 'driveway' || t.service === 'alley') w = 3.5;
   const lanes = num(t.lanes);
   if (lanes > 0 && lanes < 9) w = Math.max(w * 0.8, lanes * 3.3 + (['residential', 'tertiary', 'secondary', 'unclassified'].includes(base) ? 3 : 0));
-  const tw = num(t.width);
+  const tw = num(t['width:carriageway']) || num(t.width);
   if (tw >= 3 && tw <= 40) w = Math.max(tw, 3);
   return w;
 }
@@ -88,7 +89,7 @@ export function poiCategory(t) {
 
 const isWater = (t) => t.natural === 'water' || t.waterway === 'riverbank' || ['basin', 'reservoir'].includes(t.landuse);
 
-export function buildCity(lor, osm, places, { scale = 10 } = {}) {
+export function buildCity(lor, osm, places, { scale = 10, kataster = [] } = {}) {
   const S = scale;
   const nodes = new Map();
   let s = 90, w = 180, n = -90, e = -180;
@@ -169,7 +170,8 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
       const k = areaKind(t);
       if (k < 0) continue;
       const rings = cleanRings(poly, 0.5 * S);
-      if (rings.length && rings.some((r) => r.outer)) areas.push({ id: poly.id, k, rings });
+      // winzige Flächen (Beete, Baumscheiben < 15 m²) weglassen – im Spiel nicht sichtbar, kosten aber Platz
+      if (rings.length && rings.some((r) => r.outer) && Math.abs(ringArea(rings[0].pts)) >= 15 * S * S) areas.push({ id: poly.id, k, rings });
     }
   }
   areas.sort((a, b) => a.k - b.k || a.id - b.id);
@@ -183,7 +185,7 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
     const t = el.tags;
     if (!t) continue;
     if (t.highway) {
-      if (t.area === 'yes' || ['tunnel', 'culvert', 'building_passage'].includes(t.tunnel) || t.tunnel === 'yes') continue;
+      if (t.area === 'yes' || t.tunnel === 'culvert' || t.tunnel === 'yes') continue; // Tordurchfahrten (building_passage) bleiben
       if (num(t.layer) < 0 && !t.bridge) continue;
       const base = t.highway.replace(/_link$/, '');
       if (ROAD_CLASS[base] !== undefined) roadWays.push({ el, base });
@@ -215,8 +217,16 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
     if (['yes', 'true', '1'].includes(t.oneway) || t.junction === 'roundabout' || base === 'motorway') oneway = 1;
     if (t.oneway === '-1' || t.oneway === 'reverse') oneway = -1;
     if (t.oneway === 'no') oneway = 0;
-    const width = Math.round(roadWidth(t, base) * 10); // dm
     const cls = ROAD_CLASS[base];
+    // Querschnitt: Hauptnetz aus Breite/Spuren/Park- und Radstreifen, Nebenflächen (Zufahrt, Fußgängerzone) geschätzt.
+    const cs = cls <= 8 ? crossSection(t, base, oneway)
+      : { width: roadWidth(t, base), fwd: oneway === -1 ? 0 : 1, bwd: oneway === 1 ? 0 : 1,
+        left: { park: PARK.none, parkW: 0, orient: 'parallel', cycle: 0 }, right: { park: PARK.none, parkW: 0, orient: 'parallel', cycle: 0 },
+        maxspeed: maxspeedOf(t, base), surface: surfaceOf(t), lit: t.lit === 'yes' ? 1 : 0, gaslight: 0 };
+    const width = Math.round(cs.width * 10); // dm
+    const dm = (m) => Math.round(m * 10);
+    const x = [cs.fwd, cs.bwd, cs.left.park, dm(cs.left.parkW), PARK_ORIENT.indexOf(cs.left.orient), cs.right.park, dm(cs.right.parkW),
+      PARK_ORIENT.indexOf(cs.right.orient), dm(cs.left.cycle), dm(cs.right.cycle), cs.maxspeed, cs.surface, cs.lit | (cs.gaslight << 1)];
     const name = nameOf(t.name ?? t.ref ?? '');
     const bridge = t.bridge && t.bridge !== 'no' ? 1 : 0;
     let start = 0;
@@ -225,7 +235,7 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
         const seg = ids.slice(start, i + 1);
         const pts = simplify(flat(seg), 0.5 * S);
         if (seg.length >= 2 && (pts[0] !== pts[pts.length - 2] || pts[1] !== pts[pts.length - 1])) {
-          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id });
+          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id, x, ids: seg, pass: t.tunnel === 'building_passage' ? 1 : 0 });
         }
         start = i;
       }
@@ -238,7 +248,7 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
     ed.in = insideBorder(mx, my) ? 1 : 0;
   }
 
-  const paths = pathWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, p: simplify(flat(el.nodes), 0.5 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
+  const paths = pathWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, pass: el.tags.tunnel === 'building_passage' ? 1 : 0, p: simplify(flat(el.nodes), 0.8 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
   const rails = railWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, sub: el.tags.railway === 'subway' ? 1 : 0, ids: el.nodes, p: simplify(flat(el.nodes), 0.5 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
 
   // --- Wände: Ufer und Gleise, an Brücken/Übergängen aufgeschnitten --------------------
@@ -260,35 +270,29 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
   for (const { el, base } of roadWays) for (const id of el.nodes) if (railNodes.has(id)) {
     const p = P(id); if (p) corridors.push([p[0], p[1], p[0], p[1], (DEFAULT_WIDTH[base] ?? 8) / 2 * S + 2 * S]);
   }
-  const CELL = 400, cgrid = new Map();
-  corridors.forEach((c, i) => {
-    const x0 = Math.floor((Math.min(c[0], c[2]) - c[4]) / CELL), x1 = Math.floor((Math.max(c[0], c[2]) + c[4]) / CELL);
-    const y0 = Math.floor((Math.min(c[1], c[3]) - c[4]) / CELL), y1 = Math.floor((Math.max(c[1], c[3]) + c[4]) / CELL);
-    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) { const k = gx * 100000 + gy; (cgrid.get(k) ?? cgrid.set(k, []).get(k)).push(i); }
-  });
-  const inCorridor = (x, y) => {
-    for (const i of cgrid.get(Math.floor(x / CELL) * 100000 + Math.floor(y / CELL)) ?? []) {
-      const c = corridors[i];
-      if (segDist2(x, y, c[0], c[1], c[2], c[3]) < c[4] * c[4]) return true;
-    }
-    return false;
-  };
-  const cut = (pts) => { // Polylinie in Stücke ≤ 1 m zerlegen, Korridorstücke weglassen
-    const out = []; let cur = [];
-    const step = 1 * S;
+  const cut = makeCutter(corridors, S);
+  // Tordurchfahrten öffnen die Hauswände (eigener Korridor-Satz, nur für Gebäude).
+  const passages = [];
+  const addPassage = (pts, r) => {
     for (let i = 0; i < pts.length - 2; i += 2) {
-      const ax = pts[i], ay = pts[i + 1], bx = pts[i + 2], by = pts[i + 3];
-      const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
-      for (let j = 0; j < k; j++) {
-        const x0 = ax + (bx - ax) * j / k, y0 = ay + (by - ay) * j / k, x1 = ax + (bx - ax) * (j + 1) / k, y1 = ay + (by - ay) * (j + 1) / k;
-        if (inCorridor((x0 + x1) / 2, (y0 + y1) / 2)) { if (cur.length >= 4) out.push(cur); cur = []; continue; }
-        if (!cur.length) cur.push(Math.round(x0), Math.round(y0));
-        cur.push(Math.round(x1), Math.round(y1));
-      }
+      let ax = pts[i], ay = pts[i + 1], bx = pts[i + 2], by = pts[i + 3];
+      const L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L;
+      if (i === 0) { ax -= ux * 2 * S; ay -= uy * 2 * S; }
+      if (i === pts.length - 4) { bx += ux * 2 * S; by += uy * 2 * S; }
+      passages.push([ax, ay, bx, by, r]);
     }
-    if (cur.length >= 4) out.push(cur);
-    return out.map((c) => simplify(c, 0.2 * S)).filter((c) => c.length >= 4);
   };
+  for (const ed of edges) if (ed.pass) addPassage(edgePts(ed), Math.max(ed.w / 10 * S / 2, 1.6 * S));
+  for (const pa of paths) if (pa.pass) addPassage(pa.p, 1.4 * S);
+  const passCut = makeCutter(passages, S);
+  for (const b of buildings) {
+    const [x0, y0, x1, y1] = ringBox(b.rings[0].pts);
+    if (!passages.some((c) => Math.max(c[0], c[2]) + c[4] >= x0 && Math.min(c[0], c[2]) - c[4] <= x1 && Math.max(c[1], c[3]) + c[4] >= y0 && Math.min(c[1], c[3]) - c[4] <= y1)) continue;
+    const ws = b.rings.flatMap((r) => passCut([...r.pts, r.pts[0], r.pts[1]]));
+    const len = (p) => { let L = 0; for (let i = 0; i < p.length - 2; i += 2) L += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]); return L; };
+    const full = b.rings.reduce((n, r) => n + len([...r.pts, r.pts[0], r.pts[1]]), 0);
+    if (ws.reduce((n, w) => n + len(w), 0) < full - 0.5 * S) b.walls = ws; // nur wenn wirklich ein Stück Wand fehlt
+  }
   const offsetLine = (pts, d) => {
     const out = [];
     for (let i = 0; i < pts.length; i += 2) {
@@ -305,39 +309,46 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
   // Brückengeländer
   for (const ed of edges) if (ed.br) { const pts = edgePts(ed); for (const d of [-1, 1]) walls.push(offsetLine(pts, d * (ed.w / 10 * S / 2 + 0.6 * S))); }
 
+  const access = accessAndRules(osm.elements, { nodes, ways, P, S, edges, vertices, vIndex, buildings, W, H, walls, makeCutter });
+
   // --- Bäume, Kiez-Namen ----------------------------------------------------------------
   const trees = [], kieze = [];
   for (const nd of nodes.values()) {
     if (!nd.tags) continue;
-    if (nd.tags.natural === 'tree') { const p = toPx(nd.lat, nd.lon); if (p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H) trees.push(p); }
+    if (nd.tags.natural === 'tree') { const p = toPx(nd.lat, nd.lon); if (p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H) trees.push({ x: p[0], y: p[1], g: 0, c: 0, r: 0, osm: true }); }
     else if (['neighbourhood', 'quarter'].includes(nd.tags.place) && nd.tags.name) { const p = toPx(nd.lat, nd.lon); kieze.push({ n: nd.tags.name, x: p[0], y: p[1] }); }
   }
-  const treeStats = keepTreesOffRoads(trees, { edges, vertices, buildings, water, S });
-  trees.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const katStats = mergeKataster(trees, kataster, { toPx, W, H, S });
+  const treeStats = { ...katStats, ...keepTreesOffRoads(trees, { edges, vertices, buildings, water, S }) };
+  trees.sort((a, b) => a.y - b.y || a.x - b.x);
   kieze.sort((a, b) => a.n.localeCompare(b.n));
   const { pois, addresses } = extractPoisAndAddresses(osm.elements, { nodes, ways, P, toPx, W, H, S, nameOf });
 
   const missionPlaces = placeMission({ places, toPx, edges, vertices, buildings, S, insideBorder });
   const city = {
     meta: {
-      version: 1, scale: S, width: W, height: H, origin: { lat0, lon0, bbox: [s, w, n, e] },
+      version: 2, scale: S, width: W, height: H, origin: { lat0, lon0, bbox: [s, w, n, e] },
       osmBase: osm.osm3s?.timestamp_osm_base ?? null,
-      attribution: 'Kartendaten © OpenStreetMap-Mitwirkende (ODbL) · Grenzen: Geoportal Berlin (dl-de/zero-2.0)',
+      attribution: 'Kartendaten © OpenStreetMap-Mitwirkende (ODbL) · Grenzen und Baumbestand: Geoportal Berlin (dl-de/zero-2.0)',
       classes: ROAD_CLASSES, trafficMaxClass: TRAFFIC_MAX_CLASS,
     },
     border: border.map(delta),
     districts: districts.map((d) => ({ n: d.name, r: d.rings.map(delta) })),
     names,
     vertices,
-    edges: edges.map((ed) => [ed.a, ed.b, ed.c, ed.w, ed.n, ed.o, ed.br, ed.in, ed.p.length ? delta(ed.p) : []]),
+    // Kante: a, b, Klasse, Breite dm, Name, Einbahn, Brücke, im Gebiet, Zwischenpunkte, Querschnitt (siehe decodeCity)
+    edges: edges.map((ed) => [ed.a, ed.b, ed.c, ed.w, ed.n, ed.o, ed.br, ed.in, ed.p.length ? delta(ed.p) : [], ed.c <= 8 ? ed.x : [ed.x[10], ed.x[11]]]), // Nebenwege: nur Tempo + Belag
     paths: paths.map((x) => [x.br, delta(x.p)]),
     rails: rails.map((x) => [x.br, x.sub, delta(x.p)]),
-    buildings: buildings.map((b) => [b.h, b.k, b.rings.map((r) => delta(r.pts))]),
+    // Gebäude: Höhe dm, Art, Ringe, eigene Wandzüge (bei Tordurchfahrten) oder 0, Türen [Ring, Kante, Anteil ×1000]
+    buildings: buildings.map((b) => [b.h, b.k, b.rings.map((r) => delta(r.pts)), b.walls ? b.walls.map(delta) : 0, b.doors ?? 0]),
     water: water.map((wa) => wa.rings.map((r) => [r.outer ? 1 : 0, delta(r.pts)])),
     areas: areas.map((a) => [a.k, a.rings.map((r) => [r.outer ? 1 : 0, delta(r.pts)])]),
     walls: walls.map(delta),
-    trees: delta(trees.flat()),
+    // Bäume: Koordinaten delta-kodiert; Gattung (TREE_GENERA), Kronendurchmesser dm, Stammradius cm (0 = Standard)
+    trees: { xy: delta(trees.flatMap((t) => [t.x, t.y])), g: trees.map((t) => t.g), c: trees.map((t) => t.c), r: trees.map((t) => t.r) },
     kieze,
+    ...access.out,
     // POIs: [x, y, Kategorie (POI_CATS), Name-Index, Art-Index]; Art = OSM-Wert (z. B. „bakery“) in names
     pois: pois.map((q) => [q.x, q.y, POI_CAT[q.cat], q.n, q.k]),
     // Hausnummern: Koordinaten delta-kodiert, dazu Straßen-Index (names) und Nummer als Text
@@ -345,6 +356,7 @@ export function buildCity(lor, osm, places, { scale = 10 } = {}) {
   };
   city.places = missionPlaces;
   city.meta.trees = treeStats;
+  city.meta.access = access.stats;
   return city;
 }
 
@@ -395,6 +407,243 @@ function extractPoisAndAddresses(elements, { nodes, ways, P, toPx, W, H, S, name
   return { pois, addresses: out };
 }
 
+// --- Korridore: Polylinien in 1-m-Stücke zerlegen und Stücke in einem Korridor weglassen --------------
+function ringBox(r) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]); } return [x0, y0, x1, y1]; }
+
+export function makeCutter(corridors, S) {
+  const CELL = 400, cgrid = new Map();
+  corridors.forEach((c, i) => {
+    const x0 = Math.floor((Math.min(c[0], c[2]) - c[4]) / CELL), x1 = Math.floor((Math.max(c[0], c[2]) + c[4]) / CELL);
+    const y0 = Math.floor((Math.min(c[1], c[3]) - c[4]) / CELL), y1 = Math.floor((Math.max(c[1], c[3]) + c[4]) / CELL);
+    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) { const k = gx * 100000 + gy; (cgrid.get(k) ?? cgrid.set(k, []).get(k)).push(i); }
+  });
+  const inCorridor = (x, y) => {
+    for (const i of cgrid.get(Math.floor(x / CELL) * 100000 + Math.floor(y / CELL)) ?? []) {
+      const c = corridors[i];
+      if (segDist2(x, y, c[0], c[1], c[2], c[3]) < c[4] * c[4]) return true;
+    }
+    return false;
+  };
+  return (pts) => {
+    const out = []; let cur = [];
+    const step = 1 * S;
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      const ax = pts[i], ay = pts[i + 1], bx = pts[i + 2], by = pts[i + 3];
+      const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
+      for (let j = 0; j < k; j++) {
+        const x0 = ax + (bx - ax) * j / k, y0 = ay + (by - ay) * j / k, x1 = ax + (bx - ax) * (j + 1) / k, y1 = ay + (by - ay) * (j + 1) / k;
+        if (inCorridor((x0 + x1) / 2, (y0 + y1) / 2)) { if (cur.length >= 4) out.push(cur); cur = []; continue; }
+        if (!cur.length) cur.push(Math.round(x0), Math.round(y0));
+        cur.push(Math.round(x1), Math.round(y1));
+      }
+    }
+    if (cur.length >= 4) out.push(cur);
+    return out.map((c) => simplify(c, 0.2 * S)).filter((c) => c.length >= 4);
+  };
+}
+
+// --- Zugänge und Verkehrsregeln -------------------------------------------------------------
+const CAR_BLOCKING = new Set(['bollard', 'block', 'post', 'cycle_barrier', 'jersey_barrier', 'planter', 'lift_gate', 'gate', 'swing_gate', 'chain', 'bar']);
+const FENCES = { fence: 0, wall: 1, hedge: 2, retaining_wall: 1, city_wall: 1, guard_rail: 0, handrail: 0, bollard: 3, block: 3, jersey_barrier: 1, planter: 2 };
+
+export function accessAndRules(elements, { nodes, ways, P, S, edges, vertices, vIndex, buildings, W, H, walls, makeCutter }) {
+  const inside = (p) => p && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
+  // Knoten → Kante (mit Position in der Kante) für Barrieren und Querungen auf Straßen
+  const onEdge = new Map(), allOn = new Map();
+  edges.forEach((ed, k) => ed.ids.forEach((id, i) => {
+    if (!onEdge.has(id)) onEdge.set(id, { k, i });
+    (allOn.get(id) ?? allOn.set(id, []).get(id)).push({ k, i });
+  }));
+  const dirAt = (ed, i) => {
+    const a = P(ed.ids[Math.max(0, i - 1)]), b = P(ed.ids[Math.min(ed.ids.length - 1, i + 1)]);
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    return [dx / L, dy / L];
+  };
+  const barriers = [], posts = [], fences = [], crossings = [], signalNodes = [];
+  let blockedEdges = 0;
+  for (const nd of nodes.values()) {
+    const t = nd.tags;
+    if (!t) continue;
+    const p = P(nd.id);
+    if (!inside(p)) continue;
+    const open = ['yes', 'destination', 'permissive', 'designated'];
+    const carsAllowed = open.includes(t.motor_vehicle) || open.includes(t.motorcar) || (open.includes(t.access) && !['no', 'private'].includes(t.motor_vehicle));
+    if (t.barrier && CAR_BLOCKING.has(t.barrier) && !carsAllowed) {
+      const kind = ['lift_gate', 'gate', 'swing_gate', 'bar', 'chain'].includes(t.barrier) ? 1 : 0; // 0 Poller, 1 Schranke/Tor
+      const on = (allOn.get(nd.id) ?? []).filter((h) => edges[h.k].c <= 10);
+      if (on.some((h) => edges[h.k].c <= 2)) continue; // Autobahn/Schnellstraße: Nottore in der Mitte, keine Sperre der Fahrbahn
+      if (on.length) {
+        // Die Sperre gilt für jede Kante durch diesen Knoten (steht sie am Übergang Straße → Fußgängerzone, endet die
+        // Straße davor). Poller im Abstand von 1,8 m quer über den schmalsten Weg (Fußgänger kommen durch, Autos nicht).
+        for (const h of on) { if (!edges[h.k].blocked) blockedEdges++; edges[h.k].blocked = 1; }
+        const hit = on.reduce((a, b) => (edges[b.k].c > edges[a.k].c ? b : a));
+        const ed = edges[hit.k], [ux, uy] = dirAt(ed, hit.i), half = ed.w / 10 * S / 2;
+        // Reihe: Mitte, Richtung quer zur Fahrbahn (×1000), Anzahl Poller, Abstand 1,8 m
+        const n = Math.max(1, Math.floor((2 * half - 1 * S) / (1.8 * S)) + 1);
+        // Steht die Sperre auf einem Kreuzungsknoten, die Reihe in den gesperrten Weg hineinrücken (nicht in die Kreuzung).
+        let [bx, by] = p;
+        if (hit.i === 0 || hit.i === ed.ids.length - 1) {
+          const inward = hit.i === 0 ? 1 : -1;
+          let other = 0; for (const o of allOn.get(nd.id) ?? []) if (o.k !== hit.k) other = Math.max(other, edges[o.k].w / 10 * S / 2);
+          const shift = other ? other + 1 * S : 0;
+          bx = Math.round(bx + ux * inward * shift); by = Math.round(by + uy * inward * shift);
+        }
+        barriers.push([bx, by, kind, Math.round(-uy * 1000), Math.round(ux * 1000), n]);
+      } else posts.push([p[0], p[1], kind]);
+    }
+    if (t.highway === 'crossing' || (t.crossing && onEdge.has(nd.id))) {
+      const hit = onEdge.get(nd.id);
+      if (!hit || edges[hit.k].c > 8) continue;
+      const c = t.crossing, ref = t.crossing_ref, mk = t['crossing:markings'];
+      const kind = c === 'traffic_signals' || t['crossing:signals'] === 'yes' ? 1 : (c === 'zebra' || ref === 'zebra' || mk === 'zebra') ? 0 : (c === 'marked' || c === 'uncontrolled' || (mk && mk !== 'no')) ? 2 : -1;
+      if (kind >= 0) crossings.push([p[0], p[1], hit.k, kind]);
+    }
+    if (t.highway === 'traffic_signals') signalNodes.push({ id: nd.id, x: p[0], y: p[1] });
+  }
+  // Zäune und Mauern als Wände (Tore darin bleiben offen)
+  const gates = [];
+  for (const nd of nodes.values()) if (nd.tags && ['gate', 'swing_gate', 'kissing_gate', 'entrance', 'lift_gate'].includes(nd.tags.barrier)) { const p = P(nd.id); if (p) gates.push([p[0], p[1], p[0], p[1], 0.9 * S]); }
+  const gateCut = makeCutter(gates, S);
+  // Straßenstücke für den Schnitt mit Sperrlinien (Poller-Reihen wie Diagonalsperren, Mauern, Zäune quer über die Straße)
+  const G = 400, roadGrid = new Map();
+  edges.forEach((ed, k) => {
+    if (ed.c <= 2 || ed.c > 8) return;
+    const pts = [vertices[2 * ed.a], vertices[2 * ed.a + 1], ...ed.p, vertices[2 * ed.b], vertices[2 * ed.b + 1]];
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      const x0 = Math.floor(Math.min(pts[i], pts[i + 2]) / G), x1 = Math.floor(Math.max(pts[i], pts[i + 2]) / G);
+      const y0 = Math.floor(Math.min(pts[i + 1], pts[i + 3]) / G), y1 = Math.floor(Math.max(pts[i + 1], pts[i + 3]) / G);
+      for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) { const key = gx * 100000 + gy; (roadGrid.get(key) ?? roadGrid.set(key, []).get(key)).push([k, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]]); }
+    }
+  });
+  const crossesSeg = (ax, ay, bx, by, cx, cy, dx, dy) => {
+    const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+    if (Math.abs(d) < 1e-9) return false;
+    const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+    return t >= -0.01 && t <= 1.01 && u >= -0.01 && u <= 1.01;
+  };
+  const gateNodes = new Set();
+  for (const nd of nodes.values()) if (nd.tags && ['gate', 'swing_gate', 'lift_gate', 'entrance', 'kissing_gate'].includes(nd.tags.barrier)) gateNodes.add(nd.id);
+  for (const el of ways.values()) {
+    const k = FENCES[el.tags?.barrier];
+    if (k === undefined || el.tags.building) continue;
+    const raw = []; for (const id of el.nodes) { const q = P(id); if (q) raw.push(q[0], q[1]); }
+    const pts = simplify(raw, 0.3 * S);
+    if (pts.length < 4 || !inside([pts[0], pts[1]])) continue;
+    fences.push([k, pts]);
+    walls.push(...gateCut(pts));
+    if (el.nodes.some((id) => gateNodes.has(id))) continue; // Zaun mit Tor: Durchfahrt möglich
+    // Kreuzt die Sperrlinie eine Straße, ist diese für Autos gesperrt (z. B. Diagonalsperre im Kiez).
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      const key = Math.floor(pts[i] / G) * 100000 + Math.floor(pts[i + 1] / G);
+      for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) for (const [kk, ax, ay, bx, by] of roadGrid.get(key + gx * 100000 + gy) ?? []) {
+        if (edges[kk].blocked) continue;
+        // Poller-Reihen (Diagonalsperren): auch Straßen, die knapp daran vorbeiführen, meidet der KI-Verkehr
+        const near = el.tags.traffic_intervention === 'diagonal_diverter' && Math.min(segDist2(ax, ay, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]), segDist2(bx, by, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]),
+          segDist2(pts[i], pts[i + 1], ax, ay, bx, by), segDist2(pts[i + 2], pts[i + 3], ax, ay, bx, by)) < (3 * S) ** 2;
+        if (!near && !crossesSeg(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], ax, ay, bx, by)) continue;
+        edges[kk].blocked = 1; blockedEdges++;
+      }
+    }
+  }
+  // Türen: Eingangsknoten auf einem Gebäudeumriss
+  let doors = 0;
+  const bgrid = new Map(), CELL = 400;
+  buildings.forEach((b, bi) => { const [x0, y0, x1, y1] = ringBox(b.rings[0].pts); for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) { const key = gx * 100000 + gy; (bgrid.get(key) ?? bgrid.set(key, []).get(key)).push(bi); } });
+  for (const nd of nodes.values()) {
+    if (!nd.tags?.entrance && !(nd.tags?.door)) continue;
+    const p = P(nd.id); if (!inside(p)) continue;
+    let best = null;
+    for (const bi of bgrid.get(Math.floor(p[0] / CELL) * 100000 + Math.floor(p[1] / CELL)) ?? []) {
+      const b = buildings[bi];
+      b.rings.forEach((r, ri) => { const pts = r.pts, n = pts.length;
+        for (let i = 0; i < n; i += 2) {
+          const ax = pts[i], ay = pts[i + 1], bx = pts[(i + 2) % n], by = pts[(i + 3) % n];
+          const d = Math.sqrt(segDist2(p[0], p[1], ax, ay, bx, by));
+          if (d < 1.5 * S && (!best || d < best.d)) {
+            const L2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1, t = Math.max(0, Math.min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2));
+            best = { d, b, ri, ei: i / 2, t };
+          }
+        } });
+    }
+    if (best) { (best.b.doors ??= []).push([best.ri, best.ei, Math.round(best.t * 1000)]); doors++; }
+  }
+  // Ampelkreuzungen: Kreuzungsknoten (≥ 3 befahrbare Kanten) mit Signal auf oder vor der Kreuzung
+  const deg = new Map();
+  for (const ed of edges) if (ed.c <= 8) for (const v of [ed.a, ed.b]) deg.set(v, (deg.get(v) ?? 0) + 1);
+  const junctions = [...deg.entries()].filter(([, d]) => d >= 3).map(([v]) => v);
+  const jgrid = new Map(), JC = 600;
+  for (const v of junctions) { const key = Math.floor(vertices[2 * v] / JC) * 100000 + Math.floor(vertices[2 * v + 1] / JC); (jgrid.get(key) ?? jgrid.set(key, []).get(key)).push(v); }
+  const signals = new Set();
+  for (const sn of signalNodes) {
+    const v0 = vIndex.get(sn.id);
+    if (v0 !== undefined && deg.get(v0) >= 3) { signals.add(v0); continue; }
+    let best = null;
+    for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) for (const v of jgrid.get((Math.floor(sn.x / JC) + gx) * 100000 + Math.floor(sn.y / JC) + gy) ?? []) {
+      const d = Math.hypot(vertices[2 * v] - sn.x, vertices[2 * v + 1] - sn.y);
+      if (d < 35 * S && (!best || d < best.d)) best = { d, v };
+    }
+    if (best) signals.add(best.v);
+  }
+  // Abbiegeverbote: (von Kante, über Knoten, nach Kante)
+  const bans = [];
+  const edgesAt = new Map();
+  edges.forEach((ed, k) => { for (const v of [ed.a, ed.b]) (edgesAt.get(v) ?? edgesAt.set(v, []).get(v)).push(k); });
+  let restrictions = 0;
+  for (const el of elements) {
+    if (el.type !== 'relation' || el.tags?.type !== 'restriction') continue;
+    const r = el.tags.restriction ?? el.tags['restriction:motorcar'];
+    if (!r) continue;
+    const from = el.members.find((m) => m.role === 'from' && m.type === 'way'), via = el.members.find((m) => m.role === 'via' && m.type === 'node'), to = el.members.find((m) => m.role === 'to' && m.type === 'way');
+    if (!from || !via || !to) continue;
+    const v = vIndex.get(via.ref); if (v === undefined) continue;
+    const at = edgesAt.get(v) ?? [];
+    // Ist der Von-/Nach-Weg am Knoten nicht geteilt, gehören beide Hälften dazu (Fahrtrichtung ergibt sich aus der Spur).
+    const fes = at.filter((k) => edges[k].id === from.ref), tes = at.filter((k) => edges[k].id === to.ref);
+    if (!fes.length || !tes.length) continue;
+    restrictions++;
+    for (const fe of fes) {
+      if (r.startsWith('no_')) { for (const te of tes) if (te !== fe) bans.push(fe, v, te); }
+      else if (r.startsWith('only_')) for (const k of at) if (!tes.includes(k) && k !== fe) bans.push(fe, v, k);
+    }
+  }
+  const edgeFlags = edges.map((ed) => (ed.blocked ? 1 : 0) | (ed.pass ? 2 : 0));
+  return {
+    out: { barriers: barriers.flat(), posts: posts.flat(), fences: fences.map(([k, pts]) => [k, delta(pts)]), crossings: crossings.flat(), signals: [...signals].sort((a, b) => a - b), turnBans: bans, edgeFlags },
+    stats: { sperren: blockedEdges, poller: barriers.reduce((n, b) => n + b[5], 0) + posts.length, zaeune: fences.length, tueren: doors, ampeln: signals.size, querungen: crossings.length, abbiegeverbote: restrictions, durchfahrten: edges.filter((e) => e.pass).length },
+  };
+}
+
+// --- Baumbestand Berlin (Geoportal) zusammenführen ----------------------------------------------
+export function genusCode(g) {
+  const i = TREE_GENERA.indexOf(g);
+  if (i >= 0) return i;
+  if (['Pinus', 'Picea', 'Abies', 'Taxus', 'Larix', 'Thuja', 'Pseudotsuga', 'Metasequoia'].includes(g)) return TREE_GENERA.indexOf('Nadel');
+  return 0;
+}
+
+export function mergeKataster(trees, kataster, { toPx, W, H, S }) {
+  const kat = [];
+  for (const [lon, lat, genus, , crown, girth, height] of kataster) {
+    const p = toPx(lat, lon);
+    if (p[0] < 0 || p[1] < 0 || p[0] > W || p[1] > H) continue;
+    let c = crown > 0 ? crown : height > 0 ? height * 0.55 : girth > 0 ? 2.5 + girth / 30 : 6;
+    c = Math.max(2.5, Math.min(18, c));
+    const r = girth > 0 ? Math.max(10, Math.min(60, Math.round(girth / (2 * Math.PI)))) : 25; // cm
+    kat.push({ x: p[0], y: p[1], g: genusCode(genus), c: Math.round(c * 10), r });
+  }
+  // OSM-Bäume nur behalten, wo das Kataster keinen Baum innerhalb von 4 m kennt (private Bäume).
+  const CELL = 100, grid = new Set();
+  const key = (x, y) => Math.floor(x / CELL) * 1000000 + Math.floor(y / CELL);
+  for (const t of kat) grid.add(key(t.x, t.y));
+  const near = (x, y) => { for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) if (grid.has(key(x + gx * CELL, y + gy * CELL))) return true; return false; };
+  const katPos = new Map();
+  for (const t of kat) { const k = key(t.x, t.y); (katPos.get(k) ?? katPos.set(k, []).get(k)).push(t); }
+  const close = (x, y) => { if (!near(x, y)) return false; for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) for (const t of katPos.get(key(x + gx * CELL, y + gy * CELL)) ?? []) if (Math.hypot(t.x - x, t.y - y) < 4 * S) return true; return false; };
+  const osm = trees.splice(0, trees.length).filter((t) => !close(t.x, t.y));
+  trees.push(...kat, ...osm);
+  return { kataster: kat.length, osmKept: osm.length };
+}
+
 // --- Bäume von der Fahrbahn --------------------------------------------------------------
 // OSM-Bäume stehen oft auf der geschätzten Fahrbahnbreite (Parkstreifen, Schätzwerte). Ein Stamm auf der Fahrbahn
 // wird quer zur Straße an den Bordstein geschoben (auf seiner Seite, die Baumreihe bleibt eine Reihe). Findet sich
@@ -402,7 +651,7 @@ function extractPoisAndAddresses(elements, { nodes, ways, P, toPx, W, H, S, name
 // im Wasser stünden. Danach wird die Regel geprüft; ein
 // Verstoß bricht den Build ab.
 export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, S }) {
-  const trunk = TREE_TRUNK_M * S, gap = 0.3 * S;
+  const trunkOf = (t) => (t.r ? t.r / 100 * S : TREE_TRUNK_M * S), gap = 0.3 * S, trunk = 0.6 * S; // trunk: größter Stamm fürs Raster
   const vx = (k) => vertices[2 * k], vy = (k) => vertices[2 * k + 1];
   const CELL = 300, grid = new Map();
   const add = (item, x0, y0, x1, y1) => {
@@ -418,14 +667,27 @@ export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, S 
       add(sgm, Math.min(sgm.ax, sgm.bx) - half - trunk, Math.min(sgm.ay, sgm.by) - half - trunk, Math.max(sgm.ax, sgm.bx) + half + trunk, Math.max(sgm.ay, sgm.by) + half + trunk);
     }
   }
+  // Kreuzungsflächen wie im Spiel (map.js decodeCity): Knoten mit ≥ 3 Straßen oder einem Knick, Radius = größte
+  // halbe Fahrbahnbreite + 2 m. Auch dort darf kein Stamm stehen.
+  const at = new Map();
+  for (const ed of edges) if (ed.c <= 8 && !ed.pass) for (const v of [ed.a, ed.b]) (at.get(v) ?? at.set(v, []).get(v)).push(ed);
+  const heading = (ed, v) => { const pts = [vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)]; const i = ed.a === v ? 0 : pts.length - 4; const a = Math.atan2(pts[i + 3] - pts[i + 1], pts[i + 2] - pts[i]); return ed.a === v ? a : a + Math.PI; };
+  for (const [v, es] of at) {
+    let corner = es.length >= 3;
+    if (es.length === 2) { let d = heading(es[1], v) - heading(es[0], v) - Math.PI; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; corner = Math.abs(d) > 0.5; }
+    if (!corner) continue;
+    const half = Math.max(...es.map((ed) => ed.w / 10 * S / 2)) + 2 * S;
+    const sgm = { road: true, half, ax: vx(v), ay: vy(v), bx: vx(v), by: vy(v) };
+    add(sgm, sgm.ax - half - trunk, sgm.ay - half - trunk, sgm.ax + half + trunk, sgm.ay + half + trunk);
+  }
   const bbox = (r) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]); } return [x0, y0, x1, y1]; };
   for (const f of [...buildings, ...water]) { const rs = f.rings.map((r) => r.pts); const [x0, y0, x1, y1] = bbox(rs[0]); add({ rings: rs }, x0, y0, x1, y1); }
   const near = (x, y) => grid.get(Math.floor(x / CELL) * 100000 + Math.floor(y / CELL)) ?? [];
-  const worstRoad = (x, y) => {
+  const worstRoad = (x, y, tr) => {
     let worst = null;
     for (const g of near(x, y)) {
       if (!g.road) continue;
-      const need = g.half + trunk, d = Math.sqrt(segDist2(x, y, g.ax, g.ay, g.bx, g.by));
+      const need = g.half + tr, d = Math.sqrt(segDist2(x, y, g.ax, g.ay, g.bx, g.by));
       if (d < need + 1 && (!worst || need - d > worst.pen)) worst = { g, d, pen: need - d }; // 1 px Reserve gegen Rundung
     }
     return worst;
@@ -433,8 +695,9 @@ export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, S 
   const blocked = (x, y) => near(x, y).some((g) => g.rings && g.rings.filter((r) => pointInRing(x, y, r)).length % 2 === 1);
   let moved = 0, dropped = 0;
   for (let i = trees.length - 1; i >= 0; i--) {
-    let [x, y] = trees[i];
-    let hit = worstRoad(x, y);
+    const tree = trees[i], tr = trunkOf(tree);
+    let { x, y } = tree;
+    let hit = worstRoad(x, y, tr);
     if (!hit) { if (blocked(x, y)) { trees.splice(i, 1); dropped++; } continue; } // Baum in Haus/Wasser (OSM-Fehler)
     for (let k = 0; k < 6 && hit; k++) {
       const { g } = hit;
@@ -443,16 +706,16 @@ export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, S 
       const px = g.ax + dx * t, py = g.ay + dy * t;
       let nx = x - px, ny = y - py, n = Math.hypot(nx, ny);
       if (n < 1e-6) { const L = Math.sqrt(L2); nx = -dy / L; ny = dx / L; n = 1; }
-      const out = g.half + trunk + gap;
+      const out = g.half + tr + gap;
       x = px + nx / n * out; y = py + ny / n * out;
-      hit = worstRoad(x, y);
+      hit = worstRoad(x, y, tr);
     }
     if (hit || blocked(x, y)) { trees.splice(i, 1); dropped++; continue; }
-    trees[i] = [Math.round(x), Math.round(y)];
-    if (worstRoad(trees[i][0], trees[i][1])) { trees.splice(i, 1); dropped++; continue; } // Rundung
+    tree.x = Math.round(x); tree.y = Math.round(y);
+    if (worstRoad(tree.x, tree.y, tr)) { trees.splice(i, 1); dropped++; continue; } // Rundung
     moved++;
   }
-  for (const [x, y] of trees) if (worstRoad(x, y) || blocked(x, y)) throw new Error(`Baum bei ${x},${y} steht auf der Fahrbahn, in einem Haus oder im Wasser`);
+  for (const t of trees) if (worstRoad(t.x, t.y, trunkOf(t)) || blocked(t.x, t.y)) throw new Error(`Baum bei ${t.x},${t.y} steht auf der Fahrbahn, in einem Haus oder im Wasser`);
   return { moved, dropped };
 }
 
@@ -487,7 +750,7 @@ function placeMission({ places, toPx, edges, vertices, buildings, S, insideBorde
 
   const gp = places.giver;
   const [gx, gy] = toPx(gp.lat, gp.lon);
-  const sg = snap(gx, gy, (ed) => ed.c >= 3 && ed.c <= 8);
+  const sg = snap(gx, gy, (ed) => ed.c >= 3 && ed.c <= 8 && !ed.pass);
   let off = sg.half + 2.2 * S;
   while (off > sg.half && inBuilding(at(sg, 0, off).x, at(sg, 0, off).y)) off -= 0.3 * S;
   const giver = { ...at(sg, 0, off), name: gp.name };
@@ -503,7 +766,7 @@ function placeMission({ places, toPx, edges, vertices, buildings, S, insideBorde
   wh.k = BUILDING_KIND.warehouse;
   const o = wh.rings[0].pts; let cx = 0, cy = 0; for (let i = 0; i < o.length; i += 2) { cx += o[i]; cy += o[i + 1]; }
   cx /= o.length / 2; cy /= o.length / 2;
-  const sp = snap(cx, cy, (ed) => ed.c <= 9);
+  const sp = snap(cx, cy, (ed) => ed.c <= 9 && !ed.pass);
   const pickup = { ...at(sp, 0, Math.max(0, sp.half - 1.5 * S)), name: pk.name };
   const crates = [];
   for (let k = -2; k <= 2 && crates.length < 4; k++) {
@@ -526,7 +789,7 @@ function placeMission({ places, toPx, edges, vertices, buildings, S, insideBorde
   // Zeitlimit aus der kürzesten Route (ungerichtet, nur Straßen im Gebiet)
   const graph = new Map();
   const link = (a, b, d) => (graph.get(a) ?? graph.set(a, []).get(a)).push([b, d]);
-  for (const ed of edges) if (ed.in && ed.c <= 9) {
+  for (const ed of edges) if (ed.in && ed.c <= 9 && !ed.blocked && !ed.pass) { // wie die Autos: keine Sperren, keine Tordurchfahrten
     const pts = edgePts(ed); let L = 0;
     for (let i = 0; i < pts.length - 2; i += 2) L += Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]);
     link(ed.a, ed.b, L); link(ed.b, ed.a, L);
@@ -545,7 +808,7 @@ function placeMission({ places, toPx, edges, vertices, buildings, S, insideBorde
   const route = dist(sg.ed.a, sp.ed.a) + dist(sp.ed.a, sg.ed.a);
   if (!Number.isFinite(route)) throw new Error('Späti und Lagerhalle sind nicht über Straßen verbunden');
   const meters = route / S;
-  const timeLimit = Math.ceil((meters / 12 + 40) / 10) * 10;
+  const timeLimit = Math.ceil((meters / 10 + 60) / 10) * 10; // 10 m/s Schnitt: überwiegend Tempo 30, Ampeln
 
   for (const [k, p] of Object.entries({ giver, playerSpawn, dropoff, playerCar, pickup })) {
     if (!insideBorder(p.x, p.y)) throw new Error(`${k} liegt außerhalb des Gebiets`);
@@ -564,12 +827,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const fetched = JSON.parse(await readFile(new URL('data/raw/fetched.json', root)));
   osm.bbox = fetched.bbox;
   const places = JSON.parse(await readFile(new URL('data/places.json', root)));
-  const city = buildCity(lor, osm, places, { scale: Number(arg('--scale', 10)) });
+  let kataster = [];
+  try { kataster = JSON.parse(await readFile(new URL('data/raw/baeume.json', root))); } catch { console.warn('data/raw/baeume.json fehlt – nur OSM-Bäume'); }
+  const city = buildCity(lor, osm, places, { scale: Number(arg('--scale', 10)), kataster });
   const json = JSON.stringify(city);
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, json);
   console.log(`${out}: ${(json.length / 1e6).toFixed(2)} MB, ${city.meta.width}×${city.meta.height} px, ` +
     `${city.buildings.length} Gebäude, ${city.edges.length} Straßenkanten, ${city.vertices.length / 2} Knoten, ` +
-    `${city.trees.length / 2} Bäume (${city.meta.trees.moved} an den Bordstein gerückt, ${city.meta.trees.dropped} entfernt), ${city.pois.length} POIs, ${city.addresses.nr.length} Hausnummern, ${city.walls.length} Wandzüge, Route ${city.places.routeMeters} m → ${city.places.timeLimit} s, ` +
+    `${city.trees.g.length} Bäume (${city.meta.trees.kataster} Kataster, ${city.meta.trees.osmKept} OSM; ${city.meta.trees.moved} an den Bordstein gerückt, ${city.meta.trees.dropped} entfernt), ${JSON.stringify(city.meta.access)}, ${city.pois.length} POIs, ${city.addresses.nr.length} Hausnummern, ${city.walls.length} Wandzüge, Route ${city.places.routeMeters} m → ${city.places.timeLimit} s, ` +
     `${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }

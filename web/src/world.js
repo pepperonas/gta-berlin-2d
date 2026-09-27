@@ -1,14 +1,17 @@
 // Spielwelt: verbindet Stadt, Spieler, Autos, Passanten und Mission zu einem Simulationsschritt.
 // Enthält kein DOM – Eingaben kommen als abstrakter Zustand (siehe input.js), Ausgaben als Ereignisse.
-import { PLAYER, PED, TRAFFIC, CAR } from './config.js';
+import { PLAYER, PED, TRAFFIC, CAR, PARKED } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
-import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb } from './collision.js';
+import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage } from './car.js';
 import { placeOnLane, spawnSpot, driveAi } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
-import { insideBorder, inBuilding, locationName } from './map.js';
+import { insideBorder, inBuilding, locationName, hash01 } from './map.js';
+import { parkingStrip } from './street.js';
+import { PARK } from './citycodes.js';
+import { pointAlong } from './geom.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 
@@ -49,7 +52,7 @@ function spawnPed(w, minR, maxR) {
 // Bevölkerung um die Kamera halten: Fernes abbauen, Fehlendes im Ring außerhalb der Sicht erzeugen.
 function managePopulation(w) {
   const cam = w.camera, far = TRAFFIC.despawn;
-  const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.driver === 'player';
+  const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player';
   w.cars = w.cars.filter((c) => keep(c) || Math.hypot(c.x - cam.x, c.y - cam.y) < far);
   w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
   const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
@@ -119,6 +122,72 @@ export function teleportTo(w, spot) {
   w.peds = [];
   for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
   for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
+}
+
+// --- Geparkte Autos am Straßenrand -------------------------------------------------------
+const SLOT_M = { parallel: 5.6, diagonal: 3.0, perpendicular: 2.6 };
+
+// Stellplätze einer Kante (deterministisch, einmal berechnet): Mitte des Parkstreifens, Autoausrichtung je Aufstellung.
+export function parkingSlots(city, e) {
+  if (e._slots) return e._slots;
+  const S = city.scale, slots = [];
+  if (e.inside && e.cls <= 8 && !e.bridge) {
+    // StVO § 12: kein Parken bis 5 m vor/nach der Ecke einer Kreuzung (Ecke = halbe Breite der Querstraße vom Knoten)
+    const cornerGap = (n) => { const nd = city.nodes[n]; let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2); return nd.edges.length > 2 ? r + 5 * S : 2 * S; };
+    const m0 = cornerGap(e.a), m1 = cornerGap(e.b), p = { x: 0, y: 0, ux: 1, uy: 0 };
+    const avoid = [city.places.dropoff, city.places.playerCar, city.places.pickup, ...(city.parked ?? [])];
+    for (const side of [-1, 1]) {
+      const ps = parkingStrip(e.cs, side);
+      if ((ps.kind !== PARK.lane && ps.kind !== PARK.half) || ps.depth < 0.9 * S) continue;
+      const step = SLOT_M[ps.orient] * S;
+      for (let i = 0, s = m0 + step / 2; s < e.len - m1 - step / 2; i++, s += step) {
+        if (hash01(e.id * 977 + (side + 1) * 31 + i * 7919) >= PARKED.share) continue;
+        pointAlong(e.pts, s, p);
+        const x = p.x - p.uy * ps.offset, y = p.y + p.ux * ps.offset;
+        if (avoid.some((q) => q && Math.hypot(q.x - x, q.y - y) < 12 * S)) continue;
+        let angle = Math.atan2(p.uy, p.ux) + (side < 0 ? Math.PI : 0);          // parallel in Fahrtrichtung der Seite
+        if (ps.orient === 'perpendicular') angle += side * Math.PI / 2;
+        else if (ps.orient === 'diagonal') angle += side * Math.PI / 4;
+        slots.push({ key: `${e.id}:${side}:${i}`, x, y, angle });
+      }
+    }
+  }
+  e._slots = slots;
+  return slots;
+}
+
+function slotFree(w, slot) {
+  const probe = { x: slot.x, y: slot.y, angle: slot.angle, hw: CAR.length / 2, hh: CAR.width / 2 };
+  for (const s of w.solids.query(obbBounds(probe), [])) {
+    const m = s.seg ? obbVsSegment(probe, s) : s.r !== undefined ? circleVsObb(s.x, s.y, s.r, probe) : obbVsRect(probe, s);
+    if (m && m.depth > 1) return false;
+  }
+  return w.cars.every((c) => Math.hypot(c.x - slot.x, c.y - slot.y) > 30);
+}
+
+// Parkende Autos im Umkreis der Kamera erzeugen, ferne wieder abbauen (Stellplatz wird dann wieder frei).
+function manageParked(w) {
+  const cam = w.camera;
+  w.parkedKeys ??= new Set();
+  w.cars = w.cars.filter((c) => {
+    if (c.role !== 'curb' || c.driver === 'player' || c.id === w.playerCarId || c.cargo) return true;
+    if (Math.hypot(c.x - cam.x, c.y - cam.y) < PARKED.despawn) return true;
+    w.parkedKeys.delete(c.parkKey);
+    return false;
+  });
+  if ((w.parkTick = (w.parkTick ?? 0) + 1) % 20 !== 1) return;
+  const R = PARKED.radius, seen = new Set();
+  for (const sg of w.city.edgeSegs.query({ x: cam.x - R, y: cam.y - R, w: 2 * R, h: 2 * R }, [])) {
+    if (seen.has(sg.e)) continue;
+    seen.add(sg.e);
+    for (const slot of parkingSlots(w.city, sg.e)) {
+      if (w.parkedKeys.has(slot.key) || Math.hypot(slot.x - cam.x, slot.y - cam.y) > R || !slotFree(w, slot)) continue;
+      const car = createCar({ x: slot.x, y: slot.y, angle: slot.angle, color: CAR_COLORS[Math.floor(hash01(slot.x * 31 + slot.y) * CAR_COLORS.length)], role: 'curb' });
+      car.parkKey = slot.key; car.controls.handbrake = true;
+      w.parkedKeys.add(slot.key);
+      w.cars.push(car);
+    }
+  }
 }
 
 export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar) ?? null; }
@@ -257,6 +326,8 @@ export function updateWorld(w, input, dt) {
   for (const c of w.cars) if (c.driver === 'npc') driveAi(c, w, dt);
   for (const c of w.cars) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
+    // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
+    if (c.role === 'curb' && c.driver === null && !c.wrecked && Math.abs(c.vx) + Math.abs(c.vy) < 2 && Math.abs(c.angVel) < 0.01) { c.vx = c.vy = c.angVel = 0; continue; }
     stepCar(c, dt, w.city);
     collideCarWorld(c, w, w.events);
   }
@@ -325,6 +396,7 @@ export function updateWorld(w, input, dt) {
     if (idx >= 0) w.peds.splice(idx, 1);
   }
   managePopulation(w);
+  manageParked(w);
 
   w.events.push(...updateMission(m, missionCtx(w, input), dt));
   if (m.state === 'success') {

@@ -5,7 +5,11 @@ import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawPerson, drawTree, shade } from './assets.js';
 import { playerCar, speedOf } from './world.js';
-import { offsetPolyline } from './geom.js';
+import { signalState } from './signals.js';
+import { offsetPolyline, polylineLength } from './geom.js';
+import { laneOffsets, parkingStrip } from './street.js';
+import { cutPolyline } from './roadgraph.js';
+import { PARK, SURFACE } from './citycodes.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -55,6 +59,66 @@ export function linePath(pts) {
 // Path2D je Kartenobjekt einmal erzeugen und am Objekt merken.
 export const pathOf = (f) => (f._path ??= f.pts ? linePath(f.pts) : ringPath(f.rings));
 export { AREA_COLOR, WATER, ASPHALT };
+
+const PARK_COLOR = '#474a50';
+const FENCE_STYLE = { 0: ['#8a8f95', 1.5, []], 1: ['#a08f78', 3.5, []], 2: ['#3d6e2f', 7, []], 3: ['#3a3d42', 4, [1, 16]] };
+
+// Zufahrten einer Ampelkreuzung: je Kante die Haltelinie vor der Kreuzung (Mitte bis rechter Bordstein, in Fahrtrichtung).
+function signalApproaches(city, n) {
+  const nd = city.nodes[n], out = [];
+  const es = nd.edges.map((k) => city.edges[k]).filter((e) => e.cls <= 8);
+  const r = Math.max(...es.map((e) => e.w / 2)) + 2 * city.scale;
+  for (const e of es) {
+    const incoming = e.b === n ? e.oneway !== -1 : e.oneway !== 1; // darf man auf dieser Kante zur Kreuzung fahren?
+    if (!incoming) continue;
+    const p = e.pts, i = e.b === n ? p.length - 4 : 2;
+    const [x0, y0, x1, y1] = e.b === n ? [p[i], p[i + 1], p[i + 2], p[i + 3]] : [p[i], p[i + 1], p[i - 2], p[i - 1]];
+    const L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L; // Richtung zur Kreuzung
+    const d = Math.min(r + 4, L * 0.9);
+    const heading = Math.atan2(uy, ux);
+    const from = e.oneway ? -e.w / 2 : 0;
+    out.push({ x: nd.x - ux * d, y: nd.y - uy * d, heading, from, to: e.w / 2 });
+  }
+  return out;
+}
+let cobblePattern = null;
+function makeCobblePattern(ctx) {
+  const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(12, 12) : Object.assign(document.createElement('canvas'), { width: 12, height: 12 });
+  const g = c.getContext('2d');
+  g.fillStyle = '#4d4f53'; g.fillRect(0, 0, 12, 12);
+  g.fillStyle = '#5c5e62';
+  for (const [x, y] of [[0.5, 0.5], [6.5, 0.5], [3.5, 6.5], [9.5, 6.5], [-2.5, 6.5]]) g.fillRect(x, y, 5, 5);
+  return ctx.createPattern(c, 'repeat') ?? '#4d4f53';
+}
+
+// Markierungen einer Kante einmalig als Pfade (Ränder an Kreuzungen gekürzt).
+function buildMarks(e, city) {
+  if (e.cls > 8 || e.bridge && e.w < 50) return null;
+  const cs = e.cs, trim = (n) => {
+    const nd = city.nodes[n];
+    if (nd.edges.length < 3) return 0;
+    let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2);
+    return r + 10;
+  };
+  const L = e.len, s0 = trim(e.a), s1 = L - trim(e.b);
+  if (s1 - s0 < 30) return null;
+  const line = (off) => linePath(cutPolyline(offsetPolyline(e.pts, off), s0, s1));
+  const m = { strips: [], solid: [], dashed: [], fine: [] };
+  for (const side of [-1, 1]) {
+    const ps = parkingStrip(cs, side);
+    if ((ps.kind === PARK.lane || ps.kind === PARK.half) && ps.depth > 5) m.strips.push({ path: line(ps.offset), w: ps.depth });
+    const sd = side < 0 ? cs.left : cs.right;
+    if (sd.cycle > 5) {
+      m.solid.push(line(side * (cs.width / 2 - sd.parkW - sd.cycle))); // Radstreifen: durchgezogen zur Fahrbahn
+      if (sd.parkW > 5) m.fine.push(line(side * (cs.width / 2 - sd.parkW))); // Trennung zum Parkstreifen
+    }
+  }
+  const lo = laneOffsets(cs, city.scale);
+  if (cs.fwd && cs.bwd && !lo.narrow && cs.width >= 55) m.dashed.push(line(lo.center)); // Mittellinie bei Gegenverkehr
+  for (let i = 1; i < cs.fwd; i++) m.dashed.push(line(lo.center + i * lo.laneW));
+  for (let j = 1; j < cs.bwd; j++) m.dashed.push(line(lo.center - j * lo.laneW));
+  return m;
+}
 
 let windowPatterns = null;
 function makeWindowPatterns(ctx) {
@@ -123,11 +187,12 @@ export class Renderer {
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
     windowPatterns ??= makeWindowPatterns(ctx);
+    cobblePattern ??= makeCobblePattern(ctx);
     ctx.lineDashOffset = 0; // gestrichelte Markierungen stehen fest auf der Straße
 
     // Sichtbare Kartenobjekte (unten großzügiger: hohe Häuser ragen ins Bild).
     const q = city.render.query({ x: v.x - 60, y: v.y - 60, w: v.w + 120, h: v.h + 420 }, this._q ??= []);
-    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [];
+    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [], junctions = [], crossings = [], barriers = [], fences = [];
     for (const f of q) {
       switch (f.layer) {
         case 'area': areas.push(f); break;
@@ -137,6 +202,10 @@ export class Renderer {
         case 'rail': rails.push(f); break;
         case 'building': buildings.push(f); break;
         case 'tree': trees.push(f); break;
+        case 'junction': junctions.push(f); break;
+        case 'crossing': crossings.push(f); break;
+        case 'barrier': barriers.push(f); break;
+        case 'fence': fences.push(f); break;
       }
     }
 
@@ -175,16 +244,31 @@ export class Renderer {
       if (e.bridge) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
       else if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
     }
+    ctx.fillStyle = CURB;
+    for (const j of junctions) if (!j.bridge) { ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 2.5, 0, Math.PI * 2); ctx.fill(); }
+    for (const j of junctions) { ctx.fillStyle = j.cobble ? cobblePattern : ASPHALT; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
     for (const e of edges) {
-      ctx.strokeStyle = e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : ASPHALT;
+      ctx.strokeStyle = e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobblePattern : ASPHALT;
       ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
     }
-    ctx.strokeStyle = 'rgba(245,245,235,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([16, 18]);
-    for (const e of edges) if (!e.oneway && e.cls <= 7 && e.w >= 70) ctx.stroke(pathOf(e)); // Mittellinie
-    ctx.setLineDash([]);
+    this.drawStreetMarkings(edges, world.city);
+    this.drawCrossings(crossings);
+    this.drawSignals(world, v);
     ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
     for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
     ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+
+    // Zäune, Mauern, Hecken, Poller
+    ctx.lineCap = 'round';
+    for (const f of fences) {
+      const st = FENCE_STYLE[f.kind] ?? FENCE_STYLE[0];
+      ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.setLineDash(st[2]); ctx.stroke(pathOf(f)); ctx.setLineDash([]);
+    }
+    for (const b of barriers) {
+      ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.beginPath(); ctx.arc(b.x - 0.6, b.y - 0.8, 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineCap = 'butt';
 
     // 5) Bremsspuren
     ctx.lineWidth = 3; ctx.lineCap = 'round';
@@ -252,6 +336,56 @@ export class Renderer {
     if (m.state === 'toDropoff') ring(p.dropoff, 'rgba(80,220,120,A)', MISSION.zoneRadius);
   }
 
+
+  // Zebrastreifen (Balken in Fahrtrichtung über die ganze Fahrbahn), Ampel- und markierte Furten (zwei Linien).
+  drawCrossings(crossings) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(245,245,238,0.85)';
+    for (const z of crossings) {
+      const w = z.edge.w;
+      ctx.save();
+      ctx.transform(z.ux, z.uy, -z.uy, z.ux, z.x, z.y); // lokale Achsen: x entlang der Straße, y quer
+      if (z.kind === 'zebra') for (let y = -w / 2 + 3; y < w / 2 - 3; y += 10) ctx.fillRect(-20, y, 40, 5);
+      else { ctx.fillRect(-20, -w / 2, 2, w); ctx.fillRect(18, -w / 2, 2, w); }
+      ctx.restore();
+    }
+  }
+
+  // Ampeln: Haltelinie auf der Zufahrtsseite und ein Signal am rechten Fahrbahnrand, Farbe nach aktuellem Umlauf.
+  drawSignals(world, v) {
+    const ctx = this.ctx, city = world.city;
+    const list = (city._signalList ??= [...city.signals].map((n) => ({ n, x: city.nodes[n].x, y: city.nodes[n].y, app: signalApproaches(city, n) })));
+    for (const s of list) {
+      if (s.x < v.x - 150 || s.x > v.x + v.w + 150 || s.y < v.y - 150 || s.y > v.y + v.h + 150) continue;
+      for (const a of s.app) {
+        const state = signalState(city, s.n, a.heading, world.time);
+        ctx.save();
+        ctx.transform(Math.cos(a.heading), Math.sin(a.heading), -Math.sin(a.heading), Math.cos(a.heading), a.x, a.y);
+        ctx.fillStyle = 'rgba(245,245,238,0.9)'; ctx.fillRect(-3, a.from, 4, a.to - a.from); // Haltelinie
+        ctx.fillStyle = '#1d1f22'; ctx.fillRect(-4, a.to + 3, 8, 18);                      // Signalgeber
+        const c = { red: '#ff3b30', yellow: '#ffcc00', green: '#34c759' }[state];
+        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(0, a.to + 3 + (state === 'red' ? 4 : state === 'yellow' ? 9 : 14), 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  // Straßenraum nach Querschnitt: Parkstreifen, Radfahrstreifen, Mittellinie, Spurtrennlinien.
+  // An Kreuzungen enden die Markierungen am Rand der Querstraße.
+  drawStreetMarkings(edges, city) {
+    const ctx = this.ctx;
+    const marks = edges.map((e) => (e._marks ??= buildMarks(e, city))).filter(Boolean);
+    ctx.lineCap = 'butt';
+    for (const m of marks) for (const st of m.strips) { ctx.strokeStyle = PARK_COLOR; ctx.lineWidth = st.w; ctx.stroke(st.path); }
+    ctx.strokeStyle = 'rgba(245,245,235,0.85)'; ctx.lineWidth = 2;
+    for (const m of marks) for (const p of m.solid) ctx.stroke(p);
+    ctx.setLineDash([16, 18]);
+    for (const m of marks) for (const p of m.dashed) ctx.stroke(p);
+    ctx.setLineDash([4, 6]); ctx.lineWidth = 1.5;
+    for (const m of marks) for (const p of m.fine) ctx.stroke(p);
+    ctx.setLineDash([]);
+    ctx.lineCap = 'round';
+  }
 
   // Gleise maßstäblich: jeder OSM-Weg ist ein Gleis (Spurweite 1435 mm, Schwellen 2,6 m im Abstand von 0,6 m).
   // Ebenen nacheinander über ALLE Gleise zeichnen (Bett/Viadukt → Schwellen → Schienen), damit parallele Gleise
@@ -335,7 +469,7 @@ export class Renderer {
         if (L < 1) continue;
         const nx = out * ey / L, ny = -out * ex / L;
         if (nx * dx + ny * dy >= 0) continue;
-        faces.push({ x0, y0, ex, ey, L, ny, depth: -((x0 + x1) * dx + (y0 + y1) * dy) });
+        faces.push({ x0, y0, ex, ey, L, ny, ri, ei: i / 2, depth: -((x0 + x1) * dx + (y0 + y1) * dy) });
       }
     }
     faces.sort((a, c) => a.depth - c.depth);
@@ -351,6 +485,13 @@ export class Renderer {
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
         ctx.fillStyle = col.pat;
         ctx.fillRect(4, 2, f.L - 8, H - 4);
+        ctx.restore();
+      }
+      if (b.doors) for (const [dr, de, dt] of b.doors) if (dr === f.ri && de === f.ei) { // Hauseingang
+        ctx.save();
+        ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
+        const u = dt / 1000 * f.L;
+        ctx.fillStyle = '#3b2a1e'; ctx.fillRect(u - 6, 0, 12, Math.min(22, H * 0.4));
         ctx.restore();
       }
       if (!front || f.ny * f.L > front.ny * front.L) front = f;

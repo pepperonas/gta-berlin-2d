@@ -38,7 +38,18 @@ function fixture() {
     N(75, 52.4919, 13.4270, { highway: 'bus_stop', name: 'Einbahn' }),
     N(76, 52.49252, 13.4235, { 'addr:street': 'Teststraße', 'addr:housenumber': '12' }), // Eingang = Gebäudenummer
     N(77, 52.4918, 13.4250, { 'addr:street': 'Teststraße', 'addr:housenumber': '7a' }),
-    Wy(10, [1, 2, 3, 4], { highway: 'residential', name: 'Teststraße' }),
+    // Tordurchfahrt durch ein Haus
+    N(80, 52.49228, 13.4254), N(81, 52.4934, 13.4254),
+    N(82, 52.4925, 13.4250), N(83, 52.4925, 13.4258), N(84, 52.4931, 13.4258), N(85, 52.4931, 13.4250),
+    Wy(103, [82, 83, 84, 85, 82], { building: 'apartments' }),
+    Wy(110, [80, 81], { highway: 'service', tunnel: 'building_passage' }),
+    // Poller mitten auf dem Pollerweg (Modalfilter)
+    N(90, 52.4935, 13.4285, { barrier: 'bollard' }), N(92, 52.4935, 13.4295),
+    Wy(111, [9, 90, 92], { highway: 'residential', name: 'Pollerweg' }),
+    // Ampel an der Kreuzung Teststraße/Querstraße (Signal-Knoten auf der Zufahrt, nicht auf dem Kreuzungsknoten)
+    N(93, 52.49212, 13.4225, { highway: 'traffic_signals' }),
+    // Abbiegeverbot: von der Teststraße nicht links in die Einbahn
+    Wy(10, [1, 2, 3, 4], { highway: 'residential', name: 'Teststraße', width: '9' }),
     Wy(11, [5, 7], { highway: 'residential', name: 'Querstraße' }),
     Wy(12, [7, 8], { highway: 'residential', name: 'Querstraße', bridge: 'yes' }),
     Wy(13, [8, 2, 6], { highway: 'residential', name: 'Querstraße' }),
@@ -47,17 +58,21 @@ function fixture() {
     Wy(100, [30, 31, 32, 33, 30], { building: 'apartments', 'building:levels': '4', 'addr:street': 'Teststraße', 'addr:housenumber': '12' }),
     Wy(101, [40, 41, 42, 43, 40], { building: 'warehouse' }),
   ];
+  elements.push({ type: 'relation', id: 500, tags: { type: 'restriction', restriction: 'no_left_turn' },
+    members: [{ type: 'way', ref: 10, role: 'from' }, { type: 'node', ref: 3, role: 'via' }, { type: 'way', ref: 14, role: 'to' }] });
+  // Baumkataster: Winterlinde genau dort, wo auch der OSM-Parkbaum steht (Knoten 50)
+  const kataster = [[13.421, 52.4935, 'Tilia', 'Winter-Linde', 8, 120, 15, 1]];
   const places = { giver: { lat: 52.49225, lon: 13.4235, name: 'Späti' }, pickup: { osmWay: 101, name: 'Lager' }, dropoff: { name: 'Parkplatz' } };
-  return { lor, osm: { elements }, places };
+  return { lor, osm: { elements }, places, kataster };
 }
 
 const f = fixture();
-const json = buildCity(f.lor, f.osm, f.places);
+const json = buildCity(f.lor, f.osm, f.places, { kataster: f.kataster });
 const city = decodeCity(JSON.parse(JSON.stringify(json)));
 
 test('Build ist deterministisch', () => {
   const g = fixture();
-  assert.equal(JSON.stringify(buildCity(g.lor, g.osm, g.places)), JSON.stringify(json));
+  assert.equal(JSON.stringify(buildCity(g.lor, g.osm, g.places, { kataster: g.kataster })), JSON.stringify(json));
 });
 
 test('Projektion: Abstände stimmen auf < 0,5 % mit der Kugel überein', () => {
@@ -84,7 +99,8 @@ test('Straßengraph: Knoten an Kreuzungen, Einbahnstraße, Brücke, Namen', () =
   assert.ok(cross, 'Kreuzung Teststraße/Querstraße');
   assert.deepEqual(byName('Einbahn').map((e) => e.oneway), [1]);
   assert.equal(byName('Querstraße').filter((e) => e.bridge).length, 1);
-  assert.ok(Math.abs(byName('Teststraße')[1].w - 90) < 1, 'Standardbreite Wohnstraße 9 m');
+  assert.ok(Math.abs(byName('Teststraße')[1].w - 90) < 1, 'width=9 (Bordstein zu Bordstein)');
+  assert.ok(Math.abs(byName('Querstraße')[0].w - 55) < 1, 'ohne width/lanes/Parkstreifen: Wohnstraße 5,5 m Fahrbahn');
   assert.equal(locationName(city, cross.x, cross.y).split(' / ').sort().join(), 'Querstraße,Teststraße');
 });
 
@@ -106,7 +122,7 @@ test('Ufer ist Wand, an der Brücke aber offen; Brücke hat Geländer', () => {
 
 test('Gebäude: Höhe aus Geschossen, Späti und Lagerhalle markiert, Kiez übernommen', () => {
   const kinds = city.buildings.map((b) => b.kind).sort();
-  assert.deepEqual(kinds, [BUILDING_KIND.spaeti, BUILDING_KIND.small, BUILDING_KIND.warehouse].sort());
+  assert.deepEqual(kinds, [BUILDING_KIND.house, BUILDING_KIND.spaeti, BUILDING_KIND.small, BUILDING_KIND.warehouse].sort());
   const house = city.buildings.find((b) => b.kind === BUILDING_KIND.spaeti);
   assert.equal(house.meters, 13.8);
   assert.deepEqual(city.kieze.map((k) => k.n), ['Testkiez']);
@@ -124,7 +140,7 @@ test('Missionsorte eingerastet, Zeitlimit aus der Route', () => {
 
 test('Bäume auf der Fahrbahn rücken an den Bordstein ihrer Seite oder entfallen', async () => {
   const { treeOnRoad, inBuilding } = await import('../web/src/map.js');
-  assert.deepEqual(json.meta.trees, { moved: 2, dropped: 1 });
+  assert.deepEqual([json.meta.trees.moved, json.meta.trees.dropped], [2, 1]);
   assert.equal(city.trees.length, 3, 'Parkbaum + zwei verschobene Straßenbäume');
   assert.equal(city.droppedTrees, 0);
   const street = city.edges.find((e) => e.name === 'Teststraße' && e.pts[0] < 40000 && e.len > 2000);
@@ -149,7 +165,10 @@ test('Schutz im Spiel: ein Baum auf der Fahrbahn in einer fremden Karte wird bei
   const j = JSON.parse(JSON.stringify(json));
   const e = city.edges.find((x) => x.name === 'Teststraße');
   const mid = [Math.round((e.pts[0] + e.pts[2]) / 2), Math.round((e.pts[1] + e.pts[3]) / 2)];
-  j.trees = [...j.trees.slice(0, 2).map((v, i) => v), ...[mid[0] - j.trees[0], mid[1] - j.trees[1]], ...j.trees.slice(2)];
+  // zusätzlicher Baum mitten auf der Teststraße (nach dem ersten, delta-kodiert)
+  const t = j.trees;
+  t.xy = [...t.xy.slice(0, 2), mid[0] - t.xy[0], mid[1] - t.xy[1], ...t.xy.slice(2)];
+  t.g = [t.g[0], 0, ...t.g.slice(1)]; t.c = [t.c[0], 0, ...t.c.slice(1)]; t.r = [t.r[0], 0, ...t.r.slice(1)];
   const c2 = decodeCity(j);
   assert.equal(c2.droppedTrees, 1);
   assert.equal(c2.trees.length, city.trees.length);
@@ -171,4 +190,51 @@ test('Hausnummern: Gebäude und Eingang mit derselben Nummer zählen einmal, Num
   const a7 = city.addresses.find((a) => a.nr === '7a');
   const e = city.edges.find((x) => x.name === 'Teststraße' && x.len > 2000);
   assert.equal(locationName(city, a7.x, e.pts[1]), 'Teststraße 7a');
+});
+
+test('Tordurchfahrt: Kante bleibt erhalten, die Hauswand ist im Durchfahrtskorridor offen', () => {
+  const pass = city.edges.find((e) => e.passage);
+  assert.ok(pass, 'Durchfahrt als Kante vorhanden');
+  const house = city.buildings.find((b) => b.walls);
+  assert.ok(house, 'Haus hat eigene Wandzüge');
+  const [ax, ay, bx, by] = [pass.pts[0], pass.pts[1], pass.pts[pass.pts.length - 2], pass.pts[pass.pts.length - 1]];
+  for (const w of house.walls) for (let i = 0; i < w.length - 2; i += 2) {
+    const mx = (w[i] + w[i + 2]) / 2, my = (w[i + 1] + w[i + 3]) / 2;
+    assert.ok(Math.sqrt(segDist2(mx, my, ax, ay, bx, by)) > 10, 'Wandstück liegt in der Durchfahrt');
+  }
+  assert.ok(house.walls.length >= 2, 'Nord- und Südwand sind aufgeschnitten');
+});
+
+test('Poller auf der Straße sperren sie für Autos (Reihe quer über die Fahrbahn, Fußgänger kommen durch)', async () => {
+  const { buildLaneGraph } = await import('../web/src/roadgraph.js');
+  const pw = city.edges.filter((e) => e.name === 'Pollerweg');
+  assert.ok(pw.length >= 1 && pw.every((e) => e.blocked));
+  assert.ok(!buildLaneGraph(city).lanes.some((l) => l.edge.name === 'Pollerweg'), 'kein KI-Verkehr durch den Modalfilter');
+  const row = city.barriers.filter((b) => Math.abs(b.y - city.barriers[0].y) < 100);
+  assert.ok(row.length >= 3, `${row.length} Poller`);
+  const xs = row.map((b) => b.y).sort((a, b) => a - b);
+  for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] >= 17, 'Abstand ≥ 1,7 m: Fußgänger passen durch, Autos (2 m) nicht');
+});
+
+test('Ampel wird der Kreuzung zugeordnet; Abbiegeverbot filtert die Folgespur', async () => {
+  const { buildLaneGraph, turnAngle } = await import('../web/src/roadgraph.js');
+  const cross = city.nodes.find((n) => n.edges.length === 4 && n.edges.some((k) => city.edges[k].name === 'Querstraße'));
+  assert.ok(city.signals.has(cross.id), 'Signal liegt 9 m vor der Kreuzung und gehört zu ihr');
+  assert.equal(city.signals.size, 1);
+  const via = city.nodes.find((n) => n.edges.some((k) => city.edges[k].name === 'Einbahn') && n.edges.some((k) => city.edges[k].name === 'Teststraße'));
+  const west = city.edges.find((e) => e.name === 'Teststraße' && e.b === via.id);
+  const einbahn = city.edges.find((e) => e.name === 'Einbahn');
+  assert.ok(city.turnBans.has(`${west.id}>${via.id}>${einbahn.id}`));
+  const lane = buildLaneGraph(city).lanes.find((l) => l.edge === west && l.to === via.id);
+  assert.ok(lane.next.length && !lane.next.some((m) => m.edge === einbahn), 'nicht links in die Einbahn');
+  void turnAngle;
+});
+
+test('Baumkataster ersetzt den OSM-Baum an derselben Stelle (Gattung, Krone, Stamm)', () => {
+  assert.equal(json.meta.trees.kataster, 1);
+  const linde = city.trees.find((t) => t.genus === 'Tilia');
+  assert.ok(linde, 'Winterlinde aus dem Kataster');
+  assert.equal(linde.size, 40, 'Krone 8 m → Radius 40 px');
+  assert.ok(Math.abs(linde.r - 1.9) < 0.1, 'Stamm aus 120 cm Umfang');
+  assert.ok(!city.trees.some((t) => t !== linde && Math.hypot(t.x - linde.x, t.y - linde.y) < 40), 'OSM-Doppel entfernt');
 });

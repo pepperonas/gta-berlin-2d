@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, updateWorld, playerCar } from '../web/src/world.js';
 import { MISSION } from '../web/src/config.js';
-import { idle, route, driveTo } from './helpers/bot.js';
+import { idle, route, driveTo, followRoute } from './helpers/bot.js';
 import { realCity } from './helpers/city.js';
 
 const city = realCity();
@@ -38,14 +38,10 @@ function enterOwnCar(w) {
 
 // Fährt über Kreuzungen zum Ziel und hält in der Zone an.
 function driveRoute(w, target, maxSecs = 600) {
-  const car = playerCar(w);
-  const pts = [...route(w.city, car, target), target];
+  const pts = [...route(w.city, playerCar(w), target), target], state = {};
   for (let i = 0; i < maxSecs * 60; i++) {
     const inp = idle();
-    const last = pts.length === 1;
-    const d = driveTo(w, pts[0], inp, { stop: last });
-    if (!last && d < 40) pts.shift();
-    if (last && d < 20 && Math.hypot(car.vx, car.vy) < 10) return true;
+    if (followRoute(w, pts, inp, state)) return true;
     updateWorld(w, inp, DT);
   }
   return false;
@@ -56,12 +52,12 @@ test('kompletter Missionsablauf: annehmen → abholen → abliefern → Erfolg',
   acceptMission(w);
   enterOwnCar(w);
   const car = playerCar(w);
-  assert.ok(driveRoute(w, w.city.places.pickup), 'Lagerhalle nicht erreicht');
+  assert.ok(driveRoute(w, w.city.places.pickup), `Lagerhalle nicht erreicht (${w.mission.state}, ${w.mission.timer.toFixed(0)} s übrig)`);
   assert.equal(w.mission.prompt, 'A gedrückt halten: Kisten einladen');
   for (let i = 0; i < (MISSION.loadTime + 0.2) * 60; i++) step(w, { actionHeld: true });
   assert.equal(w.mission.state, 'toDropoff');
   assert.ok(car.cargo);
-  assert.ok(driveRoute(w, w.city.places.dropoff), 'Abgabeort nicht erreicht');
+  assert.ok(driveRoute(w, w.city.places.dropoff), `Abgabeort nicht erreicht (${w.mission.state}, ${w.mission.timer.toFixed(0)} s übrig, ${Math.round(Math.hypot(car.x - w.city.places.dropoff.x, car.y - w.city.places.dropoff.y))} px entfernt)`);
   step(w);
   assert.equal(w.mission.prompt, 'A: Kisten abliefern');
   step(w, { action: true });

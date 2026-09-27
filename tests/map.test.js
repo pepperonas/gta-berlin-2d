@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { surfaceAt, inBuilding, insideBorder, locationName, districtAt, nearestEdge, T } from '../web/src/map.js';
+import { surfaceAt, inBuilding, insideBorder, locationName, districtAt, nearestEdge, T, isRoadSurface } from '../web/src/map.js';
 import { realCity, realCityJson } from './helpers/city.js';
 
 const city = realCity();
@@ -54,8 +54,8 @@ test('Missionsorte: im Gebiet, nicht in Häusern, Straßenname stimmt', () => {
     assert.ok(!inBuilding(city, p[k].x, p[k].y), `${k} im Haus`);
     assert.notEqual(surfaceAt(city, p[k].x, p[k].y), T.WATER, `${k} im Wasser`);
   }
-  assert.equal(surfaceAt(city, p.pickup.x, p.pickup.y), T.ROAD, 'Einladen auf der Fahrbahn');
-  assert.equal(surfaceAt(city, p.dropoff.x, p.dropoff.y), T.ROAD, 'Abliefern auf der Fahrbahn');
+  assert.ok(isRoadSurface(surfaceAt(city, p.pickup.x, p.pickup.y)), 'Einladen auf der Fahrbahn');
+  assert.ok(isRoadSurface(surfaceAt(city, p.dropoff.x, p.dropoff.y)), 'Abliefern auf der Fahrbahn');
   assert.match(locationName(city, p.giver.x, p.giver.y), /^Wrangelstraße \d+[a-z]?$/, 'Straße mit Hausnummer');
   assert.equal(districtAt(city, p.pickup.x, p.pickup.y), 'Nord-Neukölln');
   assert.ok(city.timeLimit >= 300 && city.timeLimit <= 1200, `Zeitlimit ${city.timeLimit} s`);
@@ -71,7 +71,7 @@ test('Untergrund und Straßennamen', async () => {
   assert.ok(bridges.length > 20, `${bridges.length} Straßenbrücken`);
   const over = bridges.filter((e) => { const m = e.pts.length / 2 & ~1; return city.water.some((w) => w.bbox.x < e.pts[m] && e.pts[m] < w.bbox.x + w.bbox.w && w.bbox.y < e.pts[m + 1] && e.pts[m + 1] < w.bbox.y + w.bbox.h); });
   assert.ok(over.length > 10);
-  for (const e of over) { const m = e.pts.length / 2 & ~1; assert.equal(surfaceAt(city, e.pts[m], e.pts[m + 1]), T.ROAD); }
+  for (const e of over) { const m = e.pts.length / 2 & ~1; assert.ok(isRoadSurface(surfaceAt(city, e.pts[m], e.pts[m + 1]))); }
   const node = city.nodes.find((n) => { const names = n.edges.map((k) => city.edges[k].name); return names.includes('Oranienstraße') && names.includes('Adalbertstraße'); });
   assert.ok(node, 'Kreuzung Oranien-/Adalbertstraße');
   assert.match(locationName(city, node.x, node.y), /Oranienstraße \/ Adalbertstraße|Adalbertstraße \/ Oranienstraße/);
@@ -79,8 +79,8 @@ test('Untergrund und Straßennamen', async () => {
 
 test('Karte ist eine gültige, kompakte Datei', () => {
   const j = realCityJson();
-  assert.equal(j.meta.version, 1);
-  assert.ok(JSON.stringify(j).length < 8e6);
+  assert.equal(j.meta.version, 2);
+  assert.ok(JSON.stringify(j).length < 10e6, 'Karte unter 10 MB');
   assert.ok(j.meta.osmBase, 'OSM-Stand vermerkt');
 });
 
@@ -130,4 +130,26 @@ test('Hausnummern: vorhanden, an echten Straßen, im Straßennamen des HUD', asy
   const n = nearestEdge(city, a.x, a.y, 800, (e) => e.name === 'Oranienstraße');
   assert.match(locationName(city, n.x, n.y), /^Oranienstraße \d+/);
   assert.equal(nearestAddress(city, a.x, a.y, 10, 'Oranienstraße'), a);
+});
+
+test('Straßenraum, Ampeln, Durchfahrten, Kataster: Stichproben auf der echten Karte', () => {
+  const w = (name) => { const es = city.edges.filter((e) => e.name === name && e.inside && e.cls <= 8); return es.reduce((s, e) => s + e.w * e.len, 0) / es.reduce((s, e) => s + e.len, 0) / city.scale; };
+  assert.ok(w('Oranienstraße') > 9 && w('Oranienstraße') < 20, `Oranienstraße ${w('Oranienstraße').toFixed(1)} m`);
+  // Sonnenallee: zwei getrennte Richtungsfahrbahnen, je Fahrbahn gemessen
+  assert.ok(w('Sonnenallee') > 6.5 && w('Sonnenallee') < 20, `Sonnenallee ${w('Sonnenallee').toFixed(1)} m`);
+  assert.ok(city.edges.filter((e) => e.inside && e.cs.left.park + e.cs.right.park > 0).length > 3000, 'Parkstreifen erfasst');
+  assert.ok(city.edges.some((e) => e.cs.surface === 1), 'Kopfsteinpflaster erfasst');
+  // Ampeln an bekannten Kreuzungen
+  const signalAt = (a, b) => [...city.signals].some((v) => { const names = city.nodes[v].edges.map((k) => city.edges[k].name); return names.includes(a) && names.includes(b); })
+    || [...city.signals].some((v) => { const n = city.nodes[v]; return city.nodes.some((m) => Math.hypot(m.x - n.x, m.y - n.y) < 400 && m.edges.some((k) => city.edges[k].name === a) && m.edges.some((k) => city.edges[k].name === b)); });
+  assert.ok(signalAt('Kottbusser Damm', 'Hermannplatz') || signalAt('Kottbusser Damm', 'Urbanstraße'), 'Hermannplatz');
+  assert.ok(signalAt('Kottbusser Tor', 'Adalbertstraße') && signalAt('Kottbusser Tor', 'Skalitzer Straße'), 'Kottbusser Tor');
+  assert.ok(city.signals.size > 300, `${city.signals.size} Ampelkreuzungen`);
+  assert.ok(city.turnBans.size > 100, `${city.turnBans.size} Abbiegeverbote`);
+  assert.ok(city.edges.filter((e) => e.passage).length > 1000, 'Tordurchfahrten');
+  assert.ok(city.buildings.filter((b) => b.walls).length > 500, 'geöffnete Hauswände');
+  assert.ok(city.crossings.filter((c) => c.kind === 'zebra').length > 50, 'Zebrastreifen');
+  const kat = city.trees.filter((t) => t.genus !== 'sonstige').length;
+  assert.ok(kat > 60000, `${kat} Bäume mit Gattung aus dem Kataster`);
+  assert.match(city.attribution, /Baumbestand/);
 });

@@ -91,7 +91,8 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 | Was | Quelle | Lizenz |
 |---|---|---|
 | Gebietsgrenzen | Geoportal Berlin, WFS `lor_2021` (`c_lor_pgr_2021`, LOR-Prognoseräume 2021): 0210/0220/0230 = Kreuzberg, 0810 „Neukölln“ = Nord-Neukölln | Datenlizenz Deutschland – Zero 2.0 |
-| Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen | OpenStreetMap über die Overpass-API (Hüllrechteck + 250 m) | ODbL 1.0 |
+| Straßen, Gebäude, Wasser, Grün, Gleise, Bäume, Kiez-Namen, POIs, Hausnummern, Ampeln, Querungen, Poller, Zäune, Abbiegeverbote | OpenStreetMap über die Overpass-API (Hüllrechteck + 250 m, zwei Abfragen) | ODbL 1.0 |
+| Straßen- und Anlagenbäume (Gattung, Höhe, Kronendurchmesser, Stammumfang) | Geoportal Berlin, WFS `baumbestand` | Datenlizenz Deutschland – Zero 2.0 |
 
 „Nord-Neukölln“ ist kein Ortsteil, sondern die übliche Bezeichnung für den LOR-Prognoseraum 0810 nördlich der Ringbahn
 (plus Köllnische Heide). Die Grenzen Kreuzbergs entsprechen den drei Kreuzberger Prognoseräumen.
@@ -123,8 +124,22 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 3. Im Spiel dekodiert `web/src/map.js` die Datei (~0,5 s) und legt Raster-Hashes für Darstellung, Straßensegmente,
    Flächen und Kollision an. Kollision mit Gebäuden läuft über Wandsegmente, dafür ist keine Triangulierung nötig.
 
-**Bewusste Vereinfachungen:** eine Spur je Richtung für den KI-Verkehr (versetzt um ein Viertel der Fahrbahnbreite), keine
-Ampeln, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.
+**Straßenquerschnitt** (`tools/osm/crosssection.mjs`, zur Laufzeit `web/src/street.js`): Bordstein-zu-Bordstein-Breite
+aus `width:carriageway` › `width` › Summe aus Fahrstreifen, Parkstreifen (`parking:<seite>` + `:orientation`; parallel
+2 m, schräg 4,5 m, senkrecht 5 m, halb auf dem Gehweg die Hälfte) und Radfahrstreifen (`cycleway:<seite>=lane`). Passt
+das nicht zusammen, werden Park-/Radstreifen anteilig gekürzt. Spurlage von der Mitte nach außen; bleiben bei
+Gegenverkehr weniger als 2,6 m je Richtung, fahren beide Richtungen mittig (enge Berliner Nebenstraßen). Geparkte Autos
+stehen auf deterministischen Stellplätzen, frei ab 5 m hinter der Kreuzungsecke (StVO § 12).
+
+**Regeln und Zugänge:** Ampelknoten = Kreuzung mit `highway=traffic_signals` im Umkreis von 35 m; fester Umlauf
+50 s (zwei Achsen, je 20 s grün, 3 s gelb, 2 s alles rot, Versatz je Kreuzung). Abbiegeverbote aus
+`type=restriction` (von Weg, über Knoten, nach Weg). Poller/Schranken auf einer Straße sperren alle Kanten durch den
+Knoten; Sperrlinien (`barrier=*` als Weg), die eine Straße kreuzen, ebenso; bei `traffic_intervention=diagonal_diverter`
+auch knapp daneben verlaufende Straßen. Tordurchfahrten (`tunnel=building_passage`) öffnen die Hauswand im Korridor.
+Einzelne Poller auf Gehwegen sperren nichts (Berlin hat viele davon gegen Gehwegparken).
+
+**Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine Vorfahrtregeln an ungeregelten Kreuzungen,
+keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.
 
 ## Offene Punkte, nur auf echter Hardware prüfbar
 
@@ -136,4 +151,4 @@ Ampeln, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerha
    eventuell doch funktioniert.
 5. Ob ein kostenloses Einzelentwicklerkonto die Dev-Mode-Aktivierung erlaubt (die Doku sagt nur „fully registered“).
 6. Bildrate auf der Konsole. Auf dem Mac hält der Browser mit der echten Karte bei 1280×720 und 1920×1080 die volle Bildwiederholrate (Frame-Abstand Median 10,0 ms, p95 10,9 ms, gemessen im Playwright-Chromium); über die Xbox sagt das nichts aus.
-7. Ladezeit (6,6 MB JSON, ~0,5 s Dekodieren auf dem Mac) und Speicher (JS-Heap ~110 MB im Browser) auf der Konsole.
+7. Ladezeit (9,7 MB JSON, ~1 s Dekodieren auf dem Mac) und Speicher (JS-Heap ~280 MB im Browser) auf der Konsole.

@@ -12,16 +12,32 @@ let nextId = 1;
 
 export const walkable = (e) => e.inside && e.cls >= 3 && e.cls <= 10 && e.cls !== 9 && e.len > 20;
 
+// Gehwegabschnitt einer Kante: von Ecke zu Ecke (an Kreuzungen endet der Gehweg am Rand der Querstraße).
+export function walkRange(city, e) {
+  if (e._walk) return e._walk;
+  const corner = (n) => {
+    const nd = city.nodes[n];
+    if (nd.edges.length < 3) return 1 * city.scale;
+    let r = 0; for (const k of nd.edges) if (city.edges[k] !== e) r = Math.max(r, city.edges[k].w / 2);
+    return r + 1 * city.scale;
+  };
+  let a = corner(e.a), b = e.len - corner(e.b);
+  if (b - a < 2 * city.scale) { const m = e.len / 2; a = m - city.scale; b = m + city.scale; }
+  return (e._walk = [a, b]);
+}
+
 // Abstand der Gehweg-Laufspur von der Straßenmitte, so dass sie nicht in Häusern liegt (je Seite gecacht).
 export function sidewalkOffset(city, e, side) {
   e.sw ??= {};
   if (e.sw[side] !== undefined) return e.sw[side];
   const S = city.scale, half = e.w / 2, p = { x: 0, y: 0, ux: 1, uy: 0 };
-  let off = half + 0.5 * S;
+  let off = null; // null = auf dieser Seite gibt es keinen freien Gehweg (überbaut, Arkade)
+  const [w0, w1] = walkRange(city, e);
+  const n = Math.max(3, Math.ceil((w1 - w0) / (1.5 * S))); // alle 1,5 m prüfen (schmale Vorsprünge)
   for (let o = half + 2.2 * S; o >= half + 0.5 * S; o -= 0.4 * S) {
     let ok = true;
-    for (const f of [0.2, 0.5, 0.8]) {
-      pointAlong(e.pts, e.len * f, p);
+    for (let k = 0; k <= n; k++) {
+      pointAlong(e.pts, w0 + (w1 - w0) * k / n, p);
       const x = p.x - p.uy * o * side, y = p.y + p.ux * o * side;
       if (inBuilding(city, x, y)) { ok = false; break; }
     }
@@ -34,7 +50,7 @@ export function sidewalkOffset(city, e, side) {
 const tmpP = { x: 0, y: 0, ux: 1, uy: 0 };
 export function sidewalkPoint(city, e, side, s, out = {}) {
   pointAlong(e.pts, s, tmpP);
-  const o = sidewalkOffset(city, e, side);
+  const o = sidewalkOffset(city, e, side) ?? e.w / 2 + 0.5 * city.scale;
   out.x = tmpP.x - tmpP.uy * o * side;
   out.y = tmpP.y + tmpP.ux * o * side;
   return out;
@@ -53,12 +69,20 @@ export function createPed(city, spot, rng) {
   };
 }
 
+function groupCrossings(city) {
+  const m = new Map();
+  for (const c of city.crossings ?? []) (m.get(c.edge.id) ?? m.set(c.edge.id, []).get(c.edge.id)).push(c);
+  return m;
+}
+
 // Nächster Gehweg-Platz zu einer Position.
 export function nearestSpot(city, x, y, radius = 600) {
   const n = nearestEdge(city, x, y, radius, walkable) ?? nearestEdge(city, x, y, radius * 6, walkable);
   if (!n) return null;
-  const side = ((x - n.x) * -n.uy + (y - n.y) * n.ux) >= 0 ? 1 : -1;
-  return { edge: n.e, side, s: Math.min(Math.max(n.s, 1), n.e.len - 1) };
+  let side = ((x - n.x) * -n.uy + (y - n.y) * n.ux) >= 0 ? 1 : -1;
+  if (sidewalkOffset(city, n.e, side) === null) side = -side;
+  const [w0, w1] = walkRange(city, n.e);
+  return { edge: n.e, side, s: Math.min(Math.max(n.s, w0), w1) };
 }
 
 // Zufälliger Gehweg-Platz im Ring minR…maxR um (cx, cy).
@@ -71,7 +95,11 @@ export function pedSpawnSpot(city, rng, cx, cy, minR, maxR) {
     const d = Math.hypot(x - cx, y - cy);
     if (d < minR || d > maxR) continue;
     const pr = projectOnPolyline(sg.e.pts, x, y);
-    return { edge: sg.e, side: rng() < 0.5 ? 1 : -1, s: Math.min(Math.max(pr.s, 1), sg.e.len - 1) };
+    let side = rng() < 0.5 ? 1 : -1;
+    if (sidewalkOffset(city, sg.e, side) === null) side = -side;
+    if (sidewalkOffset(city, sg.e, side) === null) continue;
+    const [w0, w1] = walkRange(city, sg.e);
+    return { edge: sg.e, side, s: Math.min(Math.max(pr.s, w0), w1) };
   }
   return null;
 }
@@ -104,19 +132,41 @@ function moveWithCollision(ped, dx, dy, world) {
 function nextLeg(ped, world) {
   const city = world.city, rng = world.rng, e = ped.edge;
   const node = ped.dirSign > 0 ? e.b : e.a;
-  const opts = city.nodes[node].edges.map((k) => city.edges[k]).filter((o) => walkable(o) && o !== e);
+  const hasWalk = (o) => sidewalkOffset(city, o, 1) !== null || sidewalkOffset(city, o, -1) !== null;
+  const opts = city.nodes[node].edges.map((k) => city.edges[k]).filter((o) => walkable(o) && o !== e && hasWalk(o));
   const next = opts.length ? opts[Math.floor(rng() * opts.length)] : e;
   const dirSign = next === e ? -ped.dirSign : next.a === node ? 1 : -1;
-  const inset = Math.min(2.5 * city.scale, next.len / 2);
-  const s = dirSign > 0 ? inset : next.len - inset;
+  const [w0, w1] = walkRange(city, next);
+  const s = dirSign > 0 ? w0 : w1;
   const here = { x: ped.x, y: ped.y };
   const a = sidewalkPoint(city, next, 1, s), b = sidewalkPoint(city, next, -1, s);
   const da = Math.hypot(a.x - here.x, a.y - here.y), db = Math.hypot(b.x - here.x, b.y - here.y);
   let side = da < db ? 1 : -1;
+  const sameSide = side;
   if (next === e || rng() < 0.2) side = -side; // Straße überqueren
+  if (sidewalkOffset(city, next, side) === null) side = -side;
+  // Liegt auf der neuen Straße in der Nähe ein Zebrastreifen oder eine Ampelquerung, dort hinübergehen.
+  if (side !== sameSide && sidewalkOffset(city, next, sameSide) !== null) {
+    const z = (city.crossingsByEdge ??= groupCrossings(city)).get(next.id)?.find((c) => Math.abs(c.s - s) < 30 * city.scale);
+    if (z) {
+      ped.state = 'cross';
+      const t = sidewalkPoint(city, next, side, z.s);
+      ped.target = { edge: next, side, s: z.s, dirSign, x: t.x, y: t.y, via: sidewalkPoint(city, next, sameSide, z.s) };
+      return;
+    }
+  }
   const p = side === 1 ? a : b;
+  // Um die Ecke über den Schnittpunkt der beiden Gehweglinien gehen, nicht quer durch das Eckhaus.
+  const tA = pointAlong(e.pts, Math.min(Math.max(ped.s, 0), e.len), {}), tB = pointAlong(next.pts, s, {});
+  const ax = tA.ux * ped.dirSign, ay = tA.uy * ped.dirSign, bx = tB.ux * dirSign, by = tB.uy * dirSign;
+  const den = ax * by - ay * bx;
+  let via = null;
+  if (Math.abs(den) > 0.25) { // Richtungswechsel: Ecke berechnen
+    const t = ((p.x - here.x) * by - (p.y - here.y) * bx) / den;
+    if (t > 0 && t < 40 * city.scale) via = { x: here.x + ax * t, y: here.y + ay * t };
+  }
   ped.state = 'cross';
-  ped.target = { edge: next, side, s, dirSign, x: p.x, y: p.y };
+  ped.target = { edge: next, side, s, dirSign, x: p.x, y: p.y, via };
 }
 
 // Liegt der nächste Schritt auf einer Fahrbahn und nähert sich ein fahrendes Auto?
@@ -138,7 +188,8 @@ export function updatePed(ped, world, dt) {
       if (!pl.inCar && Math.hypot(pl.x - ahead.x, pl.y - ahead.y) < 11) break;
       if (carComing(world, ped, ahead)) break; // Gehweg quert hier eine Fahrbahn (Einmündung)
       ped.s += ped.dirSign * ped.speed * dt;
-      if (ped.s <= 0 || ped.s >= ped.edge.len) { ped.s = Math.max(0, Math.min(ped.edge.len, ped.s)); nextLeg(ped, world); break; }
+      const [w0, w1] = walkRange(city, ped.edge);
+      if (ped.s <= w0 || ped.s >= w1) { ped.s = Math.max(w0, Math.min(w1, ped.s)); nextLeg(ped, world); break; }
       sidewalkPoint(city, ped.edge, ped.side, ped.s, ped);
       break;
     }
@@ -148,15 +199,17 @@ export function updatePed(ped, world, dt) {
       break;
     case 'cross': {
       const tg = ped.target;
-      const dx = tg.x - ped.x, dy = tg.y - ped.y, d = Math.hypot(dx, dy);
+      if (tg.via && Math.hypot(tg.via.x - ped.x, tg.via.y - ped.y) < 3) tg.via = null;
+      const aim = tg.via ?? tg;
+      const dx = aim.x - ped.x, dy = aim.y - ped.y, d = Math.hypot(dx, dy);
       const v = ped.speed * 1.35 * dt;
       // Vor fahrenden Autos am Straßenrand warten (höchstens 6 s).
       if (d > v && (ped.wait ?? 0) < 6 && carComing(world, ped, { x: ped.x + dx / d * 12, y: ped.y + dy / d * 12 })) { ped.wait = (ped.wait ?? 0) + dt; break; }
       ped.wait = 0;
-      if (d <= v || d > 3000) {
-        Object.assign(ped, { edge: tg.edge, side: tg.side, s: tg.s, dirSign: tg.dirSign, state: 'walk', target: null });
-        if (d > 3000) sidewalkPoint(city, ped.edge, ped.side, ped.s, ped);
-      } else { ped.x += dx / d * v; ped.y += dy / d * v; }
+      if (!tg.via && (d <= v || d > 3000 || (ped.crossT = (ped.crossT ?? 0) + dt) > 20)) {
+        Object.assign(ped, { edge: tg.edge, side: tg.side, s: tg.s, dirSign: tg.dirSign, state: 'walk', target: null, crossT: 0 });
+        sidewalkPoint(city, ped.edge, ped.side, ped.s, ped);
+      } else if (d > 0) moveWithCollision(ped, dx / d * Math.min(v, d), dy / d * Math.min(v, d), world);
       break;
     }
     case 'flee': {

@@ -96,14 +96,33 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
   ctx.restore();
 }
 
+// Kronenfarben je Gattung (Berliner Baumbestand): dunkel, mittel, Lichtkante.
+export const TREE_STYLE = {
+  Tilia: ['#4e8a36', '#62a045', '#7cbb5a'], Acer: ['#3d7a31', '#4f9140', '#69ab55'], Platanus: ['#5f8f3c', '#72a54b', '#8dbe64'],
+  Aesculus: ['#2c6326', '#3a7a31', '#4f9142'], Quercus: ['#33662a', '#447d36', '#5b9648'], Robinia: ['#6b9d45', '#80b357', '#9bcb70'],
+  Betula: ['#7bab4e', '#8fc05f', '#a8d67b'], Populus: ['#4d8c3b', '#5fa24b', '#79bb62'], Carpinus: ['#3f7a33', '#4f9142', '#66aa57'],
+  Fraxinus: ['#4a8537', '#5b9a46', '#76b35e'], Prunus: ['#5a8f40', '#6fa551', '#e6b7c6'], Salix: ['#6c9b4a', '#7fb05b', '#9cc77a'],
+  Sorbus: ['#4a8236', '#5c9845', '#d97a3a'], Crataegus: ['#467e33', '#579442', '#71ad5a'], Ulmus: ['#3b7430', '#4c8b3e', '#65a454'],
+  Nadel: ['#1f4a26', '#2a5e30', '#3b7a40'], sonstige: ['#2f6b2a', '#3f8a35', '#58a748'],
+};
+
 export function drawTree(ctx, tr, t) {
+  const r = tr.size, lift = Math.min(r * 0.5, 30);
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  ctx.beginPath(); ctx.ellipse(tr.x + 6, tr.y + 4, tr.size, tr.size * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#5b3d22'; ctx.fillRect(tr.x - 2, tr.y - 12, 4, 12);
+  ctx.beginPath(); ctx.ellipse(tr.x + 6, tr.y + 4, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5b3d22'; ctx.fillRect(tr.x - Math.max(2, tr.r), tr.y - lift, Math.max(4, tr.r * 2), lift);
   const sway = Math.sin(t * 1.3 + tr.x) * 0.8;
-  const cy = tr.y - 16;
-  if (sprites.tree) { ctx.drawImage(sprites.tree, tr.x - tr.size + sway, cy - tr.size, tr.size * 2, tr.size * 2); return; }
-  ctx.fillStyle = '#2f6b2a'; ctx.beginPath(); ctx.arc(tr.x + sway, cy, tr.size, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#3f8a35'; ctx.beginPath(); ctx.arc(tr.x - 3 + sway, cy - 3, tr.size * 0.7, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#58a748'; ctx.beginPath(); ctx.arc(tr.x - 5 + sway, cy - 6, tr.size * 0.35, 0, Math.PI * 2); ctx.fill();
+  const cy = tr.y - lift;
+  if (sprites.tree) { ctx.drawImage(sprites.tree, tr.x - r + sway, cy - r, r * 2, r * 2); return; }
+  const [c0, c1, c2] = TREE_STYLE[tr.genus] ?? TREE_STYLE.sonstige;
+  if (tr.genus === 'Nadel') { // Nadelbaum: gezackte Krone
+    ctx.fillStyle = c0; ctx.beginPath();
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, rr = k % 2 ? r * 0.72 : r; ctx.lineTo(tr.x + sway + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+    ctx.fill();
+    ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(tr.x - r * 0.12 + sway, cy - r * 0.12, r * 0.55, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  ctx.fillStyle = c0; ctx.beginPath(); ctx.arc(tr.x + sway, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(tr.x - r * 0.18 + sway, cy - r * 0.18, r * 0.7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(tr.x - r * 0.3 + sway, cy - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
 }

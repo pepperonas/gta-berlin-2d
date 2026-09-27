@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, updateWorld } from '../web/src/world.js';
-import { surfaceAt, inBuilding, T } from '../web/src/map.js';
+import { surfaceAt, inBuilding, T, isRoadSurface } from '../web/src/map.js';
 import { obbVsSegment } from '../web/src/collision.js';
 import { obbBounds } from '../web/src/collision.js';
 import { buildLaneGraph, chooseNext, turnAngle } from '../web/src/roadgraph.js';
@@ -28,7 +28,9 @@ test('Abbiegen: keine Wende außer in der Sackgasse; meist geradeaus', () => {
   const rng = mulberry32(3);
   let straight = 0, n = 0;
   for (const l of g.lanes) {
-    if (l.next.length > 1) assert.ok(l.next.every((m) => m.edge !== l.edge), 'Wende an einer Kreuzung');
+    // Wenden nur, wo von diesem Knoten keine andere Spur abgeht (Sackgasse oder nur einmündende Einbahnstraßen)
+    const other = (g.out.get(l.to) ?? []).some((m) => m.edge !== l.edge);
+    if (other) assert.ok(l.next.every((m) => m.edge !== l.edge), `Wende an einer Kreuzung (Kante ${l.edge.id})`);
     if (l.next.length >= 3) for (let k = 0; k < 5; k++) { n++; if (Math.abs(turnAngle(l, chooseNext(l, rng))) < 0.4) straight++; }
   }
   assert.ok(straight / n > 0.4, `geradeaus nur ${(straight / n * 100).toFixed(0)} %`);
@@ -50,7 +52,7 @@ test('Dauertest 90 s mit Verkehr und Passanten: auf der Fahrbahn bzw. nicht in H
       }
       if (c.driver !== 'npc') continue;
       samples++;
-      if (surfaceAt(city, c.x, c.y) !== T.ROAD) offRoad++;
+      if (!isRoadSurface(surfaceAt(city, c.x, c.y))) offRoad++;
       const o = odo.get(c.id) ?? { d: 0, x: c.x, y: c.y };
       o.d += Math.hypot(c.x - o.x, c.y - o.y); o.x = c.x; o.y = c.y; odo.set(c.id, o);
     }
@@ -110,4 +112,58 @@ test('Mit Vollgas gegen Hauswand, ins Wasser und über die Gebietsgrenze: das Au
   const b = city.border[0], bx = (b[0] + b[2]) / 2, by = (b[1] + b[3]) / 2;
   const inward = insideBorder(city, bx + 50, by) ? [1, 0] : insideBorder(city, bx - 50, by) ? [-1, 0] : insideBorder(city, bx, by + 50) ? [0, 1] : [0, -1];
   ram(bx + inward[0] * 60, by + inward[1] * 60, Math.atan2(-inward[1], -inward[0]), (x, y) => !insideBorder(city, x, y));
+});
+
+test('Ampel: KI-Auto hält bei Rot an der Haltelinie und fährt bei Grün', async () => {
+  const { signalState, SIGNAL } = await import('../web/src/signals.js');
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const { laneDir } = await import('../web/src/roadgraph.js');
+  // eine gerade, lange Zufahrt auf eine Ampelkreuzung
+  const lane = g.lanes.find((l) => city.signals.has(l.to) && l.len > 700 && l.edge.cls <= 5 && l.next.length);
+  assert.ok(lane, 'Zufahrt gefunden');
+  const [ux, uy] = laneDir(lane, true), heading = Math.atan2(uy, ux);
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  // Zeit = Beginn einer Rotphase (Rot dauert je Achse cycle − grün − gelb = 27 s, das Auto braucht ~8 s bis zur Linie)
+  let t0 = 0.5;
+  while (!(signalState(city, lane.to, heading, t0) === 'red' && signalState(city, lane.to, heading, t0 - 0.5) !== 'red')) t0 += 0.5;
+  assert.equal(signalState(city, lane.to, heading, t0 + 20), 'red');
+  w.time = t0;
+  const car = createCar({ x: 0, y: 0 }); car.driver = 'npc';
+  placeOnLane(car, city, lane, lane.len - 600, w.rng);
+  w.cars.push(car);
+  w.camera.x = car.x; w.camera.y = car.y;
+  const end = { x: lane.pts[lane.pts.length - 2], y: lane.pts[lane.pts.length - 1] };
+  for (let i = 0; i < 20 * 60; i++) { updateWorld(w, idle(), 1 / 60); w.camera.x = car.x; w.camera.y = car.y; }
+  const before = (end.x - car.x) * ux + (end.y - car.y) * uy;
+  assert.ok(Math.hypot(car.vx, car.vy) < 5, 'steht');
+  assert.ok(before > -5 && before < 80, `hält ${(before / 10).toFixed(1)} m vor der Haltelinie`);
+  // bis Grün warten, dann fährt es über die Kreuzung
+  let k = 0;
+  const follow = () => { w.camera.x = car.x; w.camera.y = car.y; };
+  while (signalState(city, lane.to, heading, w.time) !== 'green' && k++ < SIGNAL.cycle * 60) { updateWorld(w, idle(), 1 / 60); follow(); }
+  for (let i = 0; i < 8 * 60; i++) { updateWorld(w, idle(), 1 / 60); follow(); }
+  const after = (end.x - car.x) * ux + (end.y - car.y) * uy;
+  assert.ok(after < -40 || Math.hypot(car.x - end.x, car.y - end.y) > 150, 'bei Grün weitergefahren');
+});
+
+test('Geparkte Autos stehen auf den Parkstreifen, nicht auf den Fahrstreifen', async () => {
+  const { parkingStrip } = await import('../web/src/street.js');
+  const { nearestEdge } = await import('../web/src/map.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const e = city.edges.find((x) => x.name === 'Weserstraße' && x.len > 800);
+  const m = (e.pts.length / 2 | 0) & ~1;
+  w.camera.x = w.player.x = e.pts[m]; w.camera.y = w.player.y = e.pts[m + 1];
+  for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
+  const parked = w.cars.filter((c) => c.role === 'curb');
+  assert.ok(parked.length > 20, `${parked.length} geparkte Autos`);
+  let checked = 0;
+  for (const c of parked) {
+    const ne = nearestEdge(city, c.x, c.y, 300, (x) => x.cls <= 8);
+    if (!ne || ne.e !== e) continue;
+    const lat = (c.x - ne.x) * -ne.uy + (c.y - ne.y) * ne.ux, side = Math.sign(lat);
+    assert.ok(Math.abs(Math.abs(lat) - Math.abs(parkingStrip(e.cs, side).offset)) < 3, `seitlich ${lat.toFixed(0)} px statt Parkstreifen`);
+    checked++;
+  }
+  assert.ok(checked >= 5, `${checked} auf der Weserstraße geprüft`);
 });

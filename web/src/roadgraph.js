@@ -4,13 +4,14 @@
 import { offsetPolyline, polylineLength } from './geom.js';
 import { SpatialHash } from './collision.js';
 import { TRAFFIC_MAX_CLASS } from './citycodes.js';
+import { laneOffsets } from './street.js';
 
-// Reisetempo je Straßenklasse in px/s (10 px = 1 m).
-const CRUISE = { 1: 190, 2: 165, 3: 150, 4: 140, 5: 125, 6: 105, 7: 100, 8: 55 };
+// Reisetempo aus dem Tempolimit (km/h → px/s bei 10 px = 1 m), Spielstraßen nicht unter 30 px/s.
+export const cruiseFor = (kmh) => Math.max(30, kmh / 3.6 * 10);
 
-export const drivable = (e) => e.inside && e.cls <= TRAFFIC_MAX_CLASS && e.len > 5;
+export const drivable = (e) => e.inside && e.cls <= TRAFFIC_MAX_CLASS && e.len > 5 && !e.blocked && !e.passage;
 
-function cutPolyline(pts, s0, s1) { // Teilstück zwischen den Bogenlängen s0 und s1
+export function cutPolyline(pts, s0, s1) { // Teilstück zwischen den Bogenlängen s0 und s1
   const out = [];
   let acc = 0;
   for (let i = 0; i < pts.length - 2; i += 2) {
@@ -40,25 +41,39 @@ export function buildLaneGraph(city) {
   const trimAt = (n) => (deg.get(n) >= 3 ? radius.get(n) + 1 * S : 0);
   const lanes = [], out = new Map();
   for (const e of edges) {
+    const lo = laneOffsets(e.cs, S);
     for (const dir of [1, -1]) {
-      if ((e.oneway === 1 && dir === -1) || (e.oneway === -1 && dir === 1)) continue;
+      const n = dir === 1 ? e.cs.fwd : e.cs.bwd;
+      if (!n) continue;
       const base = dir === 1 ? e.pts : reverse(e.pts);
-      const off = e.oneway ? 0 : e.w / 4;
       const from = dir === 1 ? e.a : e.b, to = dir === 1 ? e.b : e.a;
-      const raw = offsetPolyline(base, off);
-      const L = polylineLength(raw);
-      let s0 = trimAt(from), s1 = L - trimAt(to);
-      if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
-      const pts = cutPolyline(raw, s0, s1);
-      if (pts.length < 4) continue;
-      const lane = { id: lanes.length, edge: e, dir, from, to, pts, len: polylineLength(pts), cruise: CRUISE[e.cls] ?? 100, next: null };
-      lanes.push(lane);
-      (out.get(from) ?? out.set(from, []).get(from)).push(lane);
+      for (let k = 0; k < n; k++) {
+        // Querlage aus dem Querschnitt (rechts positiv in Kantenrichtung; bei Gegenrichtung gespiegelt)
+        const off = dir === 1 ? lo.fwd[k] : -lo.bwd[k];
+        const raw = offsetPolyline(base, off);
+        const L = polylineLength(raw);
+        let s0 = trimAt(from), s1 = L - trimAt(to);
+        if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
+        const pts = cutPolyline(raw, s0, s1);
+        if (pts.length < 4) continue;
+        const lane = { id: lanes.length, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), next: null };
+        lanes.push(lane);
+        (out.get(from) ?? out.set(from, []).get(from)).push(lane);
+      }
     }
   }
+  const banned = city.turnBans ?? new Set(); // „vonKante>überKnoten>nachKante“ (Abbiegeverbote)
   for (const l of lanes) {
-    const cand = (out.get(l.to) ?? []).filter((m) => m.edge !== l.edge);
-    l.next = cand.length ? cand : (out.get(l.to) ?? []).filter((m) => m !== l);
+    const all = (out.get(l.to) ?? []).filter((m) => m.edge !== l.edge && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
+    // Rechts abbiegen nur von der äußersten, links nur von der innersten Spur; geradeaus spurtreu.
+    const ok = all.filter((m) => {
+      const a = turnAngle(l, m);
+      if (a > 0.5) return l.k === l.n - 1 && m.k === m.n - 1;
+      if (a < -0.5) return l.k === 0 && m.k === 0;
+      return m.k === Math.min(l.k, m.n - 1);
+    });
+    l.next = ok.length ? ok : all.length ? all : (out.get(l.to) ?? []).filter((m) => m !== l && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
+    if (!l.next.length) l.next = (out.get(l.to) ?? []).filter((m) => m !== l);
   }
   const hash = new SpatialHash(256);
   for (const l of lanes) for (let i = 0; i < l.pts.length - 2; i += 2) {

@@ -56,6 +56,16 @@ change in `web/`.
   `inBuilding`, `insideBorder`, `districtAt`, `nearestEdge`, `locationName`. The decoded city is shared read-only by the
   title demo world and the game world; `createWorld({ city })` / `createGame({ city })` / `setCity()` take it explicitly
   (the browser loads it async in `main.js`).
+- **Street cross-section** (`tools/osm/crosssection.mjs` → `e.cs` at runtime, lane layout in `web/src/street.js`
+  `laneOffsets(cs, unit)`): curb-to-curb width, lanes per direction, parking/cycle lanes per side, maxspeed, surface.
+  `unit` is 1 in the build (m) and `city.scale` in the game (px). Lanes (`roadgraph.js`), markings (`render.js`),
+  parked-car slots (`world.js parkingSlots/manageParked`, role `'curb'`, asleep until hit) and the test autopilot all
+  derive positions from it — change the layout in one place.
+- **Traffic rules:** `city.signals` (vertex ids) + `web/src/signals.js` (fixed 50 s two-axis cycle); the AI records stop
+  lines per route (`ai.stops`) and brakes by stopping distance; `city.turnBans` filters lane successors; blocked edges
+  (`e.blocked`, bollards/barrier lines/diagonal diverters) and building passages (`e.passage`) are excluded from the
+  AI graph and the autopilot. Junction discs (`city.junctions`, radius = widest half width + 2 m) count as road for
+  surface, trees and rendering — the build (`keepTreesOffRoads`) mirrors that rule.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

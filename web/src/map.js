@@ -3,9 +3,10 @@
 // Abfragen (Kollision, Untergrund, Straßennamen, Sichtbarkeit) in Raster-Hashes einsortiert.
 import { undelta, pointInRing, pointInRings, signedArea, segDist2, bboxOf, polylineLength, projectOnPolyline } from './geom.js';
 import { SpatialHash } from './collision.js';
-import { AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS } from './citycodes.js';
+import { AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK, PARK_ORIENT, SURFACE, TREE_GENERA } from './citycodes.js';
 
-export const T = { ROAD: 0, SIDEWALK: 1, BUILDING: 2, GRASS: 3, WATER: 4, PLAZA: 5 };
+export const T = { ROAD: 0, SIDEWALK: 1, BUILDING: 2, GRASS: 3, WATER: 4, PLAZA: 5, COBBLE: 6 };
+export const isRoadSurface = (t) => t === T.ROAD || t === T.COBBLE; // Fahrbahn (Asphalt oder Pflaster)
 
 const GREEN = new Set([AREA_KIND.grass, AREA_KIND.wood, AREA_KIND.cemetery, AREA_KIND.allotments, AREA_KIND.pitch, AREA_KIND.sand]);
 
@@ -29,9 +30,17 @@ export function decodeCity(json) {
   const bb = (pts) => bboxOf(pts, {});
 
   for (let i = 0; i < V.length / 2; i++) city.nodes.push({ id: i, x: V[2 * i], y: V[2 * i + 1], edges: [] });
-  json.edges.forEach(([a, b, cls, w, n, o, br, inside, p], id) => {
+  if (json.meta.version !== 2) throw new Error(`Kartenformat ${json.meta.version} wird nicht unterstützt (erwartet 2) – npm run map:build`);
+  json.edges.forEach(([a, b, cls, w, n, o, br, inside, p, x], id) => {
     const pts = [V[2 * a], V[2 * a + 1], ...undelta(p), V[2 * b], V[2 * b + 1]];
-    const e = { id, a, b, cls, w: w / 10 * S, name: n >= 0 ? json.names[n] : '', oneway: o, bridge: !!br, inside: !!inside,
+    const d = (dm) => dm / 10 * S; // dm → px
+    // Querschnitt in px: Fahrstreifen je Richtung, Park-/Radstreifen je Seite (links/rechts in Kantenrichtung)
+    if (x.length === 2) x = [o === -1 ? 0 : 1, o === 1 ? 0 : 1, 0, 0, 0, 0, 0, 0, 0, 0, x[0], x[1], 0]; // Nebenweg: Standardquerschnitt
+    const cs = { width: d(w), fwd: x[0], bwd: x[1],
+      left: { park: x[2], parkW: d(x[3]), orient: PARK_ORIENT[x[4]] ?? 'parallel', cycle: d(x[8]) },
+      right: { park: x[5], parkW: d(x[6]), orient: PARK_ORIENT[x[7]] ?? 'parallel', cycle: d(x[9]) },
+      maxspeed: x[10], surface: x[11], lit: !!(x[12] & 1), gaslight: !!(x[12] & 2) };
+    const e = { id, a, b, cls, w: d(w), cs, name: n >= 0 ? json.names[n] : '', oneway: o, bridge: !!br, inside: !!inside,
       pts, len: polylineLength(pts), bbox: bb(pts), layer: 'edge' };
     city.edges.push(e);
     city.nodes[a].edges.push(id);
@@ -39,12 +48,14 @@ export function decodeCity(json) {
   });
   city.paths = json.paths.map(([br, p]) => { const pts = undelta(p); return { bridge: !!br, pts, bbox: bb(pts), layer: 'path' }; });
   city.rails = json.rails.map(([br, sub, p]) => { const pts = undelta(p); return { bridge: !!br, subway: !!sub, pts, bbox: bb(pts), layer: 'rail' }; });
-  city.buildings = json.buildings.map(([h, kind, rings], id) => {
+  city.buildings = json.buildings.map(([h, kind, rings, walls, doors], id) => {
     const rs = rings.map(undelta);
     const o = rs[0];
     let cx = 0, cy = 0; for (let i = 0; i < o.length; i += 2) { cx += o[i]; cy += o[i + 1]; }
     return { id, kind, meters: h / 10, height: h / 10 * S, rings: rs, outer: rs.map((_, i) => i === 0), sign: rs.map(signedArea).map(Math.sign),
-      cx: cx / (o.length / 2), cy: cy / (o.length / 2), bbox: bb(o), seed: Math.floor(hash01(id * 7 + 3) * 1e9), layer: 'building' };
+      cx: cx / (o.length / 2), cy: cy / (o.length / 2), bbox: bb(o), seed: Math.floor(hash01(id * 7 + 3) * 1e9), layer: 'building',
+      walls: walls ? walls.map(undelta) : null, // eigene Wandzüge, wo eine Tordurchfahrt die Fassade öffnet
+      doors: doors || null }; // [Ring, Kante, Anteil ×1000]
   });
   city.water = json.water.map((rings) => {
     const rs = rings.map(([, p]) => undelta(p));
@@ -57,11 +68,37 @@ export function decodeCity(json) {
   city.walls = json.walls.map(undelta);
   city.border = json.border.map(undelta);
   city.districts = json.districts.map((d) => ({ name: d.n, rings: d.r.map(undelta) }));
-  const tr = undelta(json.trees);
-  for (let i = 0; i < tr.length; i += 2) {
-    const u = hash01(i + 11);
-    city.trees.push({ x: tr[i], y: tr[i + 1], r: TREE_TRUNK_M * S, size: (2.2 + u * 1.4) * S, layer: 'tree' });
+  // Bäume: Kataster mit Gattung, Krone und Stamm; OSM-Bäume (Gattung 0, Maße 0) mit Standardwerten
+  const tr = undelta(json.trees.xy);
+  for (let i = 0; i < json.trees.g.length; i++) {
+    const c = json.trees.c[i], r = json.trees.r[i];
+    city.trees.push({ x: tr[2 * i], y: tr[2 * i + 1], r: r ? r / 100 * S : TREE_TRUNK_M * S,
+      size: c ? c / 20 * S : (2.2 + hash01(i + 11) * 1.4) * S, genus: TREE_GENERA[json.trees.g[i]] ?? 'sonstige', seed: i, layer: 'tree' });
   }
+  // Zugänge und Verkehrsregeln
+  (json.edgeFlags ?? []).forEach((f, k) => { const e = city.edges[k]; e.blocked = !!(f & 1); e.passage = !!(f & 2); });
+  city.barriers = [];
+  // Sperren: Reihen von Pollern quer zur Fahrbahn (Mitte, Querrichtung ×1000, Anzahl; Abstand 1,8 m)
+  const B = json.barriers ?? [];
+  for (let i = 0; i < B.length; i += 6) {
+    const [x, y, kind, qx, qy, n] = B.slice(i, i + 6);
+    for (let k = 0; k < n; k++) {
+      const o = (k - (n - 1) / 2) * 1.8 * S;
+      city.barriers.push({ x: x + qx / 1000 * o, y: y + qy / 1000 * o, kind, r: 0.15 * S, layer: 'barrier' });
+    }
+  }
+  const PO = json.posts ?? []; // einzelne Poller/Tore abseits der Fahrbahn
+  for (let i = 0; i < PO.length; i += 3) city.barriers.push({ x: PO[i], y: PO[i + 1], kind: PO[i + 2], r: 0.15 * S, layer: 'barrier' });
+  city.fences = (json.fences ?? []).map(([kind, p]) => { const pts = undelta(p); return { kind, pts, bbox: bb(pts), layer: 'fence' }; });
+  city.crossings = [];
+  for (let i = 0; i < (json.crossings ?? []).length; i += 4) {
+    const e = city.edges[json.crossings[i + 2]], x = json.crossings[i], y = json.crossings[i + 1];
+    const pr = projectOnPolyline(e.pts, x, y);
+    city.crossings.push({ x, y, edge: e, s: pr.s, ux: pr.ux, uy: pr.uy, kind: ['zebra', 'signal', 'marked'][json.crossings[i + 3]], layer: 'crossing' });
+  }
+  city.signals = new Set(json.signals ?? []);
+  city.turnBans = new Set();
+  for (let i = 0; i < (json.turnBans ?? []).length; i += 3) city.turnBans.add(`${json.turnBans[i]}>${json.turnBans[i + 1]}>${json.turnBans[i + 2]}`);
   // POIs (Geschäfte, Gastronomie, Haltestellen …) und Hausnummern
   city.pois = (json.pois ?? []).map(([x, y, c, n, k]) => ({ x, y, cat: POI_CATS[c], name: json.names[n], kind: json.names[k], layer: 'poi' }));
   city.addresses = [];
@@ -82,7 +119,8 @@ export function decodeCity(json) {
 
   // --- Raster-Hashes ---------------------------------------------------------------------
   city.render = new SpatialHash(640);
-  for (const list of [city.areas, city.water, city.edges, city.paths, city.rails, city.buildings]) for (const f of list) city.render.insert(f, f.bbox);
+  for (const list of [city.areas, city.water, city.edges, city.paths, city.rails, city.buildings, city.fences]) for (const f of list) city.render.insert(f, f.bbox);
+  for (const c of [...city.crossings, ...city.barriers]) city.render.insert(c, { x: c.x - 10, y: c.y - 10, w: 20, h: 20 });
 
   city.edgeSegs = new SpatialHash(320);
   for (const e of city.edges) for (let i = 0; i < e.pts.length - 2; i += 2) {
@@ -90,6 +128,20 @@ export function decodeCity(json) {
     const r = e.w / 2 + S; // 1 m Rand: Abfragen mit Abstand (Baumstamm, Gehweg) finden die Kante sicher
     city.edgeSegs.insert(s, { x: Math.min(s.ax, s.bx) - r, y: Math.min(s.ay, s.by) - r, w: Math.abs(s.bx - s.ax) + 2 * r, h: Math.abs(s.by - s.ay) + 2 * r });
   }
+  // Kreuzungsflächen: Asphalt bis zum Eckradius (größte halbe Fahrbahnbreite + 2 m), sonst schneiden abbiegende
+  // Autos über den Bordstein und die Ecke sähe aus wie Gehweg.
+  city.junctions = [];
+  for (const nd of city.nodes) {
+    const es = nd.edges.map((k) => city.edges[k]).filter((e) => e.cls <= 8 && !e.passage); // Straßen, keine Zufahrten
+    if (es.length < 3 && !(es.length === 2 && Math.abs(turnBetween(es[0], es[1], nd.id)) > 0.5)) continue;
+    const r = Math.max(...es.map((e) => e.w / 2)) + 2 * S;
+    const j = { x: nd.x, y: nd.y, r, node: nd.id, bridge: es.some((e) => e.bridge), cobble: es.every((e) => e.cs.surface === SURFACE.cobble), layer: 'junction' };
+    city.junctions.push(j);
+    const box = { x: nd.x - r, y: nd.y - r, w: 2 * r, h: 2 * r };
+    city.render.insert(j, box);
+    city.edgeSegs.insert({ e: { w: 2 * r, cls: Math.min(...es.map((e) => e.cls)), cs: { surface: j.cobble ? SURFACE.cobble : SURFACE.asphalt }, junction: j }, ax: nd.x, ay: nd.y, bx: nd.x, by: nd.y }, box);
+  }
+
   city.polys = new SpatialHash(320);
   for (const list of [city.buildings, city.water, city.areas]) for (const f of list) city.polys.insert(f, f.bbox);
 
@@ -104,7 +156,11 @@ export function decodeCity(json) {
       city.solids.insert(s, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
     }
   };
-  for (const b of city.buildings) for (const r of b.rings) addLine(r, true, 'building');
+  for (const b of city.buildings) {
+    if (b.walls) for (const w of b.walls) addLine(w, false, 'building');
+    else for (const r of b.rings) addLine(r, true, 'building');
+  }
+  for (const bar of city.barriers) city.solids.insert(bar, { x: bar.x - bar.r, y: bar.y - bar.r, w: 2 * bar.r, h: 2 * bar.r });
   for (const w of city.walls) addLine(w, false, 'wall');
   for (const r of city.border) addLine(r, true, 'border');
   // Sicherheitsnetz: Bäume, deren Stamm auf der Fahrbahn stünde, fallen weg (der Build verhindert das bereits).
@@ -117,6 +173,14 @@ export function decodeCity(json) {
   }
   for (const c of city.crates) city.solids.insert(c, c);
   return city;
+}
+
+// Winkel zwischen zwei Kanten an einem Knoten (0 = geradeaus weiter).
+function turnBetween(a, b, n) {
+  const dir = (e, atStart) => { const p = e.pts, i = atStart ? 0 : p.length - 4; return Math.atan2(p[i + 3] - p[i + 1], p[i + 2] - p[i]); };
+  const inA = a.b === n ? dir(a, false) : dir(a, true) + Math.PI, outB = b.a === n ? dir(b, true) : dir(b, false) + Math.PI;
+  let d = outB - inA; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
 }
 
 // --- Abfragen ----------------------------------------------------------------------------
@@ -151,7 +215,8 @@ export function inBuilding(city, x, y) {
 
 export function surfaceAt(city, x, y) {
   if (x < 0 || y < 0 || x > city.width || y > city.height) return T.BUILDING;
-  if (onRoad(city, x, y)) return T.ROAD;
+  const road = onRoad(city, x, y);
+  if (road) return road.cs.surface === SURFACE.cobble ? T.COBBLE : T.ROAD;
   pt.x = x; pt.y = y;
   let best = T.SIDEWALK;
   for (const f of city.polys.query(pt, tmp)) {
@@ -175,7 +240,7 @@ export function nearestEdge(city, x, y, radius, filter = () => true) {
   const box = { x: x - radius, y: y - radius, w: 2 * radius, h: 2 * radius };
   let best = null;
   for (const s of city.edgeSegs.query(box, [])) {
-    if (!filter(s.e)) continue;
+    if (s.e.junction || !filter(s.e)) continue;
     const d2 = segDist2(x, y, s.ax, s.ay, s.bx, s.by);
     if (d2 > radius * radius || (best && d2 >= best.d2)) continue;
     best = { e: s.e, d2 };

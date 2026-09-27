@@ -14,3 +14,12 @@ export const TREE_FREE_MAX_CLASS = 9;
 // POI-Kategorien (Geschäfte, Gastronomie, Haltestellen …). Reihenfolge = Code im Kartenformat.
 export const POI_CATS = ['ubahn', 'sbahn', 'bahn', 'bus', 'mall', 'supermarket', 'shop', 'food', 'drink', 'cafe', 'service', 'culture', 'hotel'];
 export const POI_CAT = Object.fromEntries(POI_CATS.map((c, i) => [c, i]));
+
+// Straßenquerschnitt (city.json v2): Parkstreifen-Art je Seite und Fahrbahnbelag.
+export const PARK = { none: 0, lane: 1, half: 2, kerb: 3 };
+export const PARK_ORIENT = ['parallel', 'diagonal', 'perpendicular'];
+export const SURFACE = { asphalt: 0, cobble: 1, plates: 2, unpaved: 3 };
+
+// Baumgattungen (Berliner Baumbestand, botanischer Gattungsname); Index = Code im Kartenformat, 0 = sonstige.
+export const TREE_GENERA = ['sonstige', 'Tilia', 'Acer', 'Platanus', 'Aesculus', 'Quercus', 'Robinia', 'Betula', 'Populus',
+  'Carpinus', 'Fraxinus', 'Prunus', 'Salix', 'Sorbus', 'Crataegus', 'Ulmus', 'Nadel'];
