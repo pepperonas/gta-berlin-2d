@@ -1,0 +1,117 @@
+// Selbst erzeugte Klänge (Web Audio, keine Fremd-Samples). Austauschbar: liegt in assets/manifest.json
+// unter "sounds" eine Datei für einen Schlüssel (crash, horn, pickup, success, fail, ui, uiMove, door, tick, hit),
+// wird diese statt der Synthese abgespielt.
+export class Sound {
+  constructor() { this.ctx = null; this.buffers = {}; this.master = null; this.engine = null; this.muted = false; this.manifest = {}; }
+
+  // Browser verlangen eine Nutzergeste; in der Xbox-Hülle ist Autoplay per Startargument erlaubt.
+  unlock() {
+    if (!this.ctx) {
+      const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.55; this.master.connect(this.ctx.destination);
+      this.noise = this.makeNoise();
+      this.startEngine();
+      this.startAmbience();
+      this.loadOverrides();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+  }
+
+  get ready() { return this.ctx && this.ctx.state === 'running'; }
+
+  setManifest(m) { this.manifest = m?.sounds ?? {}; }
+
+  async loadOverrides() {
+    for (const [key, file] of Object.entries(this.manifest)) {
+      try {
+        const res = await fetch('assets/' + file);
+        this.buffers[key] = await this.ctx.decodeAudioData(await res.arrayBuffer());
+      } catch { console.warn(`Sound "${key}" (${file}) nicht ladbar – Synthese bleibt`); }
+    }
+  }
+
+  makeNoise() {
+    const len = this.ctx.sampleRate;
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
+  startEngine() {
+    const c = this.ctx;
+    const o1 = c.createOscillator(), o2 = c.createOscillator();
+    o1.type = 'sawtooth'; o2.type = 'square';
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380;
+    const g = c.createGain(); g.gain.value = 0;
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
+    o1.start(); o2.start();
+    this.engine = { o1, o2, f, g };
+  }
+
+  startAmbience() {
+    const c = this.ctx, src = c.createBufferSource();
+    src.buffer = this.noise; src.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
+    const g = c.createGain(); g.gain.value = 0.035;
+    src.connect(f); f.connect(g); g.connect(this.master); src.start();
+    this.ambience = g;
+  }
+
+  // speedNorm 0..1, throttle 0..1; active=false blendet den Motor aus.
+  setEngine(active, speedNorm, throttle) {
+    if (!this.ready) return;
+    const e = this.engine, t = this.ctx.currentTime;
+    const base = 38 + speedNorm * 95 + throttle * 12;
+    e.o1.frequency.setTargetAtTime(base, t, 0.08);
+    e.o2.frequency.setTargetAtTime(base * 0.502, t, 0.08);
+    e.f.frequency.setTargetAtTime(260 + speedNorm * 900 + throttle * 400, t, 0.1);
+    e.g.gain.setTargetAtTime(active ? 0.07 + throttle * 0.06 + speedNorm * 0.04 : 0, t, 0.12);
+  }
+
+  play(name, strength = 1) {
+    if (!this.ready) return;
+    if (this.buffers[name]) {
+      const s = this.ctx.createBufferSource(); s.buffer = this.buffers[name];
+      const g = this.ctx.createGain(); g.gain.value = strength; s.connect(g); g.connect(this.master); s.start();
+      return;
+    }
+    const synth = SYNTH[name];
+    if (synth) synth(this, strength);
+  }
+
+  tone(freq, dur, { type = 'square', gain = 0.12, at = 0, slide = 0 } = {}) {
+    const c = this.ctx, t = c.currentTime + at;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  burst(dur, { freq = 800, gain = 0.3, type = 'lowpass' } = {}) {
+    const c = this.ctx, t = c.currentTime;
+    const s = c.createBufferSource(); s.buffer = this.noise;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    const g = c.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+  }
+}
+
+const SYNTH = {
+  crash: (s, k) => { s.burst(0.35 + k * 0.3, { freq: 600 + k * 1800, gain: 0.25 + k * 0.4 }); s.tone(90, 0.25, { type: 'sine', gain: 0.25 * k, slide: -50 }); },
+  hit: (s) => { s.burst(0.12, { freq: 400, gain: 0.3 }); s.tone(160, 0.12, { type: 'sine', gain: 0.2, slide: -80 }); },
+  horn: (s) => { s.tone(392, 0.45, { gain: 0.08 }); s.tone(494, 0.45, { gain: 0.08 }); },
+  door: (s) => { s.burst(0.08, { freq: 1500, gain: 0.25, type: 'bandpass' }); s.tone(120, 0.08, { type: 'sine', gain: 0.2, at: 0.05 }); },
+  ui: (s) => s.tone(880, 0.09, { type: 'triangle', gain: 0.12 }),
+  'ui-move': (s) => s.tone(620, 0.05, { type: 'triangle', gain: 0.08 }),
+  'ui-back': (s) => s.tone(440, 0.09, { type: 'triangle', gain: 0.1, slide: -120 }),
+  tick: (s) => s.tone(1200, 0.05, { type: 'square', gain: 0.06 }),
+  pickup: (s) => [523, 659, 784].forEach((f, i) => s.tone(f, 0.18, { type: 'triangle', gain: 0.14, at: i * 0.09 })),
+  'mission-start': (s) => [392, 523].forEach((f, i) => s.tone(f, 0.2, { type: 'triangle', gain: 0.14, at: i * 0.12 })),
+  'mission-success': (s) => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => s.tone(f, 0.22, { type: 'square', gain: 0.09, at: i * 0.11 })),
+  'mission-fail': (s) => [392, 330, 262, 196].forEach((f, i) => s.tone(f, 0.3, { type: 'sawtooth', gain: 0.08, at: i * 0.18 })),
+  carjack: (s) => s.tone(700, 0.3, { type: 'sawtooth', gain: 0.05, slide: 400 }),
+};

@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+xbox/GtaBerlin/Web/
+xbox/GtaBerlin/bin/
+xbox/GtaBerlin/obj/
+xbox/GtaBerlin/AppPackages/
+xbox/GtaBerlin/BundleArtifacts/
+xbox/**/*.pfx
+xbox/.vs/
+*.user
+.playwright-mcp/

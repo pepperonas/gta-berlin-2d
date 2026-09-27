@@ -1,0 +1,13 @@
+{
+  "name": "gta-berlin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GTA Berlin – kleines Top-down-Open-World-Spiel (HTML5) mit UWP/WebView2-Hülle für den Xbox Developer Mode",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test tests/",
+    "xbox:prepare": "node tools/prepare-xbox.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
