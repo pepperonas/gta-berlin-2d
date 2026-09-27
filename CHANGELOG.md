@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.5.0] – 2026-09-27
+
+### Hinzugefügt
+- Tageszeit: Die Spieluhr läuft beschleunigt (1 s = 1 Spielminute, ein Tag = 24 min), ein neues Spiel beginnt um 16:00.
+  Die Uhrzeit steht im HUD neben dem Geld (☀/☾) und wird mit dem Spielstand gespeichert; ältere Spielstände ohne Uhr
+  bleiben gültig. Der Titelbildschirm zeigt Abendstimmung. `?uhr=21:30` in der Adresse stellt die Uhr zum Anschauen.
+- Schattenwurf: Häuser und Bäume werfen Schatten in Sonnenrichtung (Sonnenstand wie im Berliner Sommer; morgens nach
+  Westen, mittags kurz nach Norden, abends lang nach Osten, zum Horizont hin verblassend). Die Schatten liegen in einer
+  eigenen Ebene, damit sich Überlappungen nicht doppelt abdunkeln; auch Häuser knapp außerhalb des Bildes werfen hinein.
+  Autos und Figuren haben einen mitwandernden Schatten statt eines festen Versatzes.
+- Licht: goldene Stunde, Sonnenuntergang, blaue Stunde und bläuliche Nacht über eine Lichtkarte, die per „multiply“
+  über die Welt gelegt wird (HUD und Schilder bleiben hell). Fahrende Autos haben nachts Scheinwerferkegel, Rücklichter
+  und hellere Bremslichter; der Auftragsort und die Spielfigur leuchten, damit man sie findet. Kein messbarer
+  Mehraufwand: 1920 × 1080 weiterhin Median 10 ms je Bild bei Tag, Abend und Nacht.
+
 ## [0.4.1] – 2026-09-27
 
 ### Behoben

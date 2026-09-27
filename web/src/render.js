@@ -10,6 +10,8 @@ import { offsetPolyline, polylineLength } from './geom.js';
 import { laneOffsets, parkingStrip } from './street.js';
 import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
+import { lightAt } from './daylight.js';
+import { Lighting, casterBox } from './lighting.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -154,6 +156,8 @@ export class Renderer {
     this.ctx = ctx;
     this.skids = [];
     this.particles = [];
+    this.lighting = new Lighting();
+    this.stats = { shadows: 0, lights: 0 };
   }
 
   // Ereignisse der Simulation in Effekte übersetzen.
@@ -204,6 +208,8 @@ export class Renderer {
     const vw = W / s, vh = H / s;
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
+    const L = this.light = lightAt(world.clock ?? 780);
+    const tf = [s, W / 2 - cam.x * s, H / 2 - cam.y * s];
     windowPatterns ??= makeWindowPatterns(ctx);
     cobblePattern ??= makeCobblePattern(ctx);
     ctx.lineDashOffset = 0; // gestrichelte Markierungen stehen fest auf der Straße
@@ -296,6 +302,14 @@ export class Renderer {
     }
     ctx.lineCap = 'butt';
 
+    // 5b) Schattenwurf von Häusern und Bäumen (Sonnenstand aus der Spieluhr)
+    this.stats.shadows = 0;
+    if (L.sun.strength >= 0.02) {
+      const cq = city.render.query(casterBox(v, L.sun), this._cq ??= []);
+      const casters = cq.filter((f) => f.layer === 'building');
+      this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, trees);
+    }
+
     // 6) Missionsmarker am Boden
     if (overlayMarkers) this.drawZones(world);
 
@@ -304,12 +318,12 @@ export class Renderer {
     const margin = 220;
     const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
     for (const b of buildings) list.push({ y: b.bbox.y + b.bbox.h, d: () => this.drawBuilding(b, cam) });
-    for (const tr of trees) list.push({ y: tr.y, d: () => drawTree(ctx, tr, t) });
+    for (const tr of trees) list.push({ y: tr.y, d: () => drawTree(ctx, tr, t, L.sun) });
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
-    for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t) });
-    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' }) });
+    for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
+    for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down', sun: L.sun }) });
     const pl = world.player;
-    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 }) });
+    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0, sun: L.sun }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
 
@@ -322,6 +336,10 @@ export class Renderer {
       if (p.kind === 'spark') { ctx.fillStyle = `rgba(255,${180 + (a * 75) | 0},60,${a})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
       else { ctx.fillStyle = `rgba(70,70,70,${a * 0.45})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
     }
+    // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
+    this.stats.lights = 0;
+    if (L.dark > 0.02) this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers));
+
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
       ctx.fillStyle = 'rgba(255,122,26,0.9)';
@@ -338,6 +356,30 @@ export class Renderer {
     ctx.fillStyle = 'rgba(12,14,22,0.5)'; ctx.fill(outside, 'evenodd');
     ctx.strokeStyle = 'rgba(255,211,61,0.35)'; ctx.lineWidth = 4; ctx.setLineDash([24, 16]); ctx.stroke(city._borderPath); ctx.setLineDash([]);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // Lichtquellen im Bild (Weltkoordinaten) für die Lichtkarte.
+  collectLights(world, v, L, markers) {
+    const out = [], pad = 250;
+    const inView = (x, y) => x > v.x - pad && x < v.x + v.w + pad && y > v.y - pad && y < v.y + v.h + pad;
+    const k = L.dark;
+    for (const c of world.cars) {
+      if (c.wrecked || !c.driver || !inView(c.x, c.y)) continue; // geparkte Autos ohne Fahrer bleiben dunkel
+      const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
+      const fx = c.x + ca * c.hw, fy = c.y + sa * c.hw, bx = c.x - ca * c.hw, by = c.y - sa * c.hw;
+      out.push({ x: fx - ca * 4, y: fy - sa * 4, r: 230, rgb: '255,236,196', a: 0.85 * k, cone: c.angle });
+      out.push({ x: fx, y: fy, r: 34, rgb: '255,240,210', a: 0.6 * k });
+      const braking = c.controls?.brake > 0.1;
+      out.push({ x: bx, y: by, r: braking ? 46 : 26, rgb: '255,50,36', a: (braking ? 0.9 : 0.45) * k });
+    }
+    const pl = world.player;
+    if (!pl.inCar) out.push({ x: pl.x, y: pl.y, r: 70, rgb: '255,210,170', a: 0.35 * k });
+    if (markers) {
+      const m = world.mission, p = world.city.places;
+      const spots = m.state === 'toPickup' ? [p.pickup] : m.state === 'toDropoff' ? [p.dropoff] : m.state === 'idle' || m.state === 'briefing' ? [p.giver] : [];
+      for (const z of spots) if (z && inView(z.x, z.y)) out.push({ x: z.x, y: z.y, r: 120, rgb: '255,211,61', a: 0.7 * k });
+    }
+    return out;
   }
 
   drawZones(world) {

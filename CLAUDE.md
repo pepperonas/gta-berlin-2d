@@ -74,6 +74,11 @@ change in `web/`.
   (`e.blocked`, bollards/barrier lines/diagonal diverters) and building passages (`e.passage`) are excluded from the
   AI graph and the autopilot. Junction discs (`city.junctions`, radius = widest half width + 2 m) count as road for
   surface, trees and rendering — the build (`keepTreesOffRoads`) mirrors that rule.
+- **Time of day and light:** `world.clock` (minutes, `CLOCK` in `config.js`, saved) → `daylight.js lightAt()` (pure:
+  sun direction/length/strength, ambient multiplier, `dark`, `lampsOn`, `windowsLit`). `lighting.js` draws two
+  screen-size layers: building/tree shadows (one same-orientation path, filled opaque, composited once at
+  `SHADOW_ALPHA × strength`) and, when `dark > 0.02`, a lightmap (ambient fill + additive light sprites, composited with
+  `multiply`). Light sources come from `Renderer.collectLights`. `?uhr=HH:MM` sets the clock of each new world.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

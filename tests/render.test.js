@@ -72,3 +72,40 @@ test('Gleise maßstäblich und in Ebenen: erst Bett/Viadukt, dann Schwellen, dan
   assert.ok(TRACK.sleeper > TRACK.gauge && TRACK.sleeper < 30);
   assert.ok(TRACK.deck <= 50, 'Viaduktbreite je Gleis höchstens 5 m');
 });
+
+test('Tag/Nacht: bei Tag Hausschatten und keine Lichtkarte, nachts Lichtkarte per „multiply“ mit Scheinwerfern', async () => {
+  globalThis.Path2D ??= class { moveTo() {} lineTo() {} closePath() {} rect() {} addPath() {} arc() {} };
+  // Offscreen-Ebenen (Schatten, Lichtkarte, Licht-Sprites) brauchen Verläufe
+  globalThis.OffscreenCanvas = class {
+    constructor(w, h) { this.width = w; this.height = h; }
+    getContext() { return new Proxy({}, { get: (t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}) }); }
+  };
+  const { Renderer } = await import('../web/src/render.js');
+  const { createWorld, updateWorld } = await import('../web/src/world.js');
+  const { idle } = await import('./helpers/bot.js');
+  const w = createWorld({ city: realCity(), seed: 3 });
+  w.camera.x = w.city.places.giver.x; w.camera.y = w.city.places.giver.y;
+  for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60); // Verkehr erzeugen
+  const draws = [];
+  const ctx = new Proxy({ globalCompositeOperation: 'source-over', globalAlpha: 1, lineDashOffset: 0 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'drawImage') return (img, ...a) => { if (a.every((x) => Number.isFinite(x))) draws.push({ op: t.globalCompositeOperation, alpha: t.globalAlpha }); else draws.push({ nan: true }); };
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (k === 'getLineDash') return () => [];
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const r = new Renderer(ctx);
+  w.clock = 11 * 60; draws.length = 0; r.draw(w, 1280, 720, 1.2);
+  assert.ok(r.stats.shadows > 10, `Hausschatten bei Tag (${r.stats.shadows} Häuser)`);
+  assert.ok(!draws.some((d) => d.op === 'multiply'), 'bei Tag keine Lichtkarte');
+  assert.ok(draws.some((d) => d.op === 'source-over' && d.alpha > 0 && d.alpha < 0.5), 'Schattenebene halbtransparent aufgetragen');
+  w.clock = 23 * 60; draws.length = 0; r.draw(w, 1280, 720, 1.2);
+  assert.equal(r.stats.shadows, 0, 'nachts keine Sonnenschatten');
+  assert.equal(draws.filter((d) => d.op === 'multiply').length, 1, 'genau eine Lichtkarte je Bild');
+  assert.ok(r.stats.lights >= 3, `Lichtquellen (${r.stats.lights})`);
+  assert.ok(!draws.some((d) => d.nan), 'keine NaN-Koordinaten');
+});

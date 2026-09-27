@@ -13,7 +13,7 @@ export function makeSave(w, now = Date.now()) {
   const pos = playerCar(w) ?? w.player;
   return {
     version: SAVE_VERSION, savedAt: now,
-    money: w.money, completed: w.completed, bestTime: w.bestTime,
+    money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock),
     player: { x: Math.round(pos.x), y: Math.round(pos.y) },
     car: car && !car.wrecked ? { x: Math.round(car.x), y: Math.round(car.y), angle: car.angle, health: car.health } : null,
   };
@@ -28,7 +28,8 @@ export function validateSave(s) {
   if (!s.player || !num(s.player.x, 0, MAX_XY) || !num(s.player.y, 0, MAX_XY)) return null;
   let car = null;
   if (s.car && num(s.car.x, 0, MAX_XY) && num(s.car.y, 0, MAX_XY) && num(s.car.angle, -100, 100) && num(s.car.health, 1, 100)) car = s.car;
-  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, player: s.player, car };
+  const clock = num(s.clock, 0, 1440) ? s.clock : null; // ältere Stände ohne Uhr: Uhr bleibt beim Spielstart
+  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, clock, player: s.player, car };
 }
 
 export function writeSave(storage, w) {
@@ -45,6 +46,7 @@ export function readSave(storage) {
 // sobald die Kacheln dort da sind (resolveSave, aufgerufen von updateWorld).
 export function applySave(w, s) {
   w.money = s.money; w.completed = s.completed; w.bestTime = s.bestTime;
+  if (s.clock !== null && s.clock !== undefined) w.clock = s.clock;
   w.pendingSave = s;
   const p = s.car ?? s.player;
   if (p && insideBorder(w.city, p.x, p.y)) { w.camera.x = p.x; w.camera.y = p.y; }

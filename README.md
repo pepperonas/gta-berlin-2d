@@ -79,6 +79,12 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
   auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
   neuen Ort. Während eines laufenden Auftrags gesperrt (sonst wäre die Mission trivial). Tastensymbole wechseln zwischen Controller und Tastatur.
+- **Tageszeit und Licht:** Die Spieluhr läuft beschleunigt (1 Echtsekunde = 1 Spielminute, ein Tag = 24 min, neues
+  Spiel um 16:00, die Uhrzeit steht im HUD und im Spielstand). Die Sonne steht wie im Berliner Sommer (Aufgang 5:30,
+  Untergang 20:30): Häuser und Bäume werfen Schatten in Sonnenrichtung, morgens und abends lang und warm, mittags kurz;
+  Autos und Figuren haben einen mitwandernden Schatten. In der Dämmerung färbt sich das Licht golden, dann blau; nachts
+  ist die Stadt dunkel, fahrende Autos haben Scheinwerferkegel und Rücklichter, der Auftragsort leuchtet. Zum Anschauen:
+  `http://localhost:8080/?uhr=21:30` stellt die Uhr jeder neuen Welt.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -111,7 +117,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 91 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 108 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -161,6 +167,8 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/save.js        Spielstand
   src/input.js       Tastatur, Web-Gamepad, Controller-Daten aus der Xbox-Hülle
   src/render.js      Welt-Rendering (schräge Draufsicht)
+  src/daylight.js    Tageslicht aus der Spieluhr (Sonnenstand, Umgebungslicht; ohne Canvas)
+  src/lighting.js    Schattenwurf und Lichtkarte (eigene Bildschirm-Ebenen)
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
   src/audio.js       synthetisierte Klänge
   src/assets.js      Platzhaltergrafiken + Austausch per manifest.json
@@ -253,7 +261,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 99 automatischen Tests grün, darunter:
+- Alle 108 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -278,6 +286,12 @@ in Edge `edge://inspect` mit der Konsole verbinden
   - der vollständige Missionsablauf per Autopilot über die echte Route Wrangelstraße → Neukölln → zurück
     (ohne Verkehr, innerhalb von 930 s), Scheitern durch Zeitablauf und Totalschaden;
   - Vollgas gegen Hauswand, Kaimauer und Gebietsgrenze (jeder Schritt geprüft);
+  - Tageslicht: Mittag hell mit kurzem Schatten, Mitternacht dunkel mit Laternen, morgens und abends lange Schatten in
+    entgegengesetzte Richtungen, über 24 h stetig; die Spieluhr läuft 1 min je Sekunde, springt über Mitternacht und
+    steht im Spielstand (alte Stände ohne Uhr bleiben gültig); Hausschatten gleich orientiert (sonst löschen sich
+    Überlappungen aus), Schatten werfende Häuser außerhalb des Bildes werden gefunden; bei Tag Schatten ohne Lichtkarte,
+    nachts genau eine Lichtkarte je Bild (für fünf dieser Prüfungen gegengeprüft, dass sie fehlschlagen, wenn man die
+    Funktion abschaltet);
   - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
     gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
     belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig

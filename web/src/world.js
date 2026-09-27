@@ -1,6 +1,6 @@
 // Spielwelt: verbindet Stadt, Spieler, Autos, Passanten und Mission zu einem Simulationsschritt.
 // Enthält kein DOM – Eingaben kommen als abstrakter Zustand (siehe input.js), Ausgaben als Ereignisse.
-import { PLAYER, PED, TRAFFIC, CAR, PARKED } from './config.js';
+import { PLAYER, PED, TRAFFIC, CAR, PARKED, CLOCK } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
@@ -21,7 +21,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0,
+    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0, clock: CLOCK.start,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -339,6 +339,7 @@ export function updateWorld(w, input, dt) {
   if (w.pendingSave && !resolveSave(w)) { w.loading = true; return; }
   if (!streamWorld(w)) return;
   w.time += dt;
+  w.clock = (w.clock + dt * CLOCK.minutesPerSecond) % 1440;
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;
 

@@ -3,6 +3,7 @@ import { DT } from './config.js';
 import { createGame, updateGame, setCity, requestTeleport, confirmTeleport } from './game.js';
 import { openCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf } from './world.js';
+import { parseClock } from './daylight.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
 import { Hud, BASE } from './hud.js';
@@ -41,6 +42,9 @@ globalThis.__hud = hud;
 // nach, sobald eine Kamera in ihre Nähe kommt; den Stadtplan (overview.json) erst im Hintergrund.
 // Bis der Index da ist, zeigt der Titel „Lade …“. Titelbildschirm-Hintergrund: eine laufende Demo-Welt mit Kamerafahrt.
 let demo = null;
+// ?uhr=21:30 stellt die Spieluhr jeder neuen Welt (Sichtprüfung von Tag, Dämmerung, Nacht)
+const forcedClock = parseClock(new URLSearchParams(location.search).get('uhr'));
+let clockSetFor = null;
 const getJson = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); });
 getJson('data/berlin/index.json').then((index) => {
   const city = openCity(index, (key) => getJson(`data/berlin/tiles/${key}.json`));
@@ -48,6 +52,7 @@ getJson('data/berlin/index.json').then((index) => {
   globalThis.__city = city;
   demo = createWorld({ city, seed: 1989, cars: 14, pedestrians: 30 });
   demo.mission.state = 'idle';
+  demo.clock = forcedClock ?? 19 * 60 + 30; // Titel: Abendstimmung
   getJson('data/berlin/overview.json').then((ov) => { city.overview = ov; hud.overview = null; }).catch((err) => console.error(err));
 }).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
 
@@ -156,6 +161,7 @@ function frame(now) {
     const inp = input.frame(readRaw(), DT);
     applyPointer(inp);
     const events = updateGame(game, inp, DT);
+    if (forcedClock !== null && game.world && game.world !== clockSetFor) { game.world.clock = forcedClock; clockSetFor = game.world; }
     for (const e of events) playEvent(e);
     if (game.world) {
       renderer.handleEvents(events);

@@ -169,6 +169,16 @@ Richtungen mittig fahren) werden über alle zusammenhängenden Abschnitte gleich
 Hindernisse werden entlang der eigenen Route gemessen. Das ersetzt Vorfahrtregeln: es ist keine StVO-Vorfahrt, aber es
 verklemmt nicht.
 
+**Tageslicht und Licht** (`web/src/daylight.js` rein rechnerisch, `web/src/lighting.js` zeichnet): `lightAt(minuten)`
+liefert Sonnenrichtung und Schattenlänge (Azimut 50° bei Aufgang 5:30 bis 310° bei Untergang 20:30, Mittagshöhe 58°,
+Schatten höchstens 2,4 × Höhe, zum Horizont hin ausgeblendet), das Umgebungslicht je Farbkanal aus Stützstellen
+(stetig interpoliert), den Anteil beleuchteter Fenster und ob Laternen brennen. Hausschatten: jede Wand überstreicht
+beim Verschieben um Sonne × Höhe ein Viereck; alle Vierecke eines Bildes gehen gleich orientiert in einen Pfad und
+werden deckend in eine eigene Bildschirm-Ebene gefüllt, die einmal mit 30 % Deckkraft aufgetragen wird – so dunkeln
+Überlappungen nicht doppelt ab und Innenhöfe werden nur dort beschattet, wo ihre Wände hineinwerfen. Lichtkarte: eine
+zweite Ebene mit dem Umgebungslicht füllen, Lichtquellen additiv (`lighter`) aus vorgerenderten Verlaufs-Sprites
+(rund, Kegel) dazu, dann per `multiply` über die Welt; HUD, POI-Schilder und Grenze kommen danach und bleiben hell.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

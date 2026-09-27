@@ -37,4 +37,7 @@ export const TRAFFIC = { cars: 22, pedestrians: 55, spawnMin: 750, spawnMax: 180
 // Darstellung: reale Gebäudehöhen (1 m = 10 px) werden für die Schrägansicht gestaucht.
 export const RENDER = { heightScale: 0.5 };
 
+// Spieluhr: 1 Echtsekunde = 1 Spielminute (ein Tag dauert 24 min); neues Spiel beginnt am Nachmittag.
+export const CLOCK = { minutesPerSecond: 1, start: 16 * 60 };
+
 export const SPEED_TO_KMH = 0.36;

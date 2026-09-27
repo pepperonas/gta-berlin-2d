@@ -4,6 +4,7 @@
 // TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
+import { formatClock, SUNRISE } from './daylight.js';
 import { undelta } from './geom.js';
 import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
@@ -147,7 +148,9 @@ export class Hud {
 
     // Oben links: Ort + Geld
     this.text(locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
-    this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
+    const mw = this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
+    const night = world.clock >= 1230 || world.clock < SUNRISE;
+    this.text(`${night ? '☾' : '☀'} ${formatClock(world.clock)}`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
     // Geschäft/Lokal/Haltestelle in unmittelbarer Nähe
     const here = playerCar(world) ?? world.player;
     const poi = nearestPoi(world.city, here.x, here.y, car ? 120 : 180);

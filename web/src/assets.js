@@ -30,14 +30,26 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-export function drawCar(ctx, car, t) {
+// Schattenversatz kleiner Objekte (Autos, Figuren): wandert mit der Sonne, nachts nur ein Kontaktschatten darunter.
+export function smallShadow(sun, h) {
+  if (!sun) return [3, 4, 0.35];
+  const k = Math.min(h * 1.6, h * 0.35 * sun.len) * sun.strength;
+  return [sun.dx * k, sun.dy * k, 0.22 + 0.13 * sun.strength];
+}
+
+export function drawCar(ctx, car, t, sun) {
+  const L = car.hw * 2, W = car.hh * 2;
+  // Schatten (in Sonnenrichtung versetzt)
+  const [sx, sy, sa] = smallShadow(sun, 16);
+  ctx.save();
+  ctx.translate(car.x + sx, car.y + sy);
+  ctx.rotate(car.angle);
+  ctx.fillStyle = `rgba(0,0,0,${sa})`;
+  roundRect(ctx, -L / 2 - 1, -W / 2 - 1, L + 2, W + 2, 6); ctx.fill();
+  ctx.restore();
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
-  const L = car.hw * 2, W = car.hh * 2;
-  // Schatten
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  roundRect(ctx, -L / 2 + 3, -W / 2 + 4, L, W, 5); ctx.fill();
   if (sprites.car) {
     ctx.drawImage(sprites.car, -L / 2, -W / 2, L, W);
     if (car.wrecked) { ctx.fillStyle = 'rgba(20,15,10,0.6)'; ctx.fillRect(-L / 2, -W / 2, L, W); }
@@ -72,11 +84,12 @@ export function drawCar(ctx, car, t) {
   ctx.restore();
 }
 
-export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false }) {
+export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', player = false, down = false, sun = null }) {
   ctx.save();
   ctx.translate(p.x, p.y);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.ellipse(1.5, 2, down ? 9 : 6, down ? 4 : 5, 0, 0, Math.PI * 2); ctx.fill();
+  const [sx, sy, sa] = smallShadow(sun, down ? 4 : 17);
+  ctx.fillStyle = `rgba(0,0,0,${sa})`;
+  ctx.beginPath(); ctx.ellipse(sx * 0.5, sy * 0.5, down ? 9 : 6 + Math.abs(sx) * 0.35, down ? 4 : 5 + Math.abs(sy) * 0.35, 0, 0, Math.PI * 2); ctx.fill();
   ctx.rotate(p.facing ?? p.angle ?? 0);
   const key = player ? 'player' : 'pedestrian';
   if (sprites[key]) { ctx.drawImage(sprites[key], -8, -8, 16, 16); ctx.restore(); return; }
@@ -106,10 +119,13 @@ export const TREE_STYLE = {
   Nadel: ['#1f4a26', '#2a5e30', '#3b7a40'], sonstige: ['#2f6b2a', '#3f8a35', '#58a748'],
 };
 
-export function drawTree(ctx, tr, t) {
+export function drawTree(ctx, tr, t, sun) {
   const r = tr.size, lift = Math.min(r * 0.5, 30);
-  ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  ctx.beginPath(); ctx.ellipse(tr.x + 6, tr.y + 4, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  // Bei Sonne wirft die Schattenebene (lighting.js) den Kronenschatten; sonst nur ein weicher Fleck unter dem Baum.
+  if (!sun || sun.strength < 0.5) {
+    ctx.fillStyle = `rgba(0,0,0,${0.22 * (1 - (sun?.strength ?? 0))})`;
+    ctx.beginPath(); ctx.ellipse(tr.x, tr.y, r * 0.8, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.fillStyle = '#5b3d22'; ctx.fillRect(tr.x - Math.max(2, tr.r), tr.y - lift, Math.max(4, tr.r * 2), lift);
   const sway = Math.sin(t * 1.3 + tr.x) * 0.8;
   const cy = tr.y - lift;
