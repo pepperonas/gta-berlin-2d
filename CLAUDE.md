@@ -76,8 +76,8 @@ change in `web/`.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.
-- **Traffic:** `roadgraph.js` turns drivable in-area edges (`cls <= TRAFFIC_MAX_CLASS`) into one lane per direction
-  (offset right by w/4, trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
+- **Traffic:** `roadgraph.js` turns drivable in-area edges (`cls <= TRAFFIC_MAX_CLASS`) into lanes per the cross-section
+  (trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
   polyline with pure pursuit, slows for turns/obstacles, replans via the lane hash. **Population lives around the camera**
   (`TRAFFIC.spawnMin/spawnMax/despawn` in `config.js`, `managePopulation` in `world.js`).
 - **Pedestrians** walk along road edges at a per-side sidewalk offset (cached, shrunk if it would hit a building), pick the
@@ -87,6 +87,14 @@ change in `web/`.
 - **Assets:** all graphics/sounds are self-generated placeholders; real files can be swapped in via
   `web/assets/manifest.json` (keys, sizes and orientation in `web/assets/README.md`). Never use names/art/music from
   other games.
+
+## Versioning and releases
+
+SemVer, started at 0.0.1 (0.x = prototype, formats may break). The version lives in **three places that must match**:
+`package.json`, `web/src/version.js` (shown on the title screen) and `xbox/GtaBerlin/Package.appxmanifest`
+(`Identity Version="X.Y.Z.0"`); `CHANGELOG.md` needs a dated `## [X.Y.Z] – YYYY-MM-DD` entry on top.
+`tests/version.test.js` enforces all of this. Every commit that changes behaviour bumps the version (patch for fixes,
+minor for features), gets a CHANGELOG entry, is tagged `vX.Y.Z` and pushed with `git push --follow-tags`.
 
 ## Tests
 

@@ -3,6 +3,7 @@ import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
 import { AREA_KIND } from './citycodes.js';
+import { VERSION } from './version.js';
 import { missionObjective, BRIEFING } from './mission.js';
 import { playerCar, speedOf } from './world.js';
 
@@ -339,7 +340,7 @@ export class Hud {
       this.menu(g.titleMenu, vw / 2, 350);
       this.footerHints([['A', 'Auswählen']]);
     } else this.text(g.loadError ? `Karte nicht ladbar: ${g.loadError}` : 'Lade Kreuzberg und Nord-Neukölln …', vw / 2, 380, { size: 22, align: 'center', weight: 600, color: g.loadError ? '#ff8080' : '#ddd' });
-    this.text('v0.2 · Prototyp', vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
+    this.text(`v${VERSION} · Prototyp`, vw - this.m.x, vh - this.m.y, { size: 14, align: 'right', color: '#999', weight: 500 });
     this.text('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', this.m.x, vh - this.m.y, { size: 12, color: '#999', weight: 500 });
   }
 
