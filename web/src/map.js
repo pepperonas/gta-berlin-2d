@@ -41,6 +41,7 @@ export function openCity(index, loadTile, { overview = null } = {}) {
     bezirke: index.bezirke.map((d) => ({ name: d.n, rings: d.r.map(undelta) })),
     districts: index.districts.map((d) => ({ name: d.n, rings: d.r.map(undelta) })),
     kieze: index.kieze ?? [],
+    hospitals: (index.hospitals ?? []).map(([x, y, name]) => ({ x, y, name })),
     places: { giver: pl.giver, playerSpawn: pl.playerSpawn, dropoff: pl.dropoff, playerCar: pl.playerCar, pickup: pl.pickup },
     parked: pl.parked ?? [], crates: pl.crates ?? [], timeLimit: pl.timeLimit,
     overview,
@@ -443,11 +444,12 @@ export function surfaceAt(city, x, y) {
   const road = onRoad(city, x, y);
   if (road) return road.cs.surface === SURFACE.cobble ? T.COBBLE : T.ROAD;
   pt.x = x; pt.y = y;
-  let best = T.SIDEWALK;
+  let best = T.SIDEWALK, onBridge = false;
   for (const f of city.polys.query(pt, tmp)) {
     if (!pointInRings(x, y, f.rings)) continue;
     if (f.layer === 'building') return T.BUILDING;
-    if (f.layer === 'water') best = T.WATER;
+    if (f.layer === 'water') { if (!onBridge) best = T.WATER; }
+    else if (f.kind === AREA_KIND.bridge) { onBridge = true; best = T.PLAZA; } // Brückendeck liegt über dem Wasser
     else if (best !== T.WATER) best = GREEN.has(f.kind) ? T.GRASS : T.PLAZA;
   }
   return best;

@@ -142,6 +142,8 @@ export function tileCity(g, { tile, meta, places }) {
     districts: g.districts.map((d) => ({ n: d.name, r: d.rings.map((r) => delta(simp(r, 2 * S))) })),
     kieze: g.kieze,
     places,
+    // Krankenhäuser (ganz Berlin, auch ungeladene Kacheln): hier wacht man auf, wenn die Lebenspunkte ausgehen
+    hospitals: g.pois.filter((q) => g.names[q.k] === 'hospital').map((q) => [q.x, q.y, g.names[q.n]]),
   };
   return { index, overview: overviewOf(g), tiles: out };
 }

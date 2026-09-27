@@ -245,3 +245,61 @@ test('Baumkataster ersetzt den OSM-Baum an derselben Stelle (Gattung, Krone, Sta
   assert.ok(Math.abs(linde.r - 1.9) < 0.1, 'Stamm aus 120 cm Umfang');
   assert.ok(!L('tree').some((t) => t !== linde && Math.hypot(t.x - linde.x, t.y - linde.y) < 40), 'OSM-Doppel entfernt');
 });
+
+test('Gebäude-Regeln: Brückenbauwerke und schwebende Teile sind keine Häuser, Bauteile nur ohne Umriss', async () => {
+  const { buildingTreatment, mergeParts } = await import('../tools/osm/build.mjs');
+  assert.equal(buildingTreatment({ building: 'yes' }), 'building');
+  assert.equal(buildingTreatment({ highway: 'residential' }), null);
+  assert.equal(buildingTreatment({ building: 'bridge', 'bridge:support': 'pier' }), 'skip', 'Brückenpfeiler');
+  assert.equal(buildingTreatment({ building: 'bridge', min_height: '9.5', note: 'Kreuzgang' }), 'skip');
+  assert.equal(buildingTreatment({ building: 'roof' }), 'skip');
+  assert.equal(buildingTreatment({ building: 'watchtower', min_height: '15' }), 'skip', 'Turmspitze schwebt');
+  assert.equal(buildingTreatment({ building: 'yes', 'building:min_level': '2' }), 'skip', 'Überbauung: man fährt darunter durch');
+  assert.equal(buildingTreatment({ building: 'yes', layer: '-1' }), 'skip');
+  assert.equal(buildingTreatment({ 'building:part': 'yes', height: '34' }), 'part');
+  assert.equal(buildingTreatment({ building: 'yes', 'building:part': 'yes' }), 'part');
+  const sq = (id, x, y, s, h) => ({ id, h, k: 0, measured: true, rings: [{ outer: true, pts: [x, y, x + s, y, x + s, y + s, x, y + s] }] });
+  // Haus mit Umriss und Teil darin: Teil bleibt unbeachtet
+  const buildings = [sq(1, 0, 0, 100, 160)];
+  // Brückenpfeiler (groß, 5 m) mit Turm (klein, 34 m) darauf, daneben ein einzelnes Teil
+  const parts = [sq(2, 10, 10, 20, 250), sq(10, 500, 500, 300, 50), sq(11, 600, 600, 60, 340), sq(12, 610, 610, 30, 150), sq(20, 2000, 0, 50, 120)];
+  const r = mergeParts(buildings, parts);
+  const byId = new Map(buildings.map((b) => [b.id, b]));
+  assert.ok(!byId.has(2), 'Teil im Umriss wird kein eigenes Gebäude');
+  assert.ok(byId.has(11) && byId.get(11).h === 340, 'auf dem Pfeiler steht der Turm (höchstes Teil, eigener Umriss)');
+  assert.ok(!byId.has(10) && !byId.has(12), 'kein turmhoher Pfeiler, keine Doppelung');
+  assert.ok(byId.has(20), 'einzelnes Teil wird Gebäude');
+  assert.equal(r.added, 2);
+});
+
+test('Echte Karte: Oberbaumbrücke mit Brückendeck, Türmen und ohne Häuser auf der Fahrbahn; Krankenhäuser in ganz Berlin', async () => {
+  const { openRealCity, realIndex } = await import('./helpers/city.js');
+  const { pointInRings } = await import('../web/src/geom.js');
+  const { AREA_KIND } = await import('../web/src/citycodes.js');
+  const idx = realIndex();
+  assert.ok(idx.hospitals.length >= 40, `${idx.hospitals.length} Krankenhäuser`);
+  const c = openRealCity();
+  const { bezirkAt } = await import('../web/src/map.js');
+  const bz = new Set(idx.hospitals.map(([x, y]) => bezirkAt(c, x, y)).filter(Boolean));
+  assert.equal(bz.size, 12, `Krankenhäuser in ${bz.size} von 12 Bezirken`);
+  const q = c.list('poi').find((p) => p.name === 'Oberbaumbrücke' && p.cat === 'culture') ?? null;
+  const [px, py] = q ? [q.x, q.y] : [246018, 196469];
+  c.loadArea(px - 800, py - 800, px + 800, py + 800, { pin: true });
+  const near = (f) => Math.hypot(f.cx - px, f.cy - py) < 600;
+  const towers = c.list('building').filter((b) => near(b) && b.meters >= 30);
+  assert.ok(towers.length >= 2, `Türme der Oberbaumbrücke (${towers.length})`);
+  const edges = c.list('edge').filter((e) => e.name === 'Oberbaumbrücke' && e.cls <= 8);
+  assert.ok(edges.length >= 2);
+  for (const b of c.list('building')) for (const e of edges) for (let i = 0; i < e.pts.length; i += 2) assert.ok(!pointInRings(e.pts[i], e.pts[i + 1], b.rings), `Haus ${b.id} steht auf der Fahrbahn der Oberbaumbrücke`);
+  const deck = c.list('area').filter((a) => a.kind === AREA_KIND.bridge && pointInRings(px, py, a.rings));
+  assert.equal(deck.length, 1, 'Brückendeck unter dem POI');
+  // ein Punkt auf dem Deck, der keine Fahrbahn ist, gilt nicht als Wasser
+  let checked = 0;
+  for (let dx = -300; dx <= 300 && !checked; dx += 20) for (let dy = -300; dy <= 300 && !checked; dy += 20) {
+    const x = px + dx, y = py + dy;
+    if (!pointInRings(x, y, deck[0].rings) || c.list('water').every((wa) => !pointInRings(x, y, wa.rings))) continue;
+    if (surfaceAt(c, x, y) === T.ROAD) continue;
+    assert.notEqual(surfaceAt(c, x, y), T.WATER, 'Deck über dem Wasser ist kein Wasser'); checked++;
+  }
+  assert.ok(checked, 'Deckpunkt über Wasser gefunden');
+});

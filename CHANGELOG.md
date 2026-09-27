@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.10.1] – 2026-09-27
+
+### Behoben
+- Oberbaumbrücke (und alle vergleichbar erfassten Bauwerke in Berlin): Über Fahrbahn und U-Bahn stand ein 16 m hoher
+  Klotz – der Brückenpfeiler (`building=bridge`, ohne Höhe → Standardhöhe) wurde als Haus gebaut, die Turmspitze
+  (`min_height=15`) als 18-m-Klotz vom Boden aus, die eigentlichen Türme (34 m, nur als `building:part` erfasst)
+  fehlten ganz, und zwischen Fahrbahnen und Viadukt sah man Wasser. Der Karten-Build
+  - baut aus Brückenbauwerken (`building=bridge`, `man_made=bridge`), Dächern und schwebenden Teilen (ab 3 m über Grund
+    bzw. ab dem 1. Geschoss) keine Häuser mehr – unter Überbauungen kann man jetzt hindurchfahren;
+  - übernimmt Bauteile (`building:part`) ohne umgebenden Gebäudeumriss als Gebäude; bei ineinanderliegenden Teilen
+    das höchste mit eigenem Umriss (der Turm auf dem Pfeiler, nicht ein turmhoher Pfeiler) – 2 209 Gebäude in Berlin;
+  - zeichnet Brückendecks (`man_made=bridge`) als Mauerwerk über dem Wasser; dort gilt der Untergrund nicht als
+    Wasser.
+
+### Hinzugefügt
+- Liste der 60 Berliner Krankenhäuser (alle 12 Bezirke) im Kartenindex – Grundlage für den Neustart nach K. o.
+
 ## [0.10.0] – 2026-09-27
 
 ### Hinzugefügt

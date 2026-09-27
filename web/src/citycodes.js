@@ -3,7 +3,7 @@ export const ROAD_CLASSES = [null, 'motorway', 'trunk', 'primary', 'secondary', 
   'living_street', 'service', 'pedestrian', 'track', 'busway'];
 export const ROAD_CLASS = Object.fromEntries(ROAD_CLASSES.map((c, i) => [c, i]).filter(([c]) => c));
 export const TRAFFIC_MAX_CLASS = 8; // Autobahn … Spielstraße: KI-Verkehr; Zufahrten/Fußgängerzonen nicht
-export const AREA_KIND = { rail: 0, plaza: 1, allotments: 2, cemetery: 3, grass: 4, pitch: 5, sand: 6, wood: 7 };
+export const AREA_KIND = { rail: 0, plaza: 1, allotments: 2, cemetery: 3, grass: 4, pitch: 5, sand: 6, wood: 7, bridge: 8 };
 // Wandzüge (Kachelformat): Art der Wand; 1 = Stadtgrenze (unsichtbare Wand)
 export const WALL_KIND = { other: 0, border: 1, quay: 2, rail: 3, railing: 4, fence: 5 };
 export const BUILDING_KIND = { house: 0, public: 1, industrial: 2, church: 3, small: 4, spaeti: 5, warehouse: 6 };

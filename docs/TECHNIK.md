@@ -192,6 +192,14 @@ schräg verlaufenden Straßen und wirkt wie ein gekachelter Platz. Decals entste
 Querschnitt (Rinnstein am Bordstein, Flicken und Deckel zwischen den Fahrstreifenrändern) und werden als ein Pfad je
 Art zwischengespeichert; in der niedrigen Qualitätsstufe entfallen sie.
 
+**Gebäude im Build** (`tools/osm/build.mjs buildingTreatment/mergeParts`): Aus Brückenbauwerken (`building=bridge`,
+`man_made=bridge`), Dächern (`building=roof`) und schwebenden Teilen (`min_height` ≥ 3 m oder `building:min_level`
+≥ 1) werden keine Häuser – sie berühren den Boden nicht, eine Mauer wäre falsch (Beispiel Oberbaumbrücke: Pfeiler im
+Wasser, Kreuzgang unter der U-Bahn, Turmspitze). Bauteile (`building:part`) gelten nur, wenn kein Gebäudeumriss sie
+enthält (sonst ist der Umriss das Gebäude); ineinanderliegende Teile bilden eine Gruppe, von der das höchste Teil mit
+seinem Umriss übernommen wird. `man_made=bridge`-Flächen werden Brückendecks (`AREA_KIND.bridge`), über dem Wasser
+gezeichnet. Der Index trägt alle Krankenhäuser (`hospitals`).
+
 **Häuser** (`web/src/roofs.js`, gezeichnet in `render.js drawRoof`): OSM kennt Dachformen in Berlin nur lückenhaft,
 deshalb entscheidet das Spiel aus Gebäudeart, Höhe und Seed: Altbau (12–24 m) meist mit „Berliner Dach“, niedrige
 Wohnhäuser meist Satteldach, Industrie Wellblech. Aufbauten werden je Haus einmal gewürfelt (Anzahl nach Grundfläche)

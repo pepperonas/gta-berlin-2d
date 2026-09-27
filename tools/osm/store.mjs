@@ -7,7 +7,7 @@
 import { readPbf } from './pbf.mjs';
 
 // Wege, die der Build braucht (Straßen, Gebäude, Flächen, Gleise, Sperren, POIs, Hausnummern, Plätze).
-const WAY_KEYS = ['highway', 'building', 'landuse', 'leisure', 'natural', 'waterway', 'amenity', 'railway', 'man_made',
+const WAY_KEYS = ['highway', 'building', 'building:part', 'landuse', 'leisure', 'natural', 'waterway', 'amenity', 'railway', 'man_made',
   'barrier', 'shop', 'tourism', 'addr:housenumber', 'place', 'public_transport', 'area:highway'];
 // Relationen: Multipolygone (Gebäude, Flächen, Wasser), Abbiegeverbote, Ortsteilgrenzen.
 export const keepRelation = (t) => !!t && (t.type === 'multipolygon' || t.type === 'restriction'

@@ -22,7 +22,7 @@ import { WEAPONS } from './combat.js';
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
   [AREA_KIND.cemetery]: '#5b8a47', [AREA_KIND.grass]: '#5d9340', [AREA_KIND.pitch]: '#4d8c3c',
-  [AREA_KIND.sand]: '#d6c48d', [AREA_KIND.wood]: '#3e7631',
+  [AREA_KIND.sand]: '#d6c48d', [AREA_KIND.wood]: '#3e7631', [AREA_KIND.bridge]: '#8c7a68',
 };
 const WALLS = {
   [BUILDING_KIND.house]: ['#c9b79c', '#d6c7a1', '#c4a484', '#b8a488', '#d9c9b3', '#c7a9a0', '#b3aa9a', '#d4bfa0', '#a89080', '#e0d4bd'],
@@ -485,7 +485,7 @@ export class Renderer {
     ctx.fillStyle = tex('sidewalk', SIDEWALK);
     ctx.fillRect(v.x - 5, v.y - 5, v.w + 10, v.h + 10);
     areas.sort((a, b) => a.kind - b.kind);
-    for (const a of areas) { ctx.fillStyle = tex(AREA_TEXTURE[a.kind], AREA_COLOR[a.kind]); ctx.fill(pathOf(a), 'evenodd'); }
+    for (const a of areas) if (a.kind !== AREA_KIND.bridge) { ctx.fillStyle = tex(AREA_TEXTURE[a.kind], AREA_COLOR[a.kind]); ctx.fill(pathOf(a), 'evenodd'); }
 
     // 2) Wasser mit Wellen und Kaikante
     for (const wa of water) {
@@ -505,6 +505,13 @@ export class Renderer {
       ctx.lineWidth = 24; ctx.stroke(shoreOf(wa));
       ctx.restore();
       ctx.strokeStyle = '#6f6a60'; ctx.lineWidth = 3; ctx.stroke(shoreOf(wa));
+    }
+
+    // 2b) Brückendecks liegen über dem Wasser (Mauerwerk mit dunkler Kante)
+    for (const a of areas) if (a.kind === AREA_KIND.bridge) {
+      ctx.fillStyle = AREA_COLOR[AREA_KIND.bridge]; ctx.fill(pathOf(a), 'evenodd');
+      const pl = tex('plaza', null); if (pl) { ctx.globalAlpha = 0.35; ctx.fillStyle = pl; ctx.fill(pathOf(a), 'evenodd'); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = '#5a4c40'; ctx.lineWidth = 3; ctx.stroke(pathOf(a));
     }
 
     // 3) Wege (Parks, Fußwege) und ebenerdige Gleise
