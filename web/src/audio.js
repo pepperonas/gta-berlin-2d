@@ -13,7 +13,6 @@ export class Sound {
       this.master = this.ctx.createGain(); this.master.gain.value = 0.55; this.master.connect(this.ctx.destination);
       this.noise = this.makeNoise();
       this.startEngine();
-      this.startAmbience();
       this.loadOverrides();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
@@ -49,15 +48,6 @@ export class Sound {
     o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
     o1.start(); o2.start();
     this.engine = { o1, o2, f, g };
-  }
-
-  startAmbience() {
-    const c = this.ctx, src = c.createBufferSource();
-    src.buffer = this.noise; src.loop = true;
-    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
-    const g = c.createGain(); g.gain.value = 0.035;
-    src.connect(f); f.connect(g); g.connect(this.master); src.start();
-    this.ambience = g;
   }
 
   // speedNorm 0..1, throttle 0..1; active=false blendet den Motor aus.
