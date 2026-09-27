@@ -4,6 +4,28 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.13.0] – 2026-09-28
+
+### Hinzugefügt
+- Mehr Fahrzeugarten mit eigenen Maßen, Motorleistung und Aussehen: 7,5-t-LKW (tagsüber auf Hauptstraßen),
+  Paketwagen (werktags, nicht sonntags), das orange Müllauto (werktags morgens in Wohnstraßen), Streifenwagen und
+  Rettungswagen. Der Verkehr hält Abstand zwischen den Stoßstangen, auch hinter einem 8,6 m langen Müllauto.
+- Arbeit auf der Straße: Paketwagen halten alle 150–500 m in zweiter Reihe mit Warnblinker, das Müllauto alle
+  35–80 m mit Rundumleuchte und zwei Müllwerkern samt Tonne; der Verkehr dahinter wartet.
+- Einsätze: Liegt ein Toter auf der Straße, kommt nach kurzer Zeit ein Rettungswagen mit Martinshorn (440/585 Hz im
+  Wechsel) und Blaulicht, fährt über den Spurgraph gezielt zum Einsatzort (über Rot langsam), hält dort, nimmt den
+  Toten mit und fährt mit Sondersignal ab. Schüsse rufen einen Streifenwagen (höchstens einer je 45 s). Ab und zu
+  fährt ein Einsatz einfach vorbei. Einsatzfahrzeuge entstehen und verschwinden außer Sicht.
+- Radfahrer und E-Roller: auf dem Radstreifen, wo die Straße einen hat, sonst am rechten Fahrbahnrand von
+  Nebenstraßen; Einbahnstraßen und Abbiegeverbote gelten auch für sie, die meisten halten bei Rot. Autos bleiben
+  dahinter. Wer angefahren wird, stürzt, das Rad bleibt liegen. Abgestellte Leih-Roller stehen (und liegen) am Gehweg.
+- Tiere: Taubenschwärme auf Plätzen, vor Imbissen und an Bahnhöfen, die auffliegen, wenn man hingeht, ein Auto
+  vorbeirast, gehupt oder geschossen wird; Enten in Ufernähe auf Spree, Kanälen und Seen, die wegschwimmen.
+- Umgebungsklang je nach Ort und Zeit: Stadtrauschen, Verkehr (LKW lauter), Vögel in Grün und Bäumen (Morgenchor,
+  nachts still), Gemurmel vor Kneipen, Wasser am Ufer, das Rumpeln der Hochbahn, das Martinshorn in der Nähe und die
+  Kirchenglocke zur vollen Stunde, wenn eine Kirche in Hörweite ist.
+- Nachts leuchtet Blaulicht in die Straße, Warnblinker blinken orange.
+
 ## [0.12.0] – 2026-09-28
 
 ### Hinzugefügt

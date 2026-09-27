@@ -39,7 +39,7 @@ export function activityFor(q, minutes, day) {
 }
 
 // Stelle vor dem Laden auf dem Gehweg (zur nächsten Straße hin) und die Blickrichtung dorthin
-function frontOf(city, q) {
+export function frontOf(city, q) {
   if (q._front !== undefined) return q._front;
   const S = city.scale, e = nearestEdge(city, q.x, q.y, 40 * S, (o) => o.cls <= 9);
   let f = null;

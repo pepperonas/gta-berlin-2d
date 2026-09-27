@@ -76,6 +76,12 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Gruppen auf Decken in Parks (nachmittags, am Wochenende mehr); dazu Jogger morgens und abends und Hundehalter.
   Fahrradständer mit wechselnd vielen Rädern und orange Mülleimer stehen an ihren echten Plätzen. Wer erschreckt wird,
   flieht und geht danach normal weiter. Neue Leute erscheinen nur außer Sicht, niemand verschwindet vor den Augen.
+- **Fahrzeuge, Tiere, Geräusche:** Neben Pkw fahren LKW, Paketwagen (halten in zweiter Reihe mit Warnblinker), das
+  orange Müllauto (werktags morgens, mit Müllwerkern) sowie Streifen- und Rettungswagen mit Blaulicht und
+  Martinshorn: Liegt ein Toter auf der Straße, kommt ein Rettungswagen, fährt gezielt hin und nimmt ihn mit; Schüsse
+  rufen die Polizei. Radfahrer und E-Roller fahren auf den Radstreifen bzw. am Fahrbahnrand und halten meist bei Rot;
+  Leih-Roller stehen am Gehweg. Tauben fliegen auf, Enten schwimmen weg. Man hört Stadt, Verkehr, Vögel, Kneipen,
+  Wasser, Hochbahn, Sirenen und zur vollen Stunde die Kirchenglocke.
 - Mission „Kisten für den Kiez“: Auftrag am Späti in der Wrangelstraße (Wrangelkiez) annehmen → zur Lagerhalle in
   Neukölln fahren → dort anhalten und **A halten** zum Einladen → zurück zur Wrangelstraße → abliefern. Das Zeitlimit
   berechnet der Karten-Build aus der kürzesten Route (derzeit 8,7 km → 930 s). Scheitern bei Zeitablauf oder wenn das
@@ -149,7 +155,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 154 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 174 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -299,7 +305,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 154 automatischen Tests grün, darunter:
+- Alle 174 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -361,6 +367,17 @@ in Edge `edge://inspect` mit der Konsole verbinden
     auf der Fahrbahn, Liegende nur auf Wiesen, Sitzende nur auf Bänken; neue Leute nur außer Sicht, niemand verschwindet
     im Bild, Erschreckte geben ihren Platz auf; feste Bevölkerung (Tests, Demo) ohne Rhythmus; Wochentag wechselt um
     Mitternacht und steht im Spielstand (14 Mutationsproben, alle erkannt);
+  - Fahrzeuge, Einsätze, Räder, Tiere, Klang: Müllauto nur werktags morgens in Wohnstraßen, Paketwagen nicht sonntags,
+    LKW langsamer als Pkw; hinter LKW und Müllauto kein Auffahrunfall und Abstand zwischen den Stoßstangen; Paketwagen
+    hält mit Warnblinker, der Verkehr wartet, danach geht es weiter; Zielfahrt erreicht über das Entfernungsfeld den
+    Einsatzort; ein Toter ruft einen Rettungswagen, der außer Sicht entsteht, mit Martinshorn anfährt, am Einsatzort
+    hält, den Toten mitnimmt und mit Sondersignal abfährt; Schüsse rufen genau einen Streifenwagen; Radfahrer nur auf
+    der rechten Spur, auf dem Radstreifen, wo es einen gibt, nie auf Hauptstraßen ohne Radstreifen, in 90 s Verkehr immer
+    auf der Fahrbahn und nie festgefahren, stürzen, wenn ein Auto sie trifft, und halten meist bei Rot; Leih-Roller nur
+    auf dem Gehweg; Tauben nie im Haus, Enten nur im Wasser, Tauben fliegen auf und kommen nur außer Sicht wieder;
+    Vogelgesang nach Tageszeit, Kneipengemurmel, Martinshorn tatü-tata, Glocke zur vollen Stunde nur bei einer Kirche;
+    Umgebungsschichten stumm, bis eine Mischung kommt; neue Fahrzeuge, Blaulicht, Räder und Tiere zeichnen ohne
+    ungültige Koordinaten (25 Mutationsproben, alle erkannt);
   - Gebäude-Regeln im Build: Brückenpfeiler, Kreuzgänge, Dächer und schwebende Teile werden keine Häuser, Bauteile
     nur ohne umgebenden Umriss (das höchste einer Gruppe); an der echten Oberbaumbrücke stehen die Türme (≥ 30 m),
     kein Haus auf der Fahrbahn, ein Brückendeck unter dem POI, das über dem Wasser nicht als Wasser gilt; Krankenhäuser

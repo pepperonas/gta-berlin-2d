@@ -19,13 +19,17 @@ import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, i
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
+import { pickKind, KINDS } from './fleet.js';
+import { updateService, manageEmergency } from './services.js';
+import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
+import { manageAnimals, updateAnimals } from './animals.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY,
+    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -58,7 +62,10 @@ export function resetPopulation(w, keepCar = null) {
     return keep;
   });
   w.peds = [];
+  w.bikes = [];
+  w.animals = []; w.flocks?.clear();
   w.hangers?.clear();
+  if (w.emerg) w.emerg.incidents.length = 0;
   w.populated = false;
 }
 
@@ -67,8 +74,21 @@ function populate(w) {
   w.populated = true;
   if (w.rhythm) { const t = populationTargets(w.city, w.camera.x, w.camera.y, w.clock, w.day, TRAFFIC); w.carTarget = t.cars; w.pedTarget = t.peds; w._rhythmT = w.time; }
   manageLife(w, true);
+  manageAnimals(w, true);
   for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
   for (let k = 0; k < w.pedTarget; k++) spawnPed(w, 60, TRAFFIC.spawnMax);
+  for (let k = 0; k < bikeTarget(w); k++) spawnBike(w, 120, TRAFFIC.spawnMax);
+}
+
+// Radfahrer und E-Roller: ein Anteil der Fußgänger-Zielzahl (nur mit Tagesrhythmus)
+const bikeTarget = (w) => (w.rhythm ? Math.round(w.pedTarget * BIKE.share) : 0);
+function spawnBike(w, minR, maxR) {
+  const sp = bikeSpawn(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
+  if (!sp) return null;
+  const b = createBike(w.city, sp.lane, sp.s, w.rng, w.rng() < BIKE.scooterShare ? 'scooter' : 'bike');
+  if (w.cars.some((c) => Math.abs(c.x - b.x) < c.hw + 12 && Math.abs(c.y - b.y) < c.hw + 12) || w.bikes.some((o) => Math.hypot(o.x - b.x, o.y - b.y) < 30)) return null;
+  w.bikes.push(b);
+  return b;
 }
 
 // Kacheln um die Kamera nachladen. false = der Stadtteil hier ist noch nicht da (im Browser kommt er asynchron),
@@ -125,12 +145,12 @@ function managePopulation(w) {
     const t = populationTargets(w.city, cam.x, cam.y, w.clock, w.day, TRAFFIC);
     w.carTarget = t.cars; w.pedTarget = t.peds;
   }
-  const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player';
+  const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player' || (c.duty && !c.done);
   // Festgefahrene KI-Autos außerhalb des Bildes abbauen (sie entstehen anderswo neu), damit sich nirgends ein Knoten hält
   const stuck = (c) => c.driver === 'npc' && c.ai && ((c.ai.stillT ?? 0) > 30 || (c.ai.headOn ?? 0) >= 4) && Math.hypot(c.x - cam.x, c.y - cam.y) > 1100;
   w.cars = w.cars.filter((c) => keep(c) || (Math.hypot(c.x - cam.x, c.y - cam.y) < far && !stuck(c)));
   w.peds = w.peds.filter((p) => Math.hypot(p.x - cam.x, p.y - cam.y) < far);
-  const npc = w.cars.filter((c) => c.driver === 'npc' || (c.driver === null && c.role === 'traffic')).length;
+  const npc = w.cars.filter((c) => !c.duty && (c.driver === 'npc' || (c.driver === null && c.role === 'traffic'))).length;
   if (npc < w.carTarget) spawnTraffic(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
   // weniger los als eben (Tageszeit, anderer Ort): Überzählige außer Sicht verschwinden lassen, eins je Schritt
   if (w.rhythm && npc > w.carTarget + 2) {
@@ -143,6 +163,11 @@ function managePopulation(w) {
     if (q) w.peds.splice(w.peds.indexOf(q), 1);
   }
   if (w.peds.filter((q) => q.state !== 'dead' && !q.hang).length < w.pedTarget) spawnPed(w, TRAFFIC.spawnMin * 0.8, TRAFFIC.spawnMax);
+  // Räder: Fernes und Liegengebliebenes außer Sicht abbauen, Fehlendes im Ring erzeugen
+  w.bikes = w.bikes.filter((b) => b.state !== 'gone' && Math.hypot(b.x - cam.x, b.y - cam.y) < far && !(b.state === 'lying' && b.t > 30 && Math.hypot(b.x - cam.x, b.y - cam.y) > 900));
+  const riding = w.bikes.filter((b) => b.state === 'ride').length, bt = bikeTarget(w);
+  if (riding < bt) spawnBike(w, TRAFFIC.spawnMin, TRAFFIC.spawnMax);
+  else if (riding > bt + 2) { const i = w.bikes.findIndex((b) => Math.hypot(b.x - cam.x, b.y - cam.y) > TRAFFIC.spawnMin); if (i >= 0) w.bikes.splice(i, 1); }
 }
 
 function spawnPlayerAndCar(w) {
@@ -169,7 +194,12 @@ function spawnTraffic(w, minR, maxR) {
     if (!w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 70) || !narrowFree(w, sp.lane)) continue;
     // Hauptstraßen mit viel gezähltem Verkehr bekommen mehr Autos als stille Nebenstraßen
     if (w.rng() > Math.min(1, Math.max(0.12, (sp.lane.edge.dtv ?? 8000) / 15000))) continue;
-    const car = createCar({ x: sp.x, y: sp.y, color: CAR_COLORS[Math.floor(w.rng() * CAR_COLORS.length)] });
+    // Fahrzeugart nach Uhrzeit, Wochentag und Straße (nur mit Tagesrhythmus; höchstens ein Müllauto in der Nähe)
+    let kind = w.rhythm ? pickKind(w.clock, w.day, sp.lane.edge.cls, w.rng()) : 'car';
+    if (kind === 'garbage' && w.cars.some((o) => o.kind === 'garbage')) kind = 'car';
+    const pal = KINDS[kind].colors ?? CAR_COLORS;
+    if (kind !== 'car' && !w.cars.every((o) => Math.hypot(o.x - sp.x, o.y - sp.y) > 110)) continue;
+    const car = createCar({ x: sp.x, y: sp.y, kind, color: pal[Math.floor(w.rng() * pal.length)] });
     placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
     car.driver = 'npc';
     claimNarrow(w, car, sp.lane); // auf einer Engstelle geboren: Richtung gleich belegen
@@ -420,7 +450,7 @@ export function updateWorld(w, input, dt) {
   updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
-  for (const c of w.cars) if (c.driver === 'npc') driveAi(c, w, dt);
+  for (const c of w.cars) if (c.driver === 'npc') { driveAi(c, w, dt); updateService(w, c, dt); }
   for (const c of w.cars) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
     // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
@@ -430,7 +460,7 @@ export function updateWorld(w, input, dt) {
   }
   for (let i = 0; i < w.cars.length; i++) for (let j = i + 1; j < w.cars.length; j++) {
     const a = w.cars[i], b = w.cars[j];
-    if (Math.abs(a.x - b.x) < 60 && Math.abs(a.y - b.y) < 60) collideCars(a, b, w.events);
+    const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r) collideCars(a, b, w.events);
   }
 
   if (pc) { p.x = pc.x; p.y = pc.y; p.angle = pc.angle; }
@@ -498,6 +528,20 @@ export function updateWorld(w, input, dt) {
     }
     updatePed(ped, w, dt);
   }
+  // Räder fahren; wer von einem Auto erwischt wird, stürzt (Fahrer liegt, Rad bleibt liegen)
+  for (const b of w.bikes) {
+    updateBike(b, w, dt);
+    if (b.state !== 'ride') continue;
+    for (const c of w.cars) {
+      if (Math.abs(c.x - b.x) > c.hw + 8 || Math.abs(c.y - b.y) > c.hw + 8 || speedOf(c) < 60) continue;
+      if (!circleVsObb(b.x, b.y, BIKE.r, c)) continue;
+      b.state = 'lying'; b.t = 0; b.speed = 0;
+      const sp = nearestSpot(w.city, b.x, b.y);
+      if (sp) { const ped = createPed(w.city, sp, w.rng); Object.assign(ped, { x: b.x, y: b.y, shirt: riderShirt(b) }); knockDown(ped, c.x, c.y); w.peds.push(ped); }
+      w.events.push({ type: 'hit', x: b.x, y: b.y, strength: Math.min(1, speedOf(c) / 300) });
+      break;
+    }
+  }
   // Tote verschwinden nach einer Weile, aber nur außer Sicht (spätestens nach 5 min)
   w.peds = w.peds.filter((q) => q.state !== 'dead' || (q.deadT < BODY_KEEP || Math.hypot(q.x - cam.x, q.y - cam.y) < 900) && q.deadT < 300);
   // Überzählige (geflohene Fahrer) wieder abbauen, wenn außer Sicht.
@@ -508,6 +552,9 @@ export function updateWorld(w, input, dt) {
   managePopulation(w);
   manageParked(w);
   manageLife(w);
+  manageAnimals(w);
+  updateAnimals(w, dt);
+  manageEmergency(w, dt);
 
   w.events.push(...updateMission(m, missionCtx(w, input), dt));
   if (m.state === 'success') {

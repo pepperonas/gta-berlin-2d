@@ -39,7 +39,7 @@ function appendLane(ai, lane, fromS = 0) {
 }
 
 function extendRoute(ai, rng, forced = null) {
-  const next = forced ?? chooseNext(ai.lane, rng);
+  const next = forced ?? (ai.field ? towardGoal(ai) : null) ?? chooseNext(ai.lane, rng);
   if (!next) return false;
   const v = Math.min(turnSpeed(turnAngle(ai.lane, next)), next.cruise, ai.lane.cruise);
   const con = connector(ai.lane, next);
@@ -49,6 +49,47 @@ function extendRoute(ai, rng, forced = null) {
   appendLane(ai, next);
   return true;
 }
+
+// Zielfahrt: Entfernungsfeld über den Spurgraph (Dijkstra rückwärts vom Zielspurstück, begrenzt auf ein Rechteck um
+// Start und Ziel). Wer ein Ziel hat, nimmt an jeder Kreuzung die Nachfolgespur mit der kleinsten Restentfernung.
+export function goalField(city, fromX, fromY, x, y, margin = 6000) {
+  const g = buildLaneGraph(city);
+  const goal = nearestLane(g, x, y, undefined, 400) ?? nearestLane(g, x, y, undefined, 1500);
+  if (!goal) return null;
+  const x0 = Math.min(fromX, x) - margin, y0 = Math.min(fromY, y) - margin, x1 = Math.max(fromX, x) + margin, y1 = Math.max(fromY, y) + margin;
+  const inBox = (l) => { const p = l.pts; return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1; };
+  const prev = new Map();
+  for (const l of g.lanes) {
+    if (!inBox(l)) continue;
+    for (const n of l.next) { let a = prev.get(n); if (!a) prev.set(n, a = []); a.push(l); }
+  }
+  // Zielstück zählt bis zum Zielpunkt; alle anderen mit ihrer Länge (einfache Liste statt Heap: wenige Tausend Spuren)
+  const dist = new Map([[goal.lane, 0]]), open = [goal.lane];
+  while (open.length) {
+    let bi = 0; for (let i = 1; i < open.length; i++) if (dist.get(open[i]) < dist.get(open[bi])) bi = i;
+    const l = open[bi]; open[bi] = open[open.length - 1]; open.pop();
+    const d = dist.get(l);
+    for (const p of prev.get(l) ?? []) {
+      const nd = d + p.len;
+      if (nd < (dist.get(p) ?? Infinity)) { if (!dist.has(p)) open.push(p); dist.set(p, nd); }
+    }
+  }
+  return { dist, goal: goal.lane, x, y };
+}
+function towardGoal(ai) {
+  let best = null, bd = Infinity;
+  for (const n of ai.lane.next) { const d = ai.field.dist.get(n); if (d !== undefined && d < bd) { bd = d; best = n; } }
+  return best;
+}
+// Ziel setzen (Einsatzort). Die schon geplanten ~400 px Route bleiben (dort können Kreuzungen reserviert sein),
+// ab dann wählt die Route jeden Nachfolger zum Ziel hin.
+export function setGoal(car, city, x, y) {
+  const f = car.ai && goalField(city, car.x, car.y, x, y);
+  if (!f) return false;
+  car.ai.field = f;
+  return true;
+}
+export const goalDistance = (car) => { const ai = car.ai; return ai?.field ? ai.field.dist.get(ai.lane) ?? Infinity : Infinity; };
 
 function remaining(ai, car) {
   const r = ai.route;
@@ -141,9 +182,13 @@ function obstacleAhead(car, world) {
   const c = Math.cos(car.angle), s = Math.sin(car.angle);
   let dCar = Infinity, dOther = Infinity, playerBlock = false, blocker = null, pedBlock = false;
   const path = aheadPath(car);
+  // Längere/breitere Fahrzeuge (LKW, Müllauto): Abstände gelten zwischen den Stoßstangen wie bei zwei Pkw (42 × 20 px)
+  const myL = car.hw - 21, myW = car.hh - 10;
   const check = (ox, oy, lat, isAiCar, isPlayer, obj = null, isPed = false) => {
     const rx = ox - car.x, ry = oy - car.y;
-    if (rx * rx + ry * ry > 12100) return;
+    const oL = obj?.hw !== undefined ? obj.hw - 21 : 0, ext = myL + oL;
+    if (rx * rx + ry * ry > (110 + ext) ** 2) return;
+    lat += myW + (obj?.hh !== undefined ? obj.hh - 10 : 0);
     let along, side;
     if (path) {
       along = Infinity; side = Infinity;
@@ -155,8 +200,9 @@ function obstacleAhead(car, world) {
         acc += L;
       }
     } else { along = rx * c + ry * s; side = Math.abs(-rx * s + ry * c); }
-    if (along <= 0 || along > 110) return;
+    if (along <= 0 || along > 110 + ext) return;
     if (side > lat) return;
+    along = Math.max(1, along - ext);
     if (isAiCar) { if (along < dCar) { dCar = along; blocker = obj; } }
     else { if (along < dOther) { dOther = along; pedBlock = isPed; } if (isPlayer) playerBlock = true; }
   };
@@ -167,6 +213,7 @@ function obstacleAhead(car, world) {
     check(o.x, o.y, parkedLike ? 18 : 22, o.driver === 'npc' && !o.wrecked, o.driver === 'player', o);
   }
   for (const p of world.peds) if (p.state !== 'gone' && p.state !== 'dead') check(p.x, p.y, 16, false, false, p, true); // über Tote fahren (sonst stünde der Verkehr ewig)
+  for (const b of world.bikes ?? []) if (b.state === 'ride') check(b.x, b.y, 14, false, false, b, true); // Radfahrer: dahinter bleiben
   const pl = world.player;
   if (!pl.inCar) check(pl.x, pl.y, 17, false, true);
   return { dCar, dOther, playerBlock, blocker, pedBlock };
@@ -179,7 +226,7 @@ function aheadPath(car) {
   const out = ai._ahead ??= [];
   out.length = 0; out.push(car.x, car.y);
   let acc = 0, x = car.x, y = car.y;
-  for (let k = ai.i + 1; 2 * k + 1 < r.length && acc < 120; k++) {
+  for (let k = ai.i + 1; 2 * k + 1 < r.length && acc < 150 + car.hw; k++) {
     const nx = r[2 * k], ny = r[2 * k + 1];
     acc += Math.hypot(nx - x, ny - y); out.push(nx, ny); x = nx; y = ny;
   }
@@ -255,7 +302,9 @@ export function driveAi(car, world, dt) {
     if (dist < 400) {
       const light = signalState(city, st.v, st.heading, world.time);
       const brakeDist = vf * vf / (2 * 300);
-      if (light === 'red' || (light === 'yellow' && dist > brakeDist + 10)) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, dist - 15))); // Bremsweg v²/2a mit a ≈ 0,9 m/s² (Regler bremst träge)
+      // Blaulicht mit Sondersignal fährt über Rot, aber langsam in die Kreuzung
+      if (ai.urgent) { if (light !== 'green' && dist < 60) target = Math.min(target, 70); }
+      else if (light === 'red' || (light === 'yellow' && dist > brakeDist + 10)) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, dist - 15))); // Bremsweg v²/2a mit a ≈ 0,9 m/s² (Regler bremst träge)
       ai.light = light; ai.lightDist = dist;
     }
   }
@@ -278,6 +327,8 @@ export function driveAi(car, world, dt) {
   if (vf > 40) ai.headOn = 0; // fährt wieder frei
   // Abstand halten: Mitte zu Mitte eine Autolänge (42 px) + 1,5 m Lücke; darunter stehen bleiben
   if (d < 125) target = Math.min(target, Math.max(0, (d - GAP_PX) * 2.2));
+  // Arbeitshalt (Paket, Mülltonnen, Einsatzort): stehen bleiben, der Verkehr dahinter wartet
+  if (ai.hold > 0) { ai.hold -= dt; target = 0; }
 
   if (target < 1 && Math.abs(vf) < 6) {
     ai.blockedT += dt;
@@ -319,7 +370,7 @@ const PLATOON_S = 6;      // so lange darf eine Kolonne aus derselben Zufahrt na
 const HOLD_STILL_S = 2;
 const REROUTE_S = 3;       // so lange an einer verweigerten Einfahrt warten, dann anders abbiegen   // wer mit Reservierung, aber noch vor der Kreuzung so lange steht, gibt sie frei
 
-function currentSeg(ai) {
+export function currentSeg(ai) {
   let j = 0;
   for (let k = 0; k < ai.segs.length; k++) if (ai.segs[k].k0 <= ai.i) j = k;
   return j;

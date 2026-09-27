@@ -9,13 +9,16 @@ export const TAXI_COLOR = '#f1e9c8'; // Berliner Taxi: hellelfenbein
 
 const h01 = (n) => { const x = Math.sin(n * 91.345 + 12.9898) * 43758.5453; return x - Math.floor(x); };
 
+export const SPECIAL_MODELS = ['truck', 'delivery', 'garbage', 'police', 'ambulance'];
 export function carModel(car) {
   if (car.model) return car.model;
+  if (car.kind && car.kind !== 'car') return car.kind; // LKW, Paketwagen, Müllauto, Einsatzfahrzeuge (fleet.js)
   if (car.role === 'player') return 'limousine';
   const r = h01(car.id);
   return r < 0.08 ? 'taxi' : r < 0.2 ? 'transporter' : r < 0.45 ? 'kleinwagen' : r < 0.7 ? 'kombi' : 'limousine';
 }
 export const carColor = (car) => (car.wrecked ? '#3b332d' : carModel(car) === 'taxi' ? TAXI_COLOR : car.color);
+export const hasLightBar = (car) => car.kind === 'police' || car.kind === 'ambulance';
 
 function rr(g, x, y, w, h, r) {
   g.beginPath();
@@ -25,6 +28,7 @@ function rr(g, x, y, w, h, r) {
 
 // Karosserie in lokalen Koordinaten: +x = vorn, Mitte (0,0)
 function paintBody(g, model, body, L, W, wrecked) {
+  if (SPECIAL_MODELS.includes(model)) return paintSpecial(g, model, body, L, W, wrecked);
   const len = model === 'kleinwagen' ? L - 6 : L, x0 = -len / 2, y0 = -W / 2;
   // Querverlauf: Kanten dunkler, Mitte heller → Wölbung
   const gr = g.createLinearGradient(0, y0, 0, y0 + W);
@@ -68,6 +72,71 @@ function paintBody(g, model, body, L, W, wrecked) {
   }
 }
 
+// Nutzfahrzeuge und Einsatzwagen: Fahrerhaus vorn, Aufbau dahinter (Draufsicht)
+function paintSpecial(g, model, body, L, W, wrecked) {
+  const x0 = -L / 2, y0 = -W / 2, glass = wrecked ? '#1c1916' : '#233140';
+  const box = (x, w, fill, r = 2) => { g.fillStyle = fill; rr(g, x, y0 + 0.6, w, W - 1.2, r); g.fill(); g.strokeStyle = shade(fill, -0.45); g.lineWidth = 0.9; g.stroke(); };
+  const ribs = (xa, xb, step, col) => { g.strokeStyle = col; g.lineWidth = 0.7; for (let x = xa; x < xb; x += step) { g.beginPath(); g.moveTo(x, y0 + 2); g.lineTo(x, y0 + W - 2); g.stroke(); } };
+  const cabin = (xs, len, col) => { // Fahrerhaus mit Frontscheibe
+    box(xs, len, col, 3.5);
+    g.fillStyle = glass; g.fillRect(xs + len - 5, y0 + 2.4, 3.2, W - 4.8);
+    g.fillStyle = shade(col, 0.12); g.fillRect(xs + 2, y0 + 3, len - 8, W - 6);
+  };
+  if (model === 'truck') {
+    const cab = 15; cabin(L / 2 - cab, cab, body);
+    box(x0, L - cab - 2, wrecked ? '#4a4540' : shade(body === '#e9e6df' ? '#dcdad4' : body, 0.25), 1.5);
+    ribs(x0 + 6, L / 2 - cab - 4, 7, 'rgba(0,0,0,0.12)');
+  } else if (model === 'delivery') {
+    const cab = 12; box(x0, L, body, 3);
+    g.fillStyle = glass; g.fillRect(L / 2 - 5, y0 + 2.4, 3, W - 4.8);
+    g.fillStyle = shade(body, 0.1); rr(g, x0 + 1.5, y0 + 1.8, L - cab - 3, W - 3.6, 1.5); g.fill();
+    g.fillStyle = body === '#ffcc00' ? '#d40511' : shade(body, -0.25); g.fillRect(x0 + 3, y0 + W / 2 - 1, L - cab - 7, 2); // Firmenstreifen (ohne Marke)
+  } else if (model === 'garbage') {
+    const cab = 16; cabin(L / 2 - cab, cab, body);
+    box(x0 + 9, L - cab - 11, body, 2);
+    ribs(x0 + 14, L / 2 - cab - 3, 9, shade(body, -0.25));
+    box(x0, 10, wrecked ? '#333' : '#4b4f54', 2);                   // Schüttung / Presse hinten
+    g.fillStyle = '#f5f5f0'; for (const y of [y0 + 2.5, y0 + W - 4.5]) g.fillRect(x0 + 12, y, L - cab - 16, 2); // Reflexstreifen
+  } else if (model === 'police') {
+    const len = L, xs = x0; box(xs, len, body, 5.5);
+    g.fillStyle = glass; g.fillRect(len / 2 - 12, y0 + 2.2, 3.5, W - 4.4); g.fillRect(xs + 5, y0 + 2.2, 3, W - 4.4);
+    g.fillStyle = shade(body, 0.08); rr(g, xs + 9, y0 + 3.2, len - 22, W - 6.4, 2); g.fill();
+    g.fillStyle = '#1f4e9c'; g.fillRect(xs + 2, y0 + 0.7, len - 4, 2.2); g.fillRect(xs + 2, y0 + W - 2.9, len - 4, 2.2); // blaue Flanken
+    g.fillStyle = '#1f4e9c'; g.fillRect(-4, -3, 6, 6);            // Dachkennung
+  } else if (model === 'ambulance') {
+    const cab = 13; cabin(L / 2 - cab, cab, body);
+    box(x0, L - cab - 1, body, 2);
+    g.fillStyle = '#d0102a'; g.fillRect(x0 + 1, y0 + 0.8, L - 2, 2.4); g.fillRect(x0 + 1, y0 + W - 3.2, L - 2, 2.4); // Leuchtstreifen
+    g.fillStyle = '#d0102a'; g.fillRect(-10, -1.4, 10, 2.8); g.fillRect(-6.4, -5, 2.8, 10); // Stern des Lebens stilisiert: Kreuz auf dem Dach
+    g.fillStyle = '#f07d00'; for (let y = y0 + 3; y < y0 + W - 3; y += 4) g.fillRect(x0, y, 1.6, 2);           // Heckwarnmarkierung
+  }
+  if (wrecked) { g.fillStyle = 'rgba(0,0,0,0.45)'; for (const [x, y, r] of [[-L / 4, -3, 6], [L / 5, 4, 5]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); } }
+}
+
+// Blaulicht: Balken auf dem Dach, links/rechts im Wechsel (4 Hz); Warnblinker; Müllwerker am Heck
+function drawDuty(ctx, car, t, L, W) {
+  if (hasLightBar(car) && (car.siren || car.blue)) {
+    const ph = Math.floor(t * 8) % 2, bx = car.kind === 'ambulance' ? L / 2 - 16 : -2;
+    for (const s of [-1, 1]) {
+      const on = (s < 0) === (ph === 0);
+      ctx.fillStyle = on ? '#4aa3ff' : '#123a7a';
+      ctx.fillRect(bx - 2, s * 1 + (s < 0 ? -4.5 : 0.5), 5, 4);
+      if (on) { ctx.fillStyle = 'rgba(80,160,255,0.35)'; ctx.beginPath(); ctx.arc(bx, s * 3, 9, 0, Math.PI * 2); ctx.fill(); }
+    }
+    if (car.kind === 'ambulance') { ctx.fillStyle = ph ? '#4aa3ff' : '#123a7a'; ctx.fillRect(-L / 2 + 1, -2, 2.5, 4); }
+  }
+  if (car.kind === 'garbage' && car.work) {
+    const ph = t * 4 % (Math.PI * 2);
+    ctx.fillStyle = `rgba(255,150,20,${0.55 + 0.4 * Math.sin(ph)})`; ctx.beginPath(); ctx.arc(L / 2 - 8, 0, 3, 0, Math.PI * 2); ctx.fill(); // Rundumleuchte
+    for (const [dx, dy] of [[-L / 2 - 6, -W / 2 + 2], [-L / 2 - 4, W / 2 - 1]]) { // zwei Müllwerker mit Tonne
+      const bob = Math.sin(t * 6 + dy) * 1.2;
+      ctx.fillStyle = '#1b5e20'; ctx.fillRect(dx - 9 + bob, dy - 3, 5, 6);               // Tonne (grün)
+      ctx.fillStyle = '#f07d00'; ctx.beginPath(); ctx.arc(dx + bob * 0.5, dy, 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d7ccc8'; ctx.beginPath(); ctx.arc(dx + bob * 0.5, dy, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
 const cache = new Map();
 export const SPRITE_CACHE_MAX = 160;
 export const spriteCacheSize = () => cache.size;
@@ -105,6 +174,7 @@ export function drawCarBody(ctx, car, t) {
   }
   ctx.drawImage(spr, -L / 2 - 4, -W / 2 - 4, L + 8, W + 8);
   if (car.wrecked) return true;
+  drawDuty(ctx, car, t, L, W);
   const len = model === 'kleinwagen' ? L - 6 : L;
   // Scheinwerfer, Rück-, Brems-, Rückfahrlicht, Blinker
   ctx.fillStyle = '#fff6c8';
@@ -116,10 +186,9 @@ export function drawCarBody(ctx, car, t) {
   if (braking) { ctx.fillStyle = 'rgba(255,40,30,0.25)'; ctx.fillRect(-len / 2 - 6, -W / 2, 6, W); }
   if (vf < -5) { ctx.fillStyle = '#f4f7ff'; ctx.fillRect(-len / 2, -1.6, 1.8, 3.2); }
   const blink = car.ai?.blink ?? 0;
-  if (blink && Math.floor(t * 3) % 2 === 0) {
-    const y = blink > 0 ? W / 2 - 1.8 : -W / 2 + 0.2;
+  if ((blink || car.hazard) && Math.floor(t * 3) % 2 === 0) { // Blinker bzw. Warnblinker (beide Seiten)
     ctx.fillStyle = '#ffa31a';
-    ctx.fillRect(len / 2 - 3, y, 3, 1.6); ctx.fillRect(-len / 2, y, 3, 1.6);
+    for (const y of car.hazard ? [W / 2 - 1.8, -W / 2 + 0.2] : [blink > 0 ? W / 2 - 1.8 : -W / 2 + 0.2]) { ctx.fillRect(len / 2 - 3, y, 3, 1.6); ctx.fillRect(-len / 2, y, 3, 1.6); }
   }
   return true;
 }

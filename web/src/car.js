@@ -3,14 +3,17 @@ import { CAR } from './config.js';
 import { clamp, sign } from './math.js';
 import { obbVsRect, obbVsObb, circleVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { T, surfaceAt } from './map.js';
+import { sizeOf } from './fleet.js';
 
 let nextId = 1;
 export const CAR_COLORS = ['#c0392b', '#2e86de', '#f1c40f', '#27ae60', '#ecf0f1', '#8e44ad', '#34495e', '#e67e22', '#16a085', '#7f8c8d'];
 
-export function createCar({ x, y, angle = 0, color = '#c0392b', role = 'traffic' }) {
+// kind: Fahrzeugart (fleet.js KINDS) – bestimmt Maße und Motorleistung; ohne Angabe ein Pkw
+export function createCar({ x, y, angle = 0, color = '#c0392b', role = 'traffic', kind = 'car' }) {
+  const k = sizeOf(kind);
   return {
-    id: nextId++, x, y, angle, vx: 0, vy: 0, angVel: 0,
-    hw: CAR.length / 2, hh: CAR.width / 2,
+    id: nextId++, x, y, angle, vx: 0, vy: 0, angVel: 0, kind, power: k.power,
+    hw: k.L / 2, hh: k.W / 2,
     health: CAR.health, wrecked: false, wreckT: 0,
     driver: null, // 'player' | 'npc' | null
     ai: null, role, color,
@@ -39,10 +42,10 @@ export function stepCar(car, dt, city) {
   let vf = car.vx * c + car.vy * s;
   let vr = -car.vx * s + car.vy * c;
 
-  const top = CAR.maxSpeed * surf.top;
+  const pw = car.power ?? 1, top = CAR.maxSpeed * surf.top * (0.55 + 0.45 * pw);
   if (ctl.throttle > 0 && vf < top) {
     const t = vf > 0 ? 1 - (vf / top) * 0.55 : 1.4; // aus dem Rückwärtsrollen kräftiger
-    vf += CAR.accel * ctl.throttle * t * dt;
+    vf += CAR.accel * pw * ctl.throttle * t * dt;
   }
   if (ctl.brake > 0) {
     if (vf > 5) vf = Math.max(0, vf - CAR.brake * ctl.brake * dt);

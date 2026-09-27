@@ -234,6 +234,37 @@ abgeleitet aus Route und Abbiegewinkel, ohne Zufall. Ein Sprite in `assets/manif
   (höchstens 70); wer erschreckt wird, verlässt den Zustand und fällt aus der Verwaltung. Nur die Standardbevölkerung
   hat Rhythmus – Tests und Titel-Demo mit festen Zahlen bleiben unverändert.
 
+**Fahrzeugarten, Einsätze, Räder, Tiere, Klang:**
+- `fleet.js` (rein rechnerisch): Maße und Motorleistung je Art (Pkw 4,2 × 2,0 m, LKW 7,6 × 2,4 m, Paketwagen,
+  Müllauto 8,6 × 2,5 m, Streifen- und Rettungswagen) und wann welche Art unterwegs ist (`pickKind` nach Uhrzeit,
+  Wochentag, Straßenklasse). Kollision und Zeichnung nutzen die Maße je Auto (`hw`/`hh`); die KI rechnet Abstände
+  zwischen den Stoßstangen (die Konstanten gelten weiter für zwei Pkw), die Nahprüfung der Autos untereinander wächst
+  mit der Länge.
+- `services.js`: Arbeitshalte (`ai.hold` in `traffic.js`: Zielgeschwindigkeit 0, der Verkehr dahinter wartet) nach
+  gefahrener Strecke, nie näher als 25 m vor bzw. 12 m hinter einer Kreuzung. Einsätze: jeder Tote erzeugt einen
+  Rettungseinsatz (nahe beieinander liegende werden zusammengefasst), Schüsse einen Polizeieinsatz (45 s Sperre),
+  höchstens zwei Wagen je Art. Einsatzfahrzeuge entstehen außer Sicht 100–200 m vom Einsatzort und fahren über ein
+  Entfernungsfeld: `goalField` rechnet rückwärts vom Zielspurstück (Dijkstra über die Vorgänger der Spuren in einem
+  Rechteck um Start und Ziel), `extendRoute` nimmt dann an jeder Kreuzung den Nachfolger mit der kleinsten
+  Restentfernung. Die bereits geplanten ~40 m Route bleiben, damit Kreuzungsreservierungen gültig bleiben. Mit
+  Sondersignal (`ai.urgent`) fährt ein Wagen über Rot (mit 7 m/s in die Kreuzung).
+- `bikes.js`: Räder fahren auf dem Spurgraph (Einbahn und Abbiegeverbote gelten), nur auf der rechten Spur,
+  seitlich versetzt auf die Radstreifenmitte bzw. 0,8 m vom rechten Fahrbahnrand; Hauptstraßen ohne Radstreifen sind
+  tabu. Zwischen zwei Spuren queren sie die Kreuzung gerade. Sie bremsen für alles vor sich, außer für stehenden
+  Querverkehr (der wartet auf sie – sonst warten beide ewig), und lösen sich nach 6 s Stillstand ohne Ampel für 2 s von
+  allem Hindernis. Autos behandeln Räder wie Fußgänger vor sich. Abgestellte Roller: je Kante deterministisch, an der
+  Hausseite des Gehwegs, nie auf Fahrbahn oder im Haus.
+- `animals.js`: Taubenplätze vor 30 % der Imbisse, Cafés und Bahnhöfe (nach Ort-Hash) und auf Plätzen ab 900 m²;
+  Entenplätze an den Ecken großer Wasserflächen, 6–13 m ins Wasser versetzt. Verwaltung wie beim Stadtleben (nur außer
+  Sicht aufstellen, Aufgeflogene verschwinden aus dem Bild). Tauben fliehen vor Spielfigur (5,5 m), schnellen Autos,
+  Joggern und Hunden, Schüssen und Hupen (45 m) in die Luft und landen woanders; Enten schwimmen weg und bleiben im
+  Wasser.
+- `ambience.js` (rein rechnerisch) mischt je Ort und Uhrzeit Stadtrauschen, Verkehr, Vögel, Kneipengemurmel, Wasser,
+  Hochbahn und das nächste Martinshorn; `bellStrikes` meldet Glockenschläge beim Überschreiten der vollen Stunde, wenn
+  eine Kirche (Gebäudeart) im Umkreis von 180 m steht. `audio.js` setzt die Mischung viermal je Sekunde in Rauschen
+  mit Filtern, Vogelrufe als kurze Tonfolgen, ein Folgetonhorn-Oszillator und Glocken mit unharmonischen Teiltönen um.
+  Hochbahnzüge sind bis zu echten Fahrplänen ein fester Takt.
+
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
 Strahlen ab der Körpermitte gegen die vorhandenen Kollisionsdaten (Hauswand-Segmente, Stadtgrenze, Baumkreise,

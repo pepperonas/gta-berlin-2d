@@ -13,6 +13,7 @@ export class Sound {
       this.master = this.ctx.createGain(); this.master.gain.value = 0.55; this.master.connect(this.ctx.destination);
       this.noise = this.makeNoise();
       this.startEngine();
+      this.startAmbience();
       this.loadOverrides();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
@@ -48,6 +49,44 @@ export class Sound {
     o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
     o1.start(); o2.start();
     this.engine = { o1, o2, f, g };
+  }
+
+  // Umgebung: gefiltertes Rauschen je Schicht (Stadt, Verkehr, Wasser, Bar, Hochbahn) plus Martinshorn-Oszillator
+  startAmbience() {
+    const c = this.ctx, layer = (type, freq, q = 0.7) => {
+      const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;
+      const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = c.createGain(); g.gain.value = 0;
+      s.connect(f); f.connect(g); g.connect(this.master); s.start(0, Math.random());
+      return g;
+    };
+    this.amb = { hum: layer('lowpass', 180), traffic: layer('bandpass', 420, 0.6), water: layer('highpass', 1400), bar: layer('bandpass', 850, 1.8), rumble: layer('lowpass', 90) };
+    const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = 440;
+    const g = c.createGain(); g.gain.value = 0; o.connect(g); g.connect(this.master); o.start();
+    this.siren = { o, g };
+    this.nextChirp = 0;
+  }
+
+  // mix aus ambience.js (0..1 je Schicht, sirens nach Entfernung)
+  setAmbience(mix) {
+    if (!this.ready || !this.amb) return;
+    const t = this.ctx.currentTime, a = this.amb, set = (g, v) => g.gain.setTargetAtTime(v, t, 0.6);
+    set(a.hum, 0.018 * mix.hum); set(a.traffic, 0.05 * mix.traffic); set(a.water, 0.012 * mix.water);
+    set(a.bar, 0.05 * mix.bar * (0.7 + 0.3 * Math.sin(t * 2.3) * Math.sin(t * 0.7))); set(a.rumble, 0.16 * mix.rumble);
+    const sr = mix.sirens?.[0];
+    this.siren.g.gain.setTargetAtTime(sr ? 0.07 * sr.gain : 0, t, 0.15);
+    if (sr) this.siren.o.frequency.setTargetAtTime(sr.high ? 585 : 440, t, 0.02);
+    if (mix.birds > 0.02 && t > this.nextChirp) { // Vogelstimmen: kurze Tonfolgen, je mehr Grün, desto öfter
+      const base = 2400 + Math.random() * 2600, n = 2 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) this.tone(base * (1 + (Math.random() - 0.5) * 0.3), 0.07, { type: 'sine', gain: 0.025 * mix.birds, at: i * 0.09, slide: (Math.random() - 0.3) * 900 });
+      this.nextChirp = t + 0.4 + Math.random() * 2.2 / mix.birds;
+    }
+  }
+
+  // Kirchenglocke: n Schläge (Grundton + unharmonische Teiltöne, langer Nachhall)
+  bells(n) {
+    if (!this.ready) return;
+    for (let i = 0; i < n; i++) for (const [f, g] of [[196, 0.09], [392, 0.05], [470, 0.04], [588, 0.03], [784, 0.02]]) this.tone(f, 3.2, { type: 'sine', gain: g, at: i * 2.1 });
   }
 
   // speedNorm 0..1, throttle 0..1; active=false blendet den Motor aus.

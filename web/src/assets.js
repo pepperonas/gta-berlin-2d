@@ -184,7 +184,7 @@ function drawArmsWithWeapon(ctx, weapon, attack, shirt, skin, arm) {
 }
 
 // Rumpf und Kopf (wie beim Gehen), für Tätigkeiten mit eigener Armhaltung
-function drawTorsoHead(ctx, shirt, skin, look, player) {
+export function drawTorsoHead(ctx, shirt, skin, look, player) {
   ctx.fillStyle = shirt;
   ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = shade(shirt, 0.15); ctx.beginPath(); ctx.ellipse(0.8, -0.6, 1.8, 3.6, 0, 0, Math.PI * 2); ctx.fill();

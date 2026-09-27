@@ -8,6 +8,7 @@ import { InputState, readKeys, readPad, fromHostReading, merge } from './input.j
 import { Renderer } from './render.js';
 import { Hud, BASE } from './hud.js';
 import { Sound } from './audio.js';
+import { ambienceAt, bellStrikes } from './ambience.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
 import { cursorCss, cursorKind } from './cursor.js';
@@ -234,7 +235,18 @@ function draw() {
   updateCursor();
   const car = game.world && game.screen === 'playing' ? playerCar(game.world) : null;
   sound.setEngine(!!car && !car.wrecked, car ? Math.min(1, speedOf(car) / 330) : 0, car ? car.controls.throttle : 0);
+  // Umgebungsklang: Mischung viermal je Sekunde neu, Glocke beim Überschreiten der vollen Stunde
+  const w = game.world, live = w && (game.screen === 'playing' || game.screen === 'title');
+  const now = performance.now();
+  if (live && sound.ready && now - ambT > 250) {
+    ambT = now;
+    sound.setAmbience(ambienceAt(w));
+    const n = prevClock === null ? 0 : bellStrikes(w, prevClock);
+    if (n && game.screen === 'playing') sound.bells(n);
+    prevClock = w.clock;
+  } else if (!live && sound.ready && now - ambT > 250) { ambT = now; sound.setAmbience({ hum: 0, traffic: 0, birds: 0, bar: 0, water: 0, rumble: 0, sirens: [] }); }
 }
+let ambT = 0, prevClock = null;
 
 function playEvent(e) {
   const map = { crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit' };

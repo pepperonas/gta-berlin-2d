@@ -4,6 +4,8 @@
 import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawPerson, drawTree, shade, drawDog } from './assets.js';
+import { drawBike, drawBird, drawParkedScooter } from './critters.js';
+import { parkedScooters, riderShirt } from './bikes.js';
 import { playerCar, speedOf } from './world.js';
 import { signalState } from './signals.js';
 import { offsetPolyline, polylineLength } from './geom.js';
@@ -564,6 +566,7 @@ export class Renderer {
 
     // Stadtmöbel und Requisiten der Tätigkeiten (Decken, Café-Tische, Gitarrenkoffer)
     this.drawFurniture(furns, city, world.clock);
+    for (const e of edges) for (const sc of parkedScooters(city, e)) drawParkedScooter(ctx, sc);
     this.drawLifeProps(world);
 
     // Baumscheiben der Straßenbäume
@@ -613,6 +616,8 @@ export class Renderer {
       list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t }) });
       if (p.style === 'dog' && p.state !== 'dead' && p.state !== 'down') list.push({ y: p.y - 1, d: () => drawDog(ctx, p, t) });
     }
+    for (const b of world.bikes ?? []) if (near(b.x, b.y)) list.push({ y: b.y, d: () => drawBike(ctx, b, riderShirt(b), L.sun, t) });
+    for (const a of world.animals ?? []) if (!a.z && near(a.x, a.y)) list.push({ y: a.y - 2, d: () => drawBird(ctx, a, L.sun) });
     const pl = world.player;
     if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
     list.sort((a, b) => a.y - b.y);
@@ -621,6 +626,7 @@ export class Renderer {
 
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
     this.drawTracks(rails.filter((r) => r.bridge), true);
+    for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
 
     // 9) Partikel
     for (const p of this.particles) {
@@ -725,6 +731,11 @@ export class Renderer {
       out.push({ x: fx, y: fy, r: 34, rgb: '255,240,210', a: 0.6 * k });
       const braking = c.controls?.brake > 0.1;
       out.push({ x: bx, y: by, r: braking ? 46 : 26, rgb: '255,50,36', a: (braking ? 0.9 : 0.45) * k });
+      if ((c.siren || c.blue) && (c.kind === 'police' || c.kind === 'ambulance')) { // Blaulicht streut in die Straße
+        const ph = Math.floor(world.time * 8) % 2;
+        out.push({ x: c.x - sa * (ph ? 6 : -6), y: c.y + ca * (ph ? 6 : -6), r: 140, rgb: '60,130,255', a: Math.max(0.5, k) });
+      }
+      if (c.hazard && Math.floor(world.time * 3) % 2 === 0) out.push({ x: c.x, y: c.y, r: 60, rgb: '255,160,30', a: 0.5 * k });
     }
     const pl = world.player;
     if (!pl.inCar) out.push({ x: pl.x, y: pl.y, r: 70, rgb: '255,210,170', a: 0.35 * k });

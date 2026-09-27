@@ -112,6 +112,11 @@ change in `web/`.
   activity spots from POIs, OSM furniture (`city.render` layer `'furn'`, `FURN_KIND`) and big lawns, deterministically
   from place/hour/day; `world.js manageLife` keeps them staffed with peds in state `'hang'` — spawn and despawn only out
   of view. Visual variety comes from id hashes, never from `world.rng`.
+- **Vehicle kinds, services, bikes, animals, ambience:** `car.kind` (`fleet.js KINDS`: size/power per kind; collision
+  and drawing use per-car `hw`/`hh`, AI gaps are bumper-to-bumper). `services.js`: work stops via `ai.hold`, emergency
+  incidents (dead peds → ambulance, shots → police) with goal routing (`traffic.js goalField/setGoal`, `ai.urgent`
+  runs reds). `bikes.js`: `w.bikes` on the lane graph (rightmost lane, offset to cycle lane/curb). `animals.js`:
+  `w.animals` pigeons/ducks. All four only when `w.rhythm`. `ambience.js` is the pure sound mix for `audio.js`.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.
