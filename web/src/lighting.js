@@ -115,7 +115,8 @@ export class Lighting {
   }
 
   // Lichtkarte: ambient [r,g,b] (0…1), lights: [{ x, y, r, rgb, a, cone?: angle }]
-  drawLightmap(ctx, W, H, tf, ambient, lights) {
+  // occlude(g): zweiter Durchgang in Weltkoordinaten nach den Lichtquellen (verdeckt/ergänzt, siehe render.js)
+  drawLightmap(ctx, W, H, tf, ambient, lights, occlude = null) {
     this.light = sized(this.light, W, H);
     const g = this.light.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -132,6 +133,8 @@ export class Lighting {
         g.restore();
       } else g.drawImage(this.glow(l.rgb), l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
     }
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    if (occlude) occlude(g);
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);

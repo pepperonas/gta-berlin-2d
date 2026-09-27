@@ -83,7 +83,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Spiel um 16:00, die Uhrzeit steht im HUD und im Spielstand). Die Sonne steht wie im Berliner Sommer (Aufgang 5:30,
   Untergang 20:30): Häuser und Bäume werfen Schatten in Sonnenrichtung, morgens und abends lang und warm, mittags kurz;
   Autos und Figuren haben einen mitwandernden Schatten. In der Dämmerung färbt sich das Licht golden, dann blau; nachts
-  ist die Stadt dunkel, fahrende Autos haben Scheinwerferkegel und Rücklichter, der Auftragsort leuchtet. Zum Anschauen:
+  ist die Stadt dunkel: Straßenlaternen (Berliner Gaslaternen in Straßen mit Gasbeleuchtung) werfen Lichtflecken,
+  ein Teil der Fenster ist erleuchtet, Ampeln und Schaufenster leuchten, fahrende Autos haben Scheinwerferkegel und
+  Rücklichter, der Auftragsort leuchtet; Häuser verdecken, was dahinter am Boden leuchtet. Zum Anschauen:
   `http://localhost:8080/?uhr=21:30` stellt die Uhr jeder neuen Welt.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
@@ -117,7 +119,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 108 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 114 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -169,6 +171,7 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/render.js      Welt-Rendering (schräge Draufsicht)
   src/daylight.js    Tageslicht aus der Spieluhr (Sonnenstand, Umgebungslicht; ohne Canvas)
   src/lighting.js    Schattenwurf und Lichtkarte (eigene Bildschirm-Ebenen)
+  src/lamps.js       Standorte der Straßenlaternen (ohne Canvas)
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
   src/audio.js       synthetisierte Klänge
   src/assets.js      Platzhaltergrafiken + Austausch per manifest.json
@@ -261,7 +264,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 108 automatischen Tests grün, darunter:
+- Alle 114 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -292,6 +295,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
     Überlappungen aus), Schatten werfende Häuser außerhalb des Bildes werden gefunden; bei Tag Schatten ohne Lichtkarte,
     nachts genau eine Lichtkarte je Bild (für fünf dieser Prüfungen gegengeprüft, dass sie fehlschlagen, wenn man die
     Funktion abschaltet);
+  - Straßenlaternen im Kerngebiet: keine auf einer Fahrbahn, in einem Haus oder im Wasser, Dichte je km plausibel,
+    Ausleger über der Fahrbahn, Gaslaternen warm, Grundstückszufahrten keine Kreuzungen, deterministisch; Nachtfenster
+    je Haus fest und abends zahlreicher als nachts; Laternen in der Lichtkarte, Häuser verdecken Bodenlicht nur in hoher
+    Qualitätsstufe; Qualitätsstufe mit Hysterese (sechs Mutationsproben, alle erkannt);
   - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
     gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
     belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig

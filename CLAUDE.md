@@ -78,7 +78,11 @@ change in `web/`.
   sun direction/length/strength, ambient multiplier, `dark`, `lampsOn`, `windowsLit`). `lighting.js` draws two
   screen-size layers: building/tree shadows (one same-orientation path, filled opaque, composited once at
   `SHADOW_ALPHA × strength`) and, when `dark > 0.02`, a lightmap (ambient fill + additive light sprites, composited with
-  `multiply`). Light sources come from `Renderer.collectLights`. `?uhr=HH:MM` sets the clock of each new world.
+  `multiply`). Light sources come from `Renderer.collectLights`; a second lightmap pass (`lightOccluders`) redraws
+  buildings/tree crowns in depth order with the ambient colour (so ground light doesn't shine on roofs) and adds lit
+  windows and lamp heads. `drawBuilding(b, cam, ctx, night)` serves both passes. Street lamps: `lamps.js edgeLamps`
+  (pure, cached as `e._lamps`). `Renderer.quality` drops to `'low'` when the median draw time exceeds `RENDER.budgetMs`.
+  `?uhr=HH:MM` sets the clock of each new world; `globalThis.__renderer` exposes `stats`/`quality`.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

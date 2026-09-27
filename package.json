@@ -1,6 +1,6 @@
 {
   "name": "gta-berlin",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "GTA Berlin – Top-down-Open-World-Spiel in Kreuzberg und Nord-Neukölln (HTML5, OpenStreetMap) mit UWP/WebView2-Hülle für den Xbox Developer Mode",
   "type": "module",

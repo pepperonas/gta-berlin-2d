@@ -178,6 +178,12 @@ werden deckend in eine eigene Bildschirm-Ebene gefüllt, die einmal mit 30 % Dec
 Überlappungen nicht doppelt ab und Innenhöfe werden nur dort beschattet, wo ihre Wände hineinwerfen. Lichtkarte: eine
 zweite Ebene mit dem Umgebungslicht füllen, Lichtquellen additiv (`lighter`) aus vorgerenderten Verlaufs-Sprites
 (rund, Kegel) dazu, dann per `multiply` über die Welt; HUD, POI-Schilder und Grenze kommen danach und bleiben hell.
+Damit Laternenlicht nicht auf Dächern liegt, folgt in der Lichtkarte ein zweiter Durchgang in derselben Tiefenfolge wie
+das Bild: Häuser und Baumkronen werden mit der Umgebungsfarbe übermalt, erleuchtete Fenster (deckungsgleiches
+Fenstermuster, nur die hellen Fenster) und Laternenköpfe leuchten selbst. Straßenlaternen (`web/src/lamps.js`): je Kante
+so viele, wie der mittlere Abstand ergibt (OSM zerlegt Straßen in kurze Stücke; ein fester Abstand je Stück ließe die
+meisten leer), am Bordstein plus 0,7 m. Qualitätsstufe: Median der reinen Zeichenzeit über 120 Bilder; über 14 ms
+entfallen Baumschatten und der zweite Hausdurchgang, unter 8 ms kommen sie zurück.
 
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),

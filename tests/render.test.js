@@ -109,3 +109,54 @@ test('Tag/Nacht: bei Tag Hausschatten und keine Lichtkarte, nachts Lichtkarte pe
   assert.ok(r.stats.lights >= 3, `Lichtquellen (${r.stats.lights})`);
   assert.ok(!draws.some((d) => d.nan), 'keine NaN-Koordinaten');
 });
+
+test('Nachtfenster: je Haus fest (kein Flackern), mehr Licht am späten Abend, tagsüber keines', async () => {
+  const { nightVariant, NIGHT_DENSITY } = await import('../web/src/render.js');
+  const { lightAt } = await import('../web/src/daylight.js');
+  const houses = Array.from({ length: 400 }, (_, i) => ({ seed: (i * 7919 + 13) % 1000003 }));
+  const mean = (wl) => houses.reduce((a, b) => a + (nightVariant(b, wl) + 1), 0) / houses.length;
+  assert.ok(houses.every((b) => nightVariant(b, lightAt(12 * 60).windowsLit) === -1), 'mittags kein Fenster erleuchtet');
+  assert.ok(mean(lightAt(22 * 60).windowsLit) > mean(lightAt(3 * 60).windowsLit), 'abends mehr Licht als um 3 Uhr');
+  const v = houses.map((b) => nightVariant(b, 0.5));
+  assert.deepEqual(houses.map((b) => nightVariant(b, 0.5)), v, 'deterministisch');
+  assert.ok(new Set(v).size >= 3, 'Häuser unterscheiden sich');
+  assert.ok(v.every((k) => k >= -1 && k < NIGHT_DENSITY.length));
+});
+
+test('Qualitätsstufe: wechselt erst über dem Budget auf „niedrig“ und erst deutlich darunter zurück', async () => {
+  const { nextQuality } = await import('../web/src/render.js');
+  const { RENDER } = await import('../web/src/config.js');
+  assert.equal(nextQuality('high', RENDER.budgetMs - 1), 'high');
+  assert.equal(nextQuality('high', RENDER.budgetMs + 1), 'low');
+  assert.equal(nextQuality('low', RENDER.budgetMs - 1), 'low', 'Hysterese: nicht sofort zurück');
+  assert.equal(nextQuality('low', RENDER.recoverMs - 1), 'high');
+});
+
+test('Nacht: Laternen gezeichnet und in der Lichtkarte; Häuser verdecken Bodenlicht nur in hoher Qualität', async () => {
+  const { Renderer } = await import('../web/src/render.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const w = createWorld({ city: realCity(), cars: 0, pedestrians: 0 });
+  w.camera.x = w.city.places.pickup.x; w.camera.y = w.city.places.pickup.y + 300;
+  const ctx = new Proxy({ globalCompositeOperation: 'source-over', globalAlpha: 1, lineDashOffset: 0 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (k === 'getLineDash') return () => [];
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const r = new Renderer(ctx);
+  let occl = 0;
+  const orig = r.drawBuilding.bind(r);
+  r.drawBuilding = (b, cam, g, night) => { if (night) occl++; return orig(b, cam, g, night); };
+  w.clock = 23 * 60; r.draw(w, 1280, 720, 1.2);
+  assert.ok(r._lamps.length >= 3, `Laternen im Bild (${r._lamps.length})`);
+  assert.ok(r.stats.lights >= r._lamps.length, 'jede Laterne wirft Licht');
+  assert.ok(occl > 5, `Häuser in der Lichtkarte (${occl})`);
+  occl = 0; r.quality = 'low'; r.draw(w, 1280, 720, 1.2);
+  assert.equal(occl, 0, 'niedrige Qualität: kein zweiter Hausdurchgang');
+  occl = 0; r.quality = 'high'; w.clock = 12 * 60; r.draw(w, 1280, 720, 1.2);
+  assert.equal(occl, 0, 'tagsüber keine Lichtkarte');
+});

@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.6.0] – 2026-09-27
+
+### Hinzugefügt
+- Straßenlaternen: je Straße deterministisch am Bordstein auf dem Gehweg (Hauptstraßen im Mittel alle 25 m, sonst
+  30 m, ab 10 m Fahrbahnbreite beidseitig versetzt), nie auf einer Fahrbahn, in einem Haus oder im Wasser, frei von
+  Kreuzungsecken. Grundstückszufahrten und Fußwege zählen dabei nicht als Kreuzung. Mast mit Ausleger zur Fahrbahn;
+  in Straßen mit Gasbeleuchtung (212 Abschnitte im Kerngebiet) Berliner Gaslaternen mit wärmerem Licht. Sie brennen von
+  20:15 bis 5:45 und werfen einen Lichtfleck auf Gehweg und Fahrbahn.
+- Erleuchtete Fenster: nachts leuchtet je Haus ein fester Teil der Fenster (abends mehr, gegen 3 Uhr wenige, tagsüber
+  keine), ohne Flackern.
+- Häuser und Baumkronen verdecken in der Lichtkarte, was dahinter am Boden leuchtet – kein Laternenschein auf Dächern.
+- Ampeln werfen farbigen Schein, Läden, Lokale und Bahnhöfe warmes Licht aus dem Schaufenster auf den Gehweg.
+- Automatische Qualitätsstufe: Braucht das Zeichnen im Median über 14 ms, verzichtet das Spiel auf Baumschatten und
+  den zweiten Hausdurchgang der Lichtkarte (zurück unter 8 ms). Gemessen auf dem Mac: 1–3 ms reine Zeichenzeit je Bild
+  bei 1920 × 1080, tags wie nachts.
+
 ## [0.5.0] – 2026-09-27
 
 ### Hinzugefügt

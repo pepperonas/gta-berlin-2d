@@ -35,7 +35,9 @@ export const PARKED = { share: 0.6, radius: 1300, despawn: 1800 };
 export const TRAFFIC = { cars: 22, pedestrians: 55, spawnMin: 750, spawnMax: 1800, despawn: 2400 };
 
 // Darstellung: reale Gebäudehöhen (1 m = 10 px) werden für die Schrägansicht gestaucht.
-export const RENDER = { heightScale: 0.5 };
+// quality: 'high' | 'low' – fällt automatisch auf 'low', wenn das Zeichnen im Median über budgetMs braucht
+// (zurück erst unter recoverMs); 'low' verzichtet auf Baumschatten und darauf, dass Häuser Licht in der Lichtkarte verdecken.
+export const RENDER = { heightScale: 0.5, budgetMs: 14, recoverMs: 8, sampleFrames: 120 };
 
 // Spieluhr: 1 Echtsekunde = 1 Spielminute (ein Tag dauert 24 min); neues Spiel beginnt am Nachmittag.
 export const CLOCK = { minutesPerSecond: 1, start: 16 * 60 };

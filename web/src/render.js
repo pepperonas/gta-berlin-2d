@@ -11,7 +11,9 @@ import { laneOffsets, parkingStrip } from './street.js';
 import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
-import { Lighting, casterBox } from './lighting.js';
+import { Lighting, casterBox, makeCanvas } from './lighting.js';
+import { edgeLamps } from './lamps.js';
+import { nearestEdge } from './map.js';
 
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
@@ -151,13 +153,100 @@ function makeWindowPatterns(ctx) {
   return [mk(false), mk(false), mk(true)];
 }
 
+// Nachtfenster: 4 × 4 Fenster je Kachel, je Variante ein anderer Anteil erleuchtet (deterministisch).
+// Zwei deckungsgleiche Fassungen: fürs Bild (hell/dunkel) und für die Lichtkarte (nur die hellen Fenster, sonst leer).
+export const NIGHT_DENSITY = [0.2, 0.4, 0.6, 0.8];
+const litAt = (k, i) => hash01n(i * 31 + k * 977 + 5) < NIGHT_DENSITY[k];
+function hash01n(n) { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+const nightPatternCache = new WeakMap();
+function nightWindowPatterns(ctx) {
+  let pats = nightPatternCache.get(ctx);
+  if (pats) return pats;
+  const mk = (k, forLight) => {
+    const c = makeCanvas(56, 64), g = c.getContext('2d');
+    for (let i = 0; i < 16; i++) {
+      const x = (i % 4) * 14 + 4, y = Math.floor(i / 4) * 16 + 4;
+      if (litAt(k, i)) { g.fillStyle = forLight ? '#fff3d2' : '#ffd98a'; g.fillRect(x, y, 6, 8); }
+      else if (!forLight) { g.fillStyle = '#262c38'; g.fillRect(x, y, 6, 8); }
+    }
+    return ctx.createPattern(c, 'repeat');
+  };
+  pats = { img: NIGHT_DENSITY.map((_, k) => mk(k, false)), light: NIGHT_DENSITY.map((_, k) => mk(k, true)) };
+  nightPatternCache.set(ctx, pats);
+  return pats;
+}
+const darkPatternCache = new WeakMap();
+function dark3(ctx) {
+  let p = darkPatternCache.get(ctx);
+  if (!p) {
+    const c = makeCanvas(14, 16), g = c.getContext('2d');
+    g.fillStyle = '#262c38'; g.fillRect(4, 4, 6, 8);
+    p = ctx.createPattern(c, 'repeat');
+    darkPatternCache.set(ctx, p);
+  }
+  return p;
+}
+// Welche Nachtfenster-Variante ein Haus zeigt (-1 = alles dunkel). Streut je Haus um den Tagesanteil.
+export function nightVariant(b, windowsLit) {
+  if (windowsLit <= 0) return -1;
+  const f = windowsLit + (hash01n(b.seed % 100003) - 0.5) * 0.6;
+  return f < 0.1 ? -1 : Math.min(NIGHT_DENSITY.length - 1, Math.floor(f * NIGHT_DENSITY.length));
+}
+
+const SIGNAL_RGB = { red: '255,60,48', yellow: '255,204,0', green: '52,199,89' };
+const SHOP_GLOW = new Set(['mall', 'supermarket', 'shop', 'food', 'drink', 'cafe', 'hotel', 'ubahn', 'sbahn']);
+
+// Schaufenster-Schein: vom Laden aus zum Gehweg der nächsten Straße (zwischengespeichert am POI)
+function shopGlowPoint(city, q) {
+  if (q._glow !== undefined) return q._glow;
+  const e = nearestEdge(city, q.x, q.y, 40 * city.scale, (o) => o.cls <= 8 && !o.bridge);
+  let gp = null;
+  if (e) {
+    const dx = q.x - e.x, dy = q.y - e.y, d = Math.hypot(dx, dy);
+    if (d > 1) { const k = (e.e.w / 2 + 2.2 * city.scale) / d; if (k < 1) gp = [e.x + dx * k, e.y + dy * k]; }
+  }
+  q._glow = gp;
+  return gp;
+}
+
+// Straßenlaterne: Mast (schräge Ansicht wie die Häuser: Höhe wächst nach oben), Ausleger zur Fahrbahn, Leuchte
+const LAMP_H = 20; // 8 m Masthöhe × heightScale / 2 wie die Dachverschiebung
+export function lampHead(lp) { return lp.gas ? [lp.x, lp.y - LAMP_H] : [lp.x + lp.nx * 9, lp.y - LAMP_H + lp.ny * 9]; }
+function drawLamp(ctx, lp, on) {
+  const [hx, hy] = lampHead(lp);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(lp.x + 1, lp.y + 1, 2.2, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = lp.gas ? '#2f3a33' : '#4a5058'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(lp.x, lp.y - LAMP_H);
+  if (!lp.gas) ctx.lineTo(hx, hy);
+  ctx.stroke(); ctx.lineCap = 'butt';
+  const lit = on ? (lp.gas ? '#ffd9a0' : '#fff6de') : '#c9ccd1';
+  if (lp.gas) { // Berliner Gaslaterne: Laterne mit dunklem Dach
+    ctx.fillStyle = lit; ctx.fillRect(hx - 2.6, hy - 3, 5.2, 5);
+    ctx.fillStyle = '#2f3a33'; ctx.beginPath(); ctx.moveTo(hx - 3.6, hy - 3); ctx.lineTo(hx + 3.6, hy - 3); ctx.lineTo(hx, hy - 6.5); ctx.fill();
+  } else {
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(lp.ny, lp.nx));
+    ctx.fillStyle = '#3a4048'; ctx.fillRect(-3.5, -2.2, 7, 4.4);
+    ctx.fillStyle = lit; ctx.fillRect(-2.5, -1.2, 5, 2.4);
+    ctx.restore();
+  }
+}
+
+// Qualitätsstufe aus der gemessenen Zeichenzeit (Median über RENDER.sampleFrames Bilder), mit Hysterese.
+export function nextQuality(current, medianMs) {
+  if (current === 'high' && medianMs > RENDER.budgetMs) return 'low';
+  if (current === 'low' && medianMs < RENDER.recoverMs) return 'high';
+  return current;
+}
+
 export class Renderer {
   constructor(ctx) {
     this.ctx = ctx;
     this.skids = [];
     this.particles = [];
     this.lighting = new Lighting();
-    this.stats = { shadows: 0, lights: 0 };
+    this.stats = { shadows: 0, lights: 0, ms: 0 };
+    this.quality = 'high';
+    this._times = [];
   }
 
   // Ereignisse der Simulation in Effekte übersetzen.
@@ -202,6 +291,19 @@ export class Renderer {
 
 
   draw(world, W, H, scale, overlayMarkers = true) {
+    const t0 = performance.now();
+    this.drawFrame(world, W, H, scale, overlayMarkers);
+    const ts = this._times;
+    ts.push(performance.now() - t0);
+    if (ts.length >= RENDER.sampleFrames) {
+      ts.sort((a, b) => a - b);
+      this.stats.ms = ts[ts.length >> 1];
+      this.quality = nextQuality(this.quality, this.stats.ms);
+      ts.length = 0;
+    }
+  }
+
+  drawFrame(world, W, H, scale, overlayMarkers) {
     const ctx = this.ctx, cam = world.camera, city = world.city;
     const s = scale * cam.zoom;
     ctx.setTransform(s, 0, 0, s, W / 2 - cam.x * s, H / 2 - cam.y * s);
@@ -307,7 +409,7 @@ export class Renderer {
     if (L.sun.strength >= 0.02) {
       const cq = city.render.query(casterBox(v, L.sun), this._cq ??= []);
       const casters = cq.filter((f) => f.layer === 'building');
-      this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, trees);
+      this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : []);
     }
 
     // 6) Missionsmarker am Boden
@@ -317,8 +419,11 @@ export class Renderer {
     const list = [];
     const margin = 220;
     const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
-    for (const b of buildings) list.push({ y: b.bbox.y + b.bbox.h, d: () => this.drawBuilding(b, cam) });
-    for (const tr of trees) list.push({ y: tr.y, d: () => drawTree(ctx, tr, t, L.sun) });
+    for (const b of buildings) list.push({ y: b.bbox.y + b.bbox.h, b, d: () => this.drawBuilding(b, cam) });
+    for (const tr of trees) list.push({ y: tr.y, tr, d: () => drawTree(ctx, tr, t, L.sun) });
+    const lamps = this._lamps ??= [];
+    lamps.length = 0;
+    for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
     for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
     for (const p of world.peds) if (near(p.x, p.y)) list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down', sun: L.sun }) });
@@ -326,6 +431,7 @@ export class Renderer {
     if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0, sun: L.sun }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
+    this._depth = list;
 
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
     this.drawTracks(rails.filter((r) => r.bridge), true);
@@ -338,7 +444,11 @@ export class Renderer {
     }
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
     this.stats.lights = 0;
-    if (L.dark > 0.02) this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers));
+    if (L.dark > 0.02) {
+      const fill = `rgb(${Math.round(L.ambient[0] * 255)},${Math.round(L.ambient[1] * 255)},${Math.round(L.ambient[2] * 255)})`;
+      this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers),
+        (g) => this.lightOccluders(g, cam, fill, L));
+    }
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -358,11 +468,50 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  // Zweiter Durchgang der Lichtkarte, in derselben Tiefenfolge wie das Bild: Häuser und Baumkronen decken mit dem
+  // Umgebungslicht ab, was hinter ihnen am Boden leuchtet (kein Laternenschein auf Dächern), erleuchtete Fenster und
+  // Laternenköpfe leuchten selbst.
+  lightOccluders(g, cam, fill, L) {
+    const k = L.dark;
+    const occlude = this.quality === 'high';
+    for (const it of this._depth ?? []) {
+      if (it.b) { if (occlude) this.drawBuilding(it.b, cam, g, { fill }); }
+      else if (it.tr && occlude) {
+        const r = it.tr.size, cy = it.tr.y - Math.min(r * 0.5, 30);
+        g.fillStyle = fill; g.beginPath(); g.arc(it.tr.x, cy, r * 0.8, 0, Math.PI * 2); g.fill();
+      } else if (it.lp && L.lampsOn) {
+        const [hx, hy] = lampHead(it.lp);
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.9 * k;
+        g.drawImage(this.lighting.glow(it.lp.rgb), hx - 16, hy - 16, 32, 32);
+        g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+      }
+    }
+  }
+
   // Lichtquellen im Bild (Weltkoordinaten) für die Lichtkarte.
   collectLights(world, v, L, markers) {
     const out = [], pad = 250;
     const inView = (x, y) => x > v.x - pad && x < v.x + v.w + pad && y > v.y - pad && y < v.y + v.h + pad;
     const k = L.dark;
+    // Straßenlaternen: Lichtfleck auf Gehweg und Fahrbahnrand unter dem Kopf
+    if (L.lampsOn) for (const lp of this._lamps ?? []) {
+      out.push({ x: lp.x + lp.nx * 18, y: lp.y + lp.ny * 18, r: lp.main ? 150 : 125, rgb: lp.rgb, a: (lp.gas ? 0.55 : 0.7) * k });
+    }
+    // Ampeln: farbiger Schein
+    const city = world.city;
+    for (const s of city._signalList ?? []) {
+      if (!inView(s.x, s.y)) continue;
+      for (const a of s.app) {
+        const state = signalState(city, s.n, a.heading, world.time), py = a.to + 3 + (state === 'red' ? 4 : state === 'yellow' ? 9 : 14);
+        out.push({ x: a.x - Math.sin(a.heading) * py, y: a.y + Math.cos(a.heading) * py, r: 34, rgb: SIGNAL_RGB[state], a: 0.8 * k });
+      }
+    }
+    // Läden, Lokale und Bahnhöfe: warmer Schein aus dem Schaufenster auf den Gehweg
+    for (const q of city.poiHash?.query({ x: v.x - pad, y: v.y - pad, w: v.w + 2 * pad, h: v.h + 2 * pad }, this._pq ??= []) ?? []) {
+      if (!SHOP_GLOW.has(q.cat)) continue;
+      const gp = shopGlowPoint(city, q);
+      if (gp) out.push({ x: gp[0], y: gp[1], r: 70, rgb: '255,210,150', a: 0.45 * k });
+    }
     for (const c of world.cars) {
       if (c.wrecked || !c.driver || !inView(c.x, c.y)) continue; // geparkte Autos ohne Fahrer bleiben dunkel
       const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
@@ -510,8 +659,10 @@ export class Renderer {
   }
 
   // Gebäude: sichtbare Fassaden (Kanten, deren Außennormale vom Dachversatz weg zeigt), dann das Dach.
-  drawBuilding(b, cam) {
-    const ctx = this.ctx;
+  // night: null (normales Bild) oder { light: true, fill: Umgebungsfarbe } für die Lichtkarte.
+  drawBuilding(b, cam, ctx = this.ctx, night = null) {
+    const L = this.light;
+    const variant = L && L.windowsLit > 0 ? nightVariant(b, L.windowsLit) : -2; // -2: Tagesfenster
     const H = Math.max(18, b.height * RENDER.heightScale);
     const dx = (b.cx - cam.x) * H * 0.0005;
     const dy = -H * 0.5 + (b.cy - cam.y) * H * 0.00025;
@@ -538,19 +689,22 @@ export class Renderer {
     }
     faces.sort((a, c) => a.depth - c.depth);
     let front = null;
+    const lightMode = !!night;
+    const winPat = variant === -2 ? col.pat : variant >= 0 ? nightWindowPatterns(ctx)[lightMode ? 'light' : 'img'][variant] : lightMode ? null : dark3(ctx);
     for (const f of faces) {
-      ctx.fillStyle = col.faces[f.ny > 0.6 ? 0 : f.ny > -0.3 ? 1 : 2];
+      ctx.fillStyle = lightMode ? night.fill : col.faces[f.ny > 0.6 ? 0 : f.ny > -0.3 ? 1 : 2];
       ctx.beginPath();
       ctx.moveTo(f.x0, f.y0); ctx.lineTo(f.x0 + f.ex, f.y0 + f.ey);
       ctx.lineTo(f.x0 + f.ex + dx, f.y0 + f.ey + dy); ctx.lineTo(f.x0 + dx, f.y0 + dy); ctx.closePath();
       ctx.fill();
-      if (f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small) {
+      if (winPat && f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small) {
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
-        ctx.fillStyle = col.pat;
+        ctx.fillStyle = winPat;
         ctx.fillRect(4, 2, f.L - 8, H - 4);
         ctx.restore();
       }
+      if (lightMode) continue;
       if (b.doors) for (const [dr, de, dt] of b.doors) if (dr === f.ri && de === f.ei) { // Hauseingang
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
@@ -559,6 +713,10 @@ export class Renderer {
         ctx.restore();
       }
       if (!front || f.ny * f.L > front.ny * front.L) front = f;
+    }
+    if (lightMode) { // Lichtkarte: Dach verdeckt, was dahinter am Boden leuchtet
+      ctx.save(); ctx.translate(dx, dy); ctx.fillStyle = night.fill; ctx.fill(pathOf(b), 'evenodd'); ctx.restore();
+      return;
     }
     if (b.kind === BUILDING_KIND.spaeti && front) {
       ctx.save();

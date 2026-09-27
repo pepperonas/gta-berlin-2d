@@ -37,6 +37,7 @@ try { storage = window.localStorage; storage.getItem('probe'); } catch { storage
 const game = createGame({ storage, canQuit: !!host });
 globalThis.__gta = game; // für Tests/Debug in der Konsole
 globalThis.__hud = hud;
+globalThis.__renderer = renderer; // Zeichenzeit/Qualitätsstufe (renderer.stats.ms, renderer.quality)
 
 // Karte laden: web/data/berlin/index.json (Grenzen, Orte, ~1 MB), die Kacheln (640 × 640 m) holt die Stadt selbst
 // nach, sobald eine Kamera in ihre Nähe kommt; den Stadtplan (overview.json) erst im Hintergrund.
