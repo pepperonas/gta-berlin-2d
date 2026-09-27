@@ -12,7 +12,7 @@ Eigene Dateien einbinden: Datei hier ablegen und in `manifest.json` eintragen.
 
 | Sprite | Ausrichtung / Größe im Spiel |
 |---|---|
-| `car` | Draufsicht, Front nach **rechts**, wird auf 42 × 20 skaliert (die Wagenfarbe entfällt dann) |
+| `car` | Draufsicht, Front nach **rechts**, wird auf 42 × 20 skaliert (ersetzt die fünf eingebauten Modelle; Wagenfarbe, Räder, Licht und Blinker entfallen dann) |
 | `pedestrian`, `player` | Draufsicht, Blick nach rechts, 16 × 16 |
 | `tree` | Baumkrone von oben, ca. 40 × 40 |
 

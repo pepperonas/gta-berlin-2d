@@ -93,6 +93,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 - **Häuser:** Dachformen nach Gebäudeart (Berliner Dach mit Ziegelrand, Flachdach mit Attika, Satteldach, Wellblech)
   mit Schornsteinen, Lichtschächten, Oberlichtern, Lüftungsgeräten, Solarmodulen und Dachterrassen; Fassaden als
   Altbau, Plattenbau, Neubau oder Industriebau; Kontaktschatten am Fassadenfuß.
+- **Autos und Menschen:** fünf Automodelle (Kleinwagen, Limousine, Kombi, Transporter, Berliner Taxi) mit Scheiben,
+  Spiegeln und lenkenden Vorderrädern, Blinker der KI vor dem Abbiegen, Rückfahrlicht; Passanten mit Armen und Beinen
+  im Gang, verschiedener Kleidung und Haarfarbe, manche mit Rucksack oder Tasche.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -125,7 +128,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 120 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 124 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -181,6 +184,7 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/decals.js      Gullys, Kanaldeckel, Flicken, Risse, Ölflecken je Straße (ohne Canvas)
   src/textures.js    Bodentexturen als Muster
   src/roofs.js       Dachform, Fassadenstil und Dachaufbauten je Gebäude (ohne Canvas)
+  src/vehicles.js    Automodelle, Sprite-Cache, Räder, Licht, Blinker
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
   src/audio.js       synthetisierte Klänge
   src/assets.js      Platzhaltergrafiken + Austausch per manifest.json
@@ -273,7 +277,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 120 automatischen Tests grün, darunter:
+- Alle 124 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -315,6 +319,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
   - Dächer: über 50 000 Dachaufbauten im Kerngebiet liegen ganz im Grundriss, überlappen nicht und folgen der
     Hauptachse; Dachform und Fassade passen zur Gebäudeart (Kirchen Satteldach, Industrie Wellblech, Satteldach nur bis
     9 m, Plattenbau nur über 24 m), einmal je Haus bestimmt und deterministisch (fünf Mutationsproben, alle erkannt);
+  - Autos und Menschen: Modell je Auto fest, alle fünf Modelle kommen vor, Taxis elfenbein, Spielerauto Limousine;
+    die KI blinkt vor dem Rechts- bzw. Linksabbiegen richtig, geradeaus und weit vor der Kreuzung nicht; Sprite-Cache
+    bleibt begrenzt, ohne Canvas flacher Rückfall; Aussehen der Passanten je Person fest und vielfältig (sechs
+    Mutationsproben, alle erkannt);
   - Verkehrsfluss: je 3 min an den engsten Stellen (Rixdorf, Wrangelkiez, Weserstraße) steht kein Auto über 90 s und es
     gibt kaum Zusammenstöße; auf Engstellen nie Gegenverkehr gleichzeitig, jedes Auto darauf ist eingetragen; vor einer
     belegten Kreuzung oder Engstelle hält die KI vor der Linie; Bewegungen, die sich nicht kreuzen, dürfen gleichzeitig

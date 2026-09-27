@@ -89,6 +89,10 @@ change in `web/`.
 - **Buildings:** `roofs.js roofOf(b)` (pure, cached `b._roof`: roof style, facade style, main axis, decor list);
   `render.js drawRoof` draws it, facade patterns per style come from `facadePatterns(ctx)`. Beware: `tests/render.test.js`
   identifies rails by stroke width (`TRACK.rail` = 1.6), so don't reuse that width for other strokes.
+- **Cars and people (presentation only):** `vehicles.js` (model from `car.id`, sprite cache per model × colour,
+  wheels/lights/blinkers per frame); `ai.blink` comes from `traffic.js blinkFor` (no RNG). Person looks come from
+  `assets.js personLook(p)` (hash of `p.id`). Never draw visual variety from `world.rng` — it would change the
+  simulation (traffic, tests).
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

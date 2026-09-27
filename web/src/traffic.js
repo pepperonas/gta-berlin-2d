@@ -268,6 +268,7 @@ export function driveAi(car, world, dt) {
   // Vorfahrt an der nächsten Kreuzung: erst einfahren, wenn sie frei ist und dahinter Platz ist (sonst an der Linie warten).
   // Reserviert wird nur, wer auch losfahren kann (niemand steht direkt davor).
   const gate = entryGate(car, world, d > 70 && vf > -2, dt);
+  ai.blink = blinkFor(ai, car);
   // Halt deutlich vor dem Linienpunkt: 10 px davor schaltet die Route schon auf „in der Kreuzung“ weiter
   if (gate < Infinity) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, gate - GATE_STOP)));
   releaseClaims(car, world, Math.abs(vf) < 5 ? (ai.stillT = (ai.stillT ?? 0) + dt) : (ai.stillT = 0));
@@ -329,6 +330,17 @@ function routeDist(ai, car, k) {
   let d = Math.hypot(r[2 * (ai.i + 1)] - car.x, r[2 * (ai.i + 1) + 1] - car.y);
   for (let q = ai.i + 1; q < k && d < 400; q++) d += Math.hypot(r[2 * q + 2] - r[2 * q], r[2 * q + 3] - r[2 * q + 1]);
   return d;
+}
+
+// Blinker (nur Anzeige): vor einem Abbiegen bis in die Kreuzung hinein; +1 rechts, -1 links, 0 geradeaus.
+export const BLINK_AHEAD = 110;
+export function blinkFor(ai, car) {
+  if (!ai.segs?.length) return 0;
+  const j = currentSeg(ai), cur = ai.segs[j], next = ai.segs[j + 1];
+  if (!next || cur.kEnd === undefined) return 0;
+  if (cur.kEnd >= ai.i && routeDist(ai, car, cur.kEnd) > BLINK_AHEAD) return 0;
+  const a = turnAngle(cur.lane, next.lane);
+  return a > 0.5 ? 1 : a < -0.5 ? -1 : 0;
 }
 
 // Reservierung gilt nur, solange ihr Auto noch fährt und sie selbst noch führt (nach Umplanen, Unfall, Übernahme weg).

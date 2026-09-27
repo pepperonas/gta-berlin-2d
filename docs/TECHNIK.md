@@ -199,6 +199,12 @@ und nur angenommen, wenn ein 5 × 5-Punkteraster über der Fläche samt Rand im 
 Gebäudeobjekt und verschwindet mit ihm, wenn seine Kachel entladen wird. Niedrige Qualitätsstufe: ohne Aufbauten,
 Kiesmuster und Wellblechrillen.
 
+**Autos und Figuren** (`web/src/vehicles.js`, `web/src/assets.js`): Das Automodell ist reine Darstellung und wird
+aus der Autonummer abgeleitet – nicht aus dem Zufallsgenerator der Welt, sonst würde sich der Verkehr ändern.
+Karosserien sind je Modell × Farbe zwischengespeicherte Sprites (höchstens 160, dann wird geleert); Räder, Licht und
+Blinker kommen jedes Bild dazu. Der Blinker (`ai.blink`) ist das einzige neue Feld in der Simulation, rein
+abgeleitet aus Route und Abbiegewinkel, ohne Zufall. Ein Sprite in `assets/manifest.json` ersetzt weiterhin alles.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

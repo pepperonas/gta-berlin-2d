@@ -4,6 +4,8 @@
 //   pedestrian – Draufsicht, Blick nach rechts, 16×16
 //   player     – wie pedestrian
 //   tree       – Draufsicht Baumkrone, 40×40
+import { drawCarBody } from './vehicles.js';
+
 export const sprites = {};
 
 export async function loadSprites(manifest, base = 'assets/') {
@@ -56,6 +58,12 @@ export function drawCar(ctx, car, t, sun) {
     ctx.restore();
     return;
   }
+  if (drawCarBody(ctx, car, t)) { // Modell-Sprite (vehicles.js); ohne Canvas unten der flache Platzhalter
+    if (car.cargo) { ctx.fillStyle = '#b9853f'; ctx.fillRect(-12, -4, 6, 8); ctx.strokeStyle = '#6e4a1c'; ctx.strokeRect(-12, -4, 6, 8); }
+    if (car.driver === 'player' && car.horn) { ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(L / 2 + 2, -1, 3, 2); }
+    ctx.restore();
+    return;
+  }
   const body = car.wrecked ? '#3b332d' : car.color;
   ctx.fillStyle = body;
   roundRect(ctx, -L / 2, -W / 2, L, W, 5); ctx.fill();
@@ -98,15 +106,49 @@ export function drawPerson(ctx, p, { shirt, skin = '#f2d0b1', hair = '#2b2118', 
     ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(9, 0, 3, 0, Math.PI * 2); ctx.fill();
     ctx.restore(); return;
   }
-  const swing = Math.sin((p.step ?? 0) * 0.35) * 3;
-  ctx.fillStyle = '#23272e';
-  ctx.fillRect(swing - 1.5, -4, 3, 2.6); ctx.fillRect(-swing - 1.5, 1.4, 3, 2.6);
+  // Aussehen je Person fest (aus ihrer Nummer): Hose, Haare, manchmal Tasche oder Rucksack
+  const look = personLook(p, hair);
+  const ph = (p.step ?? 0) * 0.35, swing = Math.sin(ph) * 3, arm = Math.sin(ph) * 2.4;
+  // Beine (Schrittlänge folgt der zurückgelegten Strecke)
+  ctx.fillStyle = look.pants;
+  ctx.fillRect(swing - 1.6, -3.4, 3.4, 2.4); ctx.fillRect(-swing - 1.6, 1.0, 3.4, 2.4);
+  ctx.fillStyle = '#1e2126';
+  ctx.fillRect(swing + 1.4, -3.4, 1.2, 2.4); ctx.fillRect(-swing + 1.4, 1.0, 1.2, 2.4); // Schuhe
+  // Arme gegengleich zu den Beinen
+  ctx.fillStyle = shade(shirt, -0.18);
+  ctx.beginPath(); ctx.ellipse(-arm, -5.2, 2.2, 1.3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(arm, 5.2, 2.2, 1.3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.arc(-arm + 1.8, -5.3, 1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(arm + 1.8, 5.3, 1, 0, Math.PI * 2); ctx.fill();
+  // Rumpf, Rucksack/Tasche, Kopf
   ctx.fillStyle = shirt;
-  ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 6, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = hair; ctx.beginPath(); ctx.arc(0.5, 0, 3.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(1.6, 0, 2.2, 0, Math.PI * 2); ctx.fill();
-  if (player) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 6, 0, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = shade(shirt, 0.15); ctx.beginPath(); ctx.ellipse(0.8, -0.6, 1.8, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+  if (look.bag === 'backpack') { ctx.fillStyle = look.bagColor; ctx.fillRect(-4.8, -2.8, 2.6, 5.6); }
+  else if (look.bag === 'tote') { ctx.fillStyle = look.bagColor; ctx.fillRect(arm - 1.5, 6.2, 3, 2.4); }
+  ctx.fillStyle = look.hair; ctx.beginPath(); ctx.arc(0.3, 0, 3.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(1.5, 0, 2.1, 0, Math.PI * 2); ctx.fill();
+  if (player) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 5.6, 0, 0, Math.PI * 2); ctx.stroke(); }
   ctx.restore();
+}
+
+const PANTS = ['#2c3e50', '#34495e', '#1f2a36', '#5d4e3c', '#3d5a80', '#6b6b6b', '#2b2b2b', '#7a5c3a'];
+const HAIR = ['#2b2118', '#4a3524', '#1a1a1a', '#8a6a3d', '#c9a45a', '#a33b20', '#d8d4cf', '#5a4636'];
+const BAGS = ['#6d4c2f', '#2f3b52', '#8a2f2f', '#3d6b4f', '#1f1f1f'];
+// Aussehen je Person, deterministisch aus der Nummer (reine Darstellung, kein Zufall der Simulation)
+export function personLook(p, hair) {
+  if (p._look) return p._look;
+  const h = (k) => { const x = Math.sin((p.id ?? 1) * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
+  const bagR = h(4);
+  const look = {
+    pants: PANTS[Math.floor(h(1) * PANTS.length)],
+    hair: p.id === undefined ? hair : HAIR[Math.floor(h(2) * HAIR.length)],
+    bag: bagR < 0.18 ? 'backpack' : bagR < 0.3 ? 'tote' : null,
+    bagColor: BAGS[Math.floor(h(3) * BAGS.length)],
+  };
+  if (p.id !== undefined) p._look = look;
+  return look;
 }
 
 // Kronenfarben je Gattung (Berliner Baumbestand): dunkel, mittel, Lichtkante.

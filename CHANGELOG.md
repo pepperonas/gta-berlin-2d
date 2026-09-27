@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.9.0] – 2026-09-27
+
+### Hinzugefügt
+- Fünf Automodelle in derselben Kollisionsbox: Kleinwagen, Limousine, Kombi, Transporter und das Berliner Taxi
+  (hellelfenbein mit Dachschild). Karosserie mit Wölbung, Scheiben mit Spiegelung, Dach, Außenspiegel; je Modell ×
+  Farbe einmal doppelt aufgelöst gezeichnet (Cache begrenzt). Das Modell folgt der Autonummer, die Simulation und ihr
+  Zufall bleiben unberührt; das Spielerauto ist eine Limousine.
+- Sichtbare Bewegung: Räder an den Ecken, die Vorderräder lenken mit; Rückfahrlicht beim Rückwärtsfahren; die
+  KI blinkt vor dem Abbiegen (ab 11 m vor der Kreuzung bis hinein, links/rechts aus dem Abbiegewinkel); Wracks mit
+  Ruß und Beulen.
+- Passanten mit Armen und Beinen im Gang (Schrittlänge aus der zurückgelegten Strecke), Hosen, Schuhe, Haarfarben und
+  manchmal Rucksack oder Tasche – je Person fest.
+- Gemessen: 1920 × 1080 reine Zeichenzeit 1,7–2,8 ms je Bild, JS-Heap 69 MB; bei 4-fach gedrosselter CPU 6,4 ms
+  (Qualität bleibt hoch), bei 20-fach 38,7 ms → automatisch „niedrig“, danach wieder „hoch“.
+
 ## [0.8.0] – 2026-09-27
 
 ### Hinzugefügt
