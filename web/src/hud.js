@@ -23,6 +23,7 @@ export class Hud {
     this.s = H / 720; this.vw = W / this.s; this.vh = 720;
     this.m = { x: this.vw * 0.05, y: this.vh * 0.05 };
     this.ctx.setTransform(this.s, 0, 0, this.s, 0, 0);
+    this.hits = []; // anklickbare Flächen dieses Bildes (virtuelle HUD-Koordinaten), für die Maus in main.js
   }
 
   text(str, x, y, { size = 20, color = '#fff', align = 'left', weight = 600, shadow = true, base = 'alphabetic' } = {}) {
@@ -283,6 +284,7 @@ export class Hud {
     v.cy = hh * 2 >= city.height ? city.height / 2 : Math.min(city.height - hh, Math.max(hh, v.cy));
     const ox = x + w / 2 - v.cx * f, oy = y + h / 2 - v.cy * f;
     this.bigMap = { x, y, w, h, f, f0, ox, oy }; // für Mausklicks (virtuelle HUD-Koordinaten)
+    this.hits.push({ kind: 'map', x, y, w, h });
     const ov = this.overview ?? this.buildOverview(city);
     c.save();
     rr(c, x, y, w, h, 10); c.clip();
@@ -333,6 +335,7 @@ export class Hud {
     this.text(spot.pending ? 'Lade den Stadtteil …' : spot.name, this.vw / 2, y + 84, { size: 20, align: 'center', weight: 600, color: spot.pending ? '#bbb' : '#fff' });
     const bw = 200, bh = 46, by = y + h - bh - 22;
     this.dialogButtons = { yes: { x: this.vw / 2 - bw - 12, y: by, w: bw, h: bh }, no: { x: this.vw / 2 + 12, y: by, w: bw, h: bh } };
+    this.hits = [{ kind: 'dialog', yes: true, ...this.dialogButtons.yes }, { kind: 'dialog', yes: false, ...this.dialogButtons.no }]; // der Dialog liegt über allem
     for (const [k, label, glyph, bg] of [['yes', 'Ja', 'A', YELLOW], ['no', 'Nein', 'B', 'rgba(255,255,255,0.12)']]) {
       const b = this.dialogButtons[k];
       c.fillStyle = bg; rr(c, b.x, b.y, b.w, b.h, 10); c.fill();
@@ -346,6 +349,7 @@ export class Hud {
     const c = this.ctx;
     menu.items.forEach((it, i) => {
       const yy = y + i * 58, sel = i === menu.index, dis = it.enabled === false;
+      if (!dis) this.hits.push({ kind: 'menu', menu, i, x: cx - width / 2, y: yy - 24, w: width, h: 48 });
       if (sel) {
         c.fillStyle = YELLOW; rr(c, cx - width / 2, yy - 24, width, 48, 10); c.fill();
       } else { c.fillStyle = 'rgba(15,17,24,0.7)'; rr(c, cx - width / 2, yy - 24, width, 48, 10); c.fill(); }
@@ -360,6 +364,7 @@ export class Hud {
     const widths = items.map(([, label]) => gw + 8 + c.measureText(label).width);
     let x = this.vw / 2 - (widths.reduce((a, b) => a + b, 0) + 36 * (items.length - 1)) / 2;
     items.forEach(([k, label], i) => {
+      this.hits.push({ kind: 'key', key: k, x: x - 8, y: y - 20, w: widths[i] + 16, h: 36 });
       this.glyph(k, x + gw / 2, y, 12);
       this.text(label, x + gw + 8, y + 7, { size: 17, weight: 500 });
       x += widths[i] + 36;
@@ -424,6 +429,7 @@ export class Hud {
       ['Hupe', 'X', 'H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],
       ['Pause', 'Menü-Taste', 'Esc / P'],
+      ['Menüs · Stadtplan', 'Steuerkreuz, A / B', 'Maus: zeigen + klicken'],
     ];
     const x0 = vw / 2 - 460;
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });

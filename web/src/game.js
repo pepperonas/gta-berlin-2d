@@ -16,6 +16,10 @@ export function menuInput(menu, input) {
     }
     return false;
   };
+  // Maus: Zeigen wählt aus, Klicken bestätigt (deaktivierte Einträge reagieren nicht)
+  const usable = (i) => Number.isInteger(i) && menu.items[i] && menu.items[i].enabled !== false;
+  if (usable(input.menuPick)) { menu.index = input.menuPick; return menu.items[menu.index].id; }
+  if (usable(input.menuHover) && input.menuHover !== menu.index) { menu.index = input.menuHover; return 'move'; }
   if (input.menuUp && move(-1)) return 'move';
   if (input.menuDown && move(1)) return 'move';
   if (input.confirm) return menu.items[menu.index]?.id ?? null;

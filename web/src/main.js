@@ -9,6 +9,7 @@ import { Hud } from './hud.js';
 import { Sound } from './audio.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
+import { cursorCss, cursorKind } from './cursor.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -60,30 +61,37 @@ addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 addEventListener('pointerdown', () => sound.unlock());
 
-// Maus: Klick auf den Stadtplan wählt ein Teleport-Ziel, Klick auf Ja/Nein im Dialog bestätigt.
-// Auf dem Stadtplan: Mausrad zoomt (um den Mauszeiger), Ziehen verschiebt.
+// Maus: Menüs (zeigen = auswählen, klicken = bestätigen), Tastenhinweise (A/B) und der Teleport-Dialog sind anklickbar;
+// auf dem Stadtplan zoomt das Mausrad (um den Zeiger), Ziehen verschiebt, ein Klick wählt ein Teleport-Ziel.
+// Die anklickbaren Flächen legt der HUD beim Zeichnen in hud.hits ab; Menü-Klicks gehen als abstrakte Eingabe
+// (menuHover/menuPick) durch dieselbe Spiellogik wie Controller und Tastatur.
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
-const inside = (b, vx, vy) => b && vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h;
-let drag = null;
-canvas.addEventListener('pointerdown', (e) => {
+const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
+const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '' };
+const activeMenu = () => (game.screen === 'title' ? game.titleMenu : game.screen === 'paused' ? game.pauseMenu : game.screen === 'playing' ? game.resultMenu : null);
+canvas.addEventListener('pointermove', (e) => {
   if (!hud.s) return;
   const [vx, vy] = toHud(e);
-  if (game.teleport) {
-    if (inside(hud.dialogButtons?.yes, vx, vy)) { confirmTeleport(game, true); sound.play('ui'); }
-    else if (inside(hud.dialogButtons?.no, vx, vy)) { confirmTeleport(game, false); sound.play('ui-back'); }
-    return;
-  }
-  if (game.screen === 'playing' && game.showBigMap && inside(hud.bigMap, vx, vy)) { drag = { vx, vy, moved: 0 }; canvas.setPointerCapture(e.pointerId); }
+  pointer.vx = vx; pointer.vy = vy; pointer.moved = performance.now();
+  input.lastDevice = 'keyboard';
+  const d = pointer.drag;
+  if (d) { d.moved += Math.hypot(vx - d.vx, vy - d.vy); hud.panBigMap(vx - d.vx, vy - d.vy); d.vx = vx; d.vy = vy; return; }
+  const h = hitAt(vx, vy);
+  if (h?.kind === 'menu') pointer.hover = h;
 });
-canvas.addEventListener('pointermove', (e) => {
-  if (!drag) return;
+canvas.addEventListener('pointerleave', () => { pointer.vx = pointer.vy = -1; });
+canvas.addEventListener('pointerdown', (e) => {
+  if (!hud.s || e.button !== 0) return;
   const [vx, vy] = toHud(e);
-  drag.moved += Math.hypot(vx - drag.vx, vy - drag.vy);
-  hud.panBigMap(vx - drag.vx, vy - drag.vy);
-  drag.vx = vx; drag.vy = vy;
+  const h = hitAt(vx, vy);
+  if (!h) return;
+  if (h.kind === 'dialog') { confirmTeleport(game, h.yes); sound.play(h.yes ? 'ui' : 'ui-back'); }
+  else if (h.kind === 'map') { pointer.drag = { vx, vy, moved: 0 }; canvas.setPointerCapture(e.pointerId); }
+  else if (h.kind === 'menu') pointer.pick = h;
+  else if (h.kind === 'key') pointer.key = h.key;
 });
 canvas.addEventListener('pointerup', () => {
-  const d = drag; drag = null;
+  const d = pointer.drag; pointer.drag = null;
   if (!d || d.moved > 6 || !game.showBigMap || game.teleport) return; // gezogen, nicht geklickt
   const m = hud.bigMap;
   if (requestTeleport(game, (d.vx - m.ox) / m.f, (d.vy - m.oy) / m.f)) sound.play('ui');
@@ -94,6 +102,23 @@ canvas.addEventListener('wheel', (e) => {
   const [vx, vy] = toHud(e);
   hud.zoomBigMap(Math.exp(-e.deltaY * 0.0015), vx, vy);
 }, { passive: false });
+
+// Mauseingaben in den nächsten Simulationsschritt übernehmen (nur für das gerade aktive Menü).
+function applyPointer(inp) {
+  const menu = activeMenu();
+  if (pointer.hover) { if (pointer.hover.menu === menu) inp.menuHover = pointer.hover.i; pointer.hover = null; }
+  if (pointer.pick) { if (pointer.pick.menu === menu) inp.menuPick = pointer.pick.i; pointer.pick = null; }
+  if (pointer.key === 'A') inp.confirm = true;
+  if (pointer.key === 'B') inp.back = true;
+  pointer.key = null;
+}
+
+// Zeiger im Stil des Spiels; beim Fahren/Laufen verschwindet er, wenn die Maus 2 s ruht.
+function updateCursor() {
+  const playing = game.screen === 'playing' && !game.showBigMap && !game.teleport && !game.resultMenu;
+  const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, idle: (performance.now() - pointer.moved) / 1000 });
+  if (kind !== pointer.cursor) { pointer.cursor = kind; canvas.style.cursor = cursorCss(kind); }
+}
 
 let W = 0, H = 0, dpr = 1;
 function resize() {
@@ -128,6 +153,7 @@ function frame(now) {
   while (acc >= DT) {
     acc -= DT;
     const inp = input.frame(readRaw(), DT);
+    applyPointer(inp);
     const events = updateGame(game, inp, DT);
     for (const e of events) playEvent(e);
     if (game.world) {
@@ -171,7 +197,6 @@ function draw() {
     game.worldScale = worldScale; game.hintT = hintT;
     if (game.screen === 'playing') {
       hud.drawGameplay(game.world, game);
-      canvas.style.cursor = game.showBigMap && !game.teleport ? 'crosshair' : '';
       if (game.showBigMap) hud.drawBigMap(game.world); else hud.mapView = null;
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
       if (game.resultMenu) hud.drawResult(game);
@@ -179,6 +204,7 @@ function draw() {
     else if (game.screen === 'controls') hud.drawControls();
   }
   hud.toast(game.toast);
+  updateCursor();
   const car = game.world && game.screen === 'playing' ? playerCar(game.world) : null;
   sound.setEngine(!!car && !car.wrecked, car ? Math.min(1, speedOf(car) / 330) : 0, car ? car.controls.throttle : 0);
 }

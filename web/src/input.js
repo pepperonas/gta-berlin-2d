@@ -83,6 +83,7 @@ export class InputState {
       action: edge('a'), actionHeld: raw.a, enterExit: edge('y'), pause: edge('menu'), mapToggle: edge('view'),
       menuUp: menuDir === 'up', menuDown: menuDir === 'down', menuLeft: menuDir === 'left', menuRight: menuDir === 'right',
       confirm: edge('a') || edge('confirmKey'), back: edge('b'),
+      menuHover: null, menuPick: null, // Maus (setzt main.js)
     };
     this.prev = { ...raw };
     return out;

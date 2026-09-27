@@ -8,7 +8,7 @@ import { laneOffsets } from '../../web/src/street.js';
 
 export const idle = () => ({ moveX: 0, moveY: 0, steer: 0, throttle: 0, brake: 0, handbrake: false, sprint: false, horn: false,
   action: false, actionHeld: false, enterExit: false, pause: false, mapToggle: false,
-  menuUp: false, menuDown: false, menuLeft: false, menuRight: false, confirm: false, back: false });
+  menuUp: false, menuDown: false, menuLeft: false, menuRight: false, confirm: false, back: false, menuHover: null, menuPick: null });
 
 const usable = (e) => e.inside && e.cls <= 9 && !(e.cls === 9 && e.w < 40) && !e.blocked && !e.passage;
 

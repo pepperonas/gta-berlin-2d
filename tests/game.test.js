@@ -178,3 +178,42 @@ async function pxOf(city, lat, lon) {
   const [px, py] = proj(lat, lon);
   return [(px - minX) * city.scale, (maxY - py) * city.scale];
 }
+
+test('Maus im Menü: Zeigen wählt aus, Klicken bestätigt; deaktivierte Einträge reagieren nicht', () => {
+  const m = createMenu([{ id: 'a', enabled: false }, { id: 'b' }, { id: 'c' }]);
+  assert.equal(menuInput(m, { ...idle(), menuHover: 2 }), 'move');
+  assert.equal(m.index, 2);
+  assert.equal(menuInput(m, { ...idle(), menuHover: 2 }), null, 'gleiche Stelle: kein neuer Ton');
+  assert.equal(menuInput(m, { ...idle(), menuHover: 0 }), null, 'deaktiviert: Auswahl bleibt');
+  assert.equal(m.index, 2);
+  assert.equal(menuInput(m, { ...idle(), menuPick: 0 }), null, 'deaktiviert: Klick bewirkt nichts');
+  assert.equal(menuInput(m, { ...idle(), menuPick: 1 }), 'b');
+  // Ganzer Weg nur mit der Maus: Titel → „Neues Spiel“ anklicken → Spiel; Pause → „Zum Hauptmenü“ anklicken
+  const g = createGame({ storage: memoryStorage(), city });
+  const iNew = g.titleMenu.items.findIndex((it) => it.id === 'new');
+  press(g, { menuHover: 0 }); // „Fortsetzen“ ist ohne Spielstand deaktiviert
+  press(g, { menuPick: iNew });
+  assert.equal(g.screen, 'playing');
+  press(g, { pause: true });
+  press(g, { menuPick: g.pauseMenu.items.findIndex((it) => it.id === 'title') });
+  assert.equal(g.screen, 'title');
+});
+
+test('Mauszeiger: passender Zeiger je Lage, beim Spielen ausgeblendet, wenn die Maus ruht', async () => {
+  const { cursorKind, cursorCss, CURSOR_KINDS } = await import('../web/src/cursor.js');
+  assert.equal(cursorKind({}), 'arrow');
+  assert.equal(cursorKind({ hit: { kind: 'menu' } }), 'hot');
+  assert.equal(cursorKind({ hit: { kind: 'key' } }), 'hot');
+  assert.equal(cursorKind({ hit: { kind: 'map' } }), 'target');
+  assert.equal(cursorKind({ hit: { kind: 'map' }, dragging: true }), 'move');
+  assert.equal(cursorKind({ playing: true, idle: 3 }), 'none');
+  assert.equal(cursorKind({ playing: true, idle: 0.5 }), 'arrow');
+  assert.equal(cursorKind({ playing: false, idle: 30 }), 'arrow', 'im Menü bleibt er sichtbar');
+  for (const k of CURSOR_KINDS.filter((x) => x !== 'none')) {
+    const css = cursorCss(k);
+    assert.match(css, /^url\("data:image\/svg\+xml,[^"]+"\) \d+ \d+, [a-z]+$/, k);
+    const svg = decodeURIComponent(css.slice(css.indexOf(',') + 1, css.indexOf('")')));
+    assert.match(svg, /^<svg[^>]*width='32' height='32'[\s\S]*<\/svg>$/, `${k}: gültiges 32-px-SVG`);
+    assert.ok(svg.includes('#ffd33d'), `${k}: Spielgelb`);
+  }
+});
