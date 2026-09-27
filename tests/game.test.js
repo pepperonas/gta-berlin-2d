@@ -145,7 +145,8 @@ test('Teleport in einen noch nicht geladenen Stadtteil: Ziel lädt erst, dann Di
   const t0 = g.world.time;
   press(g, {});
   assert.equal(g.world.time, t0, 'Welt steht, solange nichts geladen ist');
-  await flush(); press(g, {}); await flush(); press(g, {});
+  for (let i = 0; i < 200 && g.world.loading; i++) { await flush(); press(g, {}); }
+  press(g, {});
   assert.ok(!g.world.loading && g.world.time > t0, 'nach dem Laden läuft die Welt');
   assert.ok(g.world.cars.some((c) => c.driver === 'npc'), 'Verkehr aufgebaut');
   // Rathaus Spandau (15 km entfernt): Ziel lädt erst
@@ -155,7 +156,7 @@ test('Teleport in einen noch nicht geladenen Stadtteil: Ziel lädt erst, dann Di
   assert.ok(g.teleport.pending, 'Ziel noch nicht geladen');
   press(g, { confirm: true });
   assert.ok(g.teleport?.pending, 'bestätigen geht erst, wenn das Ziel da ist');
-  for (let i = 0; i < 5 && g.teleport?.pending; i++) { await flush(); press(g, {}); }
+  for (let i = 0; i < 200 && g.teleport?.pending; i++) { await flush(); press(g, {}); }
   assert.ok(g.teleport && !g.teleport.pending, 'Dialog mit Ortsnamen');
   assert.match(g.teleport.name, /\S/);
   press(g, { confirm: true });
@@ -233,7 +234,16 @@ test('Kachel lädt nicht: kein erneuter Versuch in jedem Bild, sondern nach eine
     assert.ok(!c.ready(p.x, p.y));
     offline = false;
     for (const t of c.tiles.values()) t.retryAt = 0; // Pause abgelaufen
-    c.focus('w', p.x, p.y); await new Promise((r) => setTimeout(r, 0));
+    // eingetroffene Kacheln werden in Zeitscheiben eingebaut (je Aufruf von focus), nicht alle auf einmal
+    let steps = 0;
+    for (; steps < 200 && !c.focus('w', p.x, p.y); steps++) await new Promise((r) => setTimeout(r, 0));
     assert.ok(c.ready(p.x, p.y), 'nach der Pause geladen');
+    // Zeitscheiben: ohne Budget genau eine eingetroffene Kachel je Aufruf, die nächste zuerst
+    const q = openCity(realIndex(), (k) => Promise.resolve(sync(k)));
+    q.focuses.set('w', { x: p.x, y: p.y, stamp: 1 });
+    for (const k of ['30_30', '40_30', `${Math.floor(p.x / q.tile)}_${Math.floor(p.y / q.tile)}`]) { const e = { state: 'loading', fails: 0 }; q.tiles.set(k, e); q.inbox.push({ key: k, entry: e, json: sync(k) }); }
+    assert.equal(q.pump(0), 1);
+    assert.equal(q.tiles.get(`${Math.floor(p.x / q.tile)}_${Math.floor(p.y / q.tile)}`).state, 'ready', 'Kachel am Fokus zuerst');
+    assert.equal(q.inbox.length, 2);
   } finally { console.error = orig; }
 });

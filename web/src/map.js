@@ -48,7 +48,7 @@ export function openCity(index, loadTile, { overview = null } = {}) {
     droppedTrees: 0, gen: 0,
     hooks: { edgeAdd: [], edgeRemove: [] },
     // Nachladen
-    available: new Set(index.tiles), tiles: new Map(), reg: new Map(), items: new Map(), focuses: new Map(), clock: 0, loader: loadTile, pinned: new Set(),
+    available: new Set(index.tiles), tiles: new Map(), inbox: [], reg: new Map(), items: new Map(), focuses: new Map(), clock: 0, loader: loadTile, pinned: new Set(),
     _sig: new Map(), _ban: new Map(),
   };
   city.borderIx = ringIndex(city.border);
@@ -58,6 +58,8 @@ export function openCity(index, loadTile, { overview = null } = {}) {
   city.release = (key) => city.focuses.delete(key);
   city.loadArea = (x0, y0, x1, y1, opts) => loadArea(city, x0, y0, x1, y1, opts);
   city.loadAll = (opts) => loadArea(city, 0, 0, city.width, city.height, opts);
+  city.status = (x, y) => loadStatus(city, x, y);
+  city.pump = (ms = PUMP_MS.playing) => pump(city, ms);
   city.unload = (key) => { city.pinned.delete(key); uninstall(city, key); };
   city.list = (layer) => [...(city.items.get(layer) ?? [])];
   city.ready = (x, y, r = STREAM.ready) => tilesAround(city, x, y, r).every((k) => city.tiles.get(k)?.state === 'ready');
@@ -86,8 +88,13 @@ function tilesAround(city, x, y, r) {
   return out;
 }
 
-// Fehlgeschlagene Kacheln erst nach einer Pause erneut anfragen (sonst jedes Bild eine Anfrage und eine Fehlermeldung).
-export const RETRY_MS = [1000, 3000, 10000];
+// Fehlgeschlagene Kacheln erst nach einer kurzen Pause erneut anfragen (sonst jedes Bild eine Anfrage und eine
+// Fehlermeldung); kurz genug, dass das Spiel nach einem Neustart des Servers gleich weiterläuft.
+export const RETRY_MS = [500, 1000, 2000, 3000];
+// Eingetroffene Kacheln werden nicht auf einmal eingebaut, sondern in Zeitscheiben (ms je Aufruf von focus): beim
+// Fahren kaum spürbar, solange die Welt wartet deutlich mehr.
+export const PUMP_MS = { playing: 4, waiting: 30 };
+const now = () => (globalThis.performance?.now ? performance.now() : Date.now());
 
 function request(city, key) {
   const old = city.tiles.get(key);
@@ -96,14 +103,31 @@ function request(city, key) {
   if (res && typeof res.then === 'function') {
     const entry = { state: 'loading', fails: old?.fails ?? 0 };
     city.tiles.set(key, entry);
-    res.then((json) => { if (city.tiles.get(key) === entry) install(city, key, json); })
-      .catch((err) => {
-        if (city.tiles.get(key) !== entry) return;
-        const fails = entry.fails + 1;
-        city.tiles.set(key, { state: 'failed', fails, retryAt: Date.now() + RETRY_MS[Math.min(fails, RETRY_MS.length) - 1] });
-        if (fails === 1) console.error(`Kachel ${key}:`, err); // einmal melden, nicht bei jedem neuen Versuch
-      });
+    res.then((json) => { if (city.tiles.get(key) === entry) { entry.state = 'arrived'; city.inbox.push({ key, entry, json }); } })
+      .catch((err) => { if (city.tiles.get(key) === entry) failed(city, key, entry, err); });
   } else if (res) install(city, key, res);
+}
+
+function failed(city, key, entry, err) {
+  const fails = entry.fails + 1;
+  city.tiles.set(key, { state: 'failed', fails, retryAt: Date.now() + RETRY_MS[Math.min(fails, RETRY_MS.length) - 1], error: String(err?.message ?? err) });
+  if (fails === 1) console.error(`Kachel ${key}:`, err); // einmal melden, nicht bei jedem neuen Versuch
+}
+
+// Eingetroffene Kacheln einbauen, die nächsten zuerst, bis das Zeitbudget verbraucht ist (mindestens eine).
+function pump(city, budgetMs) {
+  if (!city.inbox.length) return 0;
+  const fs = [...city.focuses.values()], T = city.tile;
+  const dist = ({ key }) => { const [tx, ty] = key.split('_').map(Number), cx = (tx + 0.5) * T, cy = (ty + 0.5) * T; let d = Infinity; for (const f of fs) d = Math.min(d, Math.hypot(f.x - cx, f.y - cy)); return d; };
+  city.inbox.sort((a, b) => dist(a) - dist(b));
+  const t0 = now();
+  let n = 0;
+  while (city.inbox.length && (n === 0 || now() - t0 < budgetMs)) {
+    const { key, entry, json } = city.inbox.shift();
+    if (city.tiles.get(key) !== entry) continue; // inzwischen verworfen
+    try { install(city, key, json); n++; } catch (err) { failed(city, key, entry, err); }
+  }
+  return n;
 }
 
 // Fokus (Kamera einer Welt, Teleport-Ziel …): lädt ringsum nach und gibt Fernes frei. true = alles Nötige geladen.
@@ -111,7 +135,17 @@ function focus(city, key, x, y) {
   city.focuses.set(key, { x, y, stamp: ++city.clock });
   for (const k of tilesAround(city, x, y, STREAM.load)) request(city, k);
   if (city.clock % 30 === 0) evict(city);
+  if (city.inbox.length) pump(city, city.ready(x, y) ? PUMP_MS.playing : PUMP_MS.waiting);
   return city.ready(x, y);
+}
+
+// Stand um einen Punkt (für die Ladeanzeige): wie viele Kacheln nötig, schon da, fehlgeschlagen.
+function loadStatus(city, x, y) {
+  const keys = tilesAround(city, x, y, STREAM.ready);
+  const st = keys.map((k) => city.tiles.get(k));
+  const failedTiles = st.filter((t) => t?.state === 'failed');
+  return { needed: keys.length, ready: st.filter((t) => t?.state === 'ready').length, failed: failedTiles.length,
+    retryIn: failedTiles.length ? Math.max(0, Math.min(...failedTiles.map((t) => t.retryAt)) - Date.now()) : 0 };
 }
 
 function evict(city) {

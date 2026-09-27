@@ -185,7 +185,19 @@ export class Hud {
       c.fillStyle = YELLOW; rr(c, x, y, w * Math.min(1, mission.load / MISSION.loadTime), 14, 7); c.fill();
     }
     if (mission.state === 'briefing') this.drawBriefing();
-    if (world.loading) { this.panel(vw / 2 - 150, vh / 2 - 26, 300, 52, 0.8); this.text('Lade Stadtteil …', vw / 2, vh / 2 + 8, { size: 22, align: 'center', weight: 700 }); }
+    if (world.loading) this.drawLoading(world);
+  }
+
+  // Welt wartet auf Kacheln: Fortschritt, oder klarer Hinweis, wenn der Spielserver nicht antwortet.
+  drawLoading(world) {
+    const vw = this.vw, vh = this.vh, st = world.city.status(world.camera.x, world.camera.y);
+    const off = st.failed > 0;
+    const w = off ? 620 : 340, h = off ? 86 : 56;
+    this.panel(vw / 2 - w / 2, vh / 2 - h / 2, w, h, 0.85);
+    if (off) {
+      this.text('Keine Verbindung zum Spielserver', vw / 2, vh / 2 - 8, { size: 22, align: 'center', weight: 800, color: '#ff8a80' });
+      this.text(`Läuft der Server noch (gta2d)? Neuer Versuch in ${Math.ceil(st.retryIn / 1000)} s …`, vw / 2, vh / 2 + 24, { size: 17, align: 'center', weight: 500, color: '#ddd' });
+    } else this.text(`Lade Stadtteil … ${st.ready} / ${st.needed}`, vw / 2, vh / 2 + 8, { size: 22, align: 'center', weight: 700 });
   }
 
   drawMinimap(world, target, x, y, size) {
