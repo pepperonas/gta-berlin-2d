@@ -181,7 +181,9 @@ nach-Weg), `destination`-Tags der ausfahrenden Straße in Fahrtrichtung (`:forwa
 in Weg-Richtung oder auf Einbahnstraßen), sonst eine Verfolgung: gleiche Straße weiter, sonst die geradeste Straße
 bis Klasse 5, bis 4 km, alle 100 m wird der Ortsteil nachgeschlagen; die ersten zwei neuen Ortsteile ab 250 m
 kommen aufs Schild, „Zentrum“ davor, wenn der Endpunkt mehr als 1 km näher an der Mitte liegt (nur außerhalb von
-2,5 km um die Mitte). Bleibt die Straße im Ortsteil, steht ihr Name auf einer weißen Zeile. Standort: 35 m vor der
+2,5 km um die Mitte). Bleibt die Straße im Ortsteil, steht ihr Name auf einer weißen Zeile. Jedes Ziel nur einmal je Schild (`dedupeRows`:
+OSM-Zeilen, dann nach kleinster Abbiegung; leere Zeilen nennen ihre Straße oder entfallen). Verdeckte Tafeln laufen
+wie Fahrzeuge durch `occludersOf` (15 Stichpunkte über die Tafel) und scheinen im verdeckten Teil mit Schrift durch. Standort: 35 m vor der
 Kreuzung (höchstens 70 % der Zufahrt), rechts neben der Fahrbahn, mit `roadClearance` (gemeinsam mit den Pollern)
 vom Fahrbahnrand weggerückt; liegt der Platz in einem Haus, bleibt das Schild ungezeichnet (`vis` 0). Die Tafel
 wird je Schild einmal in dreifacher Auflösung gemalt und danach nur gestempelt; sie reicht vom Pfosten weg von der

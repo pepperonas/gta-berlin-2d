@@ -154,3 +154,59 @@ test('Im Bild: Schilder am Kotti gezeichnet, Tafel als einmal gemaltes Bild, sie
   assert.equal(signBoardX({ x: 100, angle: Math.PI / 2 }, 80), 26);
   assert.equal(signBoardX({ x: 100, angle: 0 }, 80), 60);
 });
+
+test('Jedes Ziel nur einmal je Schild: die wichtigste Zeile bekommt es, sonst Straßenname, sonst weg', async () => {
+  const { dedupeRows } = await import('../tools/osm/signs.mjs');
+  const rows = [
+    { turn: 0.9, dests: ['Neukölln'], street: 'Kottbusser Damm' },
+    { turn: 0.05, dests: ['Neukölln', 'Britz'], street: 'Karl-Marx-Straße' },
+    { turn: -1.5, dests: ['Zentrum', 'Mitte'], street: 'Skalitzer Straße' },
+    { turn: -1.4, dests: ['Zentrum'], street: 'Skalitzer Straße' },
+    { turn: 1.4, dests: ['Treptow'], street: 'X', osm: 1 },
+    { turn: 1.2, dests: ['Treptow'], street: 'X' },
+  ];
+  dedupeRows(rows);
+  // geradeaus (0,05) bekommt Neukölln, die schärfere Rechte fällt auf ihren Straßennamen zurück; die flachere Linke
+  // (−1,4) bekommt Zentrum, die andere behält Mitte; OSM-Beschilderung geht vor, die zweite Treptow-Zeile nennt ihre Straße
+  assert.deepEqual(rows.map((r) => r.dests), [['Kottbusser Damm'], ['Neukölln', 'Britz'], ['Mitte'], ['Zentrum'], ['Treptow'], ['X']]);
+  const two = [{ turn: 0, dests: ['A'], street: 'S' }, { turn: 0.1, dests: ['A'], street: 'S' }];
+  dedupeRows(two);
+  assert.deepEqual(two.map((r) => r.dests), [['A'], ['S']]);
+  const three = [{ turn: 0, dests: ['A'], street: 'S' }, { turn: 0.1, dests: ['A'], street: 'S' }, { turn: 0.2, dests: ['A'], street: 'S' }];
+  dedupeRows(three);
+  assert.equal(three.length, 2, 'nichts mehr übrig: Zeile entfällt');
+  const all = realCity().list('sign');
+  let dup = 0;
+  for (const s of all) { const d = s.rows.flatMap((r) => r.dests); if (new Set(d).size !== d.length) dup++; }
+  assert.equal(dup, 0, `${dup} Schilder nennen ein Ziel doppelt`);
+  assert.ok(all.every((s) => s.rows.length >= 2), 'mindestens zwei Zeilen');
+});
+
+test('Verdeckte Wegweiser: Silhouette mit Beschriftung (die Tafel scheint durch)', async () => {
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 30 }) : () => {}) }); } };
+  const { Renderer } = await import('../web/src/render.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const city = realCity(), w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const ctx = new Proxy({ lineWidth: 1 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'getLineDash') return () => [];
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const r = new Renderer(ctx);
+  // unter den Schildern im Kerngebiet ein verdecktes suchen (Baumkrone oder Haus davor)
+  let found = null;
+  for (const sg of city.list('sign').filter((s) => s.vis).slice(0, 400)) {
+    w.camera.x = sg.x; w.camera.y = sg.y; w.player.x = sg.x + 500; w.player.y = sg.y + 300;
+    r.draw(w, 1280, 720, 1.2);
+    found = r._covered.find((c) => c.board && c.board.b === sg._board);
+    if (found) break;
+  }
+  assert.ok(found, 'ein verdecktes Schild gefunden');
+  assert.ok(found.occ.length > 0 && found.board.w > 0);
+});

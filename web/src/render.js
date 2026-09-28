@@ -753,6 +753,14 @@ export class Renderer {
     for (const p of world.peds) if (near(p.x, p.y) && p.state !== 'dead') addT(p, 0, 0, 0, p.y, false);
     for (const b of world.bikes ?? []) if (near(b.x, b.y)) addT(b, 9, 3.5, b.angle, b.y, false);
     for (const tr of trains) if (tr.mode === 'tram') for (const c of tr.cars) if (near(c.x, c.y)) addT(c, c.L / 2, c.W / 2, c.angle, c.y + 4, false);
+    // Wegweiser: die Tafel (über dem Pfosten) als Rechteck mit Stichpunkten über die ganze Fläche
+    for (const sg of this._signs ?? []) {
+      const b = signBoard(sg), w = b?.w ?? 50, h = b?.h ?? 20, left = signBoardX(sg, w), top = sg.y - SIGN_POST - h;
+      const cx = left + w / 2, cy = top + h / 2, R = Math.hypot(w, h) / 2, pts = [];
+      for (const u of [0, 0.25, 0.5, 0.75, 1]) for (const v of [0, 0.5, 1]) pts.push([left + w * u, top + h * v]);
+      const occ = occludersOf({ x: cx, y: cy, R, key: sg.y, pts }, env);
+      if (occ.length) covered.push({ x: cx, y: cy, R, occ, board: { b, left, top, w, h } });
+    }
     const mine = pcar ? covered.find((c) => c.player) : !pl.dead ? { occ: addT(pl, 0, 0, 0, pl.y, true) } : null;
     this.stats.cover = mine?.occ?.[0]?.kind ?? null;
     this.stats.silhouettes = covered.length;
@@ -1197,6 +1205,16 @@ export class Renderer {
         }
         mask.save(); mask.translate(dx, dy); mask.fill(pathOf(b), 'evenodd'); mask.restore();
       }
+    }
+    if (c.board) { // Wegweiser: die Tafel selbst scheint durch, mit Beschriftung
+      const { b, left, top, w, h } = c.board;
+      sil.globalAlpha = 0.7;
+      if (b) sil.drawImage(b.c, left, top, w, h); else { sil.fillStyle = '#f5c518'; sil.fillRect(left, top, w, h); }
+      sil.globalAlpha = 1; sil.strokeStyle = 'rgba(255,255,255,0.7)'; sil.lineWidth = 1.2; sil.strokeRect(left, top, w, h);
+      sil.setTransform(1, 0, 0, 1, 0, 0); sil.globalCompositeOperation = 'destination-in'; sil.drawImage(this._silMask, 0, 0);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      ctx.drawImage(this._sil, 0, 0, px, px, c.x - R, c.y - R, 2 * R, 2 * R);
+      return;
     }
     sil.translate(c.x, c.y); sil.rotate(c.angle ?? 0);
     silhouettePath(sil, c);

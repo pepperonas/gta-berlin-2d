@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.20.1] – 2026-09-28
+
+### Behoben
+- Wegweiser nannten dasselbe Ziel in mehreren Zeilen (z. B. zweimal „Neukölln“). Jetzt steht jedes Ziel höchstens
+  einmal auf einem Schild: die wichtigste Zeile bekommt es (echte OSM-Beschilderung, dann geradeaus, dann die
+  flachere Abbiegung); eine leer gewordene Zeile nennt ihren Straßennamen, ist auch der vergeben, entfällt sie.
+
+### Hinzugefügt
+- Verdeckte Wegweiser (unter Baumkronen, hinter Häusern) bekommen eine Silhouette mit Beschriftung: im verdeckten Teil
+  scheint die Tafel halbtransparent durch.
+
 ## [0.20.0] – 2026-09-28
 
 ### Hinzugefügt

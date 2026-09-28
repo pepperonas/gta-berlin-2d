@@ -104,10 +104,12 @@ export function buildSigns(opts) {
         const rel = destRels.find((d) => d.from === edges[a.k].id && d.to === edges[r.b.k].id && inC.has(d.via));
         const dests = rel ? rel.text.split(';').map((x) => x.trim()).filter(Boolean).slice(0, 3) : r.dests;
         if (!dests.length) continue;
-        rows.push({ dir: r.dir, turn, dests, ref: rel?.ref ?? r.ref, osm: rel ? 1 : r.osm });
+        rows.push({ dir: r.dir, turn, dests, ref: rel?.ref ?? r.ref, osm: rel ? 1 : r.osm, street: r.name >= 0 ? names[r.name] : '' });
       }
+      dedupeRows(rows);
       if (rows.length < 2) continue;
       rows.sort((p, q) => p.turn - q.turn); // links nach rechts
+      for (const r of rows) delete r.street;
       const pos = placeSign(a, inDir);
       signs.push({ x: pos.x, y: pos.y, angle: inDir, name: jName, rows, vis: pos.ok ? 1 : 0 });
       stats.signs++; stats.rows += rows.length; if (!pos.ok) stats.hidden++;
@@ -198,6 +200,23 @@ export function buildSigns(opts) {
     }
   }
   return { signs, stats };
+}
+
+// Jedes Ziel höchstens einmal je Schild: die wichtigste Zeile bekommt es (echte Beschilderung, dann geradeaus, dann die
+// kleineren Abbiegungen); leer gewordene Zeilen nennen ihren Straßennamen, ist auch der vergeben, entfallen sie.
+export function dedupeRows(rows) {
+  const order = [...rows].sort((p, q) => (q.osm ?? 0) - (p.osm ?? 0) || Math.abs(p.turn) - Math.abs(q.turn));
+  const used = new Set(), keep = new Set();
+  for (const r of order) {
+    r.dests = r.dests.filter((d) => !used.has(d));
+    if (!r.dests.length && r.street && !used.has(r.street)) r.dests = [r.street];
+    if (!r.dests.length) continue;
+    for (const d of r.dests) used.add(d);
+    keep.add(r);
+  }
+  const out = rows.filter((r) => keep.has(r));
+  rows.length = 0; rows.push(...out);
+  return rows;
 }
 
 // Hilfen für den Build: Relationen destination_sign → { from, via, to, text, ref }
