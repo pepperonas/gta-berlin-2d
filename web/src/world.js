@@ -25,6 +25,7 @@ import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js'
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
+import { stepLevel, initialLevel } from './levels.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -278,8 +279,8 @@ export function openSpot(w, x, y, car) {
 
 export function teleportTo(w, spot) {
   const car = playerCar(w), p = w.player;
-  if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0 });
-  p.x = spot.x; p.y = spot.y;
+  if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0, lvl: undefined });
+  p.x = spot.x; p.y = spot.y; p.lvl = undefined; // Ebene neu von der Landestelle
   w.camera.x = spot.x; w.camera.y = spot.y;
   // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
   resetPopulation(w, car);
@@ -441,6 +442,20 @@ function fleeingDriver(w, car, fromX, fromY, secs) {
   return ped;
 }
 
+// Ebenen aller Objekte fortschreiben; wer noch keine hat (neu erzeugt), bekommt sie von der Fläche, auf der er steht
+function updateLevels(w) {
+  const city = w.city;
+  const upd = (o, angle) => { if (o.lvl == null) o.lvl = initialLevel(city, o.x, o.y, angle); else stepLevel(city, o); };
+  for (const c of w.cars) {
+    if (c.lvl != null && c.role === 'curb' && Math.abs(c.vx) + Math.abs(c.vy) < 2) continue; // schlafende Parker
+    upd(c, c.angle);
+  }
+  for (const ped of w.peds) upd(ped, ped.angle ?? null);
+  for (const b of w.bikes ?? []) upd(b, b.angle);
+  const p = w.player, pc = playerCar(w);
+  if (pc) p.lvl = pc.lvl; else if (!p.dead) upd(p, null);
+}
+
 function updatePlayerOnFoot(w, input, dt) {
   const p = w.player;
   if (p.stun > 0) { p.stun -= dt; return; }
@@ -515,6 +530,7 @@ export function updateWorld(w, input, dt) {
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
 
   if (pc) { p.x = pc.x; p.y = pc.y; p.angle = pc.angle; }
+  updateLevels(w); // Ebene je Objekt (Brücke, Boden, Unterführung) – levels.js
 
   // Wracks: KI-Fahrer steigt aus und flieht, Wrack verschwindet später außer Sicht.
   for (const c of w.cars) {
@@ -635,7 +651,7 @@ function updateKnockout(w, dt) {
   const fee = Math.floor(w.money * HOSPITAL_FEE);
   w.money -= fee;
   teleportTo(w, spot ?? { x: w.city.places.playerSpawn.x, y: w.city.places.playerSpawn.y, angle: 0 });
-  Object.assign(p, { dead: false, hp: PLAYER_HP, stun: 0, sinceHurt: 99, hurtFlash: 0, reloadT: 0 });
+  Object.assign(p, { dead: false, hp: PLAYER_HP, stun: 0, sinceHurt: 99, hurtFlash: 0, reloadT: 0, lvl: undefined });
   w.notice = { text: `Im Krankenhaus aufgewacht${h.name ? ': ' + h.name : ''}${fee ? ` (−${fee.toLocaleString('de-DE')} €)` : ''}`, t: 5 };
   w.events.push({ type: 'respawn', x: p.x, y: p.y, hospital: h.name ?? null, fee });
   const m = w.mission;

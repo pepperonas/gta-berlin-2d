@@ -7,7 +7,7 @@
 // Koordinaten bleiben global (px), Linien sind delta-kodiert, Namen je Kachel in einer eigenen Tabelle.
 import { simplify, ringArea } from './geo.mjs';
 import { delta, clipRing } from '../../web/src/geom.js';
-import { AREA_KIND, POI_CAT, WALL_KIND } from '../../web/src/citycodes.js';
+import { AREA_KIND, POI_CAT, WALL_KIND, packLvl } from '../../web/src/citycodes.js';
 
 export const TILE_PX = 6400; // 640 m; Vielfaches aller Rasterweiten im Spiel (map.js)
 
@@ -39,7 +39,7 @@ export function tileCity(g, { tile, meta, places }) {
     let t = tiles.get(k);
     if (!t) tiles.set(k, t = { tx, ty, names: [], nameIdx: new Map(), vmap: new Map(), vid: [], vxy: [], vtrim: [],
       edges: [], junctions: [], paths: [], rails: [], buildings: [], water: [], areas: [], walls: [], fences: [],
-      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], signs: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
+      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], signs: [], portals: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
     return t;
   };
   const cx = (x) => Math.min(NX - 1, Math.max(0, Math.floor(x / tile))), cy = (y) => Math.min(NY - 1, Math.max(0, Math.floor(y / tile)));
@@ -56,19 +56,19 @@ export function tileCity(g, { tile, meta, places }) {
   // Kfz/Tag ÷ 100, Brückenlücke dm (optional; + rechts der Kantenrichtung)]
   g.edges.forEach((ed, gid) => {
     const pts = [g.vertices[2 * ed.a], g.vertices[2 * ed.a + 1], ...ed.p, g.vertices[2 * ed.b], g.vertices[2 * ed.b + 1]];
-    const flags = ed.br | (ed.in << 1) | ((ed.blocked ? 1 : 0) << 2) | (ed.pass << 3);
+    const flags = ed.br | (ed.in << 1) | ((ed.blocked ? 1 : 0) << 2) | (ed.pass << 3) | (packLvl(ed.lvl ?? 0) << 4); // Ebene: Bits 4–6
     const x = ed.c <= 8 ? ed.x : [ed.x[10], ed.x[11]]; // Nebenwege: nur Tempo + Belag
     each(bboxOf(pts, ed.w / 10 * S / 2 + S), (t) => {
       t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1), ...(ed.fill ? [Math.round(ed.fill / S * 10)] : [])]);
     });
   });
-  // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1, kleinste Klasse]
-  for (const j of g.junctions) each([j.x - j.r, j.y - j.r, j.x + j.r, j.y + j.r], (t) => { vtx(t, j.v); t.junctions.push([j.v, j.x, j.y, j.r, j.bridge | (j.cobble << 1), j.cls]); });
+  // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1 | höchste Ebene << 2 | tiefste Ebene << 5, kleinste Klasse]
+  for (const j of g.junctions) each([j.x - j.r, j.y - j.r, j.x + j.r, j.y + j.r], (t) => { vtx(t, j.v); t.junctions.push([j.v, j.x, j.y, j.r, j.bridge | (j.cobble << 1) | (packLvl(j.hi ?? 0) << 2) | (packLvl(j.lo ?? 0) << 5), j.cls]); });
 
   let gid = 0; // gemeinsame Nummernfolge für alle mehrfach abgelegten Linien und Flächen
   const lines = (list, maxLen, rec) => { for (const it of list) for (const piece of chunkPolyline(it.p, maxLen)) { const id = gid++; each(bboxOf(piece), (t) => rec(t, id, it, piece)); } };
-  lines(g.paths, tile, (t, id, it, p) => t.paths.push([id, it.br | (it.pass << 1), delta(p)]));
-  lines(g.rails, tile, (t, id, it, p) => t.rails.push([id, it.br, it.sub, delta(p)]));
+  lines(g.paths, tile, (t, id, it, p) => t.paths.push([id, it.br | (it.pass << 1) | (packLvl(it.lvl ?? 0) << 2), delta(p)])); // Ebene: Bits 2–4
+  lines(g.rails, tile, (t, id, it, p) => t.rails.push([id, it.br, it.sub, delta(p), ...(it.lvl ? [it.lvl] : [])])); // Ebene optional
   lines(g.walls.map((p, i) => ({ p, kind: g.wallKind?.[i] ?? 0 })), tile / 2, (t, id, it, p) => t.walls.push([id, it.kind, delta(p)]));
   lines(g.border.map((r) => ({ p: [...r, r[0], r[1]], kind: WALL_KIND.border })), tile / 2, (t, id, it, p) => t.walls.push([id, it.kind, delta(p)]));
   lines(g.access.fences.map(([k, p]) => ({ p, k })), tile / 2, (t, id, it, p) => t.fences.push([id, it.k, delta(p)]));
@@ -106,7 +106,9 @@ export function tileCity(g, { tile, meta, places }) {
     }
   };
   polys(g.water, (t, id, f, rings) => t.water.push([id, rings]));
-  polys(g.areas, (t, id, f, rings) => t.areas.push([id, f.k, rings]));
+  polys(g.areas, (t, id, f, rings) => t.areas.push([id, f.k, rings, ...(f.lvl ? [f.lvl] : [])])); // Brückendeck: Ebene
+  // Portale (Ebenenwechsel): [x, y, Radius, tiefste, höchste Ebene], mehrfach abgelegt wie Kreuzungen
+  for (const q of g.portals ?? []) each([q.x - q.r, q.y - q.r, q.x + q.r, q.y + q.r], (t) => t.portals.push([q.x, q.y, q.r, q.lo, q.hi]));
 
   // Punkte
   for (const tr of g.trees) { const t = home(tr.x, tr.y); t.trees.xy.push(tr.x, tr.y); t.trees.g.push(tr.g); t.trees.c.push(tr.c); t.trees.r.push(tr.r); }
@@ -150,7 +152,7 @@ export function tileCity(g, { tile, meta, places }) {
       walls: t.walls, fences: t.fences,
       trees: { xy: delta(t.trees.xy), g: t.trees.g, c: t.trees.c, r: t.trees.r },
       barriers: t.barriers, posts: t.posts, crossings: t.crossings, signals: t.signals, turnBans: t.turnBans,
-      pois: t.pois, furn: t.furn, ...(t.signs.length ? { signs: t.signs } : {}), ...(t.dens ? { dens: t.dens } : {}),
+      pois: t.pois, furn: t.furn, ...(t.signs.length ? { signs: t.signs } : {}), ...(t.portals.length ? { portals: t.portals } : {}), ...(t.dens ? { dens: t.dens } : {}),
       addresses: { xy: delta(t.addresses.xy), street: t.addresses.street, nr: t.addresses.nr },
     });
   }

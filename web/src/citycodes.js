@@ -48,3 +48,9 @@ export function packLook({ shape = 0, rmat = 0, wmat = 0, sub = 0, bez = 0 }) {
 export function unpackLook(v = 0) {
   return { shape: v & 15, rmat: (v >> 4) & 7, wmat: (v >> 7) & 7, sub: (v >> 10) & 7, bez: (v >> 13) & 15 };
 }
+
+// Ebenen (Höhenordnung aus OSM, tools/osm/levels.mjs): 0 = Boden, ≥ 1 Brücken, < 0 offene Unterführungen.
+// In Kachel-Bitfeldern als 3 Bit mit Vorzeichen.
+export const LVL_MIN = -2, LVL_MAX = 3;
+export const packLvl = (l) => (l | 0) & 7;
+export const unpackLvl = (v) => (((v | 0) & 7) << 29) >> 29;

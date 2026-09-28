@@ -4,6 +4,29 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.22.0] – 2026-09-28
+
+### Hinzugefügt
+- Ebenen aus OpenStreetMap: OSM kennt keine Höhen für Wege, aber die Höhenordnung (`bridge`, `layer`, `tunnel`).
+  Jede Straße, jeder Weg, jedes Gleis und jedes Brückendeck hat jetzt eine Ebene: Brücke ≥ 1, Boden 0, offene
+  Unterführung oder Einschnitt negativ (`layer=-1` ohne Tunnel); echte Tunnel bleiben draußen, `bridge=no` zählt nicht
+  als Brücke. Offene Unterführungen, die der Build bisher wegwarf, sind jetzt in der Karte (770 Straßenstücke), z. B.
+  die Tamara-Danz-Straße unter der Rampe der Warschauer Brücke: sie hängt an der Helen-Ernst-Straße, nicht an der Brücke.
+- Portale: Knoten, an denen Wege verschiedener Ebenen zusammentreffen (Rampenfuß, Treppe; 6 463 in Berlin). Nur dort
+  wechselt ein Auto, eine Person, ein Rad oder die Spielfigur die Ebene – nach der Fläche, auf der es wirklich ist;
+  wer unter oder über einer Brücke kreuzt, bleibt auf seiner Ebene.
+- Zeichnen nach Ebenen: erst Unterführungen, dann Boden, dann Brücken. Was unter einer höheren Fläche liegt (Auto in
+  der Unterführung, Passant unter der Brücke, Straßenbahn unter der Straßenbrücke), wird vor der Brücke gezeichnet
+  und bekommt dort, wo sie es verdeckt, eine Silhouette. Straßenbahngleise auf Brücken liegen oben, Zäune, Poller und
+  Stadtmöbel am Boden unter der Brücke.
+
+### Geändert
+- Die Brüstung einer Brücke endet am Rampenfuß gerade statt mit einem runden Bogen über der Straße darunter.
+
+### Bekannt
+- Kollisionen, Verkehr und Oberfläche wissen noch nichts von Ebenen (kommt mit 0.23.0); bis dahin bleiben die
+  bisherigen Zuschnitte der Wände unter Brücken.
+
 ## [0.21.1] – 2026-09-28
 
 ### Behoben

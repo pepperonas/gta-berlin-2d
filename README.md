@@ -181,7 +181,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 233 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 239 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -333,7 +333,13 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 233 automatischen Tests grün, darunter:
+- Alle 239 automatischen Tests grün, darunter:
+  - Ebenen: `levelOf` (Brücke, Unterführung, Tunnel, `bridge=no`, Klemmen) und die Bits im Kachelformat; an der
+    Warschauer Brücke liegt die Brücke oben, die Tamara-Danz-Straße als Unterführung darunter, beide ohne gemeinsamen
+    Knoten, verbunden nur über Portale; wer die Rampe hinauffährt, ist oben, wer unten durchläuft, bleibt unten; im
+    Portal bleibt man auf der eigenen Fahrbahn, auch wenn die Rampe näher liegt; ein Auto unter der Brücke wird vor ihr
+    gezeichnet und bekommt eine Silhouette, eins auf der Brücke nicht (8 Mutationsproben, alle erkannt; eine zunächst
+    blinde führte zu einem eigenen Portal-Test);
   - keine unsichtbare Wand (Ufer, Gleisrand, Geländer) auf befahrbarer Fläche – Kerngebiet und sieben Brücken,
     an denen es klemmte; die Oberbaumbrücke ist über die ganze Breite (beide Richtungen, Lücke, Radwege) mit dem Auto
     befahrbar; Punkttest der Fahrfläche und Zuschnitt (vier Mutationsproben, alle erkannt);

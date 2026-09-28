@@ -10,6 +10,7 @@ import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, u
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
 import { buildingLook } from './looks.mjs';
+import { levelOf, isBridge } from './levels.mjs';
 import { buildSigns, destinationRelations } from './signs.mjs';
 import { ringIndex, insideIndex, pointInRings } from '../../web/src/geom.js';
 import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA, FURN_KIND, DENS_CELL_M, DTV_ESTIMATE, packLook, BEZIRKE } from '../../web/src/citycodes.js';
@@ -263,7 +264,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       if (k < 0) continue;
       const rings = cleanRings(poly, 0.5 * S);
       // winzige Flächen (Beete, Baumscheiben < 15 m²) weglassen – im Spiel nicht sichtbar, kosten aber Platz
-      if (rings.length && rings.some((r) => r.outer) && Math.abs(ringArea(rings[0].pts)) >= 15 * S * S) areas.push({ id: poly.id, k, rings });
+      if (rings.length && rings.some((r) => r.outer) && Math.abs(ringArea(rings[0].pts)) >= 15 * S * S) areas.push({ id: poly.id, k, rings, lvl: k === AREA_KIND.bridge ? Math.max(1, Math.round(num(t.layer)) || 1) : 0 });
     }
   }
   polygons.length = 0;
@@ -283,12 +284,12 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
     const t = el.tags;
     if (!t) continue;
     if (t.highway) {
-      if (t.area === 'yes' || t.tunnel === 'culvert' || t.tunnel === 'yes') continue; // Tordurchfahrten (building_passage) bleiben
-      if (num(t.layer) < 0 && !t.bridge) continue;
+      // Tunnel spielen nicht mit; offene Unterführungen (layer < 0) und Tordurchfahrten schon (Ebene: levels.mjs)
+      if (t.area === 'yes' || levelOf(t) === null) continue;
       const base = t.highway.replace(/_link$/, '');
       if (ROAD_CLASS[base] !== undefined) roadWays.push({ el, base });
       else if (PATHS.has(t.highway) && t.footway !== 'sidewalk' && t.footway !== 'crossing' && t.cycleway !== 'crossing') pathWays.push(el);
-    } else if (t.railway && ['rail', 'light_rail', 'subway'].includes(t.railway) && t.tunnel !== 'yes' && !(num(t.layer) < 0)) {
+    } else if (t.railway && ['rail', 'light_rail', 'subway'].includes(t.railway) && levelOf(t) !== null) {
       railWays.push(el);
     }
   }
@@ -330,7 +331,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       PARK_ORIENT.indexOf(cs.right.orient), dm(cs.left.cycle), dm(cs.right.cycle), cs.maxspeed, cs.surface, cs.lit | (cs.gaslight << 1) | (busContra << 2)];
     if (cs.left.track || cs.right.track) x.push(dm(cs.left.track ?? 0), dm(cs.right.track ?? 0)); // Radwege neben der Fahrbahn (dm)
     const name = nameOf(t.name ?? t.ref ?? '');
-    const bridge = t.bridge && t.bridge !== 'no' ? 1 : 0;
+    const bridge = isBridge(t) ? 1 : 0, lvl = levelOf(t);
     // Erfasste Merkmale (für den Abdeckungsbericht): gemessen/getaggt statt Standardwert
     const tagged = { width: !!(t['width:carriageway'] || t.width), parking: Object.keys(t).some((k) => k.startsWith('parking')), maxspeed: !!t.maxspeed, surface: !!t.surface, lanes: !!t.lanes };
     let start = 0;
@@ -339,7 +340,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
         const seg = ids.slice(start, i + 1);
         const pts = simplify(flat(seg), 0.5 * S);
         if (seg.length >= 2 && (pts[0] !== pts[pts.length - 2] || pts[1] !== pts[pts.length - 1])) {
-          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id, x, ids: seg, pass: t.tunnel === 'building_passage' ? 1 : 0, tagged, rb: t.junction === 'roundabout' || t.junction === 'circular' ? 1 : 0 });
+          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id, x, ids: seg, pass: t.tunnel === 'building_passage' ? 1 : 0, tagged, rb: t.junction === 'roundabout' || t.junction === 'circular' ? 1 : 0, lvl });
         }
         start = i;
       }
@@ -355,8 +356,8 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   }
   step(`${edges.length} Straßenkanten, ${vertices.length / 2} Knoten`);
 
-  const paths = pathWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, pass: el.tags.tunnel === 'building_passage' ? 1 : 0, p: simplify(flat(el.nodes), 0.8 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
-  const rails = railWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, sub: el.tags.railway === 'subway' ? 1 : 0, ids: el.nodes, p: simplify(flat(el.nodes), 0.5 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
+  const paths = pathWays.map((el) => ({ br: isBridge(el.tags) ? 1 : 0, lvl: levelOf(el.tags), pass: el.tags.tunnel === 'building_passage' ? 1 : 0, ids: el.nodes, p: simplify(flat(el.nodes), 0.8 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
+  const rails = railWays.map((el) => ({ br: isBridge(el.tags) ? 1 : 0, lvl: levelOf(el.tags), sub: el.tags.railway === 'subway' ? 1 : 0, ids: el.nodes, p: simplify(flat(el.nodes), 0.5 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
 
   // --- Wände: Ufer und Gleise, an Brücken/Übergängen aufgeschnitten --------------------
   const offsetLine = (pts, d) => {
@@ -385,6 +386,9 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   const trackOf = (ed, side) => (ed.x.length > 13 ? (side < 0 ? ed.x[13] : ed.x[14]) / 10 * S : 0);
   const reachOf = (ed, side) => ed.w / 10 * S / 2 + (ed.fill && Math.sign(ed.fill) === side ? Math.abs(ed.fill) : 0) + (trackOf(ed, side) ? 0.4 * S + trackOf(ed, side) : 0);
   const junctions = junctionsOf(edges, vertices, S);
+  // Portale: Knoten, die Wege verschiedener Ebenen teilen (Rampenende, Brückenkopf, Treppe) – nur dort wechselt man die Ebene
+  const portals = portalsOf(edges, paths, P, S);
+  step(`Ebenen: ${edges.filter((e) => e.lvl > 0).length} Brückenkanten, ${edges.filter((e) => e.lvl < 0).length} Unterführungskanten, ${portals.length} Portale`);
   // Korridore einer Kante: Fahrbahn auf der Achse, dazu je Seite das Band bis zur Reichweite (Lücke, Radweg)
   const surfaceBands = (ed, margin, id, { tracks = true } = {}) => {
     const p = edgePts(ed), half = ed.w / 10 * S / 2, out = [];
@@ -531,7 +535,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
 
   const g = {
     S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, trees, kieze, pois, addresses, junctions, trim, furniture, dens,
-    border, bezirke, districts, access: access.out, signs,
+    border, bezirke, districts, access: access.out, signs, portals,
   };
   const meta = {
     version: 3, scale: S, width: W, height: H, origin: { lat0, lon0, bbox: [s, w, n, e] },
@@ -595,9 +599,26 @@ export function junctionsOf(edges, vertices, S) {
     if (es.length === 2) { let d = heading(es[1], v) - heading(es[0], v) - Math.PI; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; corner = Math.abs(d) > 0.5; }
     if (!corner) continue;
     const r = Math.round(Math.max(...es.map((ed) => ed.w / 10 * S / 2)) + 2 * S);
-    out.push({ v, x: vx(v), y: vy(v), r, bridge: es.some((ed) => ed.br) ? 1 : 0, cobble: es.every((ed) => ed.x[11] === 1) ? 1 : 0, cls: Math.min(...es.map((ed) => ed.c)) });
+    const lv = es.map((ed) => ed.lvl ?? 0);
+    out.push({ v, x: vx(v), y: vy(v), r, bridge: es.some((ed) => ed.br) ? 1 : 0, cobble: es.every((ed) => ed.x[11] === 1) ? 1 : 0, cls: Math.min(...es.map((ed) => ed.c)), lo: Math.min(...lv), hi: Math.max(...lv) });
   }
   return out.sort((a, b) => a.v - b.v);
+}
+
+// Portale: [x, y, Radius px, tiefste Ebene, höchste Ebene] je OSM-Knoten, an dem Straßen/Wege verschiedener Ebenen
+// zusammenkommen. Radius: breiteste halbe Straßenbreite + 2 m, nur Wege 2,5 m.
+export function portalsOf(edges, paths, P, S) {
+  const at = new Map();
+  const add = (id, lvl, half) => { let e = at.get(id); if (!e) at.set(id, e = { lo: lvl, hi: lvl, half: 0 }); e.lo = Math.min(e.lo, lvl); e.hi = Math.max(e.hi, lvl); e.half = Math.max(e.half, half); };
+  for (const ed of edges) for (const id of ed.ids) add(id, ed.lvl ?? 0, ed.w / 10 * S / 2);
+  for (const pa of paths) for (const id of pa.ids ?? []) add(id, pa.lvl ?? 0, 0);
+  const out = [];
+  for (const [id, e] of at) {
+    if (e.lo === e.hi) continue;
+    const p = P(id); if (!p) continue;
+    out.push({ x: p[0], y: p[1], r: Math.round(e.half ? e.half + 2 * S : 2.5 * S), lo: e.lo, hi: e.hi });
+  }
+  return out.sort((a, b) => a.x - b.x || a.y - b.y);
 }
 
 // Spurkürzung an Kreuzungen (px): Knoten mit ≥ 3 befahrbaren Kanten → größte halbe Breite + 1 m (wie roadgraph.js).

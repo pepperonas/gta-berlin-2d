@@ -10,7 +10,7 @@
 import { undelta, pointInRings, signedArea, segDist2, bboxOf, polylineLength, projectOnPolyline, ringIndex, insideIndex, pointInRing } from './geom.js';
 import { SpatialHash } from './collision.js';
 import { decodeSign } from './signs.js';
-import { WALL_KIND, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK_ORIENT, SURFACE, TREE_GENERA } from './citycodes.js';
+import { WALL_KIND, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK_ORIENT, SURFACE, TREE_GENERA, unpackLvl } from './citycodes.js';
 
 const WALL_NAMES = Object.fromEntries(Object.entries(WALL_KIND).map(([k, v]) => [v, k]));
 
@@ -47,7 +47,7 @@ export function openCity(index, loadTile, { overview = null } = {}) {
     parked: pl.parked ?? [], crates: pl.crates ?? [], timeLimit: pl.timeLimit,
     overview,
     nodes: new Map(), edges: new Map(), signals: new Set(), turnBans: new Set(),
-    render: new SpatialHash(640), edgeSegs: new SpatialHash(320), polys: new SpatialHash(320), solids: new SpatialHash(128),
+    render: new SpatialHash(640), edgeSegs: new SpatialHash(320), polys: new SpatialHash(320), solids: new SpatialHash(128), portals: new SpatialHash(256),
     poiHash: new SpatialHash(400), addrHash: new SpatialHash(400), dens: new Map(),
     droppedTrees: 0, droppedPosts: 0, gen: 0,
     hooks: { edgeAdd: [], edgeRemove: [] },
@@ -219,7 +219,7 @@ function install(city, key, json) {
       left: { park: x[2], parkW: d(x[3]), orient: PARK_ORIENT[x[4]] ?? 'parallel', cycle: d(x[8]), track: d(x[13] ?? 0) },
       right: { park: x[5], parkW: d(x[6]), orient: PARK_ORIENT[x[7]] ?? 'parallel', cycle: d(x[9]), track: d(x[14] ?? 0) },
       maxspeed: x[10], surface: x[11], lit: !!(x[12] & 1), gaslight: !!(x[12] & 2), busContra: !!(x[12] & 4) };
-    const e = { id: gid, a: A.id, b: B.id, cls, w: d(w), cs, name: nm(n), oneway: o, bridge: !!(flags & 1), inside: !!(flags & 2),
+    const e = { id: gid, a: A.id, b: B.id, cls, w: d(w), cs, name: nm(n), oneway: o, bridge: !!(flags & 1), inside: !!(flags & 2), lvl: unpackLvl(flags >> 4),
       blocked: !!(flags & 4), passage: !!(flags & 8), pts, len: polylineLength(pts), bbox: bboxOf(pts, {}), layer: 'edge',
       dtv: Math.abs(dtv100) * 100, dtvMeasured: dtv100 > 0, fill: d(fill) }; // fill: Lücke zur Gegenfahrbahn auf Brücken (px, + rechts) // Kfz je Werktag (gezählt oder nach Klasse geschätzt)
     city.edges.set(gid, e);
@@ -247,17 +247,18 @@ function install(city, key, json) {
 
   // Kreuzungsflächen: Asphalt bis zum Eckradius, sonst schneiden abbiegende Autos über den Bordstein.
   for (const [v, x, y, rad, fl, cls] of json.junctions) acquire(city, t, 'j' + v, (r) => {
-    const j = { x, y, r: rad, node: v, bridge: !!(fl & 1), cobble: !!(fl & 2), layer: 'junction' };
+    const j = { x, y, r: rad, node: v, bridge: !!(fl & 1), cobble: !!(fl & 2), hi: unpackLvl(fl >> 2), lo: unpackLvl(fl >> 5), layer: 'junction' };
+    j.lvl = j.hi;
     const box = { x: x - rad, y: y - rad, w: 2 * rad, h: 2 * rad };
     put(r, city.render, j, box);
-    put(r, city.edgeSegs, { e: { w: 2 * rad, cls, cs: { surface: j.cobble ? SURFACE.cobble : SURFACE.asphalt }, junction: j }, ax: x, ay: y, bx: x, by: y }, box);
+    put(r, city.edgeSegs, { e: { w: 2 * rad, cls, lvl: j.hi, lo: j.lo, cs: { surface: j.cobble ? SURFACE.cobble : SURFACE.asphalt }, junction: j }, ax: x, ay: y, bx: x, by: y }, box);
     track(city, 'junction', j);
     r.drop = () => untrack(city, 'junction', j);
   });
 
   const line = (layer, props, p) => { const pts = undelta(p); return { ...props, pts, bbox: bboxOf(pts, {}), layer }; };
-  for (const [gid, fl, p] of json.paths) acquire(city, t, 'g' + gid, (r) => { const f = line('path', { bridge: !!(fl & 1), passage: !!(fl & 2) }, p); put(r, city.render, f, f.bbox); track(city, 'path', f); r.drop = () => untrack(city, 'path', f); });
-  for (const [gid, br, sub, p] of json.rails) acquire(city, t, 'g' + gid, (r) => { const f = line('rail', { bridge: !!br, subway: !!sub }, p); put(r, city.render, f, f.bbox); track(city, 'rail', f); r.drop = () => untrack(city, 'rail', f); });
+  for (const [gid, fl, p] of json.paths) acquire(city, t, 'g' + gid, (r) => { const f = line('path', { bridge: !!(fl & 1), passage: !!(fl & 2), lvl: unpackLvl(fl >> 2) }, p); put(r, city.render, f, f.bbox); track(city, 'path', f); r.drop = () => untrack(city, 'path', f); });
+  for (const [gid, br, sub, p, lvl = 0] of json.rails) acquire(city, t, 'g' + gid, (r) => { const f = line('rail', { bridge: !!br, subway: !!sub, lvl }, p); put(r, city.render, f, f.bbox); track(city, 'rail', f); r.drop = () => untrack(city, 'rail', f); });
   for (const [gid, k, p] of json.fences) acquire(city, t, 'g' + gid, (r) => { const f = line('fence', { kind: k }, p); put(r, city.render, f, f.bbox); track(city, 'fence', f); r.drop = () => untrack(city, 'fence', f); });
 
   // Wände (Ufer, Gleise, Geländer, Zäune) und die Stadtgrenze: nur Kollision
@@ -300,7 +301,9 @@ function install(city, key, json) {
     if (gid >= 0) acquire(city, t, 'g' + gid, create); else own(t, create);
   };
   for (const [gid, rings] of json.water) area(gid, {}, rings, 'water');
-  for (const [gid, kind, rings] of json.areas) area(gid, { kind }, rings, 'area');
+  for (const [gid, kind, rings, lvl = 0] of json.areas) area(gid, { kind, lvl }, rings, 'area');
+  // Portale (Ebenenwechsel)
+  for (const [x, y, rad, lo, hi] of json.portals ?? []) acquire(city, t, `p${x},${y}`, (r) => { const q = { x, y, r: rad, lo, hi, layer: 'portal' }; put(r, city.portals, q, { x: x - rad, y: y - rad, w: 2 * rad, h: 2 * rad }); track(city, 'portal', q); r.drop = () => untrack(city, 'portal', q); });
 
   // Poller und Tore
   const B = json.barriers;

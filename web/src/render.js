@@ -26,7 +26,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
-import { occludersOf, samplePoints } from './occlusion.js';
+import { occludersOf, samplePoints, levelSurfaces, surfacesOver, trackLevel } from './occlusion.js';
 import { isStreet } from './signs.js';
 import { wallColor, roofColors } from './buildcolors.js';
 import { WEAPONS } from './combat.js';
@@ -596,93 +596,94 @@ export class Renderer {
       ctx.strokeStyle = '#6f6a60'; ctx.lineWidth = 3; ctx.stroke(shoreOf(wa));
     }
 
-    // 2b) Brückendecks liegen über dem Wasser (Mauerwerk mit dunkler Kante)
-    for (const a of areas) if (a.kind === AREA_KIND.bridge) {
-      ctx.fillStyle = AREA_COLOR[AREA_KIND.bridge]; ctx.fill(pathOf(a), 'evenodd');
-      const pl = tex('plaza', null); if (pl) { ctx.globalAlpha = 0.35; ctx.fillStyle = pl; ctx.fill(pathOf(a), 'evenodd'); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = '#5a4c40'; ctx.lineWidth = 3; ctx.stroke(pathOf(a));
+    // 2b–4) Ebene für Ebene (OSM layer/bridge): Unterführungen, Boden, Brücken. Nach jeder Ebene kommen die Fahrzeuge
+    // und Menschen, die unter einer höheren Fläche liegen – die Brücke wird danach über sie gezeichnet.
+    const lv = (f) => f.lvl ?? 0;
+    const decks = areas.filter((a) => a.kind === AREA_KIND.bridge);
+    edges.sort((a, b) => (lv(a) - lv(b)) || (b.cls - a.cls));
+    const levels = [...new Set([0, ...edges.map(lv), ...paths.map(lv), ...junctions.map((j) => j.lvl ?? 0), ...decks.map((a) => Math.max(1, lv(a)))])].sort((a, b) => a - b);
+    const minLvl = levels[0];
+    const surfaces = levels.length > 1 ? levelSurfaces({ edges, paths, junctions, decks }, minLvl + 1) : [];
+    const upper = surfaces.filter((s) => s.lvl >= 1);
+    const ground = [];
+    for (const e of edges) if (lv(e) === 0) ground.push({ kind: 'road', lvl: 0, pts: e.pts, half: e.w / 2, bbox: e.bbox });
+    for (const j of junctions) if ((j.lvl ?? 0) === 0) ground.push({ kind: 'disc', lvl: 0, x: j.x, y: j.y, r: j.r, bbox: { x: j.x - j.r, y: j.y - j.r, w: 2 * j.r, h: 2 * j.r } });
+    const portalQ = this._pq ??= [];
+    const inPortal = (x, y) => { for (const p of city.portals?.query({ x: x - 1, y: y - 1, w: 2, h: 2 }, portalQ) ?? []) if ((x - p.x) ** 2 + (y - p.y) ** 2 <= p.r * p.r) return true; return false; };
+    const movers = this._movers = this.collectMovers(world, v, wx, L, t, upper, ground);
+    for (const m of movers) {
+      const over = surfaces.length ? surfacesOver(m.pts, m.lvl, surfaces, inPortal, []) : [];
+      m.over = over; m.under = over.length ? Math.min(...over.map((o) => o.lvl)) : Infinity;
     }
-
-    // 3) Wege (Parks, Fußwege) und ebenerdige Gleise
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
-    for (const p of paths) if (!p.bridge) ctx.stroke(pathOf(p));
-    this.drawTracks(rails.filter((r) => !r.bridge), false);
-
-    // 4) Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst, Brücken zuletzt. Wege auf Brücken liegen
-    // zwischen beiden: über den Straßen unten, unter den Fahrbahnen auf derselben Brücke (Gehwege neben der Fahrbahn).
-    edges.sort((a, b) => (a.bridge - b.bridge) || (b.cls - a.cls));
-    const ground = edges.filter((e) => !e.bridge), onBridge = edges.filter((e) => e.bridge);
-    this.stats.tracks = 0;
-    for (const e of ground) if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
-    for (const e of ground) if (e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
-    for (const j of junctions) if (!j.bridge) {
-      ctx.fillStyle = CURB; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 2.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = GUTTER; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 0.7, 0, Math.PI * 2); ctx.fill();
-    }
+    this.stats.levels = levels.length; this.stats.underneath = 0;
     const asphalt = tex('asphalt', ASPHALT), cobble = tex('cobble', cobblePattern);
     const surface = (e) => (e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobble : asphalt);
-    for (const j of junctions) if (!j.bridge) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
-    for (const e of ground) { ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e)); }
-    this.drawTracks2(ground);
-    for (const e of onBridge) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
-    ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
-    for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
-    for (const j of junctions) if (j.bridge) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
-    for (const e of onBridge) {
-      ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
-      if (e.fill) { // Lücke zur Gegenfahrbahn: Fahrbahn bis dorthin
-        e._fillPath ??= linePath(offsetPolyline(e.pts, Math.sign(e.fill) * (e.w / 2 + Math.abs(e.fill) / 2)));
-        ctx.lineWidth = Math.abs(e.fill) + 2; ctx.stroke(e._fillPath);
+    const disc = (j, r) => { ctx.beginPath(); ctx.arc(j.x, j.y, r, 0, Math.PI * 2); ctx.fill(); };
+    const tramShapes = new Set();
+    if (city.transit) for (const p of patternsNear(city.transit, v.x + v.w / 2, v.y + v.h / 2, Math.max(v.w, v.h) / 2 + 100)) if (p.mode === 'tram') tramShapes.add(p.shape);
+    this.stats.tramShapes = tramShapes.size;
+    this.stats.tracks = 0; this.stats.bridgeFills = 0; this.stats.puddles = 0;
+    for (let li = 0; li < levels.length; li++) {
+      const lvl = levels[li], up = lvl >= 1;
+      const E = edges.filter((e) => lv(e) === lvl), P = paths.filter((p) => lv(p) === lvl), J = junctions.filter((j) => (j.lvl ?? 0) === lvl);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // Brückendecks liegen über dem, was darunter ist (Mauerwerk mit dunkler Kante)
+      for (const a of decks) if (Math.max(1, lv(a)) === lvl) {
+        ctx.fillStyle = AREA_COLOR[AREA_KIND.bridge]; ctx.fill(pathOf(a), 'evenodd');
+        const pl = tex('plaza', null); if (pl) { ctx.globalAlpha = 0.35; ctx.fillStyle = pl; ctx.fill(pathOf(a), 'evenodd'); ctx.globalAlpha = 1; }
+        ctx.strokeStyle = '#5a4c40'; ctx.lineWidth = 3; ctx.stroke(pathOf(a));
       }
-    }
-    this.drawTracks2(onBridge);
-    this.stats.bridgeFills = onBridge.filter((e) => e.fill).length;
-    if (this.quality === 'high') this.drawDecals(edges, city);
-    this.drawStreetMarkings(edges, world.city);
-    this.drawCrossings(crossings);
-    this.stats.puddles = drawWetRoads(ctx, edges, junctions, pathOf, city, world.wet ?? 0, L);
-    // Straßenbahngleise in der Fahrbahn (aus den Linienwegen der Straßenbahnen)
-    if (city.transit) {
-      const shapes = new Set();
-      for (const p of patternsNear(city.transit, v.x + v.w / 2, v.y + v.h / 2, Math.max(v.w, v.h) / 2 + 100)) if (p.mode === 'tram') shapes.add(p.shape);
+      if (!up) {
+        // Wege, ebenerdige Gleise, dann Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst
+        ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
+        for (const p of P) ctx.stroke(pathOf(p));
+        this.drawTracks(rails.filter((r) => !r.bridge && lv(r) === lvl), false);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        for (const e of E) if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
+        for (const e of E) if (e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
+        for (const j of J) { ctx.fillStyle = CURB; disc(j, j.r + 2.5); ctx.fillStyle = GUTTER; disc(j, j.r + 0.7); }
+        for (const j of J) { ctx.fillStyle = j.cobble ? cobble : asphalt; disc(j, j.r); }
+        for (const e of E) { ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e)); }
+        this.drawTracks2(E);
+      } else {
+        // Brücke: Brüstung, Wege auf der Brücke (neben der Fahrbahn), Kreuzungsscheiben, Fahrbahn mit Lücke zur Gegenfahrbahn
+        ctx.lineCap = 'butt'; // am Rampenfuß kein runder Brüstungsbogen über die Straße darunter
+        for (const e of E) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
+        for (const p of P) ctx.stroke(pathOf(p));
+        for (const j of J) { ctx.fillStyle = j.cobble ? cobble : asphalt; disc(j, j.r); }
+        for (const e of E) {
+          ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
+          if (e.fill) { // Lücke zur Gegenfahrbahn: Fahrbahn bis dorthin
+            e._fillPath ??= linePath(offsetPolyline(e.pts, Math.sign(e.fill) * (e.w / 2 + Math.abs(e.fill) / 2)));
+            ctx.lineWidth = Math.abs(e.fill) + 2; ctx.stroke(e._fillPath);
+            this.stats.bridgeFills++;
+          }
+        }
+        this.drawTracks2(E);
+      }
+      if (this.quality === 'high') this.drawDecals(E, city);
+      this.drawStreetMarkings(E, city);
+      if (lvl === 0) this.drawCrossings(crossings);
+      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, world.wet ?? 0, L);
+      // Straßenbahngleise in der Fahrbahn: am Boden der ganze Linienweg, oben nur die Stücke auf der Brücke
       ctx.lineCap = 'butt';
-      for (const sh of shapes) { const r = tramRails(sh); if (!r) continue; ctx.strokeStyle = 'rgba(40,40,44,0.55)'; ctx.lineWidth = 2.4; ctx.stroke(r); ctx.strokeStyle = '#a3a6ab'; ctx.lineWidth = 1.1; ctx.stroke(r); }
-      this.stats.tramShapes = shapes.size;
-    }
-    this.drawSignals(world, v);
-    ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
-
-    // Zäune, Mauern, Hecken, Poller
-    ctx.lineCap = 'round';
-    for (const f of fences) {
-      const st = FENCE_STYLE[f.kind] ?? FENCE_STYLE[0];
-      ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.setLineDash(st[2]); ctx.stroke(pathOf(f)); ctx.setLineDash([]);
-    }
-    for (const b of barriers) {
-      const down = world.knocked?.get(b.key);
-      if (down !== undefined) { // umgefahren: liegt in Fahrtrichtung, Fuß als Stumpf
-        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(down);
-        ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0.5, -1, 11, 3.4);
-        ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.fillRect(0, -1.6, 10, 3.2);
-        ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.fillRect(b.kind ? 3 : 8, -1.6, b.kind ? 2.5 : 2, 3.2);
-        ctx.restore();
-        ctx.fillStyle = '#2a2c30'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.4, 0, Math.PI * 2); ctx.fill();
-        continue;
+      if (lvl === 0) for (const sh of tramShapes) { const r = tramRails(sh); if (r) this.strokeTramRails(r); }
+      else if (up) for (const sh of tramShapes) for (const r of this.tramUpperRails(sh, lvl, v, upper, ground)) this.strokeTramRails(r);
+      if (lvl === 0) {
+        this.drawSignals(world, v);
+        this.drawGroundProps(world, city, edges, fences, barriers, furns, trees);
       }
-      ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.beginPath(); ctx.arc(b.x - 0.6, b.y - 0.8, 1.1, 0, Math.PI * 2); ctx.fill();
+      // wer unter der nächsten Ebene liegt, kommt jetzt (danach wird sie über ihn gezeichnet)
+      const next = levels[li + 1];
+      if (next !== undefined) {
+        const batch = movers.filter((m) => !m.early && m.under === next && m.lvl <= lvl).sort((a, b) => a.y - b.y);
+        for (const m of batch) { m.early = true; m.d(); }
+        this.stats.underneath += batch.length;
+      }
     }
-    ctx.lineCap = 'butt';
-
-    // Stadtmöbel und Requisiten der Tätigkeiten (Decken, Café-Tische, Gitarrenkoffer)
-    this.drawFurniture(furns, city, world.clock);
-    for (const e of edges) for (const sc of parkedScooters(city, e)) drawParkedScooter(ctx, sc);
-    this.drawLifeProps(world);
-
-    // Baumscheiben der Straßenbäume
-    ctx.fillStyle = '#5e4c3b'; ctx.strokeStyle = '#8c8578'; ctx.lineWidth = 1.2;
-    for (const tr of trees) if (treePit(city, tr)) { const h = 7 + tr.r; ctx.fillRect(tr.x - h, tr.y - h, 2 * h, 2 * h); ctx.strokeRect(tr.x - h, tr.y - h, 2 * h, 2 * h); }
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
 
     // 5) Bremsspuren
     ctx.lineWidth = 3; ctx.lineCap = 'round';
@@ -724,22 +725,9 @@ export class Renderer {
     this.stats.signs = this._signs.length;
     for (const sg of this._signs) list.push({ y: sg.y, d: () => drawSign(ctx, sg, this.quality) });
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
-    for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
-    for (const p of world.peds) if (near(p.x, p.y)) {
-      const act = p.state === 'hang' ? p.hang.act : null;
-      list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t }) });
-      if (p.style === 'dog' && p.state !== 'dead' && p.state !== 'down') list.push({ y: p.y - 1, d: () => drawDog(ctx, p, t) });
-      if (wx && hasUmbrella(p.id, wx.rain) && (p.state === 'walk' || p.state === 'cross' || p.state === 'idle' || act === 'wait' || act === 'queue')) list.push({ y: p.y + 0.5, d: () => drawUmbrella(ctx, p, t) });
-    }
-    for (const b of world.bikes ?? []) if (near(b.x, b.y)) list.push({ y: b.y, d: () => drawBike(ctx, b, riderShirt(b), L.sun, t) });
-    // Bahnen: Straßenbahnen in der Tiefenfolge; S-/U-Bahn nur, wo ihr Gleis oberirdisch liegt (sonst im Tunnel)
-    const railAt = (x, y) => { for (const f of city.render.query({ x: x - 50, y: y - 50, w: 100, h: 100 }, this._rq ??= [])) if (f.layer === 'rail') { const p = f.pts; for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 2500) return true; } return false; };
-    const trains = this._trains = transitVisible(world, v, railAt);
-    this.stats.trains = trains.length;
-    for (const tr of trains) if (tr.mode === 'tram') for (const c of tr.cars) if (near(c.x, c.y)) list.push({ y: c.y + 4, d: () => drawTrainCar(ctx, c, 'tram', L.sun, tr.lit, t) });
+    for (const m of movers) if (!m.early && !m.late && near(m.o.x, m.o.y)) list.push(m);
     for (const a of world.animals ?? []) if (!a.z && near(a.x, a.y)) list.push({ y: a.y - 2, d: () => drawBird(ctx, a, L.sun) });
     const pl = world.player;
-    if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
     this._depth = list;
@@ -752,16 +740,16 @@ export class Renderer {
     const env = { trees, buildings, bridges, deck: TRACK.deck, cam, heightScale: RENDER.heightScale };
     const covered = this._covered = [];
     const pcar = pl.inCar ? world.cars.find((c) => c.id === pl.inCar) : null;
-    const addT = (o, hw, hh, angle, key, player) => {
-      const R = hw ? Math.hypot(hw, hh) : 7;
-      const occ = occludersOf({ x: o.x, y: o.y, R, key, pts: samplePoints(o, hw, hh, angle) }, env);
-      if (occ.length) covered.push({ x: o.x, y: o.y, hw, hh, angle, R, occ, player });
-      return occ;
-    };
-    for (const c of world.cars) if (near(c.x, c.y)) addT(c, c.hw, c.hh, c.angle, c.y + 6, c === pcar);
-    for (const p of world.peds) if (near(p.x, p.y) && p.state !== 'dead') addT(p, 0, 0, 0, p.y, false);
-    for (const b of world.bikes ?? []) if (near(b.x, b.y)) addT(b, 9, 3.5, b.angle, b.y, false);
-    for (const tr of trains) if (tr.mode === 'tram') for (const c of tr.cars) if (near(c.x, c.y)) addT(c, c.L / 2, c.W / 2, c.angle, c.y + 4, false);
+    let mine = null;
+    for (const m of movers) {
+      if (m.skipCover || !near(m.o.x, m.o.y)) continue;
+      const R = m.hw ? Math.hypot(m.hw, m.hh) : 7;
+      const occ = occludersOf({ x: m.o.x, y: m.o.y, R, key: m.early ? -Infinity : m.key, pts: m.pts }, env);
+      for (const o of m.over ?? []) occ.push(o);
+      const player = m.o === pcar || m.o === pl;
+      if (occ.length) covered.push({ x: m.o.x, y: m.o.y, hw: m.hw, hh: m.hh, angle: m.angle, R, occ, player });
+      if (player) mine = { occ };
+    }
     // Wegweiser: die Tafel (über dem Pfosten) als Rechteck mit Stichpunkten über die ganze Fläche
     for (const sg of this._signs ?? []) {
       const b = signBoard(sg), w = b?.w ?? 50, h = b?.h ?? 20, left = signBoardX(sg, w), top = sg.y - SIGN_POST - h;
@@ -770,10 +758,9 @@ export class Renderer {
       const occ = occludersOf({ x: cx, y: cy, R, key: sg.y, pts }, env);
       if (occ.length) covered.push({ x: cx, y: cy, R, occ, board: { b, left, top, w, h } });
     }
-    const mine = pcar ? covered.find((c) => c.player) : !pl.dead ? { occ: addT(pl, 0, 0, 0, pl.y, true) } : null;
     this.stats.cover = mine?.occ?.[0]?.kind ?? null;
     this.stats.silhouettes = covered.length;
-    for (const tr of this._trains ?? []) if (tr.mode !== 'tram') for (const c of tr.cars) drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t);
+    for (const m of movers) if (m.late && !m.early) m.d(); // S-/U-Bahn auf Bahndamm und Viadukt
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
     // 8b) Wolkenschatten ziehen über Straßen und Dächer
     this.stats.clouds = wx ? drawCloudShadows(ctx, v, wx, t, L0.sun.strength) : 0;
@@ -1196,6 +1183,99 @@ export class Renderer {
 
   // Silhouette genau im verdeckten Teil: auf einer kleinen Hilfsfläche die Verdecker (Vereinigung) als Maske, den
   // Umriss darauf beschränkt (destination-in), dann ins Bild. Spielfigur orange, alle anderen hell und zurückhaltend.
+  // Bewegte Objekte im Bild mit Ebene und Stichpunkten: { o, y (Tiefe), key, d (zeichnen), lvl, pts, hw, hh, angle,
+  // late (S-/U-Bahn: über allem), skipCover }. Straßenbahnen und Züge haben keine eigene Ebene: sie liegen oben, wo ihr
+  // Gleis auf einer Brücke liegt.
+  collectMovers(world, v, wx, L, t, upper, ground) {
+    const ctx = this.ctx, city = world.city, out = [], margin = 220;
+    const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
+    const add = (o, y, key, d, hw, hh, angle, extra) => {
+      out.push({ o, y, key, d, lvl: o.lvl ?? 0, hw, hh, angle, pts: samplePoints(o, hw, hh, angle), ...extra });
+    };
+    for (const c of world.cars) if (near(c.x, c.y)) add(c, c.y + 6, c.y + 6, () => drawCar(ctx, c, t, L.sun), c.hw, c.hh, c.angle);
+    for (const p of world.peds) if (near(p.x, p.y)) {
+      const act = p.state === 'hang' ? p.hang.act : null, down = p.state === 'down' || p.state === 'dead';
+      const dog = p.style === 'dog' && !down, umbrella = wx && hasUmbrella(p.id, wx.rain) && (p.state === 'walk' || p.state === 'cross' || p.state === 'idle' || act === 'wait' || act === 'queue');
+      add(p, p.y, p.y, () => {
+        if (dog) drawDog(ctx, p, t);
+        drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down, dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t });
+        if (umbrella) drawUmbrella(ctx, p, t);
+      }, 0, 0, 0, { skipCover: p.state === 'dead' });
+    }
+    for (const b of world.bikes ?? []) if (near(b.x, b.y)) add(b, b.y, b.y, () => drawBike(ctx, b, riderShirt(b), L.sun, t), 9, 3.5, b.angle);
+    // Bahnen: S-/U-Bahn nur, wo ihr Gleis oberirdisch liegt (sonst im Tunnel)
+    const rq = this._rq ??= [];
+    const railNear = (x, y) => { for (const f of city.render.query({ x: x - 50, y: y - 50, w: 100, h: 100 }, rq)) if (f.layer === 'rail') { const p = f.pts; for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 2500) return f; } return null; };
+    const trains = this._trains = transitVisible(world, v, (x, y) => !!railNear(x, y));
+    this.stats.trains = trains.length;
+    for (const tr of trains) for (const c of tr.cars) {
+      if (tr.mode === 'tram') {
+        if (!near(c.x, c.y)) continue;
+        const o = { x: c.x, y: c.y, lvl: upper.length ? trackLevel(c.x, c.y, upper, ground) : 0 };
+        add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, 'tram', L.sun, tr.lit, t), c.L / 2, c.W / 2, c.angle);
+      } else {
+        const r = railNear(c.x, c.y), o = { x: c.x, y: c.y, lvl: r?.lvl ?? 0 };
+        add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t), c.L / 2, c.W / 2, c.angle, { late: true, skipCover: true });
+      }
+    }
+    const pl = world.player;
+    if (!pl.inCar) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
+    return out;
+  }
+
+  // Straßenbahnschienen: dunkle Rille, blanker Schienenkopf
+  strokeTramRails(r) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = 'rgba(40,40,44,0.55)'; ctx.lineWidth = 2.4; ctx.stroke(r);
+    ctx.strokeStyle = '#a3a6ab'; ctx.lineWidth = 1.1; ctx.stroke(r);
+  }
+
+  // Die Stücke eines Straßenbahn-Linienwegs, die auf einer Brücke der Ebene lvl liegen (im Bild)
+  tramUpperRails(shape, lvl, v, upper, ground) {
+    if (typeof Path2D === 'undefined' || !upper.length) return [];
+    const p = shape.pts, runs = [], pad = 200;
+    let run = null, prev = 0;
+    for (let i = 0; i < p.length - 2; i += 2) {
+      const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2;
+      const inView = mx > v.x - pad && mx < v.x + v.w + pad && my > v.y - pad && my < v.y + v.h + pad;
+      prev = inView ? trackLevel(mx, my, upper, ground, prev) : 0;
+      if (prev === lvl) { if (!run) runs.push(run = [p[i], p[i + 1]]); run.push(p[i + 2], p[i + 3]); } else run = null;
+    }
+    return runs.map((pts) => { const path = new Path2D(); for (const off of [-7.2, 7.2]) { const q = offsetPolyline(pts, off); path.moveTo(q[0], q[1]); for (let k = 2; k < q.length; k += 2) path.lineTo(q[k], q[k + 1]); } return path; });
+  }
+
+  // Was am Boden steht: Zäune, Poller, Stadtmöbel, abgestellte Roller, Requisiten, Baumscheiben (unter den Brücken)
+  drawGroundProps(world, city, edges, fences, barriers, furns, trees) {
+    const ctx = this.ctx;
+    ctx.lineCap = 'round';
+    for (const f of fences) {
+      const st = FENCE_STYLE[f.kind] ?? FENCE_STYLE[0];
+      ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.setLineDash(st[2]); ctx.stroke(pathOf(f)); ctx.setLineDash([]);
+    }
+    for (const b of barriers) {
+      const down = world.knocked?.get(b.key);
+      if (down !== undefined) { // umgefahren: liegt in Fahrtrichtung, Fuß als Stumpf
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(down);
+        ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0.5, -1, 11, 3.4);
+        ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.fillRect(0, -1.6, 10, 3.2);
+        ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.fillRect(b.kind ? 3 : 8, -1.6, b.kind ? 2.5 : 2, 3.2);
+        ctx.restore();
+        ctx.fillStyle = '#2a2c30'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.4, 0, Math.PI * 2); ctx.fill();
+        continue;
+      }
+      ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.beginPath(); ctx.arc(b.x - 0.6, b.y - 0.8, 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineCap = 'butt';
+    // Stadtmöbel und Requisiten der Tätigkeiten (Decken, Café-Tische, Gitarrenkoffer)
+    this.drawFurniture(furns, city, world.clock);
+    for (const e of edges) if (!(e.lvl >= 1)) for (const sc of parkedScooters(city, e)) drawParkedScooter(ctx, sc);
+    this.drawLifeProps(world);
+    // Baumscheiben der Straßenbäume
+    ctx.fillStyle = '#5e4c3b'; ctx.strokeStyle = '#8c8578'; ctx.lineWidth = 1.2;
+    for (const tr of trees) if (treePit(city, tr)) { const h = 7 + tr.r; ctx.fillRect(tr.x - h, tr.y - h, 2 * h, 2 * h); ctx.strokeRect(tr.x - h, tr.y - h, 2 * h, 2 * h); }
+  }
+
   drawCovered(ctx, c, s, t) {
     const R = c.R + 3, px = Math.min(256, Math.ceil(2 * R * s));
     if (px < 4) return;
@@ -1205,6 +1285,9 @@ export class Renderer {
     mask.fillStyle = '#000'; mask.strokeStyle = '#000';
     for (const o of c.occ) {
       if (o.kind === 'tree') { mask.beginPath(); mask.arc(o.x, o.y, o.r, 0, Math.PI * 2); mask.fill(); }
+      else if (o.kind === 'road') { mask.lineWidth = 2 * o.half; mask.lineCap = 'round'; mask.lineJoin = 'round'; mask.beginPath(); mask.moveTo(o.pts[0], o.pts[1]); for (let i = 2; i < o.pts.length; i += 2) mask.lineTo(o.pts[i], o.pts[i + 1]); mask.stroke(); }
+      else if (o.kind === 'disc') { mask.beginPath(); mask.arc(o.x, o.y, o.r, 0, Math.PI * 2); mask.fill(); }
+      else if (o.kind === 'deck') { mask.beginPath(); for (const r of o.rings) { mask.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) mask.lineTo(r[i], r[i + 1]); mask.closePath(); } mask.fill('evenodd'); }
       else if (o.kind === 'bridge') { mask.lineWidth = TRACK.deck; mask.lineCap = 'butt'; mask.beginPath(); mask.moveTo(o.pts[0], o.pts[1]); for (let i = 2; i < o.pts.length; i += 2) mask.lineTo(o.pts[i], o.pts[i + 1]); mask.stroke(); }
       else { // Hauskörper: jede Wand als Viereck zwischen Fuß und Dach, dazu das Dach (mit Höfen)
         const { b, dx, dy } = o;

@@ -185,6 +185,24 @@ Reste stehen. Geländer liegen bei `reachOf(Seite) + 0,6 m`, also außerhalb von
 Radwege neben der Fahrbahn (`cycleway:*=track`, `crosssection.mjs cycleTrack`) stehen im Querschnitt (`track` je Seite,
 Kachelfelder 13/14) und werden jenseits des Bordsteins als rote Streifen gezeichnet.
 
+**Ebenen** (`tools/osm/levels.mjs levelOf`, Spiel `web/src/levels.js`, Zeichnen `render.js drawFrame`): OSM gibt
+Wegen keine absolute Höhe, wohl aber die Reihenfolge übereinander (`bridge`, `layer`, `tunnel`) und die Verbindungen
+über gemeinsame Knoten. Daraus bekommt jede Straße, jeder Weg, jedes Gleis und jedes Brückendeck eine Ebene
+(Laufzeitfeld `lvl`, −2 … +3; Brücke = max(1, layer), `layer<0` ohne Tunnel = offene Unterführung, `layer>0` ohne
+Brücke = Boden, Tunnel verworfen). Kachelformat: Kanten-Flags Bits 4–6, Wege-/Kreuzungs-`fl` Bits 2–4 (Kreuzung
+zusätzlich 5–7 für die niedrigste Ebene), Gleise/Flächen optionales Schlussfeld – drei Bit mit Vorzeichen
+(`citycodes.js packLvl/unpackLvl`). **Portale** (`build.mjs portalsOf`, Kachelfeld `portals`) sind Knoten, an denen
+Straßen/Wege verschiedener Ebenen zusammentreffen; nur dort wechselt ein Objekt die Ebene (`stepLevel`): es gilt die
+Fläche, auf der es eindeutig ist (Lotfußpunkt im Stück, innerhalb der Breite), auf der eigenen Ebene bleibt es. Ein
+Sicherheitsnetz setzt Objekte ohne Fläche ihrer Ebene in der Nähe auf den Boden zurück; neue Objekte bekommen die
+Ebene der Straße in Blickrichtung (`initialLevel`). `world.js updateLevels` führt das je Schritt für Autos, Personen,
+Räder und die Spielfigur (im Auto: die Ebene des Autos). Gezeichnet wird Ebene für Ebene (Decks, Wege, Straßen,
+Markierungen, Nässe; am Boden Zäune, Poller, Möbel); nach jeder Ebene folgen die Objekte, die unter der nächsten
+höheren Fläche liegen (`occlusion.js levelSurfaces/surfacesOver`, im Portal zählt nichts als Decke), danach die
+Brücke über ihnen, die Silhouette zeigt den verdeckten Teil. Straßenbahnen haben keine eigene Ebene: sie liegen oben,
+wo ihr Linienweg auf einer Brücke und nicht zugleich auf einer Bodenstraße liegt (`trackLevel`, bei Überlappung gilt
+das Stück davor). Kollision, Verkehr und Oberfläche sind noch nicht ebenenbewusst (0.23.0).
+
 **Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
 Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten
 an einem Kreisel (`junction=roundabout/circular`). Knoten näher als 45 m (Richtungsfahrbahnen) und alle Knoten eines

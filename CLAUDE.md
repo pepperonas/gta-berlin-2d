@@ -100,6 +100,12 @@ change in `web/`.
   (ignored by traffic, removed later out of sight). Renderer turns `shot/impact/blood/kill` events into effects.
   About 15 % of peds fight back (`isFighter`, from the id): state `'fight'` via `updateFight`. Player has `hp`;
   `hurtPlayer` → `dead` → `world.js updateKnockout` respawns at `nearestHospital` (`city.hospitals` from index.json).
+- **Levels (`lvl`, never `layer` — that name is the render category):** OSM has no heights, only order
+  (`bridge`/`layer`/`tunnel`). `tools/osm/levels.mjs levelOf` gives every edge/path/rail/deck a level (bridge ≥ 1,
+  open underpass < 0, tunnels dropped), packed as 3-bit signed values (`citycodes.js packLvl/unpackLvl`). Portals
+  (`city.portals`, nodes where different levels meet) are the only place an entity changes level (`levels.js
+  stepLevel`, run for all movers in `world.js updateLevels`). `render.js` draws level by level; movers under a higher
+  surface (`occlusion.js surfacesOver`) are drawn before it and get a silhouette. Physics/traffic are not level-aware yet.
 - **Invariant: no tree trunk on a carriageway** (crowns may overhang). `keepTreesOffRoads` in the build pushes trunks to
   the curb or drops them and throws if any violation remains; `decodeCity` drops violators as a safety net
   (`city.droppedTrees` must stay 0); tests check the shipped map, the fixture and the safety net. Constants

@@ -69,3 +69,53 @@ export function samplePoints(o, hw, hh, angle) {
   for (const u of [-1, 0, 1]) for (const v of [-1, 0, 1]) out.push([o.x + c * u * hw - s * v * hh, o.y + s * u * hw + c * v * hh]);
   return out;
 }
+
+// --- Ebenen: Flächen über einem Objekt (Brückenfahrbahn, Brückenweg, Kreuzungsscheibe, Brückendeck) -------------
+const PATH_HALF = 9; // halbe Breite eines gezeichneten Wegs (18 px)
+const roadHalf = (e) => {
+  const tr = Math.max(e.cs?.left?.track ? 4 + e.cs.left.track : 0, e.cs?.right?.track ? 4 + e.cs.right.track : 0);
+  return e.w / 2 + (e.fill ? Math.abs(e.fill) : 0) + tr;
+};
+const grow = (bb, r) => ({ x: bb.x - r, y: bb.y - r, w: bb.w + 2 * r, h: bb.h + 2 * r });
+
+// Flächen der Ebenen ≥ minLvl aus den sichtbaren Listen: [{ kind, lvl, bbox, … }]
+export function levelSurfaces({ edges = [], paths = [], junctions = [], decks = [] }, minLvl = 1) {
+  const out = [];
+  for (const e of edges) if ((e.lvl ?? 0) >= minLvl) { const half = roadHalf(e); out.push({ kind: 'road', lvl: e.lvl ?? 0, pts: e.pts, half, bbox: grow(e.bbox, half) }); }
+  for (const p of paths) if ((p.lvl ?? 0) >= minLvl) out.push({ kind: 'road', lvl: p.lvl ?? 0, pts: p.pts, half: PATH_HALF, bbox: grow(p.bbox, PATH_HALF) });
+  for (const j of junctions) { const l = j.hi ?? j.lvl ?? 0; if (l >= minLvl) out.push({ kind: 'disc', lvl: l, x: j.x, y: j.y, r: j.r, bbox: { x: j.x - j.r, y: j.y - j.r, w: 2 * j.r, h: 2 * j.r } }); }
+  for (const a of decks) { const l = Math.max(1, a.lvl ?? 0); if (l >= minLvl) out.push({ kind: 'deck', lvl: l, rings: a.rings, bbox: a.bbox }); }
+  return out;
+}
+
+// Liegt (x, y) auf der Fläche s?
+export function onSurface(s, x, y) {
+  const b = s.bbox;
+  if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) return false;
+  if (s.kind === 'disc') return (x - s.x) ** 2 + (y - s.y) ** 2 <= s.r * s.r;
+  if (s.kind === 'deck') return pointInRings(x, y, s.rings);
+  const p = s.pts, h2 = s.half * s.half;
+  for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) <= h2) return true;
+  return false;
+}
+
+// Flächen höher als lvl, die einen der Stichpunkte überdecken. inPortal(x, y): dort (Rampenfuß, Treppe) geht es
+// hinauf – da liegt nichts darüber.
+export function surfacesOver(pts, lvl, surfaces, inPortal = () => false, out = []) {
+  out.length = 0;
+  for (const [x, y] of pts) {
+    if (inPortal(x, y)) continue;
+    for (const s of surfaces) if (s.lvl > lvl && !out.includes(s) && onSurface(s, x, y)) out.push(s);
+  }
+  return out;
+}
+
+// Ebene eines Punkts auf Schienen/Linienweg (Straßenbahn): oben, wenn eine höhere Fläche darunter liegt und keine
+// Fläche der Ebene 0; liegen beide übereinander (Brücke kreuzt Straße), gilt prev (die Ebene davor auf dem Weg).
+export function trackLevel(x, y, upper, ground, prev = 0) {
+  let up = 0;
+  for (const s of upper) if (s.lvl > up && onSurface(s, x, y)) up = s.lvl;
+  if (!up) return 0;
+  for (const s of ground) if (onSurface(s, x, y)) return prev;
+  return up;
+}
