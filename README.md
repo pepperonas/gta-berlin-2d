@@ -195,7 +195,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 263 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 264 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -347,7 +347,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 263 automatischen Tests grün, darunter:
+- Alle 264 automatischen Tests grün, darunter:
+  - Gebäude aus Bauteilen: Sockel mit Hochhaus (beide), Turm auf dem Block (eigenes Gebäude), Obergeschosse über der
+    Arkade heben das Haus darunter, Überbauung ohne etwas darunter entfällt, Pfeiler im Wasser wird kein Haus, Art aus
+    `building:part`;
   - Waffenrad: Mausrichtung → Segment (oben 0, im Uhrzeigersinn, Grenzen genau zwischen den Mitten, Totzone),
     rechte Taste tippen = ein-/aussteigen, halten = Rad auf mit der aktuellen Waffe, Totzone behält die Wahl,
     Loslassen wählt, im Auto kein Rad und kein versehentliches Aussteigen nach langem Halten, Rad schließt beim

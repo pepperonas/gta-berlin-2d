@@ -39,37 +39,67 @@ export function buildingTreatment(t) {
   if ((!b || b === 'no') && (!part || part === 'no')) return null;
   if (num(t.layer) < 0 || t.location === 'underground') return 'skip';
   if (b === 'roof' || part === 'roof' || b === 'bridge' || part === 'bridge' || t.man_made === 'bridge') return 'skip';
-  if (num(t.min_height) >= 3 || num(t['building:min_level']) >= 1) return 'skip';
+  // Schwebende Teile (Obergeschosse über einer Arkade, Turmspitze auf einem Sockel): heben das Haus darunter an; wo
+  // darunter nichts steht (Überbauung einer Straße), fährt man durch (mergeParts entscheidet)
+  if (num(t.min_height) >= 3 || num(t['building:min_level']) >= 1) return 'upper';
   if (part && part !== 'no') return 'part';
   return 'building';
 }
 
-// Bauteile einordnen: Teile, deren Mittelpunkt in einem Gebäudeumriss liegt, gehören zu diesem (nichts zu tun).
-// Übrige Teile bilden Gruppen (Mittelpunkt liegt in einem größeren Teil der Gruppe); je Gruppe wird das höchste Teil
-// mit seinem eigenen Umriss ein Gebäude – der Turm auf dem Brückenpfeiler, nicht ein turmhoher Pfeiler.
-export function mergeParts(buildings, parts) {
+// Bauteile einordnen (Simple-3D-Buildings, vereinfacht für die Draufsicht):
+//  – Teile im Umriss eines Gebäudes gehören zu ihm; ragen sie deutlich darüber hinaus (Turm auf dem Block), werden sie
+//    ein eigenes Gebäude obendrauf (vorher fehlte der Turm).
+//  – übrige Teile bilden Gruppen (Mittelpunkt in einem größeren Teil der Gruppe); das größte Teil ist der Sockel und
+//    wird ein Gebäude (außer es steht im Wasser/auf dem Brückendeck: skipBase – der Pfeiler der Oberbaumbrücke), Teile,
+//    die deutlich höher sind, stehen als eigene Gebäude darauf (Turm auf dem Pfeiler, Hochhaus auf dem Einkaufssockel).
+//  – schwebende Teile (uppers: ab 3 m über Grund) heben das kleinste Gebäude darunter auf ihre Oberkante; ohne etwas
+//    darunter entfallen sie (Überbauung einer Straße, Kreuzgang).
+// Höhen in dm; „deutlich“ = 3 m.
+export function mergeParts(buildings, parts, uppers = [], skipBase = () => false) {
+  const TALL = 30;
   const grid = boxGrid(400);
   const inside = (list, x, y) => { for (const g of list) if (g.rings.filter((r) => pointInRing(x, y, r.pts)).length % 2 === 1) return g; return null; };
   const centroid = (b) => { const r = b.rings[0].pts; let x = 0, y = 0; for (let i = 0; i < r.length; i += 2) { x += r[i]; y += r[i + 1]; } return [x / (r.length / 2), y / (r.length / 2)]; };
   for (const b of buildings) { const [x0, y0, x1, y1] = ringBox(b.rings[0].pts); grid.add(b, x0, y0, x1, y1); }
   const pgrid = boxGrid(400), roots = [];
-  let merged = 0;
+  let merged = 0, added = 0, towers = 0, raised = 0;
   const area = (b) => Math.abs(ringArea(b.rings[0].pts));
+  const asBuilding = (p) => ({ id: p.id, h: p.h, k: p.k, rings: p.rings, measured: p.measured, fromParts: true, look: p.look, rc: p.rc, fc: p.fc });
+  const out = [];
   parts.sort((a, b) => area(b) - area(a) || a.id - b.id);
   for (const p of parts) {
     const [cx, cy] = centroid(p);
-    if (inside(grid.at(cx, cy), cx, cy)) continue;
-    const host = inside(pgrid.at(cx, cy), cx, cy);
-    if (host) { (host.root ?? host).group.push(p); p.root = host.root ?? host; merged++; }
+    const host = inside(grid.at(cx, cy), cx, cy);
+    if (host) { if (p.h > host.h + TALL) { out.push(asBuilding(p)); towers++; } continue; } // Turm auf dem Umriss
+    const ph = inside(pgrid.at(cx, cy), cx, cy);
+    if (ph) { (ph.root ?? ph).group.push(p); p.root = ph.root ?? ph; merged++; }
     else { p.group = [p]; roots.push(p); }
     const [x0, y0, x1, y1] = ringBox(p.rings[0].pts); pgrid.add(p, x0, y0, x1, y1);
   }
   for (const r of roots) {
-    let best = r;
-    for (const q of r.group) if (q.h > best.h || (q.h === best.h && area(q) > area(best))) best = q;
-    buildings.push({ id: best.id, h: best.h, k: best.k, rings: best.rings, measured: best.measured, fromParts: true, look: best.look, rc: best.rc, fc: best.fc });
+    const base = !skipBase(r) ? r : null, floor = base ? base.h : 0;
+    const placed = base ? [base] : [];
+    if (base) { out.push(asBuilding(base)); added++; }
+    // höhere Teile der Gruppe, vom höchsten an; keines doppelt (liegt eines schon in einem gleich hohen, entfällt es)
+    for (const q of [...r.group].sort((a, b) => b.h - a.h || area(b) - area(a) || a.id - b.id)) {
+      if (q === base || (base && q.h <= floor + TALL)) continue;
+      const [qx, qy] = centroid(q);
+      if (placed.some((o) => o !== base && o.h >= q.h && inside([o], qx, qy))) continue;
+      placed.push(q); out.push(asBuilding(q)); added++;
+    }
   }
-  return { added: roots.length, merged };
+  buildings.push(...out);
+  // schwebende Teile: auf das kleinste Gebäude darunter
+  const all = boxGrid(400);
+  for (const b of buildings) { const [x0, y0, x1, y1] = ringBox(b.rings[0].pts); all.add(b, x0, y0, x1, y1); }
+  for (const u of uppers) {
+    const [cx, cy] = centroid(u);
+    let host = null;
+    for (const g of all.at(cx, cy)) if (g.rings.filter((r) => pointInRing(cx, cy, r.pts)).length % 2 === 1 && (!host || area(g) < area(host))) host = g;
+    if (!host) continue;
+    if (u.h > host.h) { host.h = u.h; host.measured = host.measured || u.measured; raised++; }
+  }
+  return { added, merged, towers, raised };
 }
 
 // Gebäudehöhe in m; measured = aus Höhe/Geschossen (sonst Schätzwert nach Gebäudeart).
@@ -78,7 +108,7 @@ function buildingHeight(t) {
   if (h > 2 && h < 400) return [h, true];
   const lv = num(t['building:levels']), rl = num(t['roof:levels']);
   if (lv > 0 && lv < 80) return [lv * 3.2 + (rl > 0 ? rl * 2.4 : 1), true];
-  switch (t.building) {
+  switch (buildingType(t)) {
     case 'garage': case 'garages': case 'shed': case 'kiosk': case 'carport': case 'hut': case 'container': case 'toilets': return [3, false];
     case 'industrial': case 'warehouse': case 'retail': case 'supermarket': case 'commercial': case 'service': return [8, false];
     case 'church': case 'cathedral': return [24, false];
@@ -87,8 +117,12 @@ function buildingHeight(t) {
   }
 }
 
+// Art eines Gebäudes oder Bauteils: building=…, bei Bauteilen ohne eigenes building=… der Wert von building:part
+// (sonst galt ein Einkaufszentrum aus retail-Teilen als Wohnhaus und bekam ein Berliner Dach)
+export const buildingType = (t) => (t.building && t.building !== 'no' ? t.building : t['building:part'] && t['building:part'] !== 'no' ? t['building:part'] : undefined);
+
 function buildingKind(t) {
-  const b = t.building;
+  const b = buildingType(t);
   if (['industrial', 'warehouse', 'manufacture', 'hangar'].includes(b)) return BUILDING_KIND.industrial;
   if (['church', 'cathedral', 'chapel', 'religious', 'mosque'].includes(b)) return BUILDING_KIND.church;
   if (['garage', 'garages', 'shed', 'kiosk', 'carport', 'hut', 'container', 'toilets'].includes(b)) return BUILDING_KIND.small;
@@ -237,7 +271,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
     return sp.length >= 8 ? { outer: r.outer, pts: orient(sp, r.outer) } : null;
   }).filter(Boolean);
 
-  const buildings = [], water = [], areas = [], parts = [];
+  const buildings = [], water = [], areas = [], parts = [], uppers = [];
   let heightMeasured = 0;
   for (const poly of polygons) {
     const t = poly.tags;
@@ -255,6 +289,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       const bez = BEZIRKE.indexOf(bezirkAt(mx / (r0.length / 2), my / (r0.length / 2))) + 1;
       const b = { id: poly.id, h: Math.round(h * 10), k: buildingKind(t), rings, measured, look: packLook({ ...lk, bez }), rc: lk.rc, fc: lk.fc };
       if (bt === 'part') parts.push(b);
+      else if (bt === 'upper') uppers.push(b);
       else { if (measured) heightMeasured++; buildings.push(b); }
     } else if (isWater(t)) {
       const rings = cleanRings(poly, 0.5 * S);
@@ -271,11 +306,16 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   areas.sort((a, b) => a.k - b.k || a.id - b.id);
   // Bauteile (building:part) ohne umgebenden Gebäudeumriss werden selbst zu Gebäuden (etwa die Türme der
   // Oberbaumbrücke, die nur als Teile erfasst sind); ineinanderliegende Teile zu einem, mit der größten Höhe.
-  const partStats = mergeParts(buildings, parts);
+  // Sockel im Wasser oder auf einem Brückendeck (Pfeiler) wird kein Haus – sein Turm schon
+  const skipGrid = boxGrid(2000), skipList = [...water, ...areas.filter((a) => a.k === AREA_KIND.bridge)];
+  for (const w of skipList) for (const r of w.rings) if (r.outer) { const [x0, y0, x1, y1] = ringBox(r.pts); skipGrid.add(w, x0, y0, x1, y1); }
+  const inPoly = (w, x, y) => w.rings.filter((r) => pointInRing(x, y, r.pts)).length % 2 === 1;
+  const skipBase = (p) => { const r = p.rings[0].pts; let x = 0, y = 0; for (let i = 0; i < r.length; i += 2) { x += r[i]; y += r[i + 1]; } x /= r.length / 2; y /= r.length / 2; return skipGrid.at(x, y).some((w) => inPoly(w, x, y)); };
+  const partStats = mergeParts(buildings, parts, uppers, skipBase);
   for (const b of buildings) if (b.fromParts && b.measured) heightMeasured++;
   buildings.sort((a, b) => a.id - b.id);
   water.sort((a, b) => a.id - b.id);
-  step(`${buildings.length} Gebäude (davon ${partStats.added} aus Bauteilen), ${water.length} Wasserflächen, ${areas.length} Flächen`);
+  step(`${buildings.length} Gebäude (davon ${partStats.added} aus Bauteilen, ${partStats.towers} Türme auf Umrissen, ${partStats.raised} durch Obergeschosse erhöht), ${water.length} Wasserflächen, ${areas.length} Flächen`);
 
   // --- Straßen und Graph ---------------------------------------------------------------
   const roadWays = [], pathWays = [], railWays = [];

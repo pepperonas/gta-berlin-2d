@@ -44,7 +44,7 @@ export function occludersOf(t, { trees = [], buildings = [], bridges = [], deck 
     for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < (deck / 2 + R) ** 2) { out.push({ kind: 'bridge', pts: p }); break; }
   }
   for (const b of buildings) {
-    if (b.bbox.y + b.bbox.h <= key) continue; // vorher gezeichnet
+    if ((b._depthY ?? b.bbox.y + b.bbox.h) <= key) continue; // vorher gezeichnet (Tiefenschlüssel wie render.js buildingDepth)
     const { dx, dy } = roofOffset(b, cam, heightScale), bb = b.bbox;
     if (x + R < bb.x + Math.min(0, dx) || x - R > bb.x + bb.w + Math.max(0, dx) || y + R < bb.y + Math.min(0, dy) || y - R > bb.y + bb.h + Math.max(0, dy)) continue;
     let hit = false;

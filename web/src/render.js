@@ -8,7 +8,7 @@ import { drawBike, drawBird, drawParkedScooter } from './critters.js';
 import { parkedScooters, riderShirt } from './bikes.js';
 import { playerCar, speedOf } from './world.js';
 import { signalState } from './signals.js';
-import { offsetPolyline, polylineLength } from './geom.js';
+import { offsetPolyline, polylineLength, pointInRings } from './geom.js';
 import { laneOffsets, parkingStrip } from './street.js';
 import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
@@ -283,6 +283,22 @@ export function drawCarSnow(ctx, c, depth, speed) {
     ctx.fillRect(w * 0.45, -hh * 0.75, w * 0.45, hh * 1.5); ctx.fillRect(-w * 0.92, -hh * 0.75, w * 0.3, hh * 1.5);
   }
   ctx.restore();
+}
+
+// Tiefenschlüssel eines Hauses (Unterkante des Grundrisses). Steht es in einem anderen (Hochhaus auf dem Sockel, Turm
+// auf dem Block), kommt es danach – sonst malte das Dach des Sockels über den Turm. Einmal je Haus berechnet (b._depthY).
+export function buildingDepth(city, b) {
+  if (b._depthY !== undefined) return b._depthY;
+  let y = b.bbox.y + b.bbox.h;
+  const r = b.rings[0];
+  let cx = 0, cy = 0; for (let i = 0; i < r.length; i += 2) { cx += r[i]; cy += r[i + 1]; } cx /= r.length / 2; cy /= r.length / 2;
+  const area = (q) => { const o = q.rings[0]; let a = 0; for (let i = 0; i < o.length; i += 2) a += o[i] * o[(i + 3) % o.length] - o[(i + 2) % o.length] * o[i + 1]; return Math.abs(a) / 2; };
+  const mine = area(b);
+  for (const o of city.render?.query({ x: cx - 1, y: cy - 1, w: 2, h: 2 }, []) ?? []) {
+    if (o === b || o.layer !== 'building' || area(o) <= mine || !pointInRings(cx, cy, o.rings)) continue;
+    y = Math.max(y, o.bbox.y + o.bbox.h + 0.5);
+  }
+  return (b._depthY = y);
 }
 
 const STAIN_LIFE = 90, STAIN_MAX = 160;
@@ -725,7 +741,7 @@ export class Renderer {
     const list = [];
     const margin = 220;
     const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
-    for (const b of buildings) list.push({ y: b.bbox.y + b.bbox.h, b, d: () => this.drawBuilding(b, cam) });
+    for (const b of buildings) list.push({ y: buildingDepth(city, b), b, d: () => this.drawBuilding(b, cam) });
     const treeFx = { snow: snowD, wind: wx?.wind ?? null, storm: (wx?.storm ?? 0) * gust };
     for (const tr of trees) list.push({ y: tr.y, tr, d: () => drawTree(ctx, tr, t, L.sun, treeFx) });
     const lamps = this._lamps ??= [];

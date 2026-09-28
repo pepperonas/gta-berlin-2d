@@ -56,7 +56,7 @@ export function buildingLook(t) {
     shape: SHAPES[first(t['roof:shape'])] ?? 0,
     rmat: RMATS[first(t['roof:material'])] ?? 0,
     wmat: WMATS[first(t['building:material'] ?? t['building:facade:material'])] ?? 0,
-    sub: SUBS[first(t.building)] ?? 0,
+    sub: SUBS[first(t.building && t.building !== 'no' ? t.building : t['building:part'])] ?? 0,
     rc: parseColour(t['roof:colour']) + 1,
     fc: parseColour(t['building:colour'] ?? t['building:facade:colour']) + 1,
   };

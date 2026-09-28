@@ -272,8 +272,9 @@ test('Gebäude-Regeln: Brückenbauwerke und schwebende Teile sind keine Häuser,
   assert.equal(buildingTreatment({ building: 'bridge', 'bridge:support': 'pier' }), 'skip', 'Brückenpfeiler');
   assert.equal(buildingTreatment({ building: 'bridge', min_height: '9.5', note: 'Kreuzgang' }), 'skip');
   assert.equal(buildingTreatment({ building: 'roof' }), 'skip');
-  assert.equal(buildingTreatment({ building: 'watchtower', min_height: '15' }), 'skip', 'Turmspitze schwebt');
-  assert.equal(buildingTreatment({ building: 'yes', 'building:min_level': '2' }), 'skip', 'Überbauung: man fährt darunter durch');
+  assert.equal(buildingTreatment({ building: 'watchtower', min_height: '15' }), 'upper', 'Turmspitze schwebt: hebt das Haus darunter');
+  assert.equal(buildingTreatment({ building: 'yes', 'building:min_level': '2' }), 'upper', 'Obergeschosse: heben das Haus darunter (ohne Haus darunter: man fährt durch)');
+  assert.equal(buildingTreatment({ 'building:part': 'retail', min_height: '3.14', height: '22' }), 'upper', 'Obergeschosse über der Arkade');
   assert.equal(buildingTreatment({ building: 'yes', layer: '-1' }), 'skip');
   assert.equal(buildingTreatment({ 'building:part': 'yes', height: '34' }), 'part');
   assert.equal(buildingTreatment({ building: 'yes', 'building:part': 'yes' }), 'part');
@@ -281,14 +282,36 @@ test('Gebäude-Regeln: Brückenbauwerke und schwebende Teile sind keine Häuser,
   // Haus mit Umriss und Teil darin: Teil bleibt unbeachtet
   const buildings = [sq(1, 0, 0, 100, 160)];
   // Brückenpfeiler (groß, 5 m) mit Turm (klein, 34 m) darauf, daneben ein einzelnes Teil
-  const parts = [sq(2, 10, 10, 20, 250), sq(10, 500, 500, 300, 50), sq(11, 600, 600, 60, 340), sq(12, 610, 610, 30, 150), sq(20, 2000, 0, 50, 120)];
-  const r = mergeParts(buildings, parts);
+  const parts = [sq(2, 10, 10, 20, 170), sq(10, 500, 500, 300, 50), sq(11, 600, 600, 60, 340), sq(12, 610, 610, 30, 150), sq(20, 2000, 0, 50, 120)];
+  const r = mergeParts(buildings, parts, [], (p) => p.id === 10); // Teil 10 steht im Wasser (Pfeiler)
   const byId = new Map(buildings.map((b) => [b.id, b]));
-  assert.ok(!byId.has(2), 'Teil im Umriss wird kein eigenes Gebäude');
+  assert.ok(!byId.has(2), 'Teil im Umriss, nicht höher: kein eigenes Gebäude');
   assert.ok(byId.has(11) && byId.get(11).h === 340, 'auf dem Pfeiler steht der Turm (höchstes Teil, eigener Umriss)');
-  assert.ok(!byId.has(10) && !byId.has(12), 'kein turmhoher Pfeiler, keine Doppelung');
+  assert.ok(!byId.has(10) && !byId.has(12), 'kein Pfeiler im Wasser, keine Doppelung (12 liegt im gleich hohen Turm)');
   assert.ok(byId.has(20), 'einzelnes Teil wird Gebäude');
   assert.equal(r.added, 2);
+});
+
+test('Gebäude aus Bauteilen: Sockel mit Hochhaus, Turm auf dem Block, Obergeschosse über der Arkade, Überbauung', async () => {
+  const { mergeParts, buildingType } = await import('../tools/osm/build.mjs');
+  const sq = (id, x, y, s, h) => ({ id, h, k: 0, measured: true, rings: [{ outer: true, pts: [x, y, x + s, y, x + s, y + s, x, y + s] }] });
+  // Einkaufssockel 3,1 m mit 25-m-Hochhaus darauf: beide Gebäude (vorher blieb nur das Hochhaus, der Sockel fehlte)
+  const bs = [sq(1, 5000, 0, 200, 120)];               // Block mit Umriss, 12 m
+  const parts = [sq(10, 0, 0, 400, 31), sq(11, 50, 50, 100, 250), sq(12, 60, 60, 40, 60), // Sockel, Hochhaus, Vordach
+    sq(20, 5050, 50, 60, 400)];                            // Turm im Umriss des Blocks, 40 m
+  const uppers = [sq(30, 200, 200, 150, 220),              // Obergeschosse 3,1–22 m über dem Sockel
+    sq(31, 9000, 0, 50, 180)];                             // Überbauung einer Straße: nichts darunter
+  const r = mergeParts(bs, parts, uppers);
+  const byId = new Map(bs.map((b) => [b.id, b]));
+  assert.ok(byId.has(10) && byId.has(11), 'Sockel und Hochhaus');
+  assert.ok(!byId.has(12), 'niedriges Teil im Sockel: kein eigenes Gebäude');
+  assert.equal(byId.get(10).h, 220, 'Obergeschosse heben den Sockel darunter (vorher: flache 3-m-Platte)');
+  assert.equal(byId.get(11).h, 250, 'Hochhaus bleibt');
+  assert.ok(byId.has(20) && byId.get(1).h === 120, 'Turm auf dem Block als eigenes Gebäude, Block bleibt 12 m');
+  assert.ok(!byId.has(31) && !byId.has(30), 'Obergeschosse werden kein eigenes Gebäude; ohne etwas darunter entfallen sie');
+  assert.deepEqual([r.towers, r.raised], [1, 1]);
+  assert.equal(buildingType({ 'building:part': 'retail' }), 'retail', 'Art eines Bauteils');
+  assert.equal(buildingType({ building: 'office', 'building:part': 'yes' }), 'office');
 });
 
 test('Echte Karte: Oberbaumbrücke mit Brückendeck, Türmen und ohne Häuser auf der Fahrbahn; Krankenhäuser in ganz Berlin', async () => {

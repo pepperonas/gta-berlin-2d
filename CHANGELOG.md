@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.25.2] – 2026-09-28
+
+### Behoben
+- Gebäude aus Bauteilen (`building:part`) stimmen jetzt, z. B. am Neuen Kranzler Eck / Kurfürstendamm 231:
+  - Obergeschosse über einer Arkade (`min_height`/`building:min_level`) wurden verworfen; übrig blieb ein 3 m hoher
+    Sockel als flache Platte. Sie heben jetzt das Haus darunter auf ihre Höhe (446 Häuser); nur ohne etwas darunter
+    (Überbauung einer Straße) entfallen sie weiter.
+  - In verschachtelten Teilen blieb nur das höchste mit seinem eigenen Umriss – der Sockel darum fehlte. Jetzt bleibt
+    der Sockel (außer im Wasser/auf dem Brückendeck: Pfeiler der Oberbaumbrücke), höhere Teile stehen darauf.
+  - Teile im Umriss eines Gebäudes, die deutlich höher sind (Turm auf dem Block), wurden ignoriert; sie stehen jetzt
+    als eigenes Gebäude darauf (3 260 in Berlin). Ein Haus in einem anderen wird nach diesem gezeichnet.
+  - Die Art eines Bauteils kommt aus `building:part` (retail, commercial …): Geschäftshäuser bekommen keine
+    Altbau-Dächer und -Fassaden mehr.
+
 ## [0.25.1] – 2026-09-28
 
 ### Behoben
