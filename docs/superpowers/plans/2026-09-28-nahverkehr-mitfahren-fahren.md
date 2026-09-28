@@ -22,7 +22,7 @@ Tunnel, Züge unter Tage und die Leisten. Alles deterministisch, ohne `w.rng`, i
 - Höchsttempo: Straßenbahn 60, U-Bahn 70, S-Bahn 100 km/h. Aufspringen ab 25 km/h Relativtempo; Abspringen ab 10 km/h (1,2 s betäubt, ab 40 km/h 10 HP Schaden).
 - Reichweite Fahrgast 25 px zum Wagen-Rechteck; Führerstand 30 px um die Spitze; Haltestelle ±250 px; Trinkgeld bis 10 € (voll bei ±30 px und größter Verzögerung ≤ 1,3 m/s² in den letzten 8 s).
 - Unter Tage = S/U-Bahn und kein sichtbares Gleis (`layer === 'rail'`) innerhalb 50 px; nicht geladene Kachel = nicht unter Tage.
-- Versionierung: jede Etappe mit Verhaltensänderung bumpt SemVer in `package.json`, `web/src/version.js`, `xbox/GtaBerlin/Package.appxmanifest` (`X.Y.Z.0`), datierter CHANGELOG-Eintrag, Tag `vX.Y.Z`, `git push --follow-tags`. README „Stand und Prüfumfang“ + Testzahl, CLAUDE.md Architektur nachführen.
+- Versionierung: jede Etappe mit Verhaltensänderung bumpt SemVer in `package.json`, `web/src/version.js`, `xbox/GtaBerlin/Package.appxmanifest` (`X.Y.Z.0`), datierter CHANGELOG-Eintrag, **annotierter** Tag `git tag -a vX.Y.Z -m "X.Y.Z"` (leichte Tags überträgt `--follow-tags` nicht), `git push --follow-tags`. README „Stand und Prüfumfang“ + Testzahl, CLAUDE.md Architektur nachführen.
 - Testserver für Browserprüfungen: `PORT=8091 npm start` (Port 8080 gehört einem anderen Projekt); nie `pkill` auf serve.mjs.
 - Jede neue Schutzprüfung bekommt eine Mutationsprobe (Fehler absichtlich einbauen, Test muss scheitern, zurücksetzen und per `git diff` prüfen).
 
@@ -1333,5 +1333,5 @@ test('Nahverkehr: Mitfahrten, Strecke im Nahverkehr und als Zugführer, bediente
 ```bash
 git add -A web/src tests README.md CHANGELOG.md docs/TECHNIK.md CLAUDE.md package.json xbox/GtaBerlin/Package.appxmanifest
 git commit -m "Public transport: ride as passenger (G / D-pad down), drive trams/S-Bahn/U-Bahn, tunnel view, stats (0.29.0)"
-git tag v0.29.0 && git push --follow-tags
+git tag -a v0.29.0 -m "0.29.0" && git push --follow-tags
 ```
