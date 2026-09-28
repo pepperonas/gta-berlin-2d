@@ -6,6 +6,7 @@ import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
 import { WEAPONS, PLAYER_HP } from './combat.js';
+import { WHEEL, slotDir, drawWeaponIcon } from './weaponwheel.js';
 import { dayName } from './rhythm.js';
 import { WX_ICON } from './weather.js';
 import { undelta } from './geom.js';
@@ -143,6 +144,32 @@ export class Hud {
   }
   panBigMap(dx, dy) { if (this.bigMap && this.mapView) { this.mapView.cx -= dx / this.bigMap.f; this.mapView.cy -= dy / this.bigMap.f; } }
 
+  // Waffenrad (rechte Maustaste halten): runde Segmente mit Symbolen, das gezeigte hell und etwas größer, in der Mitte
+  // Name und Munition. hover = Index des gezeigten Segments.
+  drawWeaponWheel(p, hover) {
+    const c = this.ctx, cx = this.vw / 2, cy = this.vh / 2, n = WEAPONS.length;
+    const R = WHEEL.radius, r0 = WHEEL.inner, gap = 0.035, step = 2 * Math.PI / n;
+    c.save();
+    c.fillStyle = 'rgba(8,10,14,0.35)'; c.fillRect(0, 0, this.vw, this.vh); // Welt dahinter abgedunkelt
+    for (let i = 0; i < n; i++) {
+      const on = i === hover, sel = i === (p.weapon ?? 0), mid = i * step - Math.PI / 2; // 0 oben
+      const a0 = mid - step / 2 + gap, a1 = mid + step / 2 - gap, Ro = on ? R + 10 : R;
+      c.beginPath(); c.arc(cx, cy, Ro, a0, a1); c.arc(cx, cy, r0, a1, a0, true); c.closePath();
+      c.fillStyle = on ? 'rgba(255,211,61,0.92)' : sel ? 'rgba(46,50,60,0.9)' : 'rgba(20,23,30,0.82)'; c.fill();
+      c.lineWidth = on ? 3 : 1.5; c.strokeStyle = on ? '#fff3c4' : sel ? YELLOW : 'rgba(255,255,255,0.18)'; c.stroke();
+      const d = slotDir(i, n), rm = (r0 + Ro) / 2;
+      drawWeaponIcon(c, WEAPONS[i].id, cx + d.x * rm, cy + d.y * rm, on ? 86 : 72, on ? '#1a1c22' : sel ? YELLOW : '#e8e8e8');
+      this.counts = this.counts ?? {}; this.counts.wheelIcons = (this.counts.wheelIcons ?? 0) + 1;
+    }
+    // Mitte: Name und Munition der gezeigten Waffe
+    const wp = WEAPONS[hover >= 0 ? hover : p.weapon ?? 0], k = WEAPONS.indexOf(wp);
+    c.beginPath(); c.arc(cx, cy, r0 - 8, 0, Math.PI * 2); c.fillStyle = 'rgba(12,14,19,0.9)'; c.fill();
+    this.text(wp.name.toUpperCase(), cx, cy - 4, { size: wp.name.length > 12 ? 12 : 15, weight: 800, align: 'center', color: YELLOW });
+    this.text(wp.melee ? 'Nahkampf' : `${p.mag?.[k] ?? wp.mag} / ${wp.mag}`, cx, cy + 20, { size: 15, weight: 700, align: 'center', color: '#ddd' });
+    c.restore();
+    this.layout = { ...(this.layout ?? {}), wheel: { cx, cy, R, r0, hover } };
+  }
+
   drawWeaponPanel(p) {
     const c = this.ctx, m = this.m;
     const w = 250, h = 104, x = this.vw - m.x - w, y = this.vh - m.y - h;
@@ -150,6 +177,7 @@ export class Hud {
     const wp = WEAPONS[p.weapon ?? 0];
     this.panel(x, y, w, h);
     this.text(wp.name.toUpperCase(), x + 18, y + 28, { size: 16, weight: 800, color: YELLOW });
+    drawWeaponIcon(c, wp.id, x + w - 42, y + 62, 46, 'rgba(255,255,255,0.8)'); // Symbol wie im Waffenrad
     // Waffenleiste: 6 Punkte, der gewählte hell
     for (let i = 0; i < WEAPONS.length; i++) {
       c.fillStyle = i === p.weapon ? YELLOW : 'rgba(255,255,255,0.25)';
@@ -556,7 +584,8 @@ export class Hud {
       ['Sprinten (zu Fuß)', 'A halten / Stick voll', 'Umschalt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
-      ['Einsteigen / Aussteigen', 'Y', 'F'],
+      ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
+      ['Waffenrad (zu Fuß)', '–', 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen)', 'A', 'E / Enter'],
       ['Hupe', 'X', 'H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],

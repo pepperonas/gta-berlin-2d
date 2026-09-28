@@ -43,6 +43,9 @@ change in `web/`.
   the title-screen demo world, and the Xbox shell bridge. `render.js`/`hud.js`/`audio.js`/`assets.js` are presentation only.
 - **Input pipeline (`input.js`):** keyboard + Web Gamepad API + host readings are merged into one raw state, then
   `InputState.frame()` derives the abstract actions. Short key presses are latched until the next sim step.
+  Right mouse button: `weaponwheel.js createRightButton` (pure state machine: tap → `enterExit`, hold → weapon wheel,
+  mouse direction via `wheelSlot`, release → `weaponSlot`); `main.js` feeds it pointer events, slows the accumulator
+  by `WHEEL.slow` while open and `hud.drawWeaponWheel` draws it (icons from `drawWeaponIcon`).
 - **Xbox shell bridge:** the Web Gamepad API is broken in UWP WebView2, so the C# shell reads `Windows.Gaming.Input`
   and posts a reading every 8 ms via `PostWebMessageAsJson` (`{type:'gamepad', pads}`); `fromHostReading` converts it
   to a standard gamepad. The page sends `{type:'ready'}` and `{type:'quit'}` (menu "Beenden", only shown when

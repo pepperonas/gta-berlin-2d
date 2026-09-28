@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.25.0] – 2026-09-28
+
+### Hinzugefügt
+- Rechte Maustaste: kurz tippen steigt ins Auto ein bzw. aus (wie F / Y); gedrückt halten öffnet zu Fuß das
+  Waffenrad. Das Kontextmenü des Browsers ist abgeschaltet.
+- Waffenrad: ein runder Kranz mit einem Segment je Waffe und eigenem Symbol (Faust, Schläger, Messer, Pistole,
+  Maschinenpistole, Schrotflinte). Die Richtung der Maus ab der Stelle des Drucks wählt, das gezeigte Segment leuchtet
+  gelb und wird größer, in der Mitte stehen Name und Munition; Loslassen nimmt die Waffe. In der Mitte (Totzone) bleibt
+  die letzte Wahl stehen. Solange das Rad offen ist, läuft das Spiel in Zeitlupe und es wird nicht geschossen; steigt
+  man ein oder wird umgehauen, schließt es.
+- Das Waffenfeld unten rechts zeigt das Symbol der gewählten Waffe.
+
 ## [0.24.1] – 2026-09-28
 
 ### Behoben

@@ -450,6 +450,12 @@ Kisten) und gegen Passanten (Kreis) und Autos (gedrehtes Rechteck); niedrige Wä
 lassen Kugeln durch. Die Streuung zieht aus dem Welt-Zufall, alles bleibt deterministisch und in Node testbar. Die
 Zielhilfe sucht im Kegel um die Zielrichtung das Ziel mit kleinstem „Winkel × 300 + Abstand“ und verlangt freie Sicht.
 Maus-Zielen rechnet `main.js` in einen Weltpunkt um (`aimWorld`), wie Menüklicks als abstrakte Eingabe.
+Die rechte Maustaste läuft über einen reinen Zustandsautomaten (`weaponwheel.js createRightButton`): unter 0,22 s
+losgelassen ist es ein Tippen (→ `enterExit`), länger gehalten öffnet zu Fuß das Waffenrad; die Richtung der Maus ab dem
+Druckpunkt wählt das Segment (`wheelSlot`, 0 oben, im Uhrzeigersinn, 18 px Totzone behält die Wahl), Loslassen wird
+zu `weaponSlot` – dieselbe abstrakte Eingabe wie die Zifferntasten, die Simulation bleibt unberührt. Solange das Rad
+offen ist, füllt `main.js` den Zeitschritt-Speicher nur zu 30 % (Zeitlupe, weiter in festen Schritten) und unterdrückt
+das Feuern.
 Gegenwehr ist ein Passanten-Zustand `fight` (hinlaufen, alle 0,9 s zuschlagen, Aufgeben nach 20 s oder 45 m); ob
 jemand sich wehrt, folgt aus seiner Nummer, nicht aus dem Welt-Zufall. Das K. o. nutzt denselben Ladeweg wie der
 Teleport (`findTeleportSpot`/`teleportTo`): Liegt das Ziel auf offenem Grund (Wiese, Platz, Gehweg/Hof), sucht

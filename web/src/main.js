@@ -10,6 +10,8 @@ import { Hud, BASE } from './hud.js';
 import { Sound } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
 import { thunderBetween } from './weather.js';
+import { createRightButton, WHEEL } from './weaponwheel.js';
+import { WEAPONS } from './combat.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -87,7 +89,15 @@ addEventListener('pointerdown', () => sound.unlock());
 // (menuHover/menuPick) durch dieselbe Spiellogik wie Controller und Tastatur.
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
 const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
-const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0 };
+const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0, enterExit: false, slot: 0 };
+// Rechte Maustaste: tippen = ein-/aussteigen, halten = Waffenrad (weaponwheel.js); das Kontextmenü des Browsers bleibt aus
+const rightBtn = createRightButton();
+addEventListener('contextmenu', (e) => e.preventDefault());
+const wheelResult = (r) => {
+  if (r.enterExit) pointer.enterExit = true;
+  if (r.pick !== undefined) { pointer.slot = r.pick + 1; sound.play('weapon'); }
+  if (r.opened) sound.play('ui-move');
+};
 const playingOnFoot = () => game.screen === 'playing' && game.world && !game.world.player.inCar && !game.showBigMap && !game.teleport && !game.resultMenu;
 addEventListener('blur', () => { pointer.fire = false; });
 const activeMenu = () => (game.screen === 'title' ? game.titleMenu : game.screen === 'paused' ? game.pauseMenu : game.screen === 'playing' ? game.resultMenu : null);
@@ -95,6 +105,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (!hud.s) return;
   const [vx, vy] = toHud(e);
   pointer.vx = vx; pointer.vy = vy; pointer.moved = performance.now();
+  if (rightBtn.open) { rightBtn.move(vx, vy); return; } // Waffenrad: die Richtung wählt
   input.lastDevice = 'keyboard';
   const d = pointer.drag;
   if (d) { d.moved += Math.hypot(vx - d.vx, vy - d.vy); hud.panBigMap(vx - d.vx, vy - d.vy); d.vx = vx; d.vy = vy; return; }
@@ -103,7 +114,12 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { pointer.vx = pointer.vy = -1; });
 canvas.addEventListener('pointerdown', (e) => {
-  if (!hud.s || e.button !== 0) return;
+  if (hud.s && e.button === 2 && game.screen === 'playing' && game.world && !game.showBigMap && !game.teleport && !game.resultMenu) {
+    const [vx, vy] = toHud(e);
+    rightBtn.press(performance.now() / 1000, vx, vy); canvas.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (!hud.s || e.button !== 0 || rightBtn.open) return;
   const [vx, vy] = toHud(e);
   const h = hitAt(vx, vy);
   if (!h) { // im Spiel zu Fuß: linke Maustaste feuert (Ziel = Mauszeiger)
@@ -115,7 +131,8 @@ canvas.addEventListener('pointerdown', (e) => {
   else if (h.kind === 'menu') pointer.pick = h;
   else if (h.kind === 'key') pointer.key = h.key;
 });
-canvas.addEventListener('pointerup', () => {
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button === 2) { wheelResult(rightBtn.release(performance.now() / 1000)); return; }
   pointer.fire = false;
   const d = pointer.drag; pointer.drag = null;
   if (!d || d.moved > 6 || !game.showBigMap || game.teleport) return; // gezogen, nicht geklickt
@@ -123,7 +140,7 @@ canvas.addEventListener('pointerup', () => {
   if (requestTeleport(game, (d.vx - m.ox) / m.f, (d.vy - m.oy) / m.f)) sound.play('ui');
 });
 canvas.addEventListener('wheel', (e) => {
-  if (playingOnFoot()) { e.preventDefault(); pointer.wheel = Math.sign(e.deltaY); return; } // Waffe wechseln
+  if (playingOnFoot()) { e.preventDefault(); if (!rightBtn.open) pointer.wheel = Math.sign(e.deltaY); return; } // Waffe wechseln
   if (!game.showBigMap || !hud.s) return;
   e.preventDefault();
   const [vx, vy] = toHud(e);
@@ -136,7 +153,10 @@ function applyPointer(inp) {
   if (pointer.hover) { if (pointer.hover.menu === menu) inp.menuHover = pointer.hover.i; pointer.hover = null; }
   if (pointer.pick) { if (pointer.pick.menu === menu) inp.menuPick = pointer.pick.i; pointer.pick = null; }
   // Kampf mit der Maus: zielen auf den Zeiger (solange die Maus zuletzt benutzt wurde), linke Taste, Mausrad
-  if (playingOnFoot()) {
+  if (pointer.enterExit) { inp.enterExit = true; pointer.enterExit = false; }
+  if (pointer.slot) { inp.weaponSlot = pointer.slot; pointer.slot = 0; }
+  if (rightBtn.open) { inp.fire = false; inp.firePressed = false; } // bei offenem Rad wird nicht geschossen
+  else if (playingOnFoot()) {
     inp.fire = inp.fire || pointer.fire;
     inp.firePressed = inp.firePressed || pointer.firePressed;
     if (pointer.wheel > 0) inp.weaponNext = true; else if (pointer.wheel < 0) inp.weaponPrev = true;
@@ -187,7 +207,10 @@ function readRaw() {
 
 let last = performance.now(), acc = 0, hintT = 0;
 function frame(now) {
-  const elapsed = Math.min(0.1, (now - last) / 1000); last = now; acc += elapsed;
+  const elapsed = Math.min(0.1, (now - last) / 1000); last = now;
+  // Waffenrad: öffnet nach dem Halten, schließt, wenn man nicht mehr zu Fuß spielt; solange offen, läuft die Welt langsam
+  wheelResult(rightBtn.tick(now / 1000, playingOnFoot() && !game.world?.player.dead, game.world?.player.weapon ?? 0, WEAPONS.length));
+  acc += rightBtn.open ? elapsed * WHEEL.slow : elapsed;
   while (acc >= DT) {
     acc -= DT;
     const inp = input.frame(readRaw(), DT);
@@ -246,6 +269,7 @@ function draw() {
       hud.drawGameplay(game.world, game);
       if (game.showBigMap) hud.drawBigMap(game.world); else hud.mapView = null;
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
+      if (rightBtn.open) hud.drawWeaponWheel(game.world.player, rightBtn.state.hover);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);
     else if (game.screen === 'controls') hud.drawControls();

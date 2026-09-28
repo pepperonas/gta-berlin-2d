@@ -173,7 +173,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Sprinten | A halten oder Stick voll | Umschalt |
 | Gas / Bremse, Rückwärts | RT / LT | W / S |
 | Handbremse | RB oder B | Leertaste |
-| Ein-/Aussteigen | Y | F |
+| Ein-/Aussteigen | Y | F oder rechte Maustaste (tippen) |
 | Aktion (Auftrag, Einladen, Abliefern) | A | E / Enter |
 | Hupe | X | H |
 | Stadtplan | Ansicht-Taste | M |
@@ -184,6 +184,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
 | Treten (zu Fuß) | B | V |
 | Waffe wechseln / wählen | LB / RB | Q, Mausrad / 1–6 |
+| Waffenrad (zu Fuß) | – | rechte Maustaste halten, Maus in Richtung der Waffe, loslassen wählt (Zeitlupe, solange offen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
@@ -194,7 +195,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 259 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 263 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -346,7 +347,13 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 259 automatischen Tests grün, darunter:
+- Alle 263 automatischen Tests grün, darunter:
+  - Waffenrad: Mausrichtung → Segment (oben 0, im Uhrzeigersinn, Grenzen genau zwischen den Mitten, Totzone),
+    rechte Taste tippen = ein-/aussteigen, halten = Rad auf mit der aktuellen Waffe, Totzone behält die Wahl,
+    Loslassen wählt, im Auto kein Rad und kein versehentliches Aussteigen nach langem Halten, Rad schließt beim
+    Einsteigen; sechs verschiedene Symbole mit gültigen Koordinaten; HUD zeichnet je Waffe ein Segment, das gezeigte
+    gelb, Name und Munition in der Mitte (6 Mutationsproben, alle erkannt); im Browser geprüft (Messer gewählt,
+    Tippen steigt ein und aus, Kontextmenü unterdrückt);
   - Brücken: jede der 895 Brückenfahrbahnen Berlins in jeder Richtung über die ganze Breite abgefahren
     (`node tools/check-bridges.mjs`, blockweise, ~30 s) – keine Sperre außer einer OSM-Überlappung zweier A-100-Viadukte,
     höchstens 6 Stellen mit falscher Ebene; sechs Brücken mit je einer gefundenen Ursache (Elsenbrücke, Kaiserdamm,
