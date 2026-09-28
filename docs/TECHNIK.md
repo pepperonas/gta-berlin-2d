@@ -210,7 +210,15 @@ beide im selben Portal stehen, das beide Ebenen verbindet, damit dicht hinterein
 durcheinander hindurchfahren (`levels.js touch`). `surfaceAt(…, lvl)` sieht auf der Brücke nur die Brücke (Fahrbahn,
 sonst fester Grund) und am Boden Wasser und Häuser auch unter der Brücke. Der Build schneidet unsichtbare Wände nur
 noch mit Fahrflächen derselben Ebene auf: Kaimauern und Gleisränder laufen unter Brücken weiter, Geländer über den
-Straßen darunter – vorher mussten sie dort weggeschnitten werden, weil alles in einer Ebene lag.
+Straßen darunter – vorher mussten sie dort weggeschnitten werden, weil alles in einer Ebene lag. An jedem Widerlager
+(Brückenende mit tieferer Straße) sind Kaimauern, Gleisränder und Zäune dagegen über die ganze Brückenbreite offen,
+4 m davor bis 8 m auf die Brücke; Portale haben als Radius die größte Reichweite (Fahrbahn + Lücke + Radweg) + 2 m.
+Im Portal (`stepLevel`) gelten nur Portale, die die eigene Ebene verbinden; die eigene Ebene zählt auf Straßen, auf
+denen man entlangfährt (bis 17°), die andere nur auf Stücken, die durchs Portal führen; gewechselt wird, wenn man nicht
+mehr auf der eigenen ist und die andere höchstens 2,5 m daneben liegt, oder wenn man der Achse der anderen (in
+Fahrtrichtung) deutlich näher ist; Reichweiten über 10 m zählen dort nicht (OSM-Fehler). Geprüft wird das berlinweit
+von `tools/check-bridges.mjs`: jede Brückenfahrbahn in jeder Richtung, alle 1,5 m quer über die ganze Breite, mit
+Fahrzeugachse entlang der Sehne (wie ein Fahrer durch die Biegung lenkt), 40 m An- und Auslauf.
 
 **Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
 Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten

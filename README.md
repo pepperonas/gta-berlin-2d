@@ -194,7 +194,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 256 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 259 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -346,7 +346,12 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 256 automatischen Tests grün, darunter:
+- Alle 259 automatischen Tests grün, darunter:
+  - Brücken: jede der 895 Brückenfahrbahnen Berlins in jeder Richtung über die ganze Breite abgefahren
+    (`node tools/check-bridges.mjs`, blockweise, ~30 s) – keine Sperre außer einer OSM-Überlappung zweier A-100-Viadukte,
+    höchstens 6 Stellen mit falscher Ebene; sechs Brücken mit je einer gefundenen Ursache (Elsenbrücke, Kaiserdamm,
+    Gottlieb-Dunkel-Brücke, Lessingbrücke, Südostallee, Kiefholzstraße) einzeln ohne Befund; die Prüfung ist
+    gegengeprüft (mit ebenenblinden Wänden meldet sie die Elsenbrücke), 11 Mutationsproben;
   - Physik nach Ebenen: Stadtgrenze sperrt jede Ebene, Häuser/Bäume/Poller den Boden, Wände nur ihre Ebene; an der
     Warschauer Brücke quert ein Brückengeländer die Unterführung – unten fährt ein Auto hindurch, mit Ebene 1 prallt es
     ab; Kaimauer läuft unter der Oberbaumbrücke weiter; auf der Brückenachse oben Fahrbahn, unten Wasser, neben der

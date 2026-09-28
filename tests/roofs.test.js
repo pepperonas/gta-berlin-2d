@@ -180,3 +180,16 @@ test('Steildach über Vorderhaus mit Seitenflügel: jeder Flügel bekommt seinen
   assert.ok(wing, 'Flügelfläche');
   for (const x of [wing.pts[4], wing.pts[6]]) assert.ok(Math.abs(x - 3.5 * u) < 0.6 * u, `Flügel: First 3,5 m hinter der Traufe (${(x / u).toFixed(1)} m)`);
 });
+
+test('Dachaufbau im Grundriss: exakter Test – auch eine schmale Einbuchtung oder ein kleiner Hof zwischen Stichpunkten zählt', async () => {
+  const { rectInside } = await import('../web/src/roofs.js');
+  const box = { rings: [[0, 0, 100, 0, 100, 100, 0, 100]] };
+  assert.ok(rectInside(box, 50, 50, 10, 5, 1, 0), 'mitten im Haus');
+  assert.ok(!rectInside(box, 95, 50, 10, 5, 1, 0), 'ragt über die Kante');
+  // schmale Kerbe von oben bis y = 52, 2 px breit bei x = 51: liegt zwischen den früheren 5×5-Stichpunkten
+  const notch = { rings: [[0, 0, 50, 0, 50, 52, 52, 52, 52, 0, 100, 0, 100, 100, 0, 100]] };
+  assert.ok(!rectInside(notch, 51, 55, 15, 6, 1, 0), 'Kerbe reicht ins Rechteck');
+  const court = { rings: [[0, 0, 100, 0, 100, 100, 0, 100], [48, 48, 48, 51, 51, 51, 51, 48]] };
+  assert.ok(!rectInside(court, 50, 50, 15, 6, 1, 0), 'kleiner Innenhof unter dem Aufbau');
+  assert.ok(rectInside(court, 20, 20, 8, 4, Math.cos(0.5), Math.sin(0.5)), 'gedreht, abseits des Hofs');
+});

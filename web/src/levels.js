@@ -8,7 +8,7 @@
 import { AREA_KIND } from './citycodes.js';
 import { pointInRings } from './geom.js';
 
-export const LEVEL = { pathHalf: 12, margin: 5, check: 10, lost: 30 }; // px (10 px = 1 m) bzw. Schritte
+export const LEVEL = { pathHalf: 12, margin: 5, check: 10, lost: 30, slack: 25, maxHalf: 100 }; // px (10 px = 1 m) bzw. Schritte
 const q = [];
 const box = { x: 0, y: 0, w: 0, h: 0 };
 const around = (x, y, r) => { box.x = x - r; box.y = y - r; box.w = 2 * r; box.h = 2 * r; return box; };
@@ -30,7 +30,7 @@ function pieces(city, x, y, r, out) {
     const dx = s.bx - s.ax, dy = s.by - s.ay, L2 = dx * dx + dy * dy || 1;
     const t = ((x - s.ax) * dx + (y - s.ay) * dy) / L2, tc = Math.max(0, Math.min(1, t));
     const d = Math.hypot(s.ax + dx * tc - x, s.ay + dy * tc - y), side = Math.sign((x - s.ax) * -dy + (y - s.ay) * dx) || 1;
-    out.push({ lvl: e.lvl ?? 0, d, t, half: reach(e, side), angle: Math.atan2(dy, dx) });
+    out.push({ lvl: e.lvl ?? 0, d, t, half: reach(e, side), angle: Math.atan2(dy, dx), ends: e.pts });
   }
   for (const f of city.render.query(around(x, y, r), q)) {
     if (f.layer !== 'path' || !f.lvl) continue; // Wege am Boden zählen nicht als eigene Fläche
@@ -39,12 +39,12 @@ function pieces(city, x, y, r, out) {
       const dx = p[i + 2] - p[i], dy = p[i + 3] - p[i + 1], L2 = dx * dx + dy * dy || 1;
       const t = ((x - p[i]) * dx + (y - p[i + 1]) * dy) / L2, tc = Math.max(0, Math.min(1, t));
       const d = Math.hypot(p[i] + dx * tc - x, p[i + 1] + dy * tc - y);
-      if (d < r) out.push({ lvl: f.lvl, d, t, half: LEVEL.pathHalf, angle: Math.atan2(dy, dx) });
+      if (d < r) out.push({ lvl: f.lvl, d, t, half: LEVEL.pathHalf, angle: Math.atan2(dy, dx), path: p });
     }
   }
   return out;
 }
-const tmpPieces = [];
+const tmpPieces = [], tmpPortals = [];
 
 // Liegt unter (x, y) eine Fläche der Ebene lvl (Straße, Brückenweg, Kreuzungsscheibe, Brückendeck)? r = Toleranz
 export function levelHere(city, x, y, lvl, r = LEVEL.margin) {
@@ -76,21 +76,51 @@ export function initialLevel(city, x, y, angle = null, r = 30) {
 }
 
 // Ebene eines Objekts einen Schritt weiterführen (obj.x, obj.y, obj.lvl; obj._lvlT zählt fürs Sicherheitsnetz)
+// Führt ein Stück durch das Portal (Kante endet dort, Weg hat dort einen Punkt)? Nur solche zählen im Portal –
+// eine Straße, die bloß darunter oder darüber hindurchführt (A 100 unter dem Kaiserdamm), entscheidet nichts.
+function through(p, portals) {
+  for (const portal of portals) {
+    if (p.lvl < portal.lo || p.lvl > portal.hi) continue;
+    const near = (x, y) => Math.abs(x - portal.x) < 3 && Math.abs(y - portal.y) < 3;
+    if (p.ends) { const e = p.ends; if (near(e[0], e[1]) || near(e[e.length - 2], e[e.length - 1])) return true; continue; }
+    if (!p.path) return true; // ohne Geometrie (Testattrappe): zählt
+    for (let i = 0; i < p.path.length; i += 2) if (near(p.path[i], p.path[i + 1])) return true;
+  }
+  return false;
+}
+
+const aligned = (a, b) => { let d = Math.abs(((a - b) % Math.PI + Math.PI) % Math.PI); d = Math.min(d, Math.PI - d); return d < 0.3; }; // bis 17°: man fährt auf ihr entlang
+
 export function stepLevel(city, obj) {
   const L = obj.lvl ?? 0;
-  let portal = null;
-  for (const p of city.portals.query(around(obj.x, obj.y, 1), q)) if (Math.hypot(obj.x - p.x, obj.y - p.y) <= p.r) { portal = p; break; }
-  if (portal) {
-    // Nur Flächen zählen, auf denen man eindeutig ist (innerhalb der Breite, Lotfußpunkt innerhalb des Stücks):
-    // auf einer der eigenen Ebene bleibt man; sonst gilt die, in der man am tiefsten drin ist. Auf keiner (Gehweg
-    // neben der Fahrbahn, Treppenfuß daneben) ändert sich nichts.
-    let keep = false, best = null;
-    for (const p of pieces(city, obj.x, obj.y, portal.r + 40, tmpPieces)) {
-      if (p.lvl < portal.lo || p.lvl > portal.hi || p.t <= 0.001 || p.t >= 0.999 || p.d > p.half) continue;
-      if (p.lvl === L) keep = true;
-      if (!best || p.d / p.half < best.d / best.half) best = p;
+  // nur Portale, die die eigene Ebene verbinden (wer auf der Brücke über das Portal einer tieferen Brücke fährt, bleibt
+  // oben); liegen mehrere übereinander (Richtungsfahrbahnen), zählen alle
+  const portals = tmpPortals; portals.length = 0;
+  for (const p of city.portals.query(around(obj.x, obj.y, 1), q)) if (L >= p.lo && L <= p.hi && Math.hypot(obj.x - p.x, obj.y - p.y) <= p.r) portals.push(p);
+  if (portals.length) {
+    const reachR = Math.max(...portals.map((p) => p.r));
+    // Im Portal zählt die Fläche, auf der man ist oder der man am nächsten ist (Lotfußpunkt innerhalb des Stücks):
+    // je Ebene der kleinste Überstand über die Breite (d − Reichweite, ≤ 0 = drauf). Auf der eigenen bleibt man, solange
+    // man auf ihr ist; sonst gilt die nächste bis LEVEL.slack daneben – wer am Rand der Brücke auffährt oder mit einer
+    // Radseite neben der schmalen Fahrbahn, kommt trotzdem hinauf. Auf keiner (Gehweg, Treppenfuß daneben): nichts.
+    // Liegen beide Flächen unter einem (breite Straße am Brückenkopf), gilt die, deren Achse man deutlich näher ist
+    // (relativer Abstand d/Reichweite unter der Hälfte) – sofern sie in Fahrtrichtung verläuft (wer auf der breiten
+    // Heerstraße geradeaus fährt, streift den Anfang der Abfahrt, bleibt aber oben).
+    let own = Infinity, ownRel = Infinity, best = null, bestEx = Infinity, bestRel = Infinity, bestAligned = false;
+    const heading = Number.isFinite(obj.angle) ? obj.angle : null;
+    for (const p of pieces(city, obj.x, obj.y, reachR + 60, tmpPieces)) {
+      if (p.t <= 0.001 || p.t >= 0.999) continue;
+      // Eigene Ebene: nur Straßen, auf denen man entlangfährt (bis 17°; ohne Fahrtrichtung jede durchs Portal) – auch
+      // wenn sie nicht durchs Portal führt (A 100 an der Auffahrt vorbei); eine, die man nur quert oder die schräg
+      // abzweigt (A 100 unter dem Kaiserdamm, Zufahrt an der Kiefholzstraße), hält niemanden unten.
+      // Andere Ebene: nur Stücke, die durchs Portal führen (die Brücke nebenan zählt nicht).
+      if (p.lvl === L ? (heading !== null ? !aligned(heading, p.angle) : !through(p, portals)) : !through(p, portals)) continue;
+      const half = Math.min(p.half, LEVEL.maxHalf); // unplausible Breiten (OSM: 30 m auf 7 m Länge) nicht über den Brückenkopf
+      const ex = p.d - half, rel = p.d / (half || 1);
+      if (p.lvl === L) { own = Math.min(own, ex); ownRel = Math.min(ownRel, rel); }
+      else if (ex < bestEx) { bestEx = ex; bestRel = rel; best = p; bestAligned = heading === null || aligned(heading, p.angle); }
     }
-    if (!keep && best) obj.lvl = best.lvl;
+    if (best && bestEx <= LEVEL.slack && ((own > 0 && bestEx < own) || (bestEx <= 0 && bestAligned && bestRel < 0.5 * ownRel))) obj.lvl = best.lvl;
     obj._lvlT = 0;
     return obj.lvl ?? 0;
   }

@@ -4,6 +4,27 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.24.1] – 2026-09-28
+
+### Behoben
+- Brücken berlinweit befahrbar gemacht – mit einem neuen Prüfwerkzeug (`tools/check-bridges.mjs`), das jede der 895
+  Brückenfahrbahnen in jeder Richtung über die ganze Breite abfährt, die Ebene wie im Spiel führt und jede Sperre
+  meldet. Vorher: 57 Sperren, jetzt keine (bis auf eine Überlappung zweier A-100-Viadukte in OSM am äußersten Rand).
+  Die Ursachen:
+  - Elsenbrücke: ein Zaun unter der Brücke sperrte die Brücke darüber (Zäune sperren nur noch Straßen ihrer Ebene;
+    53 Straßen waren so fälschlich gesperrt).
+  - Am Rand der Brücke (Lücke zur Gegenfahrbahn, Radweg) lag man außerhalb des Portals, blieb unten und prallte an die
+    Kaimauer darunter: Portale umfassen die ganze Breite, im Portal gilt die nächste Fläche mit etwas Spielraum.
+  - Am Widerlager lagen Kaimauern, Gleisränder und Zäune quer über der Brückenbreite, geöffnet war nur die Breite der
+    Straße dahinter (Lessingbrücke u. a.): an allen 1 605 Brückenenden jetzt über die ganze Brückenbreite offen.
+  - Eine Straße, die unter dem Brückenkopf hindurchführt (A 100 unter dem Kaiserdamm) oder schräg abzweigt, hielt
+    Autos unten; im Portal zählt die eigene Ebene nur noch auf der Straße, auf der man entlangfährt.
+  - Das Portal einer tieferen Brücke zog Autos auf der höheren herunter (Gottlieb-Dunkel-Brücke über der A 100).
+  - Mehrere Portale übereinander (Richtungsfahrbahnen) wurden nicht alle berücksichtigt; unplausible OSM-Breiten
+    (30 m auf 7 m Länge an der Südostallee) zählen am Brückenkopf höchstens 10 m.
+- Dachaufbauten werden exakt gegen den Grundriss geprüft (Kanten gegen das Rechteck) statt an 5 × 5 Stichpunkten –
+  eine schmale Einbuchtung oder ein kleiner Hof zwischen den Punkten ließ eine Klimaanlage über die Dachkante ragen.
+
 ## [0.24.0] – 2026-09-28
 
 ### Hinzugefügt

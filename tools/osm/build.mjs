@@ -386,7 +386,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   const reachOf = (ed, side) => ed.w / 10 * S / 2 + (ed.fill && Math.sign(ed.fill) === side ? Math.abs(ed.fill) : 0) + (trackOf(ed, side) ? 0.4 * S + trackOf(ed, side) : 0);
   const junctions = junctionsOf(edges, vertices, S);
   // Portale: Knoten, die Wege verschiedener Ebenen teilen (Rampenende, Brückenkopf, Treppe) – nur dort wechselt man die Ebene
-  const portals = portalsOf(edges, paths, P, S);
+  const portals = portalsOf(edges, paths, P, S, reachOf);
   step(`Ebenen: ${edges.filter((e) => e.lvl > 0).length} Brückenkanten, ${edges.filter((e) => e.lvl < 0).length} Unterführungskanten, ${portals.length} Portale`);
   // Korridore einer Kante: Fahrbahn auf der Achse, dazu je Seite das Band bis zur Reichweite (Lücke, Radweg)
   const surfaceBands = (ed, margin, id, { tracks = true } = {}) => {
@@ -441,7 +441,25 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   // exakter Punkttest der Fahrfläche einer Ebene (auch Tordurchfahrten und gesperrte Straßen)
   const onSurfaceAt = perLvl((L) => surfaceIndex(edges, edgePts, junctions.filter((j) => atLvl(j, L)), reachOf, S, (ed) => ed.c <= 8 && lvlOf(ed) === L));
   const invisible = (q, skip, L = 0) => cutWhere(q, (x, y) => onSurfaceAt(L)(x, y, skip), S); // unsichtbare Wände: nie auf Fahrfläche
-  for (const wa of water) for (const r of wa.rings) for (const q of cut([...r.pts, r.pts[0], r.pts[1]])) for (const q2 of surfCutAt(0)(q)) invisible(q2).forEach(addWall(WALL_KIND.quay)); // Wasser bremst nur
+  // Widerlager: wo eine Brücke auf eine tiefere Straße herunterkommt, fährt man über die ganze Brückenbreite (Fahrbahn,
+  // Lücke zur Gegenfahrbahn, Radweg) auf den Boden. Ufer, Gleisränder und Zäune, die dort quer liegen, sind offen – von
+  // 4 m vor dem Brückenende bis 8 m auf die Brücke (sonst prallte man am Rand der Lessingbrücke an die Kaimauer).
+  const atVertex = new Map();
+  for (const ed of edges) for (const v of [ed.a, ed.b]) (atVertex.get(v) ?? atVertex.set(v, []).get(v)).push(ed);
+  const abutments = [];
+  for (const ed of edges) {
+    if (!(lvlOf(ed) >= 1) || ed.c > 10) continue;
+    const p = edgePts(ed), R = Math.max(reachOf(ed, -1), reachOf(ed, 1)) + 1 * S;
+    for (const [v, x0, y0, x1, y1] of [[ed.a, p[0], p[1], p[2], p[3]], [ed.b, p[p.length - 2], p[p.length - 1], p[p.length - 4], p[p.length - 3]]]) {
+      if (!(atVertex.get(v) ?? []).some((o) => o !== ed && lvlOf(o) < lvlOf(ed))) continue;
+      const L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L, into = Math.min(8 * S, L);
+      abutments.push([x0 - ux * 4 * S, y0 - uy * 4 * S, x0 + ux * into, y0 + uy * into, R]);
+    }
+  }
+  const abutCut = makeCutter(abutments, S);
+  const openAbut = (list) => list.flatMap((q) => abutCut(q));
+  step(`${abutments.length} Widerlager`);
+  for (const wa of water) for (const r of wa.rings) for (const q of cut([...r.pts, r.pts[0], r.pts[1]])) for (const q2 of surfCutAt(0)(q)) openAbut(invisible(q2)).forEach(addWall(WALL_KIND.quay)); // Wasser bremst nur
   const railWalls = [];
   for (const r of rails) if (!r.br && !r.sub) for (const d of [-2.5 * S, 2.5 * S]) for (const q of cut(offsetLine(r.p, d))) railWalls.push([q, lvlOf(r)]);
   // Brückengeländer nur am äußeren Rand der ganzen Brücke: jedes Geländer endet, wo eine andere Brückenfahrbahn derselben
@@ -477,11 +495,11 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   const driveCut = makeCutter(edges.filter((ed) => ed.c <= 8 && !ed.blocked && !ed.pass && (ed.lvl ?? 0) === 0).flatMap((ed) => surfaceBands(ed, 0.3 * S, 'e', { tracks: false })), S);
   let cutWalls = 0;
   for (const [list, k] of [[railWalls, WALL_KIND.rail], [fenceWalls.map((w0) => [w0, 0]), WALL_KIND.fence]]) for (const [w0, L] of list) {
-    const pieces = k === WALL_KIND.rail ? surfCutAt(L)(w0).flatMap((q) => invisible(q, null, L)) : driveCut(w0);
+    const pieces = openAbut(k === WALL_KIND.rail ? surfCutAt(L)(w0).flatMap((q) => invisible(q, null, L)) : driveCut(w0));
     if (pieces.reduce((a, q) => a + lenOf(q), 0) < lenOf(w0) - 0.5 * S) cutWalls++;
     pieces.forEach(addWall(k, L));
   }
-  access.out.fences = access.out.fences.flatMap(([k, p]) => driveCut(p).map((q) => [k, q]));
+  access.out.fences = access.out.fences.flatMap(([k, p]) => openAbut(driveCut(p)).map((q) => [k, q]));
   access.stats.waendeAufFahrbahnGekuerzt = cutWalls;
   step(`Zugänge und Regeln ${JSON.stringify(access.stats)}`);
 
@@ -613,10 +631,12 @@ export function junctionsOf(edges, vertices, S) {
 
 // Portale: [x, y, Radius px, tiefste Ebene, höchste Ebene] je OSM-Knoten, an dem Straßen/Wege verschiedener Ebenen
 // zusammenkommen. Radius: breiteste halbe Straßenbreite + 2 m, nur Wege 2,5 m.
-export function portalsOf(edges, paths, P, S) {
+// Radius: größte Reichweite der Straßen am Knoten (Fahrbahn + Lücke zur Gegenfahrbahn + Radweg, reachOf) + 2 m – wer
+// am Rand der Brücke auffährt, muss durchs Portal kommen (sonst blieb er unten und prallte an die Kaimauer darunter).
+export function portalsOf(edges, paths, P, S, reachOf = (ed) => ed.w / 10 * S / 2) {
   const at = new Map();
   const add = (id, lvl, half) => { let e = at.get(id); if (!e) at.set(id, e = { lo: lvl, hi: lvl, half: 0 }); e.lo = Math.min(e.lo, lvl); e.hi = Math.max(e.hi, lvl); e.half = Math.max(e.half, half); };
-  for (const ed of edges) for (const id of ed.ids) add(id, ed.lvl ?? 0, ed.w / 10 * S / 2);
+  for (const ed of edges) for (const id of ed.ids) add(id, ed.lvl ?? 0, Math.max(reachOf(ed, -1), reachOf(ed, 1)));
   for (const pa of paths) for (const id of pa.ids ?? []) add(id, pa.lvl ?? 0, 0);
   const out = [];
   for (const [id, e] of at) {
@@ -989,11 +1009,13 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
     for (const q of open) fences.push([k, q]); // gezeichnet wie gebaut: mit Lücke an Toren und Wegen
     walls.push(...open);
     if (el.nodes.some((id) => gateNodes.has(id))) continue; // Zaun mit Tor: Durchfahrt möglich
-    // Kreuzt die Sperrlinie eine Straße, ist diese für Autos gesperrt (z. B. Diagonalsperre im Kiez).
+    // Kreuzt die Sperrlinie eine Straße derselben Ebene, ist diese für Autos gesperrt (z. B. Diagonalsperre im Kiez).
+    // Ein Zaun am Ufer unter einer Brücke sperrt die Brücke darüber nicht (so war die Elsenbrücke gesperrt).
+    const fenceLvl = levelOf(el.tags) ?? 0;
     for (let i = 0; i < pts.length - 2; i += 2) {
       const key = Math.floor(pts[i] / G) * 1000000 + Math.floor(pts[i + 1] / G);
       for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) for (const [kk, ax, ay, bx, by] of roadGrid.get(key + gx * 1000000 + gy) ?? []) {
-        if (edges[kk].blocked) continue;
+        if (edges[kk].blocked || (edges[kk].lvl ?? 0) !== fenceLvl) continue;
         // Poller-Reihen (Diagonalsperren): auch Straßen, die knapp daran vorbeiführen, meidet der KI-Verkehr
         const near = el.tags.traffic_intervention === 'diagonal_diverter' && Math.min(segDist2(ax, ay, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]), segDist2(bx, by, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]),
           segDist2(pts[i], pts[i + 1], ax, ay, bx, by), segDist2(pts[i + 2], pts[i + 3], ax, ay, bx, by)) < (3 * S) ** 2;

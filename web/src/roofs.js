@@ -290,6 +290,22 @@ function edgeDist(b, x, y) {
   return best;
 }
 
+// Liegt das gedrehte Rechteck (Mitte px/py, halbe Maße hx/hy, Achse ca/sa) ganz im Grundriss? Exakt: Mitte drin und keine
+// Grundrisskante schneidet oder berührt das Rechteck (auch keine schmale Einbuchtung, kein kleiner Innenhof)
+export function rectInside(b, px, py, hx, hy, ca, sa) {
+  if (!pointInRings(px, py, b.rings)) return false;
+  for (const r of b.rings) for (let i = 0; i < r.length; i += 2) {
+    // Kante ins Rechteck-System drehen und gegen das achsparallele Rechteck [-hx,hx]×[-hy,hy] schneiden (Liang–Barsky)
+    const ax = r[i] - px, ay = r[i + 1] - py, bx = r[(i + 2) % r.length] - px, by = r[(i + 3) % r.length] - py;
+    const x0 = ax * ca + ay * sa, y0 = -ax * sa + ay * ca, x1 = bx * ca + by * sa, y1 = -bx * sa + by * ca;
+    let t0 = 0, t1 = 1;
+    const dx = x1 - x0, dy = y1 - y0;
+    const clip = (pq, qq) => { if (pq === 0) return qq >= 0; const t = qq / pq; if (pq < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } return true; };
+    if (clip(-dx, x0 + hx) && clip(dx, hx - x0) && clip(-dy, y0 + hy) && clip(dy, hy - y0) && t0 <= t1) return false;
+  }
+  return true;
+}
+
 export function roofDecor(b, scale = 10, style = roofStyle(b, scale), geo = null) {
   const area = footprintM2(b, scale);
   const rnd = mulberry32(b.seed ^ 0x5bd1e995);
@@ -327,15 +343,9 @@ export function roofDecor(b, scale = 10, style = roofStyle(b, scale), geo = null
     const [lm, wm] = DECOR[t], l = lm * scale, wd = wm * scale;
     for (let tries = 0; tries < 12; tries++) {
       const px = x + rnd() * w, py = y + rnd() * h;
-      // ganze Fläche (plus Rand) im Grundriss? 5 × 5 Punkte – nur die Ecken zu prüfen reicht bei eingebuchteten
-      // Grundrissen nicht (eine Einbuchtung kann zwischen den Ecken liegen)
-      const hx = l / 2 + 0.4 * scale, hy = wd / 2 + 0.4 * scale;
-      let inside = true;
-      for (let i = 0; i <= 4 && inside; i++) for (let j = 0; j <= 4 && inside; j++) {
-        const u = -hx + hx * i / 2, v = -hy + hy * j / 2;
-        inside = pointInRings(px + ca * u - sa * v, py + sa * u + ca * v, b.rings);
-      }
-      if (!inside) continue;
+      // ganze Fläche (plus Rand) im Grundriss – exakt, denn eine Einbuchtung oder ein kleiner Hof kann zwischen
+      // Stichpunkten liegen (so ragte eine Klimaanlage aus Haus 549334)
+      if (!rectInside(b, px, py, l / 2 + 0.4 * scale, wd / 2 + 0.4 * scale, ca, sa)) continue;
       if (band && edgeDist(b, px, py) < band + Math.max(l, wd) / 2 + 0.3 * scale) continue;
       if (out.some((o) => Math.hypot(o.x - px, o.y - py) < (Math.max(o.l, o.w) + Math.max(l, wd)) / 2 + 0.5 * scale)) continue;
       out.push({ t, x: px, y: py, l, w: wd, a });

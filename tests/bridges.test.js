@@ -105,3 +105,43 @@ test('Zeichenfolge: Wege auf Brücken unter den Brückenfahrbahnen, Radwege geze
   assert.ok(log.some((l) => bridgeTracks.has(l.p) && l.s === '#a4574b'), 'Radweg auf der Brücke gezeichnet');
   assert.ok(r.stats.bridgeFills > 0, 'Lücke zur Gegenfahrbahn gefüllt');
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Alle Brücken befahrbar (tools/check-bridges.mjs): jede Brückenfahrbahn in jeder Richtung über die ganze Breite,
+// mit Ebenenführung wie im Spiel. Keine Wand auf der Brücke, Ebene stimmt.
+// ---------------------------------------------------------------------------------------------------------------
+import { checkBridges, checkAllBridges } from '../tools/check-bridges.mjs';
+
+// Stellen, an denen je eine Ursache steckte (Name, Kartenpunkt px, Radius m, Brücke, die dort liegen muss)
+const CASES = [
+  ['Elsenbrücke (Zaun darunter sperrte sie; Rand der Brücke ohne Portal)', 257900, 202950, 150, 'Elsenbrücke'],
+  ['Kaiserdamm (A 100 darunter hielt am Brückenkopf unten fest)', 137040, 186990, 100, 'Kaiserdamm'],
+  ['Gottlieb-Dunkel-Brücke (Portal der tieferen A-100-Brücke zog herunter)', 223250, 241730, 120, 'Gottlieb-Dunkel-Brücke'],
+  ['Lessingbrücke (Kaimauer quer am Widerlager, Lücke breiter als die Straße)', 175670, 173040, 80, 'Lessingbrücke'],
+  ['Südostallee (OSM: 30 m breites Stück am Brückenkopf)', 273440, 243100, 80, 'Südostallee'],
+  ['Kiefholzstraße (Zufahrt und A 100 schräg am Brückenkopf)', 256010, 215660, 80, 'Kiefholzstraße'],
+];
+
+test('Brücken mit bekannten Ursachen: über die ganze Breite ohne Sperre und auf der richtigen Ebene befahrbar', () => {
+  const meta = realIndex().meta;
+  for (const [name, x, y, r, bridge] of CASES) {
+    const city = openRealCity(), R = r * S;
+    city.loadArea(x - R - 2000, y - R - 2000, x + R + 2000, y + R + 2000);
+    const n = [...city.edges.values()].filter((e) => e.lvl >= 1 && e.name === bridge && Math.abs((e.pts[0] + e.pts.at(-2)) / 2 - x) < R && Math.abs((e.pts[1] + e.pts.at(-1)) / 2 - y) < R).length;
+    assert.ok(n > 0, `${name}: Brücke im Umkreis`);
+    const bad = checkBridges(city, [x - R, y - R, x + R, y + R]);
+    assert.deepEqual(bad.map((b) => `${b.e.name} ${b.hit ? b.hit.what : ''} ${Math.round(b.wrongLvl * 100)} %`), [], name);
+  }
+  const city = openRealCity(), [x, y] = geoToPx(meta, 52.4965, 13.4585);
+  city.loadArea(x - 3000, y - 3000, x + 3000, y + 3000);
+  assert.ok([...city.edges.values()].filter((e) => e.name === 'Elsenbrücke' && e.lvl >= 1).every((e) => !e.blocked), 'Elsenbrücke nicht gesperrt');
+});
+
+test('Alle Brücken Berlins: keine Wand auf der Fahrbahn, Ebene stimmt (bis auf bekannte OSM-Überlappungen)', () => {
+  const bad = checkAllBridges(openRealCity());
+  assert.ok(bad.count > 800, `${bad.count} Brückenkanten geprüft`);
+  // Einzige verbleibende Sperre: zwei A-100-Viadukte verschiedener Ebene, die sich in OSM am Rand überlappen
+  const walls = bad.filter((b) => b.hit).map((b) => `${b.e.name} #${b.e.id}`);
+  assert.deepEqual(walls.filter((w) => w !== 'A 100 #124130'), [], 'Sperren auf Brücken');
+  assert.ok(bad.length <= 6, `${bad.length} Befunde (Ebene) – vorher 57 Sperren`);
+});
