@@ -20,7 +20,7 @@ import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
 import { transitVisible } from './transitlive.js';
 import { patternsNear } from './transit.js';
-import { segDist2 } from './geom.js';
+import { railAt } from './tunnel.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
@@ -1316,8 +1316,7 @@ export class Renderer {
     }
     for (const b of world.bikes ?? []) if (near(b.x, b.y)) add(b, b.y, b.y, () => drawBike(ctx, b, riderShirt(b), L.sun, t), 9, 3.5, b.angle);
     // Bahnen: S-/U-Bahn nur, wo ihr Gleis oberirdisch liegt (sonst im Tunnel)
-    const rq = this._rq ??= [];
-    const railNear = (x, y) => { for (const f of city.render.query({ x: x - 50, y: y - 50, w: 100, h: 100 }, rq)) if (f.layer === 'rail') { const p = f.pts; for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 2500) return f; } return null; };
+    const railNear = (x, y) => railAt(city, x, y);
     const trains = this._trains = transitVisible(world, v, (x, y) => !!railNear(x, y));
     this.stats.trains = trains.length;
     for (const tr of trains) for (const c of tr.cars) {
