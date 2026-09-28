@@ -27,6 +27,19 @@ function head(pts, len) {
 }
 const rev = (p) => { const o = []; for (let i = p.length - 2; i >= 0; i -= 2) o.push(p[i], p[i + 1]); return o; };
 
+// Liegt (x, y) quer neben der Brückenachse (Lotfußpunkt nicht vor dem ersten oder hinter dem letzten Punkt)? Am
+// Innenrand einer scharfen Kurve beginnt der versetzte Fahrweg vor dem Brückenanfang – dort ist man noch nicht drauf.
+function besideAxis(bp, x, y) {
+  let best = Infinity, inside = false;
+  for (let i = 0; i < bp.length - 2; i += 2) {
+    const dx = bp[i + 2] - bp[i], dy = bp[i + 3] - bp[i + 1], L2 = dx * dx + dy * dy || 1;
+    const t = ((x - bp[i]) * dx + (y - bp[i + 1]) * dy) / L2, tc = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(bp[i] + dx * tc - x, bp[i + 1] + dy * tc - y);
+    if (d < best) { best = d; inside = !((i === 0 && t < 0) || (i === bp.length - 4 && t > 1)); }
+  }
+  return inside;
+}
+
 // Anschluss an einem Knoten: die Straße (Klasse ≤ 8, nicht die Brücke selbst), die am geradesten weiterführt;
 // dir = Fahrtrichtung am Knoten (Einheitsvektor). Liefert Punkte, die am Knoten beginnen und von ihm wegführen.
 function continuation(city, e, node, dir) {
@@ -76,7 +89,7 @@ function drive(city, world, e, forward, offset = null, log = null) {
     car.x = x; car.y = y; car.angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
     const was = car.lvl; stepLevel(city, car);
     if (log && was !== car.lvl) log.push(`Ebene ${was} → ${car.lvl} bei ${Math.round(car.x)},${Math.round(car.y)}${onBridge ? ' (Brücke)' : ''}`);
-    if (onBridge) { onBridgeSteps++; if (car.lvl !== e.lvl) wrongLvl++; }
+    if (onBridge && besideAxis(bp, car.x, car.y)) { onBridgeSteps++; if (car.lvl !== e.lvl) wrongLvl++; }
     if (!onBridge) continue; // An- und Abfahrt: Kanten, Bordsteine dort sind nicht Sache der Brücke
     for (const sol of world.solids.query(obbBounds(car), tmp)) {
       if (sol.layer === 'barrier' || sol.kind === 'border' || !blocks(world, sol, car.lvl)) continue; // Stadtgrenze: Kartenende, keine Sperre
@@ -87,7 +100,8 @@ function drive(city, world, e, forward, offset = null, log = null) {
     }
     if (found.length) break;
   }
-  return { hit: found[0] ?? null, wrongLvl: onBridgeSteps ? wrongLvl / onBridgeSteps : 0, before: before?.o, after: after?.o };
+  // falsche Ebene zählt ab 3 m Strecke (ein Wechsel 1 m hinter dem Knoten ist auf einem 10-m-Stück schon 10 %)
+  return { hit: found[0] ?? null, wrongLvl: onBridgeSteps ? wrongLvl / onBridgeSteps : 0, wrongM: wrongLvl * STEP / city.scale, before: before?.o, after: after?.o };
 }
 function wallName(city, s) { return `Wand(Ebene ${s.lvl ?? 0})`; }
 
@@ -110,7 +124,7 @@ export function checkBridges(city, box = null) {
       if (hi - lo < 2 * CAR.hh) offs.push(0);
       for (const off of offs) {
         const r = drive(city, world, e, forward, off);
-        if (r.hit || r.wrongLvl > 0.2) { out.push({ e, forward, off, ...r }); break; }
+        if (r.hit || (r.wrongLvl > 0.2 && r.wrongM > 3)) { out.push({ e, forward, off, ...r }); break; }
       }
     }
   }
@@ -144,6 +158,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const t0 = Date.now(), bad = box ? checkBridges(city, box) : checkAllBridges(city);
   const n = bad.count ?? [...city.edges.values()].filter((e) => e.lvl >= 1 && e.cls <= 8 && !e.passage).length;
-  for (const b of bad) console.log(`${b.e.name || '(ohne Namen)'} #${b.e.id} [${Math.round(b.e.pts[0])},${Math.round(b.e.pts[1])}] ${b.forward ? 'vor' : 'zurück'} Versatz ${b.off === null ? 'Spur' : Math.round(b.off / city.scale * 10) / 10 + ' m'}: ${b.hit ? `${b.hit.what} bei ${b.hit.x},${b.hit.y} auf Ebene ${b.hit.lvl}${b.hit.onBridge ? ' (auf der Brücke)' : ' (An-/Abfahrt)'}` : ''}${b.wrongLvl > 0.2 ? ` falsche Ebene ${Math.round(b.wrongLvl * 100)} %` : ''}`);
+  for (const b of bad) console.log(`${b.e.name || '(ohne Namen)'} #${b.e.id} [${Math.round(b.e.pts[0])},${Math.round(b.e.pts[1])}] ${b.forward ? 'vor' : 'zurück'} Versatz ${b.off === null ? 'Spur' : Math.round(b.off / city.scale * 10) / 10 + ' m'}: ${b.hit ? `${b.hit.what} bei ${b.hit.x},${b.hit.y} auf Ebene ${b.hit.lvl}${b.hit.onBridge ? ' (auf der Brücke)' : ' (An-/Abfahrt)'}` : ''}${b.wrongLvl > 0.2 ? ` falsche Ebene ${Math.round(b.wrongLvl * 100)} % (${Math.round(b.wrongM)} m)` : ''}`);
   console.log(`${bad.length} Befunde bei ${n} Brückenkanten in ${Date.now() - t0} ms`);
 }

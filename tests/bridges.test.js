@@ -27,6 +27,12 @@ test('Richtungsfahrbahnen auf Brücken: die Lücke dazwischen wird Fahrbahn, zur
   assert.equal(pair(30).n, 0, 'überlappen schon: nichts zu füllen');
   assert.equal(pair(120).n, 0, 'mehr als 7 m: echter Mittelstreifen bleibt');
   assert.equal(pair(78, 33, [0, 1]).n, 0, 'verschiedene Straßen: kein Paar');
+  const lv = pair(78); // dasselbe mit verschiedenen Ebenen: kein Paar (sonst ragt die Fläche in das Viadukt daneben)
+  const vertices2 = [0, 0, 0, 3000, 78, 3000, 78, 0], e2 = [
+    { a: 0, b: 1, c: 4, w: 33, n: 0, o: 1, br: 1, p: [], lvl: 2 }, { a: 2, b: 3, c: 4, w: 33, n: 0, o: 1, br: 1, p: [], lvl: 1 }];
+  const ep2 = (ed) => [vertices2[2 * ed.a], vertices2[2 * ed.a + 1], vertices2[2 * ed.b], vertices2[2 * ed.b + 1]];
+  assert.equal(bridgeFills(e2, ep2, S), 0, 'verschiedene Ebenen: kein Paar');
+  assert.equal(lv.n, 2);
 });
 
 test('Radwege neben der Fahrbahn (cycleway=track) kommen in den Querschnitt, Radstreifen bleiben auf der Fahrbahn', () => {
@@ -137,11 +143,12 @@ test('Brücken mit bekannten Ursachen: über die ganze Breite ohne Sperre und au
   assert.ok([...city.edges.values()].filter((e) => e.name === 'Elsenbrücke' && e.lvl >= 1).every((e) => !e.blocked), 'Elsenbrücke nicht gesperrt');
 });
 
-test('Alle Brücken Berlins: keine Wand auf der Fahrbahn, Ebene stimmt (bis auf bekannte OSM-Überlappungen)', () => {
+test('Alle Brücken Berlins: keine Wand auf der Fahrbahn, in der Spur immer die richtige Ebene', () => {
   const bad = checkAllBridges(openRealCity());
   assert.ok(bad.count > 800, `${bad.count} Brückenkanten geprüft`);
-  // Einzige verbleibende Sperre: zwei A-100-Viadukte verschiedener Ebene, die sich in OSM am Rand überlappen
-  const walls = bad.filter((b) => b.hit).map((b) => `${b.e.name} #${b.e.id}`);
-  assert.deepEqual(walls.filter((w) => w !== 'A 100 #124130'), [], 'Sperren auf Brücken');
-  assert.ok(bad.length <= 6, `${bad.length} Befunde (Ebene) – vorher 57 Sperren`);
+  assert.deepEqual(bad.filter((b) => b.hit).map((b) => `${b.e.name} #${b.e.id}: ${b.hit.what}`), [], 'Sperren auf Brücken');
+  // in der Spur (Versatz null) stimmt die Ebene überall; am äußersten Rand bleiben Stellen, an denen die Gegenfahrbahn
+  // ihre Brücke erst später beginnt (man ist dort tatsächlich auf deren Bodenstück) – höchstens 4, je höchstens 6 m
+  assert.deepEqual(bad.filter((b) => b.off === null).map((b) => `${b.e.name} #${b.e.id}`), [], 'falsche Ebene in der Spur');
+  assert.ok(bad.length <= 4 && bad.every((b) => b.wrongM <= 6.5), bad.map((b) => `${b.e.name} ${Math.round(b.wrongM)} m`).join(', '));
 });

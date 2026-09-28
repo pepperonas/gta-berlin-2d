@@ -109,12 +109,15 @@ export function stepLevel(city, obj) {
     let own = Infinity, ownRel = Infinity, best = null, bestEx = Infinity, bestRel = Infinity, bestAligned = false;
     const heading = Number.isFinite(obj.angle) ? obj.angle : null;
     for (const p of pieces(city, obj.x, obj.y, reachR + 60, tmpPieces)) {
-      if (p.t <= 0.001 || p.t >= 0.999) continue;
+      // Lotfußpunkt im Stück nötig – außer für ein Stück der eigenen Ebene, das nicht am Portal endet: am Knoten zwischen
+      // zwei solchen Stücken fällt der Lotfußpunkt innen in der Biegung aus beiden heraus, man ist aber drauf
+      const thru = through(p, portals);
+      if ((p.lvl !== L || thru) && (p.t <= 0.001 || p.t >= 0.999)) continue;
       // Eigene Ebene: nur Straßen, auf denen man entlangfährt (bis 17°; ohne Fahrtrichtung jede durchs Portal) – auch
       // wenn sie nicht durchs Portal führt (A 100 an der Auffahrt vorbei); eine, die man nur quert oder die schräg
       // abzweigt (A 100 unter dem Kaiserdamm, Zufahrt an der Kiefholzstraße), hält niemanden unten.
       // Andere Ebene: nur Stücke, die durchs Portal führen (die Brücke nebenan zählt nicht).
-      if (p.lvl === L ? (heading !== null ? !aligned(heading, p.angle) : !through(p, portals)) : !through(p, portals)) continue;
+      if (p.lvl === L ? (heading !== null ? !aligned(heading, p.angle) : !thru) : !thru) continue;
       const half = Math.min(p.half, LEVEL.maxHalf); // unplausible Breiten (OSM: 30 m auf 7 m Länge) nicht über den Brückenkopf
       const ex = p.d - half, rel = p.d / (half || 1);
       if (p.lvl === L) { own = Math.min(own, ex); ownRel = Math.min(ownRel, rel); }

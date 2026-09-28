@@ -355,10 +355,11 @@ in Edge `edge://inspect` mit der Konsole verbinden
     gelb, Name und Munition in der Mitte (6 Mutationsproben, alle erkannt); im Browser geprüft (Messer gewählt,
     Tippen steigt ein und aus, Kontextmenü unterdrückt);
   - Brücken: jede der 895 Brückenfahrbahnen Berlins in jeder Richtung über die ganze Breite abgefahren
-    (`node tools/check-bridges.mjs`, blockweise, ~30 s) – keine Sperre außer einer OSM-Überlappung zweier A-100-Viadukte,
-    höchstens 6 Stellen mit falscher Ebene; sechs Brücken mit je einer gefundenen Ursache (Elsenbrücke, Kaiserdamm,
+    (`node tools/check-bridges.mjs`, blockweise, ~30 s) – keine Sperre, in der Spur überall die richtige Ebene,
+    höchstens 4 Randstellen mit falscher Ebene (je ≤ 6 m, gestaffelte Brückenanfänge der Gegenfahrbahn); sechs Brücken mit je einer gefundenen Ursache (Elsenbrücke, Kaiserdamm,
     Gottlieb-Dunkel-Brücke, Lessingbrücke, Südostallee, Kiefholzstraße) einzeln ohne Befund; die Prüfung ist
-    gegengeprüft (mit ebenenblinden Wänden meldet sie die Elsenbrücke), 11 Mutationsproben;
+    gegengeprüft (mit ebenenblinden Wänden meldet sie die Elsenbrücke), 13 Mutationsproben; Lücke zur Gegenfahrbahn nur
+    zwischen Fahrbahnen derselben Ebene;
   - Physik nach Ebenen: Stadtgrenze sperrt jede Ebene, Häuser/Bäume/Poller den Boden, Wände nur ihre Ebene; an der
     Warschauer Brücke quert ein Brückengeländer die Unterführung – unten fährt ein Auto hindurch, mit Ebene 1 prallt es
     ab; Kaimauer läuft unter der Oberbaumbrücke weiter; auf der Brückenachse oben Fahrbahn, unten Wasser, neben der

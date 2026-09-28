@@ -789,7 +789,7 @@ export function bridgeFills(edges, edgePts, S) {
     const a = info.get(k), ea = edges[k];
     let best = null;
     for (const j of cand) {
-      if (j === k || edges[j].n !== ea.n) continue;
+      if (j === k || edges[j].n !== ea.n || (edges[j].lvl ?? 0) !== (ea.lvl ?? 0)) continue; // nur Gegenstück derselben Ebene (A 100: Viadukte übereinander)
       const b = info.get(j);
       if (a.ux * b.ux + a.uy * b.uy > -0.9) continue; // gegenläufig und parallel
       const rx = b.mx - a.mx, ry = b.my - a.my, along = Math.abs(rx * a.ux + ry * a.uy), across = rx * -a.uy + ry * a.ux;

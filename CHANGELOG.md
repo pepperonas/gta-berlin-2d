@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.25.1] – 2026-09-28
+
+### Behoben
+- A 100: zwei Viadukte verschiedener Ebene nebeneinander wurden als „Gegenfahrbahnen mit Lücke“ gepaart – die Lücke
+  zur Gegenfahrbahn wird nur noch zwischen Fahrbahnen derselben Ebene gefüllt. Damit gibt es auf keiner Brücke Berlins
+  mehr eine Sperre (die letzte am Rand des A-100-Viadukts ist weg).
+- Am Knoten zwischen zwei Brückenstücken (Biegung) verlor ein Auto am Innenrand kurz seine Fahrbahn und konnte auf die
+  Rampe darunter wechseln (Heerstraße): Stücke der eigenen Ebene, die nicht am Portal enden, zählen jetzt auch dort.
+- Brückenprüfung: falsche Ebene zählt ab 3 m Strecke (statt Anteil – auf 10-m-Stücken war ein Wechsel 1 m hinter dem
+  Knoten schon ein Befund); in der Spur stimmt die Ebene überall. Übrig sind 4 Stellen am äußersten Rand, an denen die
+  Gegenfahrbahn ihre Brücke erst später beginnt (dort ist man tatsächlich auf deren Bodenstück).
+
 ## [0.25.0] – 2026-09-28
 
 ### Hinzugefügt
