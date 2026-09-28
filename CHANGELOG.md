@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.19.0] – 2026-09-28
+
+### Geändert
+- Silhouetten für alle: Autos, Busse, Straßenbahnwagen, Radfahrer und Passanten bekommen einen Umriss, wenn eine
+  Baumkrone, ein Haus (Fassade, Dach, Tordurchfahrt) oder die Hochbahn über ihnen liegt – die Spielfigur bzw. ihr Auto
+  orange und pulsierend, alle anderen hell und zurückhaltend.
+- Der Umriss erscheint genau im verdeckten Teil (Umriss ∩ Verdecker, auf einer kleinen Hilfsfläche verrechnet): ragt
+  nur die Motorhaube unter einen Baum, ist nur die Motorhaube umrissen. Vorher zählte allein der Mittelpunkt.
+
 ## [0.18.0] – 2026-09-28
 
 ### Geändert

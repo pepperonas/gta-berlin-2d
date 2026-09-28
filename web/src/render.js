@@ -26,7 +26,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
-import { coverOf } from './occlusion.js';
+import { occludersOf, samplePoints } from './occlusion.js';
 import { wallColor, roofColors } from './buildcolors.js';
 import { WEAPONS } from './combat.js';
 import { benchAngle } from './life.js';
@@ -686,10 +686,24 @@ export class Renderer {
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
     const bridges = rails.filter((r) => r.bridge);
     this.drawTracks(bridges, true);
-    // Verdeckt etwas die Spielfigur bzw. ihr Auto? Dann kommen ihre Umrisse ganz oben drauf (nach der Lichtkarte)
+    // Was verdeckt wen? Fahrzeuge und Menschen bekommen dort, wo etwas später Gezeichnetes über ihnen liegt
+    // (Baumkrone, Haus, Viadukt), ihren Umriss obendrauf – nach der Lichtkarte, damit er auch nachts zu sehen ist.
+    const env = { trees, buildings, bridges, deck: TRACK.deck, cam, heightScale: RENDER.heightScale };
+    const covered = this._covered = [];
     const pcar = pl.inCar ? world.cars.find((c) => c.id === pl.inCar) : null;
-    const who = pcar ?? (pl.dead ? null : pl);
-    this.stats.cover = who ? coverOf({ x: who.x, y: who.y, key: pcar ? who.y + 6 : who.y }, { trees, buildings, bridges, deck: TRACK.deck, cam, heightScale: RENDER.heightScale }) : null;
+    const addT = (o, hw, hh, angle, key, player) => {
+      const R = hw ? Math.hypot(hw, hh) : 7;
+      const occ = occludersOf({ x: o.x, y: o.y, R, key, pts: samplePoints(o, hw, hh, angle) }, env);
+      if (occ.length) covered.push({ x: o.x, y: o.y, hw, hh, angle, R, occ, player });
+      return occ;
+    };
+    for (const c of world.cars) if (near(c.x, c.y)) addT(c, c.hw, c.hh, c.angle, c.y + 6, c === pcar);
+    for (const p of world.peds) if (near(p.x, p.y) && p.state !== 'dead') addT(p, 0, 0, 0, p.y, false);
+    for (const b of world.bikes ?? []) if (near(b.x, b.y)) addT(b, 9, 3.5, b.angle, b.y, false);
+    for (const tr of trains) if (tr.mode === 'tram') for (const c of tr.cars) if (near(c.x, c.y)) addT(c, c.L / 2, c.W / 2, c.angle, c.y + 4, false);
+    const mine = pcar ? covered.find((c) => c.player) : !pl.dead ? { occ: addT(pl, 0, 0, 0, pl.y, true) } : null;
+    this.stats.cover = mine?.occ?.[0]?.kind ?? null;
+    this.stats.silhouettes = covered.length;
     for (const tr of this._trains ?? []) if (tr.mode !== 'tram') for (const c of tr.cars) drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t);
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
     // 8b) Wolkenschatten ziehen über Straßen und Dächer
@@ -736,7 +750,7 @@ export class Renderer {
     // Leuchtreklame leuchtet selbst (nach der Lichtkarte)
     if (this._neon.length) drawNeon(ctx, this._neon, t, Math.min(1, (L.dark - 0.25) * 3));
 
-    if (this.stats.cover) drawSilhouette(ctx, who, !!pcar, t);
+    for (const c of covered) this.drawCovered(ctx, c, s, t);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -1110,6 +1124,38 @@ export class Renderer {
     ctx.restore();
   }
 
+  // Silhouette genau im verdeckten Teil: auf einer kleinen Hilfsfläche die Verdecker (Vereinigung) als Maske, den
+  // Umriss darauf beschränkt (destination-in), dann ins Bild. Spielfigur orange, alle anderen hell und zurückhaltend.
+  drawCovered(ctx, c, s, t) {
+    const R = c.R + 3, px = Math.min(256, Math.ceil(2 * R * s));
+    if (px < 4) return;
+    const k = px / (2 * R);
+    const mask = (this._silMask ??= makeCanvas(256, 256)).getContext('2d'), sil = (this._sil ??= makeCanvas(256, 256)).getContext('2d');
+    for (const g of [mask, sil]) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, px + 2, px + 2); g.setTransform(k, 0, 0, k, -(c.x - R) * k, -(c.y - R) * k); }
+    mask.fillStyle = '#000'; mask.strokeStyle = '#000';
+    for (const o of c.occ) {
+      if (o.kind === 'tree') { mask.beginPath(); mask.arc(o.x, o.y, o.r, 0, Math.PI * 2); mask.fill(); }
+      else if (o.kind === 'bridge') { mask.lineWidth = TRACK.deck; mask.lineCap = 'butt'; mask.beginPath(); mask.moveTo(o.pts[0], o.pts[1]); for (let i = 2; i < o.pts.length; i += 2) mask.lineTo(o.pts[i], o.pts[i + 1]); mask.stroke(); }
+      else { // Hauskörper: jede Wand als Viereck zwischen Fuß und Dach, dazu das Dach (mit Höfen)
+        const { b, dx, dy } = o;
+        for (const r of b.rings) for (let i = 0; i < r.length; i += 2) {
+          const x0 = r[i], y0 = r[i + 1], x1 = r[(i + 2) % r.length], y1 = r[(i + 3) % r.length];
+          mask.beginPath(); mask.moveTo(x0, y0); mask.lineTo(x1, y1); mask.lineTo(x1 + dx, y1 + dy); mask.lineTo(x0 + dx, y0 + dy); mask.closePath(); mask.fill();
+        }
+        mask.save(); mask.translate(dx, dy); mask.fill(pathOf(b), 'evenodd'); mask.restore();
+      }
+    }
+    sil.translate(c.x, c.y); sil.rotate(c.angle ?? 0);
+    silhouettePath(sil, c);
+    const pulse = 0.75 + 0.2 * Math.sin(t * 5);
+    sil.fillStyle = c.player ? 'rgba(255,122,26,0.3)' : 'rgba(255,255,255,0.14)'; sil.fill();
+    sil.strokeStyle = c.player ? `rgba(255,236,210,${pulse})` : 'rgba(255,255,255,0.6)'; sil.lineWidth = c.player ? 2 : 1.4; sil.stroke();
+    if (c.hw) { sil.beginPath(); sil.moveTo(c.hw * 0.35, -c.hh * 0.7); sil.lineTo(c.hw * 0.35, c.hh * 0.7); sil.stroke(); } // Frontscheibe: Fahrtrichtung
+    sil.setTransform(1, 0, 0, 1, 0, 0); sil.globalCompositeOperation = 'destination-in'; sil.drawImage(this._silMask, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.drawImage(this._sil, 0, 0, px, px, c.x - R, c.y - R, 2 * R, 2 * R);
+  }
+
   // Gebäude: sichtbare Fassaden (Kanten, deren Außennormale vom Dachversatz weg zeigt), dann das Dach.
   // night: null (normales Bild) oder { light: true, fill: Umgebungsfarbe } für die Lichtkarte.
   drawBuilding(b, cam, ctx = this.ctx, night = null) {
@@ -1207,25 +1253,14 @@ export class Renderer {
   }
 }
 
-// Umriss der verdeckten Spielfigur bzw. ihres Autos: helle Kontur mit orangem Schimmer, leicht pulsierend
-export function drawSilhouette(ctx, o, car, t) {
-  const a = 0.75 + 0.2 * Math.sin(t * 5);
-  ctx.save(); ctx.translate(o.x, o.y);
-  ctx.fillStyle = 'rgba(255,122,26,0.22)'; ctx.strokeStyle = `rgba(255,236,210,${a})`; ctx.lineWidth = 2;
-  ctx.setLineDash([]);
-  ctx.beginPath();
-  if (car) {
-    ctx.rotate(o.angle);
+// Umriss eines Fahrzeugs (abgerundetes Rechteck mit Frontscheibe) bzw. einer Person (Kreis) im Ursprung
+function silhouettePath(g, o) {
+  g.beginPath();
+  if (o.hw) {
     const L = o.hw, W = o.hh, r = Math.min(4, W * 0.5);
-    ctx.moveTo(-L + r, -W); ctx.lineTo(L - r, -W); ctx.quadraticCurveTo(L, -W, L, -W + r); ctx.lineTo(L, W - r); ctx.quadraticCurveTo(L, W, L - r, W);
-    ctx.lineTo(-L + r, W); ctx.quadraticCurveTo(-L, W, -L, W - r); ctx.lineTo(-L, -W + r); ctx.quadraticCurveTo(-L, -W, -L + r, -W); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(L * 0.35, -W * 0.7); ctx.lineTo(L * 0.35, W * 0.7); ctx.stroke(); // Frontscheibe: zeigt die Fahrtrichtung
-  } else {
-    ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(Math.cos(o.angle ?? 0) * 4, Math.sin(o.angle ?? 0) * 4); ctx.lineTo(Math.cos(o.angle ?? 0) * 11, Math.sin(o.angle ?? 0) * 11); ctx.stroke();
-  }
-  ctx.restore();
+    g.moveTo(-L + r, -W); g.lineTo(L - r, -W); g.quadraticCurveTo(L, -W, L, -W + r); g.lineTo(L, W - r); g.quadraticCurveTo(L, W, L - r, W);
+    g.lineTo(-L + r, W); g.quadraticCurveTo(-L, W, -L, W - r); g.lineTo(-L, -W + r); g.quadraticCurveTo(-L, -W, -L + r, -W); g.closePath();
+  } else g.arc(0, 0, 7, 0, Math.PI * 2);
 }
 
 function drawCrate(ctx, c) {

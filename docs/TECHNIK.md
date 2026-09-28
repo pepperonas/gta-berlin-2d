@@ -171,12 +171,16 @@ einen), jeweils `GATE_M` = 4,4 m breit. Vorher waren Tore 1,8 m breit und Querun
 Feld war mit dem Auto nicht erreichbar. `tests/helpers/city.js reachability` misst das per Flutfüllung auf einem
 Raster (Kreis mit Auto- bzw. Fußgängerradius gegen alle festen Hindernisse).
 
-**Silhouette** (`web/src/occlusion.js`, rein): Nach den tiefensortierten Objekten und dem Viadukt prüft der Renderer,
-ob die Spielfigur bzw. ihr Auto von etwas übermalt wurde, das in der Zeichenfolge nach ihr kommt: Baumkrone
-(Kreis über dem Stamm), Haus (Grundriss um Bruchteile des Dachversatzes verschoben – deckt Dach, Fassade und
-Tordurchfahrt) oder Viadukt/Bahnbrücke (halbe Deckbreite um das Gleis). Dann kommt ihr Umriss (Auto: abgerundetes
-Rechteck mit Frontscheibe, zu Fuß: Kreis mit Blickrichtung) nach der Lichtkarte obendrauf. Kosten: ein Punkt gegen
-die sichtbaren Häuser und Bäume je Bild.
+**Silhouetten** (`web/src/occlusion.js occludersOf`, rein; gezeichnet in `render.js drawCovered`): Nach den
+tiefensortierten Objekten und dem Viadukt sucht der Renderer für jedes sichtbare Fahrzeug (Auto, Bus, Straßenbahn-
+wagen, Rad) und jede Person die Verdecker, die in der Zeichenfolge nach ihr kommen und sie berühren – geprüft an neun
+Stichpunkten der Grundfläche (Mitte, Ecken, Kantenmitten): Baumkrone (Kreis über dem Stamm), Haus (Grundriss um
+Bruchteile des Dachversatzes verschoben – deckt Dach, Fassade und Tordurchfahrt) oder Viadukt/Bahnbrücke (halbe
+Deckbreite um das Gleis). Für jedes verdeckte Objekt entsteht auf zwei wiederverwendeten kleinen Hilfsflächen eine
+Maske aus allen Verdeckern (jede Wand als Viereck zwischen Fuß und Dach, dazu das Dach mit Höfen, Kronenkreise,
+Deckstreifen) und der Umriss (abgerundetes Rechteck mit Frontscheibe bzw. Kreis), der per `destination-in` auf die
+Maske beschnitten und nach der Lichtkarte ins Bild gesetzt wird. So ist genau der verdeckte Teil umrissen. Kosten an
+dichten Stellen 7–21 Umrisse je Bild bei 2,4–3,2 ms Zeichenzeit.
 
 **Verkehrsfluss ohne Ampel** (`web/src/traffic.js`): Jede KI-Route besteht aus Spurstücken; vor dem Ende eines Stücks
 bittet das Auto um Einfahrt (`mayEnter`). Eine Kreuzung ohne Ampel hält eine Reservierung (`world.jres`: Zufahrt,

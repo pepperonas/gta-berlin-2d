@@ -48,8 +48,8 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   sperren Straßen für den KI-Verkehr, Fußgänger kommen durch, und mit Schwung fährt man sie um (sie bleiben liegen);
   rund 47 000 Zäune, Mauern und Hecken, an Toren und überall, wo ein Weg sie kreuzt, 4,4 m breit offen – eingezäunte
   Flächen wie das Tempelhofer Feld erreicht man auch mit dem Auto; 41 000 Hauseingänge als Türen.
-- **Silhouette:** Verdeckt eine Baumkrone, ein Haus, eine Tordurchfahrt oder die Hochbahn die Spielfigur oder ihr Auto,
-  erscheint ihr Umriss obendrauf.
+- **Silhouetten:** Liegt eine Baumkrone, ein Haus, eine Tordurchfahrt oder die Hochbahn über einem Fahrzeug oder einer
+  Person, erscheint ihr Umriss genau im verdeckten Teil – für die Spielfigur und ihr Auto orange, für alle anderen hell.
 - **Bäume aus dem Berliner Baumbestand:** alle 962 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
   und Stammdicke; OSM-Bäume nur noch, wo das Kataster keinen Baum kennt.
 - **POIs und Hausnummern:** rund 50 000 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
@@ -174,7 +174,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 210 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 212 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -326,7 +326,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 210 automatischen Tests grün, darunter:
+- Alle 212 automatischen Tests grün, darunter:
   - Erreichbarkeit (Flutfüllung auf einem 0,5–0,8-m-Raster mit Auto- bzw. Fußgängerbreite gegen Hauswände, Zäune,
     Ufer, Bäume und Poller): das Tempelhofer Feld ist vom Columbiadamm aus mit dem Auto und zu Fuß erreichbar (Mitte,
     Nord-, Süd- und Ostrand); in Kreuzberg und Marzahn erreicht das Auto über 90 % der Fußgängerfläche; im Build
@@ -334,8 +334,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
     Querung bleibt ganz; Poller fallen mit Schwung um (Ereignis, Auto bremst leicht und fährt weiter), langsam nicht,
     bleiben nach dem Nachladen liegen, gelten je Welt, halten zu Fuß auf und liegend nicht mehr; Verdeckung durch
     Krone, Haus (Durchfahrt, hinter dem Haus, nicht davor und nicht an der Vorderkante) und Viadukt, die Silhouette
-    wird nur gezeichnet, wenn etwas verdeckt, auch im Auto in einer Durchfahrt (13 Mutationsproben, alle erkannt;
-    zwei zunächst blinde führten zu schärferen Prüfungen);
+    wird nur gezeichnet, wenn etwas verdeckt, auch im Auto in einer Durchfahrt; teilweise Verdeckung zählt (nur die
+    Motorhaube unter der Krone, Heck unter dem Dach), wer vor dem Baum steht, liegt obenauf; im Stadtverkehr bekommen
+    verdeckte Autos und Passanten je einen Umriss, freie nicht (18 Mutationsproben, alle erkannt; drei zunächst blinde
+    führten zu schärferen Prüfungen);
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);

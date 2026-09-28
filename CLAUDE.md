@@ -133,8 +133,10 @@ change in `web/`.
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop
   skips them via `isDown(world, s)`. `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
-- **Silhouette:** `occlusion.js coverOf` (pure) decides whether the player/their car is covered by something drawn later
-  (tree crown, building incl. passages, viaduct); `render.js` sets `stats.cover` and draws `drawSilhouette` after the lightmap.
+- **Silhouettes:** `occlusion.js occludersOf` (pure) lists what covers a vehicle/person (drawn later in depth order and
+  touching one of its `samplePoints`): tree crowns, buildings (incl. passages), viaducts. `render.js` collects
+  `this._covered` for all cars/peds/bikes/tram cars and the player, sets `stats.cover` (player) / `stats.silhouettes`,
+  and `drawCovered` masks the outline with the union of occluders on two scratch canvases (`destination-in`) after the lightmap.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.

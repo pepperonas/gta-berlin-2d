@@ -5,7 +5,7 @@ import { nearestEdge } from '../web/src/map.js';
 import { createWorld, updateWorld } from '../web/src/world.js';
 import { createCar, collideCarWorld, isDown } from '../web/src/car.js';
 import { KNOCK, PLAYER } from '../web/src/config.js';
-import { coverOf, crownOf, roofOffset } from '../web/src/occlusion.js';
+import { coverOf, crownOf, roofOffset, occludersOf, samplePoints } from '../web/src/occlusion.js';
 import { idle } from './helpers/bot.js';
 
 const CAR_R = 11, FOOT_R = 5; // Freiraum eines Autos (halbe Breite + Rand) bzw. einer Person, px
@@ -97,7 +97,7 @@ test('Silhouette: verdeckt → Umriss obendrauf (Auto und zu Fuß), frei → nic
   const ctx = new Proxy({ lineWidth: 1 }, {
     get(t, k) {
       if (k in t) return t[k];
-      if (k === 'fill') return () => { if (t.fillStyle === 'rgba(255,122,26,0.22)') sil++; };
+      if (k === 'drawImage') return (img) => { if (img && img === r._sil) sil++; };
       if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
       if (k === 'measureText') return () => ({ width: 10 });
       if (k === 'getLineDash') return () => [];
@@ -105,7 +105,8 @@ test('Silhouette: verdeckt → Umriss obendrauf (Auto und zu Fuß), frei → nic
     },
     set(t, k, v) { t[k] = v; return true; },
   });
-  const r = new Renderer(ctx);
+  let r = null;
+  r = new Renderer(ctx);
   // Spielfigur unter einer Baumkrone (Baum steht südlich von ihr, wird also später gezeichnet)
   const tr = city.list('tree').find((x) => x.size > 30);
   const c = crownOf(tr);
@@ -113,14 +114,14 @@ test('Silhouette: verdeckt → Umriss obendrauf (Auto und zu Fuß), frei → nic
   w.camera.x = c.x; w.camera.y = c.y;
   sil = 0; r.draw(w, 1280, 720, 1.2);
   assert.equal(r.stats.cover, 'tree');
-  assert.equal(sil, 1, 'Umriss gezeichnet');
+  assert.ok(sil >= 1 && sil === r.stats.silhouettes, 'Umriss gezeichnet (je verdecktem Objekt einer)');
   // mitten auf einer breiten Straße: frei
   const e = city.list('edge').find((x) => x.cls <= 4 && x.w > 150 && !x.br);
   const [x, y] = [e.pts[0], e.pts[1]];
   Object.assign(w.player, { x, y }); w.camera.x = x; w.camera.y = y;
   sil = 0; r.draw(w, 1280, 720, 1.2);
   const covered = r.stats.cover;
-  assert.equal(sil, covered ? 1 : 0, 'Umriss nur, wenn verdeckt');
+  assert.equal(sil, r.stats.silhouettes, 'je verdecktem Objekt ein Umriss');
   // im Auto in einer Tordurchfahrt
   const pass = city.list('edge').find((x) => x.passage);
   assert.ok(pass, 'Tordurchfahrt im Kerngebiet');
@@ -131,4 +132,59 @@ test('Silhouette: verdeckt → Umriss obendrauf (Auto und zu Fuß), frei → nic
     assert.equal(r.stats.cover, 'building', 'im Auto unter dem Haus');
   }
   assert.ok(covered === null || covered === 'tree', `auf der Straße höchstens von Straßenbäumen verdeckt (${covered})`);
+});
+
+test('Teilweise Verdeckung: schon die Motorhaube unter der Krone zählt; Fahrzeuge und Menschen gleichermaßen', () => {
+  const tr = { x: 100, y: 300, size: 40 }, c = crownOf(tr);
+  const env = { trees: [tr], buildings: [], bridges: [] };
+  // Auto 42 × 20, Mitte 35 px neben dem Kronenrand: nur die Front ragt unter die Krone
+  const car = { x: c.x - c.r - 15, y: c.y, angle: 0 };
+  const occ = occludersOf({ x: car.x, y: car.y, R: Math.hypot(21, 10), key: car.y + 6, pts: samplePoints(car, 21, 10, 0) }, env);
+  assert.equal(occ.length, 1, 'teilweise verdeckt');
+  assert.equal(occ[0].kind, 'tree');
+  assert.ok(!coverOf({ x: car.x, y: car.y, key: car.y + 6 }, env), 'der Mittelpunkt allein wäre frei');
+  const far = { x: c.x - c.r - 40, y: c.y };
+  assert.equal(occludersOf({ x: far.x, y: far.y, R: Math.hypot(21, 10), key: far.y, pts: samplePoints(far, 21, 10, 0) }, env).length, 0, 'ganz daneben');
+  // Person vor dem Stamm (später gezeichnet als der Baum): liegt obenauf, auch wenn der Kronenkreis sie berührt
+  assert.equal(occludersOf({ x: tr.x, y: tr.y + 5, R: 7, key: tr.y + 5 }, env).length, 0, 'vor dem Baum');
+  // Person am Kronenrand
+  assert.equal(occludersOf({ x: c.x + c.r * 0.9, y: c.y, R: 7, key: c.y }, env).length, 1);
+  // Hausecke ragt über das Heck eines Autos, das hinter dem Haus fährt
+  const b = { rings: [[0, 0, 200, 0, 200, 100, 0, 100]], cx: 100, cy: 50, bbox: { x: 0, y: 0, w: 200, h: 100 }, height: 200 };
+  const envB = { buildings: [b], cam: { x: 100, y: 50 }, heightScale: 1 };
+  const behind = { x: 220, y: -40 }; // rechts hinter dem Haus: nur das linke Ende liegt unter dem Dach
+  const o2 = occludersOf({ x: behind.x, y: behind.y, R: 23, key: behind.y + 6, pts: samplePoints(behind, 21, 10, 0) }, envB);
+  assert.equal(o2.length, 1, 'Heck unter dem Dach');
+  assert.equal(samplePoints({ x: 0, y: 0 }, 0, 0, 0).length, 1);
+  assert.equal(samplePoints({ x: 0, y: 0 }, 21, 10, 0.3).length, 9);
+});
+
+test('Silhouetten im Stadtverkehr: verdeckte Autos und Passanten bekommen einen Umriss, freie nicht', async () => {
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
+  globalThis.OffscreenCanvas ??= class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return new Proxy({}, { get: (t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}) }); } };
+  const { Renderer } = await import('../web/src/render.js');
+  const city = realCity(), w = createWorld({ city, seed: 5 });
+  w.camera.x = w.city.places.giver.x; w.camera.y = w.city.places.giver.y;
+  for (let i = 0; i < 60; i++) updateWorld(w, idle(), 1 / 60);
+  let draws = 0, r = null;
+  const ctx = new Proxy({ lineWidth: 1 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'drawImage') return (img) => { if (img === r._sil) draws++; };
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'getLineDash') return () => [];
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  r = new Renderer(ctx);
+  r.draw(w, 1280, 720, 1.2);
+  const list = r._covered;
+  assert.ok(list.length > 0, `${list.length} verdeckte Objekte im Bild`);
+  assert.equal(draws, list.length, 'je verdecktem Objekt ein Umriss');
+  assert.ok(list.some((c) => !c.player), 'auch andere als die Spielfigur');
+  const all = w.cars.length + w.peds.length;
+  assert.ok(list.length < all, `nicht alle (${list.length} von ${all})`);
+  for (const c of list) assert.ok(c.occ.length > 0 && c.occ.every((o) => ['tree', 'building', 'bridge'].includes(o.kind)));
 });
