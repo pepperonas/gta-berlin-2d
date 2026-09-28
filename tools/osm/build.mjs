@@ -359,6 +359,16 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   const rails = railWays.map((el) => ({ br: el.tags.bridge && el.tags.bridge !== 'no' ? 1 : 0, sub: el.tags.railway === 'subway' ? 1 : 0, ids: el.nodes, p: simplify(flat(el.nodes), 0.5 * S) })).filter((x) => x.p.length >= 4 && inBounds(x.p));
 
   // --- Wände: Ufer und Gleise, an Brücken/Übergängen aufgeschnitten --------------------
+  const offsetLine = (pts, d) => {
+    const out = [];
+    for (let i = 0; i < pts.length; i += 2) {
+      const pa = i > 0 ? [pts[i - 2], pts[i - 1]] : [pts[i], pts[i + 1]];
+      const pb = i < pts.length - 2 ? [pts[i + 2], pts[i + 3]] : [pts[i], pts[i + 1]];
+      const dx = pb[0] - pa[0], dy = pb[1] - pa[1], L = Math.hypot(dx, dy) || 1;
+      out.push(Math.round(pts[i] - dy / L * d), Math.round(pts[i + 1] + dx / L * d));
+    }
+    return out;
+  };
   const corridors = []; // [ax, ay, bx, by, r]
   const addCorridor = (list, pts, r, ext) => {
     for (let i = 0; i < pts.length - 2; i += 2) {
@@ -369,7 +379,25 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       list.push([ax, ay, bx, by, r]);
     }
   };
-  for (const ed of edges) if (ed.br) addCorridor(corridors, edgePts(ed), ed.w / 10 * S / 2 + 1.5 * S, 6 * S);
+  // Fahrfläche je Straßenseite (px): Fahrbahn + Lücke zur Gegenfahrbahn (Brücken) + Radweg neben der Fahrbahn.
+  // Unsichtbare Wände (Ufer, Gleisränder, Geländer) haben auf dieser ganzen Fläche nichts zu suchen.
+  bridgeFills(edges, edgePts, S);
+  const trackOf = (ed, side) => (ed.x.length > 13 ? (side < 0 ? ed.x[13] : ed.x[14]) / 10 * S : 0);
+  const reachOf = (ed, side) => ed.w / 10 * S / 2 + (ed.fill && Math.sign(ed.fill) === side ? Math.abs(ed.fill) : 0) + (trackOf(ed, side) ? 0.4 * S + trackOf(ed, side) : 0);
+  const junctions = junctionsOf(edges, vertices, S);
+  // Korridore einer Kante: Fahrbahn auf der Achse, dazu je Seite das Band bis zur Reichweite (Lücke, Radweg)
+  const surfaceBands = (ed, margin, id, { tracks = true } = {}) => {
+    const p = edgePts(ed), half = ed.w / 10 * S / 2, out = [];
+    for (let i = 0; i < p.length - 2; i += 2) out.push([p[i], p[i + 1], p[i + 2], p[i + 3], half + margin, id]);
+    for (const side of [-1, 1]) {
+      const r = tracks ? reachOf(ed, side) : half + (ed.fill && Math.sign(ed.fill) === side ? Math.abs(ed.fill) : 0);
+      if (r <= half + 0.1) continue;
+      const band = offsetLine(p, side * (half + r) / 2);
+      for (let i = 0; i < band.length - 2; i += 2) out.push([band[i], band[i + 1], band[i + 2], band[i + 3], (r - half) / 2 + margin, id]);
+    }
+    return out;
+  };
+  for (const ed of edges) if (ed.br) addCorridor(corridors, edgePts(ed), Math.max(reachOf(ed, -1), reachOf(ed, 1)) + 1.5 * S, 6 * S);
   for (const pa of paths) if (pa.br) addCorridor(corridors, pa.p, 2.5 * S, 4 * S);
   // Straßen, die Gleise ebenerdig kreuzen (gemeinsamer Knoten), öffnen die Gleiswand.
   const railNodes = new Set(); for (const r of rails) if (!r.br) for (const id of r.ids) railNodes.add(id);
@@ -394,41 +422,38 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
     const full = b.rings.reduce((acc, r) => acc + lenOf([...r.pts, r.pts[0], r.pts[1]]), 0);
     if (ws.reduce((acc, x) => acc + lenOf(x), 0) < full - 0.5 * S) b.walls = ws; // nur wenn wirklich ein Stück Wand fehlt
   }
-  const offsetLine = (pts, d) => {
-    const out = [];
-    for (let i = 0; i < pts.length; i += 2) {
-      const pa = i > 0 ? [pts[i - 2], pts[i - 1]] : [pts[i], pts[i + 1]];
-      const pb = i < pts.length - 2 ? [pts[i + 2], pts[i + 3]] : [pts[i], pts[i + 1]];
-      const dx = pb[0] - pa[0], dy = pb[1] - pa[1], L = Math.hypot(dx, dy) || 1;
-      out.push(Math.round(pts[i] - dy / L * d), Math.round(pts[i + 1] + dx / L * d));
-    }
-    return out;
-  };
   // Wandzüge mit Art (WALL_KIND in citycodes.js): Ufer, Gleis, Geländer, Zaun – das Spiel und die Tests unterscheiden sie
   const walls = [], wallKind = [];
   const addWall = (k) => (p) => { walls.push(p); wallKind.push(k); };
-  for (const wa of water) for (const r of wa.rings) cut([...r.pts, r.pts[0], r.pts[1]]).forEach(addWall(WALL_KIND.quay));
+  // Befahrbare Fläche aller Straßen (inkl. Kreuzungsscheiben) – unsichtbare Wände enden dort
+  const surfCorr = [];
+  for (const ed of edges) if (ed.c <= 8 && !ed.blocked && !ed.pass) surfCorr.push(...surfaceBands(ed, 0.3 * S, 'e'));
+  for (const j of junctions) surfCorr.push([j.x, j.y, j.x, j.y, j.r + 0.3 * S, 'k']);
+  const surfCut = makeCutter(surfCorr, S);
+  const onSurface = surfaceIndex(edges, edgePts, junctions, reachOf, S); // auch Tordurchfahrten und gesperrte Straßen
+  const invisible = (q, skip) => cutWhere(q, (x, y) => onSurface(x, y, skip), S); // unsichtbare Wände: nie auf Fahrfläche
+  for (const wa of water) for (const r of wa.rings) for (const q of cut([...r.pts, r.pts[0], r.pts[1]])) for (const q2 of surfCut(q)) invisible(q2).forEach(addWall(WALL_KIND.quay)); // Wasser bremst nur
   const railWalls = [];
   for (const r of rails) if (!r.br && !r.sub) for (const d of [-2.5 * S, 2.5 * S]) railWalls.push(...cut(offsetLine(r.p, d)));
-  // Richtungsfahrbahnen auf Brücken: die Lücke zum Gegenstück (gleicher Name, Gegenrichtung, bis 7 m) wird Fahrbahn
-  const fills = bridgeFills(edges, edgePts, S);
   // Brückengeländer nur am äußeren Rand der ganzen Brücke: jedes Geländer endet, wo eine andere Brückenfahrbahn, die
   // Lücke zum Gegenstück oder ein Weg auf der Brücke liegt (sonst standen Geländer mitten auf der Gegenfahrbahn)
   const bridgeWays = [];
-  edges.forEach((ed, k) => { if (ed.br && ed.c <= 10) bridgeWays.push({ id: 'e' + k, pts: edgePts(ed), half: ed.w / 10 * S / 2, road: true, fill: ed.fill ?? 0 }); });
+  edges.forEach((ed, k) => { if (ed.br && ed.c <= 10) bridgeWays.push({ id: 'e' + k, ed, pts: edgePts(ed), half: ed.w / 10 * S / 2, road: true, fill: ed.fill ?? 0 }); });
   paths.forEach((pa, k) => { if (pa.br) bridgeWays.push({ id: 'p' + k, pts: pa.p, half: 0.9 * S, road: false }); });
   const railCorr = [];
   for (const bw of bridgeWays) {
-    const p = bw.pts, reach = bw.half + (bw.road ? 2.5 : 1.2) * S;
-    for (let i = 0; i < p.length - 2; i += 2) railCorr.push([p[i], p[i + 1], p[i + 2], p[i + 3], reach, bw.id]);
-    if (bw.fill) { const f = offsetLine(p, Math.sign(bw.fill) * (bw.half + Math.abs(bw.fill) / 2)); for (let i = 0; i < f.length - 2; i += 2) railCorr.push([f[i], f[i + 1], f[i + 2], f[i + 3], Math.abs(bw.fill) / 2 + S, bw.id]); }
+    if (bw.road) { railCorr.push(...surfaceBands(bw.ed, 2.5 * S, bw.id)); continue; } // samt Gehweg daneben
+    const p = bw.pts;
+    for (let i = 0; i < p.length - 2; i += 2) railCorr.push([p[i], p[i + 1], p[i + 2], p[i + 3], bw.half + 1.2 * S, bw.id]);
   }
-  // Straßen darunter: ein Geländer oben auf der Brücke ist für den Verkehr unten keine Wand
-  for (const ed of edges) if (!ed.br && !ed.pass && ed.c <= 8) { const p = edgePts(ed); for (let i = 0; i < p.length - 2; i += 2) railCorr.push([p[i], p[i + 1], p[i + 2], p[i + 3], ed.w / 10 * S / 2 + 0.3 * S, 'unten']); }
+  // Straßen darunter und Kreuzungsflächen: ein Geländer oben auf der Brücke ist für den Verkehr unten keine Wand
+  for (const ed of edges) if (!ed.br && !ed.pass && ed.c <= 8) railCorr.push(...surfaceBands(ed, 0.3 * S, 'unten'));
+  for (const j of junctions) railCorr.push([j.x, j.y, j.x, j.y, j.r + 0.3 * S, 'kreuzung']);
   const railCut = makeCutter(railCorr, S);
   for (const bw of bridgeWays) for (const d of [-1, 1]) {
     if (bw.fill && Math.sign(bw.fill) === d) continue; // zur Gegenfahrbahn hin kein Geländer
-    for (const piece of railCut(offsetLine(bw.pts, d * (bw.half + (bw.road ? 0.6 : 0.3) * S)), bw.id)) addWall(WALL_KIND.railing)(piece);
+    const off = bw.road ? reachOf(bw.ed, d) + 0.6 * S : bw.half + 0.3 * S; // außerhalb von Lücke und Radweg
+    for (const piece of railCut(offsetLine(bw.pts, d * off), bw.id)) invisible(piece, bw.road ? (ed) => ed === bw.ed : null).forEach(addWall(WALL_KIND.railing));
   }
   step(`${walls.length} Wandzüge, ${buildings.filter((b) => b.walls).length} geöffnete Hauswände`);
 
@@ -437,10 +462,12 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   // Zäune und Gleiswände nicht auf befahrbaren Fahrbahnen: wo die (oft geschätzte) Fahrbahn einen Zaun längs überdeckt,
   // schrammte die KI daran entlang. Quer sperrende Zäune haben ihre Straße bereits gesperrt (dort wird nichts
   // ausgeschnitten). Ufer bleiben unangetastet, sonst ginge es dort ins Wasser.
-  const driveCut = makeCutter(edges.filter((ed) => ed.c <= 8 && !ed.blocked && !ed.pass).flatMap((ed) => { const p = edgePts(ed), out = []; for (let i = 0; i < p.length - 2; i += 2) out.push([p[i], p[i + 1], p[i + 2], p[i + 3], ed.w / 10 * S / 2 + 0.3 * S]); return out; }), S);
+  // Zäune (sichtbar) nur auf Fahrbahn und Brückenlücke kürzen – nicht auf Radwegen (dort sind sie oft die Grundstücks-
+  // grenze) und nicht in Kreuzungsflächen (Diagonalsperren sind Absicht); Gleisränder (unsichtbar) auf der ganzen Fläche.
+  const driveCut = makeCutter(edges.filter((ed) => ed.c <= 8 && !ed.blocked && !ed.pass).flatMap((ed) => surfaceBands(ed, 0.3 * S, 'e', { tracks: false })), S);
   let cutWalls = 0;
   for (const [list, k] of [[railWalls, WALL_KIND.rail], [fenceWalls, WALL_KIND.fence]]) for (const w0 of list) {
-    const pieces = driveCut(w0);
+    const pieces = k === WALL_KIND.rail ? surfCut(w0).flatMap((q) => invisible(q)) : driveCut(w0);
     if (pieces.reduce((a, q) => a + lenOf(q), 0) < lenOf(w0) - 0.5 * S) cutWalls++;
     pieces.forEach(addWall(k));
   }
@@ -448,8 +475,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   access.stats.waendeAufFahrbahnGekuerzt = cutWalls;
   step(`Zugänge und Regeln ${JSON.stringify(access.stats)}`);
 
-  // --- Kreuzungsflächen und Spurkürzung je Knoten (Spiel und Baumregel nutzen dieselben Werte) ----------
-  const junctions = junctionsOf(edges, vertices, S);
+  // --- Spurkürzung je Knoten (Kreuzungsflächen siehe oben; Spiel und Baumregel nutzen dieselben Werte) ----------
   const trim = laneTrim(edges, vertices, S, edgePts);
   const postStats = keepPostsOffCarriageway(access.out, { edges, vertices, junctions, S });
   access.stats.pollerVerschoben = postStats.moved; access.stats.pollerEntfernt = postStats.dropped;
@@ -732,6 +758,48 @@ export function bridgeFills(edges, edgePts, S) {
     n++;
   }
   return n;
+}
+
+// Liegt (x, y) auf befahrbarer Fläche? Fahrbahn, Lücke zur Gegenfahrbahn, Radweg neben der Fahrbahn (je Seite nach
+// reachOf), Kreuzungsscheibe. skip(ed) → true lässt eine Kante aus (z. B. die Brücke, zu der ein Geländer gehört).
+export function surfaceIndex(edges, edgePts, junctions, reachOf, S, filter = (ed) => ed.c <= 8) {
+  const CELL = 400, grid = new Map();
+  const add = (item, x0, y0, x1, y1) => {
+    for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) for (let gy = Math.floor(y0 / CELL); gy <= Math.floor(y1 / CELL); gy++) { const k = gx * 1000000 + gy; (grid.get(k) ?? grid.set(k, []).get(k)).push(item); }
+  };
+  for (const ed of edges) {
+    if (!filter(ed)) continue;
+    const p = edgePts(ed), R = Math.max(reachOf(ed, -1), reachOf(ed, 1));
+    for (let i = 0; i < p.length - 2; i += 2) add({ ed, ax: p[i], ay: p[i + 1], bx: p[i + 2], by: p[i + 3] }, Math.min(p[i], p[i + 2]) - R, Math.min(p[i + 1], p[i + 3]) - R, Math.max(p[i], p[i + 2]) + R, Math.max(p[i + 1], p[i + 3]) + R);
+  }
+  for (const j of junctions) add({ j }, j.x - j.r, j.y - j.r, j.x + j.r, j.y + j.r);
+  return (x, y, skip = null, margin = 0.2 * S) => {
+    for (const it of grid.get(Math.floor(x / CELL) * 1000000 + Math.floor(y / CELL)) ?? []) {
+      if (it.j) { if (Math.hypot(x - it.j.x, y - it.j.y) < it.j.r + margin) return true; continue; }
+      if (skip && skip(it.ed)) continue;
+      const dx = it.bx - it.ax, dy = it.by - it.ay, L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - it.ax) * dx + (y - it.ay) * dy) / L2));
+      const px = it.ax + dx * t, py = it.ay + dy * t, d = Math.hypot(x - px, y - py);
+      const side = Math.sign((x - it.ax) * -dy + (y - it.ay) * dx) || 1; // wie offsetLine: + rechts
+      if (d < reachOf(it.ed, side) + margin) return true;
+    }
+    return false;
+  };
+}
+// Polylinie in 1-m-Stücke zerlegen und Stücke weglassen, deren Mitte hit(x, y) trifft
+export function cutWhere(pts, hit, S) {
+  const out = []; let cur = [];
+  for (let i = 0; i < pts.length - 2; i += 2) {
+    const ax = pts[i], ay = pts[i + 1], bx = pts[i + 2], by = pts[i + 3], k = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / S));
+    for (let j = 0; j < k; j++) {
+      const x0 = ax + (bx - ax) * j / k, y0 = ay + (by - ay) * j / k, x1 = ax + (bx - ax) * (j + 1) / k, y1 = ay + (by - ay) * (j + 1) / k;
+      if (hit((x0 + x1) / 2, (y0 + y1) / 2)) { if (cur.length >= 4) out.push(cur); cur = []; continue; }
+      if (!cur.length) cur.push(Math.round(x0), Math.round(y0));
+      cur.push(Math.round(x1), Math.round(y1));
+    }
+  }
+  if (cur.length >= 4) out.push(cur);
+  return out.map((c) => simplify(c, 0.2 * S)).filter((c) => c.length >= 4);
 }
 
 // --- Korridore: Polylinien in 1-m-Stücke zerlegen und Stücke in einem Korridor weglassen --------------

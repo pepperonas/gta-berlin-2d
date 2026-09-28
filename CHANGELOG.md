@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.21.1] – 2026-09-28
+
+### Behoben
+- Unsichtbare Sperren auf Fahrflächen, berlinweit gesucht und entfernt: Brückengeländer standen mitten auf den neuen
+  Radwegen (Oberbaumbrücke) und in Brückenlücken, Uferlinien und Gleisränder lagen unter Brücken auf der Fahrbahn,
+  in Kreuzungsflächen, auf Radwegen und in Tordurchfahrten. Eine Suche über ganz Berlin fand vorher mehrere tausend
+  Meter solcher Wände, jetzt keinen. Unsichtbare Wände (Ufer, Gleisränder, Geländer) werden im Build zum Schluss Meter
+  für Meter gegen die befahrbare Fläche geprüft (Fahrbahn, Lücke zur Gegenfahrbahn, Radweg neben der Fahrbahn,
+  Kreuzungsscheibe, auch Tordurchfahrten und gesperrte Straßen) und dort entfernt; Geländer stehen außerhalb von Radweg
+  und Lücke. Sichtbare Zäune bleiben, wo sie wirklich stehen (Mittelzäune, Diagonalsperren, Zäune am Radweg).
+
 ## [0.21.0] – 2026-09-28
 
 ### Hinzugefügt

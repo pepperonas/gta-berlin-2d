@@ -181,7 +181,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 230 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 233 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -333,7 +333,10 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 230 automatischen Tests grün, darunter:
+- Alle 233 automatischen Tests grün, darunter:
+  - keine unsichtbare Wand (Ufer, Gleisrand, Geländer) auf befahrbarer Fläche – Kerngebiet und sieben Brücken,
+    an denen es klemmte; die Oberbaumbrücke ist über die ganze Breite (beide Richtungen, Lücke, Radwege) mit dem Auto
+    befahrbar; Punkttest der Fahrfläche und Zuschnitt (vier Mutationsproben, alle erkannt);
   - Brücken: Lücke zwischen gegenläufigen Brückenfahrbahnen bis 7 m wird Fahrbahn, zur richtigen Seite, nur bei
     gleichem Namen; `cycleway=track` im Querschnitt; an Oberbaum- und Warschauer Brücke kein Geländerstück auf einer
     Fahrbahn, Lücke gefüllt, Radweg außen; Brückenwege unter der Brückenfahrbahn gezeichnet, Radwege auf der Brücke

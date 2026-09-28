@@ -178,6 +178,10 @@ Kachelfeld 12, Vorzeichen wie `offsetLine`: + rechts der Kantenrichtung). Gelän
 (2,5 m), ein anderer Brückenweg, eine gefüllte Lücke oder eine Straße darunter liegt – der eigene Korridor zählt
 nicht (Kennung je Weg). So steht ein Geländer nur am äußeren Rand der ganzen Brücke. Zeichenfolge: Straßen am Boden →
 Bordstein der Brücken → Wege auf Brücken → Brückenfahrbahnen samt Lücke → Radwege → Markierungen.
+Unsichtbare Wände (Ufer, Gleisränder, Geländer) prüft der Build zum Schluss mit `surfaceIndex` (exakter Punkttest der
+Fahrfläche je Straßenseite: Fahrbahn + Lücke + Radweg, Kreuzungsscheiben, auch Tordurchfahrten und gesperrte Straßen)
+und `cutWhere` Meter für Meter; Korridore allein ließen an Brückenenden, wo Bänder zweier Kanten zusammenstoßen,
+Reste stehen. Geländer liegen bei `reachOf(Seite) + 0,6 m`, also außerhalb von Radweg und Lücke.
 Radwege neben der Fahrbahn (`cycleway:*=track`, `crosssection.mjs cycleTrack`) stehen im Querschnitt (`track` je Seite,
 Kachelfelder 13/14) und werden jenseits des Bordsteins als rote Streifen gezeichnet.
 

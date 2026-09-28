@@ -133,6 +133,9 @@ change in `web/`.
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop
   skips them via `isDown(world, s)`. `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
+- **Invisible walls:** quays, rail side walls and railings are finally cut with `build.mjs surfaceIndex` + `cutWhere` (exact
+  point test of the drivable surface per side via `reachOf`: carriageway + bridge gap + cycle track, junction discs, incl.
+  passages/blocked roads). `tests/walls.test.js` scans the core area and known bridges for leftovers.
 - **Bridges:** railings are cut (`makeCutter(corridors)(pts, skipId)`) wherever another bridge way, a filled gap or a
   ground road lies, so they only stand at the outer edge; `bridgeFills` gives close dual carriageways a `fill` (tile edge
   field 12). `cs.left/right.track` = cycle tracks beside the curb (x[13], x[14]). Draw order in `render.js`: ground roads →
