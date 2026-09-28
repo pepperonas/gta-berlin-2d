@@ -46,15 +46,16 @@ seiner Linie. Unterirdisch gibt es eine **Tunnelansicht**. Busse lassen sich wie
 
 | | Tastatur | Controller |
 |---|---|---|
-| Als Fahrgast einsteigen / aussteigen | E | A |
+| Als Fahrgast einsteigen / aussteigen | G | Steuerkreuz unten |
 | Als Fahrer übernehmen / aussteigen | F oder rechte Maus tippen | Y |
 | Türen öffnen/schließen (als Fahrer, an einer Haltestelle) | E | A |
 | Gas / Bremse (als Fahrer) | W / S | RT / LT |
 | Notbremse | Leertaste | B |
 | Wenden am Linienende | E | A |
 
-„Aktion“ (E/A) hat Vorrang für Aufträge (Mission-Einladen); nur wenn keine Missionsaktion möglich ist, gilt es als
-Einsteigen.
+Mitfahren hat eine **eigene Taste** (G / Steuerkreuz unten, Nutzerwunsch), damit es nie mit der Auftrags-Aktion (E/A)
+oder dem Übernehmen (F/Y) kollidiert. E/A bleibt für Aufträge und – als Fahrer – für Türen und Wenden. Neues
+Eingabefeld `ride` (Flanke) in `input.js`/`idle.js`; das Steuerkreuz ist im Spiel sonst unbelegt (nur Menüs).
 
 ### Einsteigen als Fahrgast
 
@@ -82,7 +83,7 @@ Einsteigen.
 
 - Spieler unsichtbar, Kamera folgt dem Wagen (wie beim Auto, Zoom nach Tempo).
 - HUD-Leiste oben: Linienname in Linienfarbe, Richtung (letzter Halt), nächster Halt + Entfernung, bei Halt „Hält –
-  E: aussteigen“.
+  G: aussteigen“.
 - Busfahrgast: der Bus bleibt KI-gesteuert (`car.duty`), der Spieler ist an `carId` gebunden.
 
 ## 2. Selbst fahren (Straßenbahn, S-Bahn, U-Bahn)
