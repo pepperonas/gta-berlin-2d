@@ -9,6 +9,7 @@
 // keine Kachel mehr sie hält. Punkte gehören genau einer Kachel, große Flächen sind je Kachel abgeschnitten.
 import { undelta, pointInRings, signedArea, segDist2, bboxOf, polylineLength, projectOnPolyline, ringIndex, insideIndex, pointInRing } from './geom.js';
 import { SpatialHash } from './collision.js';
+import { decodeSign } from './signs.js';
 import { WALL_KIND, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CATS, PARK_ORIENT, SURFACE, TREE_GENERA } from './citycodes.js';
 
 const WALL_NAMES = Object.fromEntries(Object.entries(WALL_KIND).map(([k, v]) => [v, k]));
@@ -340,6 +341,10 @@ function install(city, key, json) {
   for (const [x, y, c, n, k] of json.pois) own(t, (r) => {
     const q = { x, y, cat: POI_CATS[c], name: nm(n), kind: nm(k), layer: 'poi' };
     put(r, city.poiHash, q, { x, y, w: 0, h: 0 }); track(city, 'poi', q); r.drop = () => untrack(city, 'poi', q);
+  });
+  for (const row of json.signs ?? []) own(t, (r) => {
+    const sg = decodeSign(row, nm);
+    put(r, city.render, sg, { x: sg.x - 60, y: sg.y - 80, w: 120, h: 90 }); track(city, 'sign', sg); r.drop = () => untrack(city, 'sign', sg);
   });
   const axy = undelta(json.addresses.xy);
   json.addresses.nr.forEach((nr, i) => own(t, (r) => {

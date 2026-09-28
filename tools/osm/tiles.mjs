@@ -39,7 +39,7 @@ export function tileCity(g, { tile, meta, places }) {
     let t = tiles.get(k);
     if (!t) tiles.set(k, t = { tx, ty, names: [], nameIdx: new Map(), vmap: new Map(), vid: [], vxy: [], vtrim: [],
       edges: [], junctions: [], paths: [], rails: [], buildings: [], water: [], areas: [], walls: [], fences: [],
-      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
+      trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], signs: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
     return t;
   };
   const cx = (x) => Math.min(NX - 1, Math.max(0, Math.floor(x / tile))), cy = (y) => Math.min(NY - 1, Math.max(0, Math.floor(y / tile)));
@@ -120,6 +120,8 @@ export function tileCity(g, { tile, meta, places }) {
   for (let i = 0; i < TB.length; i += 3) { const v = TB[i + 1]; home(g.vertices[2 * v], g.vertices[2 * v + 1]).turnBans.push(TB[i], v, TB[i + 2]); }
   for (const q of g.pois) { const t = home(q.x, q.y); t.pois.push([q.x, q.y, POI_CAT[q.cat], nm(t, g.names[q.n]), nm(t, g.names[q.k])]); }
   for (const f of g.furniture ?? []) home(f.x, f.y).furn.push([f.x, f.y, f.k]);
+  // Wegweiser: [x, y, Fahrtrichtung ×1000, Kreuzungsname, sichtbar, [[Richtung ×1000, Abbiegen ×1000, Ziele (;), Nummer oder -1], …]]
+  for (const sg of g.signs ?? []) { const t = home(sg.x, sg.y); t.signs.push([sg.x, sg.y, Math.round(sg.angle * 1000), nm(t, sg.name), sg.vis, sg.rows.map((r) => [Math.round(r.dir * 1000), Math.round(r.turn * 1000), nm(t, r.dests.join(';')), r.ref ? nm(t, r.ref) : -1])]); }
   // Einwohnerdichte: je Kachel das Teilraster (Zeilen von oben), nur wenn dort jemand wohnt
   if (g.dens) {
     const { cell, nx, ny, v } = g.dens, per = Math.round(tile / cell);
@@ -147,7 +149,7 @@ export function tileCity(g, { tile, meta, places }) {
       walls: t.walls, fences: t.fences,
       trees: { xy: delta(t.trees.xy), g: t.trees.g, c: t.trees.c, r: t.trees.r },
       barriers: t.barriers, posts: t.posts, crossings: t.crossings, signals: t.signals, turnBans: t.turnBans,
-      pois: t.pois, furn: t.furn, ...(t.dens ? { dens: t.dens } : {}),
+      pois: t.pois, furn: t.furn, ...(t.signs.length ? { signs: t.signs } : {}), ...(t.dens ? { dens: t.dens } : {}),
       addresses: { xy: delta(t.addresses.xy), street: t.addresses.street, nr: t.addresses.nr },
     });
   }

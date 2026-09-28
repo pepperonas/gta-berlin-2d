@@ -27,6 +27,7 @@ import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
 import { occludersOf, samplePoints } from './occlusion.js';
+import { isStreet } from './signs.js';
 import { wallColor, roofColors } from './buildcolors.js';
 import { WEAPONS } from './combat.js';
 import { benchAngle } from './life.js';
@@ -366,6 +367,53 @@ function drawDormer(ctx, d, col, sun) {
 // Straßenlaterne: Mast (schräge Ansicht wie die Häuser: Höhe wächst nach oben), Ausleger zur Fahrbahn, Leuchte
 const LAMP_H = 20; // 8 m Masthöhe × heightScale / 2 wie die Dachverschiebung
 export function lampHead(lp) { return lp.gas ? [lp.x, lp.y - LAMP_H] : [lp.x + lp.nx * 9, lp.y - LAMP_H + lp.ny * 9]; }
+// Wegweiser: zwei Pfosten, darüber die Tafel (gelb, Straßennamen weiß) als einmal gezeichnetes Bild je Schild.
+// Pfeile zeigen in die Kartenrichtung der Ausfahrt (Norden oben, wie die Kamera).
+export const SIGN_POST = 30, SIGN_FONT = 10;
+export function signBoard(sg) {
+  if (sg._board !== undefined) return sg._board;
+  const K = 3, pad = 3, rowH = SIGN_FONT + 5, arrowW = 13;
+  const probe = makeCanvas(1, 1).getContext('2d');
+  if (!probe || !probe.measureText) return (sg._board = null);
+  probe.font = `700 ${SIGN_FONT}px Segoe UI, system-ui, sans-serif`;
+  const tw = (t) => probe.measureText(t)?.width ?? t.length * SIGN_FONT * 0.6; // ohne echte Schrift (Tests): geschätzt
+  const texts = sg.rows.map((r) => r.dests.slice(0, 2).join(' · '));
+  const refW = (r) => (r.ref ? tw(r.ref) + 5 : 0);
+  const w = Math.ceil(Math.max(50, ...sg.rows.map((r, i) => arrowW + 4 + tw(texts[i]) + (r.ref ? refW(r) + 4 : 0))) + 2 * pad);
+  const h = sg.rows.length * rowH + 2 * pad;
+  const c = makeCanvas(w * K, h * K), g = c.getContext('2d');
+  g.scale(K, K);
+  g.fillStyle = '#1c1c1c'; g.fillRect(0, 0, w, h);
+  sg.rows.forEach((r, i) => {
+    const y0 = pad + i * rowH, street = r.dests.every(isStreet);
+    g.fillStyle = street ? '#f4f4f0' : '#f5c518'; g.fillRect(1, y0, w - 2, rowH - 1);
+    g.save(); g.translate(pad + arrowW / 2, y0 + rowH / 2); g.rotate(r.dir + Math.PI / 2); // Pfeil zeigt nach „oben“ = −y
+    g.fillStyle = '#111'; g.beginPath(); g.moveTo(0, -6); g.lineTo(5, -0.6); g.lineTo(1.6, -0.6); g.lineTo(1.6, 6); g.lineTo(-1.6, 6); g.lineTo(-1.6, -0.6); g.lineTo(-5, -0.6); g.closePath(); g.fill();
+    g.restore();
+    g.fillStyle = '#111'; g.font = `700 ${SIGN_FONT}px Segoe UI, system-ui, sans-serif`; g.textBaseline = 'middle';
+    g.fillText(texts[i], pad + arrowW + 4, y0 + rowH / 2 + 0.5);
+    if (r.ref) { // Bundesstraße: gelbes Schild mit schwarzem Rand
+      const rw = refW(r), rx = w - pad - rw;
+      g.fillStyle = '#f5c518'; g.fillRect(rx, y0 + 1.5, rw, rowH - 4); g.strokeStyle = '#111'; g.lineWidth = 0.8; g.strokeRect(rx, y0 + 1.5, rw, rowH - 4);
+      g.fillStyle = '#111'; g.fillText(r.ref, rx + 2.5, y0 + rowH / 2 + 0.5);
+    }
+  });
+  return (sg._board = { c, w, h });
+}
+// Tafel neben der Fahrbahn: sie reicht vom Pfosten weg von der Straße (rechts der Fahrtrichtung liegt der Gehweg)
+export function signBoardX(sg, w) {
+  const rx = -Math.sin(sg.angle); // x-Anteil der Richtung „rechts der Fahrtrichtung“ (y nach unten)
+  return rx > 0.35 ? sg.x - 6 : rx < -0.35 ? sg.x - w + 6 : sg.x - w / 2;
+}
+function drawSign(ctx, sg, quality) {
+  const b = signBoard(sg);
+  const w = b?.w ?? 50, h = b?.h ?? 20, top = sg.y - SIGN_POST - h, left = signBoardX(sg, w);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(left + 2, sg.y - 1, w, 3); // Schatten der Tafel am Boden
+  ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(sg.x, sg.y); ctx.lineTo(sg.x, top + h); ctx.stroke();
+  if (b && quality === 'high') ctx.drawImage(b.c, left, top, w, h);
+  else { ctx.fillStyle = '#f5c518'; ctx.fillRect(left, top, w, h); ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 1; ctx.strokeRect(left, top, w, h); }
+}
+
 function drawLamp(ctx, lp, on) {
   const [hx, hy] = lampHead(lp);
   ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(lp.x + 1, lp.y + 1, 2.2, 0, Math.PI * 2); ctx.fill();
@@ -502,7 +550,7 @@ export class Renderer {
 
     // Sichtbare Kartenobjekte (unten großzügiger: hohe Häuser ragen ins Bild).
     const q = city.render.query({ x: v.x - 60, y: v.y - 60, w: v.w + 120, h: v.h + 420 }, this._q ??= []);
-    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [], junctions = [], crossings = [], barriers = [], fences = [], furns = [];
+    const areas = [], water = [], edges = [], paths = [], rails = [], buildings = [], trees = [], junctions = [], crossings = [], barriers = [], fences = [], furns = [], signs = [];
     for (const f of q) {
       switch (f.layer) {
         case 'area': areas.push(f); break;
@@ -515,6 +563,7 @@ export class Renderer {
         case 'junction': junctions.push(f); break;
         case 'crossing': crossings.push(f); break;
         case 'barrier': barriers.push(f); break;
+        case 'sign': if (f.vis) signs.push(f); break;
         case 'fence': fences.push(f); break;
         case 'furn': furns.push(f); break;
       }
@@ -662,6 +711,9 @@ export class Renderer {
     const lamps = this._lamps ??= [];
     lamps.length = 0;
     for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
+    this._signs = signs.filter((sg) => near(sg.x, sg.y));
+    this.stats.signs = this._signs.length;
+    for (const sg of this._signs) list.push({ y: sg.y, d: () => drawSign(ctx, sg, this.quality) });
     for (const cr of city.crates) if (near(cr.x, cr.y)) list.push({ y: cr.y + cr.h, d: () => drawCrate(ctx, cr) });
     for (const c of world.cars) if (near(c.x, c.y)) list.push({ y: c.y + 6, d: () => drawCar(ctx, c, t, L.sun) });
     for (const p of world.peds) if (near(p.x, p.y)) {
@@ -796,6 +848,7 @@ export class Renderer {
     const inView = (x, y) => x > v.x - pad && x < v.x + v.w + pad && y > v.y - pad && y < v.y + v.h + pad;
     const k = L.dark;
     // Straßenlaternen: Lichtfleck auf Gehweg und Fahrbahnrand unter dem Kopf
+    if (L.lampsOn) for (const sg of this._signs ?? []) out.push({ x: sg.x, y: sg.y - SIGN_POST - 10, r: 55, rgb: [255, 236, 190], a: 0.45 * k }); // angestrahlte Tafeln
     if (L.lampsOn) for (const lp of this._lamps ?? []) {
       out.push({ x: lp.x + lp.nx * 18, y: lp.y + lp.ny * 18, r: lp.main ? 150 : 125, rgb: lp.rgb, a: (lp.gas ? 0.55 : 0.7) * k });
     }

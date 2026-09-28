@@ -48,6 +48,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   sperren Straßen für den KI-Verkehr, Fußgänger kommen durch, und mit Schwung fährt man sie um (sie bleiben liegen);
   rund 47 000 Zäune, Mauern und Hecken, an Toren und überall, wo ein Weg sie kreuzt, 4,4 m breit offen – eingezäunte
   Flächen wie das Tempelhofer Feld erreicht man auch mit dem Auto; 41 000 Hauseingänge als Türen.
+- **Wegweiser:** An großen Kreuzungen und Kreiseln stehen gelbe Wegweiser: je Ausfahrt ein Pfeil in Kartenrichtung
+  mit den Ortsteilen, in die sie führt (aus der OSM-Beschilderung oder aus dem Straßenverlauf), „Zentrum“ und
+  B-Nummer; weiße Zeilen nennen Straßen im selben Ortsteil.
 - **Silhouetten:** Liegt eine Baumkrone, ein Haus, eine Tordurchfahrt oder die Hochbahn über einem Fahrzeug oder einer
   Person, erscheint ihr Umriss genau im verdeckten Teil – für die Spielfigur und ihr Auto orange, für alle anderen dezent hell.
 - **Bäume aus dem Berliner Baumbestand:** alle 962 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
@@ -174,7 +177,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 213 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 224 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -326,7 +329,14 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 213 automatischen Tests grün, darunter:
+- Alle 224 automatischen Tests grün, darunter:
+  - Wegweiser: an einer künstlichen Kreuzung je Zufahrt ein Schild rechts 35 m davor, Zeilen links → geradeaus →
+    rechts, kein Wenden (auch nicht in eine andere Straße), Einbahnstraßen, OSM-Beschilderung vor der Verfolgung
+    (Tag nur in Weg-Richtung, `destination:backward` dagegen, Relation nur für ihre Zufahrt), „Zentrum“ nur Richtung
+    Mitte, Straßenname im selben Ortsteil, Kreisel als eine Kreuzung, Schild im Haus nicht aufgestellt; echte Karte:
+    Kotti weist nach Neukölln (Süden) und Richtung Zentrum, kein Schild auf einer Fahrbahn oder in einem Haus; im
+    Bild gezeichnet, Tafel einmal gemalt und von der Fahrbahn weg (15 Mutationsproben, alle erkannt; zwei zunächst
+    blinde führten zu schärferen Prüfungen);
   - Erreichbarkeit (Flutfüllung auf einem 0,5–0,8-m-Raster mit Auto- bzw. Fußgängerbreite gegen Hauswände, Zäune,
     Ufer, Bäume und Poller): das Tempelhofer Feld ist vom Columbiadamm aus mit dem Auto und zu Fuß erreichbar (Mitte,
     Nord-, Süd- und Ostrand); in Kreuzberg und Marzahn erreicht das Auto über 90 % der Fußgängerfläche; im Build

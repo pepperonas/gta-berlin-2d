@@ -10,6 +10,7 @@ import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, u
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
 import { buildingLook } from './looks.mjs';
+import { buildSigns, destinationRelations } from './signs.mjs';
 import { ringIndex, insideIndex, pointInRings } from '../../web/src/geom.js';
 import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA, FURN_KIND, DENS_CELL_M, DTV_ESTIMATE, packLook, BEZIRKE } from '../../web/src/citycodes.js';
 
@@ -337,7 +338,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
         const seg = ids.slice(start, i + 1);
         const pts = simplify(flat(seg), 0.5 * S);
         if (seg.length >= 2 && (pts[0] !== pts[pts.length - 2] || pts[1] !== pts[pts.length - 1])) {
-          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id, x, ids: seg, pass: t.tunnel === 'building_passage' ? 1 : 0, tagged });
+          edges.push({ a: vertex(seg[0]), b: vertex(seg[seg.length - 1]), c: cls, w: width, n: name, o: oneway, br: bridge, p: pts.slice(2, -2), id: el.id, x, ids: seg, pass: t.tunnel === 'building_passage' ? 1 : 0, tagged, rb: t.junction === 'roundabout' || t.junction === 'circular' ? 1 : 0 });
         }
         start = i;
       }
@@ -465,19 +466,34 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   const dens = densityGrid(life.dichte ?? [], { toPx, W, H, S });
   step(`Verkehrsmengen: ${trafficStats.measured} Kanten gezählt (${trafficStats.km} km), Dichte-Raster ${dens.nx}×${dens.ny} (${dens.filled} Zellen bewohnt)`);
 
+  // Wegweiser an großen Kreuzungen und Kreiseln
+  const distIx = districts.map((d) => ({ name: d.name, ix: ringIndex(d.rings) }));
+  const districtAt = (x, y) => { for (const d of distIx) if (insideIndex(d.ix, x, y)) return d.name; return null; };
+  const sbgrid = boxGrid(400);
+  for (const b of buildings) { const [x0, y0, x1, y1] = ringBox(b.rings[0].pts); sbgrid.add(b, x0, y0, x1, y1); }
+  const inBuildingB = (x, y) => sbgrid.at(x, y).some((b) => b.rings.filter((r) => pointInRing(x, y, r.pts)).length % 2 === 1);
+  const signOut = buildSigns({
+    edges, vertices, names, S, districtAt, center: toPx(52.5170, 13.3889),
+    stations: pois.filter((q) => q.cat === 'ubahn' || q.cat === 'sbahn').map((q) => ({ x: q.x, y: q.y, name: q.name })),
+    wayTags: (id) => osm.ways.get(id)?.tags, destRels: destinationRelations(osm, vIndex),
+    clearance: roadClearance({ edges, vertices, junctions, S }, 0.3 * S, 0.5 * S), inBuilding: inBuildingB, inside: insideBorder,
+  });
+  const signs = signOut.signs;
+  step(`Wegweiser ${JSON.stringify(signOut.stats)}`);
+
   const missionPlaces = placeMission({ places, toPx, edges, vertices, buildings, S, insideBorder });
   step(`Mission: Route ${missionPlaces.routeMeters} m → ${missionPlaces.timeLimit} s`);
 
   const g = {
     S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, trees, kieze, pois, addresses, junctions, trim, furniture, dens,
-    border, bezirke, districts, access: access.out,
+    border, bezirke, districts, access: access.out, signs,
   };
   const meta = {
     version: 3, scale: S, width: W, height: H, origin: { lat0, lon0, bbox: [s, w, n, e] },
     osmBase: osm.timestamp ?? null,
     attribution: 'Kartendaten © OpenStreetMap-Mitwirkende (ODbL) · Grenzen, Baumbestand, Einwohnerdichte und Verkehrsmengen: Geoportal Berlin (dl-de/zero-2.0)',
     classes: ROAD_CLASSES, trafficMaxClass: TRAFFIC_MAX_CLASS,
-    trees: treeStats, access: access.stats,
+    trees: treeStats, access: access.stats, signs: signOut.stats,
     counts: { buildings: buildings.length, heightMeasured, edges: edges.length, vertices: vertices.length / 2, trees: trees.length, pois: pois.length, addresses: addresses.length, water: water.length, areas: areas.length, walls: walls.length },
     coverage: coverage({ bezirkAt, edges, vx, vy, buildings, trees, pois, addresses, access: access.out, junctions }),
   };
@@ -1001,9 +1017,11 @@ export function keepTreesOffRoads(trees, { edges, vertices, buildings, water, ju
 // ohne freien Platz entfallen sie. Maßgeblich sind befahrbare Straßen (Klasse ≤ 8, nicht gesperrt, keine Durchfahrt)
 // und Kreuzungsflächen. Pollerreihen auf gesperrten Straßen bleiben stehen (sie SIND die Sperre).
 export const POST_R = 0.15; // m, wie im Spiel (map.js)
-export function keepPostsOffCarriageway(out, { edges, vertices, junctions, S }) {
+// Freiraum zur Fahrbahn: worst(x, y) → tiefster Übergriff auf eine befahrbare Fahrbahn/Kreuzungsfläche (oder null),
+// place(x, y) → nächster freier Punkt quer zur Straße (oder null). r = Radius des Objekts, gap = Abstand zum Bordstein.
+export function roadClearance({ edges, vertices, junctions, S }, r = POST_R * S, gap = 0.4 * S) {
   const vx = (k) => vertices[2 * k], vy = (k) => vertices[2 * k + 1];
-  const grid = boxGrid(300), r = POST_R * S, gap = 0.4 * S;
+  const grid = boxGrid(300);
   for (const ed of edges) {
     if (ed.c > 8 || ed.blocked || ed.pass) continue;
     const pts = [vx(ed.a), vy(ed.a), ...ed.p, vx(ed.b), vy(ed.b)], half = ed.w / 10 * S / 2;
@@ -1032,6 +1050,11 @@ export function keepPostsOffCarriageway(out, { edges, vertices, junctions, S }) 
     const rx = Math.round(x), ry = Math.round(y);
     return worst(rx, ry) ? null : [rx, ry];
   };
+  return { worst, place };
+}
+
+export function keepPostsOffCarriageway(out, { edges, vertices, junctions, S }) {
+  const { worst, place } = roadClearance({ edges, vertices, junctions, S });
   let moved = 0, dropped = 0;
   const posts = [];
   for (let i = 0; i < out.posts.length; i += 3) {

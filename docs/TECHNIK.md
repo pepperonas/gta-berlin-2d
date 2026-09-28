@@ -171,6 +171,23 @@ einen), jeweils `GATE_M` = 4,4 m breit. Vorher waren Tore 1,8 m breit und Querun
 Feld war mit dem Auto nicht erreichbar. `tests/helpers/city.js reachability` misst das per Flutfüllung auf einem
 Raster (Kreis mit Auto- bzw. Fußgängerradius gegen alle festen Hindernisse).
 
+**Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
+Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten
+an einem Kreisel (`junction=roundabout/circular`). Knoten näher als 45 m (Richtungsfahrbahnen) und alle Knoten eines
+Kreisels werden zusammengefasst (höchstens 180 m Ausdehnung). Rand-Kanten bis Klasse 5 mit genau einem Ende in der
+Kreuzung sind Zu- bzw. Ausfahrten, je nach Einbahnrichtung. Je Zufahrt entsteht ein Schild; Zeilen, die um mehr als
+149° zurückführen, entfallen. Ziele in dieser Reihenfolge: Relation `destination_sign` (von-Weg, Kreuzungsknoten,
+nach-Weg), `destination`-Tags der ausfahrenden Straße in Fahrtrichtung (`:forward`/`:backward`, das nackte Tag nur
+in Weg-Richtung oder auf Einbahnstraßen), sonst eine Verfolgung: gleiche Straße weiter, sonst die geradeste Straße
+bis Klasse 5, bis 4 km, alle 100 m wird der Ortsteil nachgeschlagen; die ersten zwei neuen Ortsteile ab 250 m
+kommen aufs Schild, „Zentrum“ davor, wenn der Endpunkt mehr als 1 km näher an der Mitte liegt (nur außerhalb von
+2,5 km um die Mitte). Bleibt die Straße im Ortsteil, steht ihr Name auf einer weißen Zeile. Standort: 35 m vor der
+Kreuzung (höchstens 70 % der Zufahrt), rechts neben der Fahrbahn, mit `roadClearance` (gemeinsam mit den Pollern)
+vom Fahrbahnrand weggerückt; liegt der Platz in einem Haus, bleibt das Schild ungezeichnet (`vis` 0). Die Tafel
+wird je Schild einmal in dreifacher Auflösung gemalt und danach nur gestempelt; sie reicht vom Pfosten weg von der
+Straße. Kachelformat: `signs: [x, y, Fahrtrichtung ×1000, Name, sichtbar, [[Richtung ×1000, Abbiegen ×1000, Ziele,
+Nummer]]]`.
+
 **Silhouetten** (`web/src/occlusion.js occludersOf`, rein; gezeichnet in `render.js drawCovered`): Nach den
 tiefensortierten Objekten und dem Viadukt sucht der Renderer für jedes sichtbare Fahrzeug (Auto, Bus, Straßenbahn-
 wagen, Rad) und jede Person die Verdecker, die in der Zeichenfolge nach ihr kommen und sie berühren – geprüft an neun

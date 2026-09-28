@@ -133,6 +133,10 @@ change in `web/`.
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop
   skips them via `isDown(world, s)`. `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
+- **Direction signs:** built by `tools/osm/signs.mjs buildSigns` (pure: junction clusters incl. roundabouts, approaches/
+  exits by oneway, destinations from OSM `destination_sign`/`destination:*` or traced Ortsteile + „Zentrum“, placement
+  via `build.mjs roadClearance`), tile field `signs`, decoded by `web/src/signs.js decodeSign` into layer `'sign'`;
+  `render.js signBoard` caches the board canvas (`sg._board`), `drawSign` draws post + board beside the road.
 - **Silhouettes:** `occlusion.js occludersOf` (pure) lists what covers a vehicle/person (drawn later in depth order and
   touching one of its `samplePoints`): tree crowns, buildings (incl. passages), viaducts. `render.js` collects
   `this._covered` for all cars/peds/bikes/tram cars and the player, sets `stats.cover` (player) / `stats.silhouettes`,

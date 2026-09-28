@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.20.0] – 2026-09-28
+
+### Hinzugefügt
+- Wegweiser an großen Kreuzungen und Kreiseln (785 Kreuzungen, 1 689 Schilder in ganz Berlin): je Zufahrt ein
+  gelbes Schild rechts etwa 35 m vor der Kreuzung, je Ausfahrt eine Zeile mit Pfeil (zeigt in die Kartenrichtung der
+  Ausfahrt), Zielen und Bundesstraßennummer. Führt eine Ausfahrt im Ortsteil weiter, nennt eine weiße Zeile den
+  Straßennamen. Nachts sind die Tafeln angestrahlt.
+- Ziele: zuerst die echte Beschilderung aus OSM (Relationen `destination_sign` von–über–nach, `destination`-Tags in
+  Fahrtrichtung – 965 Zeilen); sonst verfolgt der Karten-Build die Straße bis 4 km und nennt die ersten Ortsteile,
+  in die sie führt, dazu „Zentrum“, wenn sie deutlich auf die Mitte zuführt. Am Kottbusser Tor etwa: Kottbusser Damm
+  → Neukölln, Skalitzer Straße westwärts → Zentrum · Tiergarten.
+- Richtungsfahrbahnen und alle Knoten eines Kreisels gelten als eine Kreuzung; Einbahnstraßen werden beachtet,
+  Zeilen, die fast zurückführen, entfallen.
+
 ## [0.19.1] – 2026-09-28
 
 ### Geändert
