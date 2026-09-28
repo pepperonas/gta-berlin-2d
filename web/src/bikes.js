@@ -18,7 +18,7 @@ const cyclePx = (lane) => (lane.dir === 1 ? lane.edge.cs.right : lane.edge.cs.le
 // Radtaugliche Spur: rechte Spur, Straße mit Radstreifen oder Nebenstraße (keine Autobahn/Schnellstraße)
 export function bikeable(lane) {
   const cls = lane.edge.cls;
-  return !lane.removed && lane.k === lane.n - 1 && cls >= 3 && cls <= 8 && (cyclePx(lane) > 0 || cls >= 5);
+  return !lane.removed && !lane.busOnly && lane.k === lane.n - 1 && cls >= 3 && cls <= 8 && (cyclePx(lane) > 0 || cls >= 5);
 }
 
 // Fahrlinie des Rades zu einer Spur (Radstreifenmitte bzw. 0,8 m vom rechten Fahrbahnrand), gecacht an der Spur

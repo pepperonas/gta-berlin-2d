@@ -24,6 +24,7 @@ import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, peopleFactor, bikeFactor } from './weather.js';
+import { updateTransit } from './transitlive.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -67,6 +68,7 @@ export function resetPopulation(w, keepCar = null) {
   w.peds = [];
   w.bikes = [];
   w.animals = []; w.flocks?.clear();
+  w.transit = null; w._transitPopulated = false;
   w.hangers?.clear();
   if (w.emerg) w.emerg.incidents.length = 0;
   w.populated = false;
@@ -472,6 +474,8 @@ export function updateWorld(w, input, dt) {
     const a = w.cars[i], b = w.cars[j];
     const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r) collideCars(a, b, w.events);
   }
+
+  updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
 
   if (pc) { p.x = pc.x; p.y = pc.y; p.angle = pc.angle; }
 

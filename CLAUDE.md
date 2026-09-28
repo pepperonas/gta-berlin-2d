@@ -21,6 +21,7 @@ node --test --test-name-pattern="Menü" tests/   # single test by name
 node tools/prepare-xbox.mjs            # copy web/ → xbox/GtaBerlin/Web/ and generate package logos (PNG, no libs)
 npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries + tree cadastre + population density + traffic counts (Geoportal WFS) → data/raw/ (gitignored, needs network)
 npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
+npm run map:transit                    # data/raw/gtfs.zip (VBB GTFS, fetch with map:fetch -- --gtfs) → web/data/berlin/transit.json (~20 s)
 npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
 ```
 
@@ -120,6 +121,13 @@ change in `web/`.
 - **Weather:** `weather.js` (pure: blocks per day from `seed`+`w.dayCount`, `weatherLight` adjusts `lightAt`, `stepWet`),
   world keeps `w.weather`/`w.wet` (only with `w.rhythm`, else clear; `w.forceWeather` / `?wetter=`); `wetfx.js` draws
   clouds, rain, wet roads + puddles (`e._puddles`), fog and neon signs; `render.js facadeLight` shades walls by sun.
+- **Public transport:** `transit.json` (built by `tools/osm/transit.mjs` from VBB GTFS, own ZIP reader `zip.mjs`) →
+  `transit.js prepareTransit` (patterns: shape, stop arc lengths, run times, departures per day type). The timetable only
+  sets the headway at the game clock (vehicles run in real time); `stepTransit` keeps virtual vehicles (fare time τ) per
+  pattern near the camera in `w.transit`. `transitlive.js`: buses become AI cars (`kind 'bus'`, `ai.follow` = follow the
+  shape via `lane.nextBus`, stop at stops), trams stay kinematic but stop for obstacles and feed `w.railObs` (collision,
+  AI obstacles), S/U trains are drawn only on above-ground rails. Bus-only lanes (`lane.busOnly`: busways,
+  `cs.busContra` contraflow) never appear in `lane.next`. `city.transit` is set by `main.js` / `tests/helpers/city.js`.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.

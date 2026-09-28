@@ -9,6 +9,7 @@ import { Renderer } from './render.js';
 import { Hud, BASE } from './hud.js';
 import { Sound } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
+import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
 import { cursorCss, cursorKind } from './cursor.js';
@@ -60,6 +61,8 @@ getJson('data/berlin/index.json').then((index) => {
   demo.clock = forcedClock ?? 19 * 60 + 30; // Titel: Abendstimmung
   demo.forceWeather = forcedWeather;
   getJson('data/berlin/overview.json').then((ov) => { city.overview = ov; hud.overview = null; }).catch((err) => console.error(err));
+  // Fahrplan (VBB): ohne ihn läuft das Spiel einfach ohne Busse und Bahnen
+  getJson('data/berlin/transit.json').then((tj) => { city.transit = prepareTransit(tj); city.attribution += ` · ${tj.attribution}`; }).catch((err) => console.warn('Fahrplan nicht geladen:', err.message));
 }).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
 
 let manifest = {};
@@ -253,7 +256,7 @@ function draw() {
 let ambT = 0, prevClock = null;
 
 function playEvent(e) {
-  const map = { crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit' };
+  const map = { 'tram-bell': 'tram-bell', crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit' };
   if (e.type === 'shot') map.shot = e.weapon;
   if (e.type === 'swing') map.swing = e.hit ? 'punch' : 'swing';
   Object.assign(map, { thud: 'thud', impact: 'impact', reload: 'reload', reloaded: 'reloaded', weapon: 'weapon', 'player-hurt': 'punch', wasted: 'mission-fail', respawn: 'pickup' });

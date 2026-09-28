@@ -1,6 +1,6 @@
 {
   "name": "gta-berlin",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "GTA Berlin – Top-down-Open-World-Spiel in Kreuzberg und Nord-Neukölln (HTML5, OpenStreetMap) mit UWP/WebView2-Hülle für den Xbox Developer Mode",
   "type": "module",
@@ -10,6 +10,7 @@
     "xbox:prepare": "node tools/prepare-xbox.mjs",
     "map:fetch": "node tools/osm/fetch.mjs",
     "map:build": "node --max-old-space-size=12000 tools/osm/build.mjs",
+    "map:transit": "node --max-old-space-size=8000 tools/osm/transit.mjs",
     "map:preview": "node tools/osm/preview.mjs"
   },
   "engines": { "node": ">=20" }

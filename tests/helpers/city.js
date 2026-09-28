@@ -3,12 +3,21 @@
 // Welten laden ringsum wie im Spiel nach (city.focus).
 import { readFileSync } from 'node:fs';
 import { openCity } from '../../web/src/map.js';
+import { prepareTransit } from '../../web/src/transit.js';
+import { existsSync } from 'node:fs';
 
 const dir = new URL('../../web/data/berlin/', import.meta.url);
 export const realIndex = () => JSON.parse(readFileSync(new URL('index.json', dir)));
 export const realOverview = () => JSON.parse(readFileSync(new URL('overview.json', dir)));
 export const tileLoader = () => (k) => JSON.parse(readFileSync(new URL(`tiles/${k}.json`, dir)));
 export const openRealCity = () => openCity(realIndex(), tileLoader());
+// Fahrplan (transit.json), einmal je Testprozess vorbereitet
+let transitCache;
+export function realTransit() {
+  if (transitCache !== undefined) return transitCache;
+  const f = new URL('transit.json', dir);
+  return (transitCache = existsSync(f) ? prepareTransit(JSON.parse(readFileSync(f))) : null);
+}
 
 // Hüllrechteck von Ortsteilen (px)
 export function districtBox(city, names) {
@@ -23,6 +32,7 @@ let cached = null;
 export function realCity() {
   if (cached) return cached;
   cached = openRealCity();
+  cached.transit = realTransit();
   cached.loadArea(...districtBox(cached, ['Kreuzberg', 'Neukölln']), { pin: true });
   return cached;
 }

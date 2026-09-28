@@ -217,7 +217,7 @@ function install(city, key, json) {
     const cs = { width: d(w), fwd: x[0], bwd: x[1],
       left: { park: x[2], parkW: d(x[3]), orient: PARK_ORIENT[x[4]] ?? 'parallel', cycle: d(x[8]) },
       right: { park: x[5], parkW: d(x[6]), orient: PARK_ORIENT[x[7]] ?? 'parallel', cycle: d(x[9]) },
-      maxspeed: x[10], surface: x[11], lit: !!(x[12] & 1), gaslight: !!(x[12] & 2) };
+      maxspeed: x[10], surface: x[11], lit: !!(x[12] & 1), gaslight: !!(x[12] & 2), busContra: !!(x[12] & 4) };
     const e = { id: gid, a: A.id, b: B.id, cls, w: d(w), cs, name: nm(n), oneway: o, bridge: !!(flags & 1), inside: !!(flags & 2),
       blocked: !!(flags & 4), passage: !!(flags & 8), pts, len: polylineLength(pts), bbox: bboxOf(pts, {}), layer: 'edge',
       dtv: Math.abs(dtv100) * 100, dtvMeasured: dtv100 > 0 }; // Kfz je Werktag (gezählt oder nach Klasse geschätzt)

@@ -133,6 +133,8 @@ const SYNTH = {
   crash: (s, k) => { s.burst(0.35 + k * 0.3, { freq: 600 + k * 1800, gain: 0.25 + k * 0.4 }); s.tone(90, 0.25, { type: 'sine', gain: 0.25 * k, slide: -50 }); },
   hit: (s) => { s.burst(0.12, { freq: 400, gain: 0.3 }); s.tone(160, 0.12, { type: 'sine', gain: 0.2, slide: -80 }); },
   horn: (s) => { s.tone(392, 0.45, { gain: 0.08 }); s.tone(494, 0.45, { gain: 0.08 }); },
+  // Straßenbahnklingel: zwei helle Schläge
+  'tram-bell': (s) => { for (const at of [0, 0.22]) { s.tone(1568, 0.5, { type: 'sine', gain: 0.08, at }); s.tone(2350, 0.35, { type: 'sine', gain: 0.04, at }); } },
   door: (s) => { s.burst(0.08, { freq: 1500, gain: 0.25, type: 'bandpass' }); s.tone(120, 0.08, { type: 'sine', gain: 0.2, at: 0.05 }); },
   ui: (s) => s.tone(880, 0.09, { type: 'triangle', gain: 0.12 }),
   'ui-move': (s) => s.tone(620, 0.05, { type: 'triangle', gain: 0.08 }),

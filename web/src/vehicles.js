@@ -9,7 +9,7 @@ export const TAXI_COLOR = '#f1e9c8'; // Berliner Taxi: hellelfenbein
 
 const h01 = (n) => { const x = Math.sin(n * 91.345 + 12.9898) * 43758.5453; return x - Math.floor(x); };
 
-export const SPECIAL_MODELS = ['truck', 'delivery', 'garbage', 'police', 'ambulance'];
+export const SPECIAL_MODELS = ['truck', 'delivery', 'garbage', 'police', 'ambulance', 'bus'];
 export function carModel(car) {
   if (car.model) return car.model;
   if (car.kind && car.kind !== 'car') return car.kind; // LKW, Paketwagen, Müllauto, Einsatzfahrzeuge (fleet.js)
@@ -110,6 +110,15 @@ function paintSpecial(g, model, body, L, W, wrecked) {
     g.fillStyle = '#d0102a'; g.fillRect(-10, -1.4, 10, 2.8); g.fillRect(-6.4, -5, 2.8, 10); // Stern des Lebens stilisiert: Kreuz auf dem Dach
     g.fillStyle = '#f07d00'; for (let y = y0 + 3; y < y0 + W - 3; y += 4) g.fillRect(x0, y, 1.6, 2);           // Heckwarnmarkierung
   }
+  else if (model === 'bus') { // Linienbus: gelb, Fensterband an den Seiten, Klimageräte und Lüfter auf dem Dach
+    box(x0, L, body, 4);
+    g.fillStyle = glass; g.fillRect(L / 2 - 4, y0 + 2, 3, W - 4);                            // Frontscheibe
+    g.fillStyle = '#2b2f36'; g.fillRect(x0 + 4, y0 + 0.8, L - 12, 2); g.fillRect(x0 + 4, y0 + W - 2.8, L - 12, 2); // Fensterband
+    g.fillStyle = shade(body, 0.12); rr(g, x0 + 3, y0 + 3.5, L - 10, W - 7, 2); g.fill();
+    g.fillStyle = '#d8d8d2'; rr(g, -18, -6, 26, 12, 2); g.fill();                             // Klimaanlage
+    g.fillStyle = '#b9b9b2'; g.fillRect(x0 + 6, -4, 14, 8);                                   // Motorklappe hinten
+    g.fillStyle = shade(body, -0.2); for (const x of [-40, 22, 34]) g.fillRect(x, -3, 5, 6);   // Dachluken
+  }
   if (wrecked) { g.fillStyle = 'rgba(0,0,0,0.45)'; for (const [x, y, r] of [[-L / 4, -3, 6], [L / 5, 4, 5]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); } }
 }
 
@@ -124,6 +133,10 @@ function drawDuty(ctx, car, t, L, W) {
       if (on) { ctx.fillStyle = 'rgba(80,160,255,0.35)'; ctx.beginPath(); ctx.arc(bx, s * 3, 9, 0, Math.PI * 2); ctx.fill(); }
     }
     if (car.kind === 'ambulance') { ctx.fillStyle = ph ? '#4aa3ff' : '#123a7a'; ctx.fillRect(-L / 2 + 1, -2, 2.5, 4); }
+  }
+  if (car.line) { // Liniennummer auf dem Dach (von oben lesbar)
+    ctx.save(); ctx.rotate(-car.angle); ctx.fillStyle = '#1b1b1b'; ctx.font = 'bold 9px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(car.line, 0, 0); ctx.restore();
   }
   if (car.kind === 'garbage' && car.work) {
     const ph = t * 4 % (Math.PI * 2);

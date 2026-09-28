@@ -105,7 +105,17 @@ async function fetchLife() {
   return { dichte: dichte.length, verkehr: verkehr.length };
 }
 
-if (import.meta.url === `file://${process.argv[1]}` && process.argv.includes('--life')) {
+// VBB-Fahrplan (GTFS, CC BY 3.0, ~80 MB): node tools/osm/fetch.mjs --gtfs
+const GTFS = 'https://www.vbb.de/vbbgtfs';
+async function fetchGtfs() {
+  console.log(`VBB-Fahrplan (${GTFS}) …`);
+  await download(GTFS, raw + 'gtfs.zip');
+}
+
+if (import.meta.url === `file://${process.argv[1]}` && process.argv.includes('--gtfs')) {
+  await mkdir(raw, { recursive: true });
+  await fetchGtfs();
+} else if (import.meta.url === `file://${process.argv[1]}` && process.argv.includes('--life')) {
   // nur die Daten für Belebung (Dichte, Verkehrsmengen) nachladen: node tools/osm/fetch.mjs --life
   await mkdir(raw, { recursive: true });
   console.log(await fetchLife());
@@ -123,6 +133,7 @@ if (import.meta.url === `file://${process.argv[1]}` && process.argv.includes('--
   process.stdout.write('\n');
   await writeFile(raw + 'baeume.json', JSON.stringify(trees));
   await fetchLife();
+  await fetchGtfs();
   await writeFile(raw + 'fetched.json', JSON.stringify({ at: new Date().toISOString(), pbf: pbfUrl, lor: lor.features.length, trees: trees.length }, null, 1));
   console.log(`fertig: ${trees.length} Bäume, ${lor.features.length} Prognoseräume in ${((Date.now() - t0) / 1000).toFixed(0)} s → data/raw/`);
 }

@@ -95,6 +95,7 @@ braucht im Browser deutlich unter 200 MB, liefe also vermutlich auch im App-Modu
 | Straßen- und Anlagenbäume (Gattung, Höhe, Kronendurchmesser, Stammumfang), 962 545 Bäume | Geoportal Berlin, WFS `baumbestand` | Datenlizenz Deutschland – Zero 2.0 |
 | Einwohnerdichte 2022 (Einwohner je Hektar je Block, 26 397 Blöcke) | Geoportal Berlin, WFS `ua_einwohnerdichte_2022` (Umweltatlas) | Datenlizenz Deutschland – Zero 2.0 |
 | Verkehrsmengen 2019 (Kfz je Werktag, 9 922 Abschnitte des Hauptstraßennetzes) | Geoportal Berlin, WFS `verkehrsmengen_2019` (`dtvw2019kfz`) | Datenlizenz Deutschland – Zero 2.0 |
+| Fahrplan (Linien, Linienwege, Halte, Fahrten) | VBB Verkehrsverbund Berlin-Brandenburg GmbH, GTFS (`https://www.vbb.de/vbbgtfs`) | CC BY 3.0 (Namensnennung „VBB Verkehrsverbund Berlin-Brandenburg GmbH“) |
 
 Warum Geofabrik statt Overpass: ganz Berlin ergäbe über Overpass mehrere GB JSON in Dutzenden Abfragen und sprengt die
 Nutzungsgrenzen der öffentlichen Server (~1 GB/Tag). Der Auszug enthält dieselben OSM-Daten mit allen Tags; Ortsteile
@@ -278,6 +279,34 @@ Kamera versetzten Widerschein und bei Nebel einen größeren Hof. Fassaden: `fac
 × Sonnenstärke, als warme bzw. dunkle Lasur über der Grundfarbe. Leuchtreklame: aus den POIs im Bild (höchstens 40), am
 Gehweg vor dem Laden, nach der Lichtkarte gezeichnet (leuchtet selbst) plus farbiges Licht in der Lichtkarte. Wie der
 Tagesrhythmus gilt das Wetter nur in der Welt mit Standardbevölkerung; Tests und Titel-Demo bleiben klar.
+
+**Öffentlicher Verkehr** (`tools/osm/zip.mjs`, `tools/osm/transit.mjs` → `transit.json`; `web/src/transit.js`,
+`web/src/transitlive.js`, `web/src/railart.js`):
+- Build: ZIP ohne Abhängigkeiten (Zentralverzeichnis selbst gelesen, Einträge per `node:zlib` im Datenstrom – die
+  400-MB-`stop_times.txt` liegt nie ganz im Speicher). Stichtage: je Tagesart der Kandidat unter den ersten vier
+  Dienstagen/Samstagen/Sonntagen mit den meisten Fahrten (der erste Dienstag im Feed hatte Bauarbeiten, ein Samstag war
+  Feiertag). Fahrten werden zu Mustern (Linie + Weg + Haltfolge) zusammengefasst; je Muster bleiben der auf Berlin
+  gekürzte, vereinfachte Linienweg, die Halte als Bogenlänge (monoton, bei der Vereinfachung anteilig mitgezogen), die
+  Fahrzeiten (Median) und die Abfahrtsminuten je Tagesart (GTFS-Zeiten über 24:00 bleiben als > 1440 erhalten). Die
+  Projektion wird aus `index.json meta.origin` exakt wie im Karten-Build rekonstruiert. Nur Bus, Straßenbahn, S- und
+  U-Bahn; Regionalbahn, Fähre und Rufbus bleiben draußen.
+- Zeitmaßstab: die Spieluhr läuft 60× schneller als die Fahrzeuge fahren. Der Fahrplan liefert deshalb nur den Takt
+  zur Uhrzeit (Abfahrten je Stunde, ±30 min, Nachtfahrten vom Vortag mitgezählt); die Fahrzeuge fahren in Echtzeit mit
+  Fahr- und Haltezeiten aus dem Fahrplan. Jedes Muster im Umkreis von 1,2 km führt virtuelle Fahrzeuge, die nur aus
+  ihrer Fahrzeit τ bestehen (so laufen sie auch über nicht geladene Kacheln), beim ersten Verfolgen gleichmäßig im
+  Takt verteilt (Phase aus dem Muster-Hash), danach fährt je 3600/Takt Sekunden eines ab.
+- Busse: nahe der Kamera (≤ 220 m, außer Sicht) werden sie zu KI-Fahrzeugen – nur dort, wo eine Spur höchstens 6 m vom
+  Linienweg liegt und in seine Richtung zeigt. Sie folgen dem Weg (`ai.follow`: an jeder Kreuzung die Nachfolgespur
+  mit dem kleinsten mittleren Abstand zum Weg, notfalls die dem Wegpunkt 60 m voraus nächste) und halten, sobald ihre
+  Lage auf dem Weg den nächsten Halt erreicht. Ohne Vorankommen (25 s) oder abseits des Wegs (> 15 m, 8 s) geben sie die
+  Linie ab. Busspuren: `oneway:bus=no`/`oneway:psv=no`/Gegenbusspur ergeben im Build ein Kennzeichen am Querschnitt,
+  der Spurgraph legt daraus eine Gegenspur nur für Busse an; reine Busstraßen (`busway`) ebenso. `lane.next` (allgemeiner
+  Verkehr) enthält keine Busspuren, `lane.nextBus` schon.
+- Straßenbahnen bleiben kinematisch auf dem Weg; vor Spieler, Autos, Rädern oder Fußgängern auf dem Gleis bleibt die
+  Fahrzeit stehen (Verspätung), nach 2,5 s klingelt sie. Ihre Wagen gehen als feste Hindernisse in die Kollision
+  (Autos und Spielfigur werden herausgeschoben) und in die Hinderniserkennung der KI.
+- S-/U-Bahn werden nur gezeichnet, wo ein Gleis der Karte (oberirdisch, Tunnel sind im Build ausgenommen) höchstens
+  5 m entfernt liegt; ihr Rumpeln (auch im Tunnel) speist den Umgebungsklang.
 
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige

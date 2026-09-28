@@ -11,6 +11,7 @@ export const KINDS = {
   garbage: { L: 86, W: 25, power: 0.6, colors: ['#f07d00'] },                                        // BSR-Orange
   police: { L: 48, W: 20, power: 1.1, colors: ['#e8ecef'] },                                         // Berliner Polizei (silber-blau)
   ambulance: { L: 60, W: 22, power: 1, colors: ['#f5f5f2'] },                                        // RTW der Feuerwehr
+  bus: { L: 120, W: 25, power: 0.75, colors: ['#f0cf1f'] },                                          // Linienbus (12 m), aus dem Fahrplan
 };
 export const EMERGENCY = new Set(['police', 'ambulance']);
 export const kindOf = (car) => car.kind ?? 'car';

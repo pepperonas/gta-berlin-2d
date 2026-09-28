@@ -3,6 +3,7 @@
 // Nähe und die Kirchenglocke zur vollen Stunde. audio.js macht daraus Klang; hier steht nur die Mischung (testbar).
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { sirenHigh } from './fleet.js';
+import { positionAt, pointOn } from './transit.js';
 
 export const AMB = { hear: 1200, siren: 3000, bells: 1800, hochbahnHear: 450, trainEvery: 150, trainLen: 14 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -42,9 +43,14 @@ export function ambienceAt(world) {
     const d = Math.hypot(p.x - cam.x, p.y - cam.y);
     if (d < 400) bar += 0.12 * (1 - d / 400);
   }
-  // Hochbahnzug: alle trainEvery s ein Zug je Richtung, jeweils trainLen s hörbar (bis ÖPNV-Fahrpläne kommen)
-  const phase = world.time % AMB.trainEvery, train = phase < AMB.trainLen || Math.abs(phase - AMB.trainEvery / 2) < AMB.trainLen / 2;
-  const rumble = hochbahn < AMB.hochbahnHear && train ? 1 - hochbahn / AMB.hochbahnHear : 0;
+  // Bahnen: mit Fahrplan das Rumpeln echter Züge in der Nähe (auch im Tunnel unter der Straße), sonst ein fester
+  // Takt an der Hochbahn
+  let rumble = 0;
+  if (world.transit && world.city.transit) rumble = trainRumble(world, cam);
+  else {
+    const phase = world.time % AMB.trainEvery, train = phase < AMB.trainLen || Math.abs(phase - AMB.trainEvery / 2) < AMB.trainLen / 2;
+    rumble = hochbahn < AMB.hochbahnHear && train ? 1 - hochbahn / AMB.hochbahnHear : 0;
+  }
   const sirens = [];
   for (const c of world.cars) if (c.siren) {
     const d = Math.hypot(c.x - cam.x, c.y - cam.y);
@@ -62,6 +68,21 @@ export function ambienceAt(world) {
     rumble: clamp01(rumble),
     sirens,
   };
+}
+
+function trainRumble(world, cam) {
+  let r = 0;
+  const tr = world.city.transit;
+  for (const [id, s] of world.transit.tracked) {
+    const p = tr.patterns[id];
+    if (p.mode === 'bus') continue;
+    for (const v of s.veh) {
+      const q = pointOn(p, positionAt(p, v.tau).s), d = Math.hypot(q.x - cam.x, q.y - cam.y);
+      const R = p.mode === 'tram' ? 250 : AMB.hochbahnHear;
+      if (d < R) r = Math.max(r, (1 - d / R) * (p.mode === 'tram' ? 0.5 : 1));
+    }
+  }
+  return r;
 }
 
 function nearestOnLine(p, x, y) {

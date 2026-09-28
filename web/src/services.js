@@ -88,7 +88,7 @@ export function manageEmergency(w, dt) {
   }
   for (const c of w.cars) {
     const d = c.duty;
-    if (!d || c.done) continue;
+    if (!d || c.done || !EMERGENCY.has(c.kind)) continue; // Busse haben eigene Dienste (transitlive.js)
     if (c.wrecked || c.driver !== 'npc') { finish(w, c, false); continue; }
     const gx = d.inc?.x ?? d.x, gy = d.inc?.y ?? d.y, dist = Math.hypot(c.x - gx, c.y - gy);
     if (d.phase === 'drive') {

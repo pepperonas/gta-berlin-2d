@@ -39,7 +39,7 @@ function appendLane(ai, lane, fromS = 0) {
 }
 
 function extendRoute(ai, rng, forced = null) {
-  const next = forced ?? (ai.field ? towardGoal(ai) : null) ?? chooseNext(ai.lane, rng);
+  const next = forced ?? (ai.field ? towardGoal(ai) : ai.follow ? followLine(ai) : null) ?? chooseNext(ai.lane, rng);
   if (!next) return false;
   const v = Math.min(turnSpeed(turnAngle(ai.lane, next)), next.cruise, ai.lane.cruise);
   const con = connector(ai.lane, next);
@@ -52,9 +52,10 @@ function extendRoute(ai, rng, forced = null) {
 
 // Zielfahrt: Entfernungsfeld über den Spurgraph (Dijkstra rückwärts vom Zielspurstück, begrenzt auf ein Rechteck um
 // Start und Ziel). Wer ein Ziel hat, nimmt an jeder Kreuzung die Nachfolgespur mit der kleinsten Restentfernung.
-export function goalField(city, fromX, fromY, x, y, margin = 6000) {
+export function goalField(city, fromX, fromY, x, y, margin = 6000, angle = undefined) {
   const g = buildLaneGraph(city);
-  const goal = nearestLane(g, x, y, undefined, 400) ?? nearestLane(g, x, y, undefined, 1500);
+  // mit Richtung (Haltestelle): die Spur in Fahrtrichtung, nicht die Gegenfahrbahn
+  const goal = nearestLane(g, x, y, angle, 400, true) ?? nearestLane(g, x, y, undefined, 1500, true);
   if (!goal) return null;
   const x0 = Math.min(fromX, x) - margin, y0 = Math.min(fromY, y) - margin, x1 = Math.max(fromX, x) + margin, y1 = Math.max(fromY, y) + margin;
   const inBox = (l) => { const p = l.pts; return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1; };
@@ -81,10 +82,52 @@ function towardGoal(ai) {
   for (const n of ai.lane.next) { const d = ai.field.dist.get(n); if (d !== undefined && d < bd) { bd = d; best = n; } }
   return best;
 }
+// Linienweg folgen (Bus): an jeder Kreuzung die Nachfolgespur, deren Ende am dichtesten am Weg liegt und dabei auf
+// ihm vorankommt. ai.follow = { pts, s } (s = bisherige Lage auf dem Weg); null, wenn keine Spur zum Weg passt.
+export function followLine(ai) {
+  const f = ai.follow;
+  let best = null, bd = Infinity, bs = f.s;
+  for (const n of ai.lane.nextBus) {
+    // mittlerer Abstand einiger Punkte der Spur (erste 60 m) zum Weg; die Spur muss auf ihm vorankommen
+    let sum = 0, cnt = 0, last = f.s;
+    for (const u of [0.25, 0.5, 0.75, 1]) {
+      const pt = pointAlong(n.pts, Math.min(n.len, 600) * u);
+      const q = projectNear(f.pts, f.cum, pt.x, pt.y, last);
+      sum += q.d; cnt++; last = Math.max(last, q.s);
+    }
+    const d = sum / cnt;
+    if (last <= f.s + 5 || d > 140) continue;
+    if (d < bd) { bd = d; best = n; bs = last; }
+  }
+  if (!best) { // keine Spur liegt am Weg (verwinkelte Kreuzung): die, die dem Wegpunkt 60 m voraus am nächsten kommt
+    const aim = pointAlong(f.pts, Math.min(f.s + 600, f.cum[f.cum.length - 1]));
+    const cur = ai.lane.pts, k = cur.length - 2, d0 = Math.hypot(cur[k] - aim.x, cur[k + 1] - aim.y);
+    for (const n of ai.lane.nextBus) {
+      const p = n.pts, j = p.length - 2, d = Math.hypot(p[j] - aim.x, p[j + 1] - aim.y);
+      if (d < d0 && d < bd) { bd = d; best = n; }
+    }
+  }
+  if (best) f.s = bs;
+  return best;
+}
+// Nächster Punkt auf dem Weg ab Bogenlänge s0 (nur ein Fenster voraus – Schleifen im Weg sollen nicht zurückspringen)
+export function projectNear(pts, cum, x, y, s0, ahead = 4000) {
+  let best = { s: s0, d: Infinity };
+  let i = 0;
+  while (i < cum.length - 2 && cum[i + 1] < s0 - 50) i++;
+  for (; i < cum.length - 1 && cum[i] <= s0 + ahead; i++) {
+    const ax = pts[2 * i], ay = pts[2 * i + 1], dx = pts[2 * i + 2] - ax, dy = pts[2 * i + 3] - ay, L2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2));
+    const d = Math.hypot(ax + dx * t - x, ay + dy * t - y);
+    if (d < best.d) best = { s: cum[i] + t * Math.sqrt(L2), d };
+  }
+  return best;
+}
+
 // Ziel setzen (Einsatzort). Die schon geplanten ~400 px Route bleiben (dort können Kreuzungen reserviert sein),
 // ab dann wählt die Route jeden Nachfolger zum Ziel hin.
-export function setGoal(car, city, x, y) {
-  const f = car.ai && goalField(city, car.x, car.y, x, y);
+export function setGoal(car, city, x, y, angle = undefined) {
+  const f = car.ai && goalField(city, car.x, car.y, x, y, 6000, angle);
   if (!f) return false;
   car.ai.field = f;
   return true;
@@ -132,6 +175,7 @@ export function spawnSpot(city, rng, cx, cy, minR, maxR) {
   const segs = g.hash.query({ x: cx - maxR, y: cy - maxR, w: 2 * maxR, h: 2 * maxR }, []);
   for (let tries = 0; tries < 40 && segs.length; tries++) {
     const sg = segs[Math.floor(rng() * segs.length)];
+    if (sg.lane.busOnly) continue;
     const t = rng();
     const x = sg.ax + (sg.bx - sg.ax) * t, y = sg.ay + (sg.by - sg.ay) * t;
     const d = Math.hypot(x - cx, y - cy);
@@ -148,7 +192,8 @@ export function spawnSpot(city, rng, cx, cy, minR, maxR) {
 // Nächste Spur zum Auto finden (nach Unfall / Abdrängen / Übernahme durch die KI).
 export function replan(car, city, rng) {
   const g = buildLaneGraph(city);
-  const hit = nearestLane(g, car.x, car.y, car.angle, 600) ?? nearestLane(g, car.x, car.y, car.angle, 3000);
+  const bus = car.kind === 'bus';
+  const hit = nearestLane(g, car.x, car.y, car.angle, 600, bus) ?? nearestLane(g, car.x, car.y, car.angle, 3000, bus);
   if (!hit) { car.ai = null; return; }
   let s = 0;
   const p = hit.lane.pts;
@@ -156,7 +201,8 @@ export function replan(car, city, rng) {
   s += Math.hypot(hit.x - p[hit.i], hit.y - p[hit.i + 1]) + 30;
   const keep = car.ai;
   initAi(car, hit.lane, s, rng, city);
-  if (keep) Object.assign(car.ai, { cruiseK: keep.cruiseK });
+  // Auftrag überlebt die Neuplanung: Tempo, Zielfeld (Einsatz), Linienweg (Bus), Sondersignal, Halt
+  if (keep) Object.assign(car.ai, { cruiseK: keep.cruiseK, field: keep.field ?? null, follow: keep.follow ?? null, urgent: keep.urgent, hold: keep.hold });
 }
 
 // Abstand zum nächsten Zebrastreifen voraus, an dem ein Fußgänger steht oder geht (Infinity = keiner).
@@ -214,6 +260,7 @@ function obstacleAhead(car, world) {
   }
   for (const p of world.peds) if (p.state !== 'gone' && p.state !== 'dead') check(p.x, p.y, 16, false, false, p, true); // über Tote fahren (sonst stünde der Verkehr ewig)
   for (const b of world.bikes ?? []) if (b.state === 'ride') check(b.x, b.y, 14, false, false, b, true); // Radfahrer: dahinter bleiben
+  for (const o of world.railObs ?? []) check(o.x, o.y, 22, false, false, o); // Straßenbahnwagen: warten, bis sie vorbei sind
   const pl = world.player;
   if (!pl.inCar) check(pl.x, pl.y, 17, false, true);
   return { dCar, dOther, playerBlock, blocker, pedBlock };

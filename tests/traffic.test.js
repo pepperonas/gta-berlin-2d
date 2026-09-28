@@ -22,7 +22,11 @@ test('Spurgraph: Rechtsverkehr, Einbahnstraßen nur in Fahrtrichtung', () => {
   assert.ok(mx * -uy + my * ux > e.w / 8, 'Spur liegt rechts der Mitte');
   const oneway = city.list('edge').filter((x) => x.inside && x.oneway === 1 && x.cls <= 7);
   assert.ok(oneway.length > 50);
-  for (const x of oneway) assert.ok(!lanes.some((l) => l.edge === x && l.dir === -1), 'Gegenspur auf Einbahnstraße');
+  for (const x of oneway) assert.ok(!lanes.some((l) => l.edge === x && l.dir === -1 && !l.busOnly), 'Gegenspur auf Einbahnstraße');
+  // Gegenbusspuren (oneway:bus=no) gibt es, und sie sind reine Busspuren, die der allgemeine Verkehr nie ansteuert
+  const contra = lanes.filter((l) => l.busOnly && l.edge.oneway);
+  assert.ok(contra.length > 0, 'Gegenbusspur vorhanden');
+  for (const l of lanes) if (!l.busOnly) assert.ok(l.next.every((m) => !m.busOnly), 'Busspur im allgemeinen Verkehr');
 });
 
 test('Abbiegen: keine Wende außer in der Sackgasse; meist geradeaus', () => {
@@ -30,7 +34,8 @@ test('Abbiegen: keine Wende außer in der Sackgasse; meist geradeaus', () => {
   let straight = 0, n = 0;
   for (const l of g.lanes) {
     // Wenden nur, wo von diesem Knoten keine andere Spur abgeht (Sackgasse oder nur einmündende Einbahnstraßen)
-    const other = (g.out.get(l.to) ?? []).some((m) => m.edge !== l.edge);
+    // (für den allgemeinen Verkehr zählt eine reine Busspur nicht als Weiterfahrt)
+    const other = (g.out.get(l.to) ?? []).some((m) => m.edge !== l.edge && (l.busOnly || !m.busOnly));
     if (other) assert.ok(l.next.every((m) => m.edge !== l.edge), `Wende an einer Kreuzung (Kante ${l.edge.id})`);
     if (l.next.length >= 3) for (let k = 0; k < 5; k++) { n++; if (Math.abs(turnAngle(l, chooseNext(l, rng))) < 0.4) straight++; }
   }

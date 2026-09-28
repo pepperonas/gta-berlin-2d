@@ -16,6 +16,10 @@ import { lightAt } from './daylight.js';
 import { weatherLight, hasUmbrella } from './weather.js';
 import { drawCloudShadows, drawOvercast, drawRain, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn } from './wetfx.js';
 import { drawUmbrella } from './critters.js';
+import { drawTrainCar, tramRails } from './railart.js';
+import { transitVisible } from './transitlive.js';
+import { patternsNear } from './transit.js';
+import { segDist2 } from './geom.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
@@ -558,6 +562,14 @@ export class Renderer {
     this.drawStreetMarkings(edges, world.city);
     this.drawCrossings(crossings);
     this.stats.puddles = drawWetRoads(ctx, edges, junctions, pathOf, city, world.wet ?? 0, L);
+    // Straßenbahngleise in der Fahrbahn (aus den Linienwegen der Straßenbahnen)
+    if (city.transit) {
+      const shapes = new Set();
+      for (const p of patternsNear(city.transit, v.x + v.w / 2, v.y + v.h / 2, Math.max(v.w, v.h) / 2 + 100)) if (p.mode === 'tram') shapes.add(p.shape);
+      ctx.lineCap = 'butt';
+      for (const sh of shapes) { const r = tramRails(sh); if (!r) continue; ctx.strokeStyle = 'rgba(40,40,44,0.55)'; ctx.lineWidth = 2.4; ctx.stroke(r); ctx.strokeStyle = '#a3a6ab'; ctx.lineWidth = 1.1; ctx.stroke(r); }
+      this.stats.tramShapes = shapes.size;
+    }
     this.drawSignals(world, v);
     ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
     for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
@@ -629,6 +641,11 @@ export class Renderer {
       if (wx && hasUmbrella(p.id, wx.rain) && (p.state === 'walk' || p.state === 'cross' || p.state === 'idle' || act === 'wait' || act === 'queue')) list.push({ y: p.y + 0.5, d: () => drawUmbrella(ctx, p, t) });
     }
     for (const b of world.bikes ?? []) if (near(b.x, b.y)) list.push({ y: b.y, d: () => drawBike(ctx, b, riderShirt(b), L.sun, t) });
+    // Bahnen: Straßenbahnen in der Tiefenfolge; S-/U-Bahn nur, wo ihr Gleis oberirdisch liegt (sonst im Tunnel)
+    const railAt = (x, y) => { for (const f of city.render.query({ x: x - 50, y: y - 50, w: 100, h: 100 }, this._rq ??= [])) if (f.layer === 'rail') { const p = f.pts; for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 2500) return true; } return false; };
+    const trains = this._trains = transitVisible(world, v, railAt);
+    this.stats.trains = trains.length;
+    for (const tr of trains) if (tr.mode === 'tram') for (const c of tr.cars) if (near(c.x, c.y)) list.push({ y: c.y + 4, d: () => drawTrainCar(ctx, c, 'tram', L.sun, tr.lit, t) });
     for (const a of world.animals ?? []) if (!a.z && near(a.x, a.y)) list.push({ y: a.y - 2, d: () => drawBird(ctx, a, L.sun) });
     const pl = world.player;
     if (!pl.inCar) list.push({ y: pl.y, d: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
@@ -638,6 +655,7 @@ export class Renderer {
 
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
     this.drawTracks(rails.filter((r) => r.bridge), true);
+    for (const tr of this._trains ?? []) if (tr.mode !== 'tram') for (const c of tr.cars) drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t);
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
     // 8b) Wolkenschatten ziehen über Straßen und Dächer
     this.stats.clouds = wx ? drawCloudShadows(ctx, v, wx, t, L0.sun.strength) : 0;
@@ -771,6 +789,12 @@ export class Renderer {
       const m = world.mission, p = world.city.places;
       const spots = m.state === 'toPickup' ? [p.pickup] : m.state === 'toDropoff' ? [p.dropoff] : m.state === 'idle' || m.state === 'briefing' ? [p.giver] : [];
       for (const z of spots) if (z && inView(z.x, z.y)) out.push({ x: z.x, y: z.y, r: 120, rgb: '255,211,61', a: 0.7 * k });
+    }
+    // Bahnen: warmes Innenlicht je Wagen, Scheinwerfer vorn
+    for (const tr of this._trains ?? []) for (const c of tr.cars) {
+      if (!inView(c.x, c.y)) continue;
+      out.push({ x: c.x, y: c.y, r: c.L * 0.7, rgb: '255,230,180', a: 0.45 * k });
+      if (c.first) out.push({ x: c.x + Math.cos(c.angle) * c.L / 2, y: c.y + Math.sin(c.angle) * c.L / 2, r: 200, rgb: '255,236,196', a: 0.7 * k, cone: c.angle });
     }
     // Leuchtreklame wirft farbiges Licht auf den Gehweg
     for (const n of this._neon ?? []) if (neonOn(n.q, world.time)) out.push({ x: n.x, y: n.y + 6, r: 60, rgb: n.rgb, a: 0.6 * k });

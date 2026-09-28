@@ -316,10 +316,12 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       : { width: roadWidth(t, base), fwd: oneway === -1 ? 0 : 1, bwd: oneway === 1 ? 0 : 1,
         left: { park: PARK.none, parkW: 0, orient: 'parallel', cycle: 0 }, right: { park: PARK.none, parkW: 0, orient: 'parallel', cycle: 0 },
         maxspeed: maxspeedOf(t, base), surface: surfaceOf(t), lit: t.lit === 'yes' ? 1 : 0, gaslight: 0 };
+    // Busse dürfen gegen die Einbahnstraße (oneway:bus/psv=no, Gegenbusspur) – eigene Busspur in Gegenrichtung
+    const busContra = oneway !== 0 && (['no'].includes(t['oneway:bus']) || ['no'].includes(t['oneway:psv']) || /opposite/.test(`${t.busway ?? ''}${t['busway:left'] ?? ''}${t['busway:right'] ?? ''}${t['busway:both'] ?? ''}`)) ? 1 : 0;
     const width = Math.round(cs.width * 10); // dm
     const dm = (m) => Math.round(m * 10);
     const x = [cs.fwd, cs.bwd, cs.left.park, dm(cs.left.parkW), PARK_ORIENT.indexOf(cs.left.orient), cs.right.park, dm(cs.right.parkW),
-      PARK_ORIENT.indexOf(cs.right.orient), dm(cs.left.cycle), dm(cs.right.cycle), cs.maxspeed, cs.surface, cs.lit | (cs.gaslight << 1)];
+      PARK_ORIENT.indexOf(cs.right.orient), dm(cs.left.cycle), dm(cs.right.cycle), cs.maxspeed, cs.surface, cs.lit | (cs.gaslight << 1) | (busContra << 2)];
     const name = nameOf(t.name ?? t.ref ?? '');
     const bridge = t.bridge && t.bridge !== 'no' ? 1 : 0;
     // Erfasste Merkmale (für den Abdeckungsbericht): gemessen/getaggt statt Standardwert

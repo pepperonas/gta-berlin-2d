@@ -3,13 +3,13 @@
 // An Kreuzungen werden die Spuren gekürzt; Abbiegeverbinder sind kubische Bézierkurven.
 import { offsetPolyline, polylineLength } from './geom.js';
 import { SpatialHash } from './collision.js';
-import { TRAFFIC_MAX_CLASS } from './citycodes.js';
+import { TRAFFIC_MAX_CLASS, ROAD_CLASS } from './citycodes.js';
 import { laneOffsets } from './street.js';
 
 // Reisetempo aus dem Tempolimit (km/h → px/s bei 10 px = 1 m), Spielstraßen nicht unter 30 px/s.
 export const cruiseFor = (kmh) => Math.max(30, kmh / 3.6 * 10);
 
-export const drivable = (e) => e.inside && e.cls <= TRAFFIC_MAX_CLASS && e.len > 5 && !e.blocked && !e.passage;
+export const drivable = (e) => e.inside && (e.cls <= TRAFFIC_MAX_CLASS || e.cls === ROAD_CLASS.busway) && e.len > 5 && !e.blocked && !e.passage;
 
 export function cutPolyline(pts, s0, s1) { // Teilstück zwischen den Bogenlängen s0 und s1
   const out = [];
@@ -96,22 +96,39 @@ function makeLanes(city, e, g) {
       const pts = cutPolyline(raw, s0, s1);
       if (pts.length < 4) continue;
       // eng: Gegenverkehr teilt sich die Fahrbahnmitte (Engstelle, man muss einander durchlassen)
-      made.push(new Lane(city, g, { id: laneId++, key: (dir === 1 ? 0 : 100) + k, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), narrow: lo.narrow && e.cs.fwd > 0 && e.cs.bwd > 0 }));
+      made.push(new Lane(city, g, { id: laneId++, key: (dir === 1 ? 0 : 100) + k, edge: e, dir, k, n, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), narrow: lo.narrow && e.cs.fwd > 0 && e.cs.bwd > 0, busOnly: e.cls === ROAD_CLASS.busway }));
     }
+  }
+  // Gegenbusspur in Einbahnstraßen (oneway:bus=no): eigene Spur nur für Busse am linken Fahrbahnrand
+  if (e.cs.busContra && (e.cs.fwd === 0) !== (e.cs.bwd === 0)) {
+    const dir = e.cs.fwd ? -1 : 1, base = dir === 1 ? e.pts : reverse(e.pts);
+    const from = dir === 1 ? e.a : e.b, to = dir === 1 ? e.b : e.a;
+    const raw = offsetPolyline(base, Math.max(1.4 * S, e.cs.width / 2 - 1.6 * S));
+    const L = polylineLength(raw);
+    let s0 = trimAt(from), s1 = L - trimAt(to);
+    if (s1 - s0 < L * 0.3) { const m = L / 2; s0 = Math.min(s0, m - L * 0.15); s1 = Math.max(s1, m + L * 0.15); }
+    const pts = cutPolyline(raw, s0, s1);
+    if (pts.length >= 4) made.push(new Lane(city, g, { id: laneId++, key: dir === 1 ? 50 : 150, edge: e, dir, k: 0, n: 1, from, to, pts, len: polylineLength(pts), cruise: cruiseFor(e.cs.maxspeed), narrow: false, busOnly: true }));
   }
   return made;
 }
 
 class Lane {
-  constructor(city, g, props) { Object.assign(this, props); this._city = city; this._g = g; this._gen = -1; this._next = null; }
+  constructor(city, g, props) { Object.assign(this, props); this._city = city; this._g = g; this._gen = -1; this._next = null; this._genB = -1; this._nextB = null; }
+  // Nachfolger für den allgemeinen Verkehr (ohne Busspuren); auf einer Busspur selbst sind alle erlaubt
   get next() {
-    if (this._gen !== this._city.gen) { this._next = nextLanes(this, this._g, this._city.turnBans); this._gen = this._city.gen; }
+    if (this._gen !== this._city.gen) { this._next = nextLanes(this, this._g, this._city.turnBans, !!this.busOnly); this._gen = this._city.gen; }
     return this._next;
+  }
+  // Nachfolger für Linienbusse (mit Busspuren und Gegenbusspuren)
+  get nextBus() {
+    if (this._genB !== this._city.gen) { this._nextB = nextLanes(this, this._g, this._city.turnBans, true); this._genB = this._city.gen; }
+    return this._nextB;
   }
 }
 
-function nextLanes(l, g, banned) {
-  const at = g.out.get(l.to) ?? [];
+function nextLanes(l, g, banned, withBus = false) {
+  const at = (g.out.get(l.to) ?? []).filter((m) => withBus || !m.busOnly);
   const all = at.filter((m) => m.edge !== l.edge && !banned.has(`${l.edge.id}>${l.to}>${m.edge.id}`));
   // Rechts abbiegen nur von der äußersten, links nur von der innersten Spur; geradeaus spurtreu.
   const ok = all.filter((m) => {
@@ -172,11 +189,12 @@ export function chooseNext(lane, rng) {
 }
 
 // Nächste Spur zu einer Position; Richtung zählt mit (Winkelabweichung in px bewertet).
-export function nearestLane(graph, x, y, angle, radius = 400) {
+export function nearestLane(graph, x, y, angle, radius = 400, allowBus = false) {
   const box = { x: x - radius, y: y - radius, w: 2 * radius, h: 2 * radius };
   let best = null;
   const ca = Math.cos(angle), sa = Math.sin(angle);
   for (const s of graph.hash.query(box, [])) {
+    if (s.lane.busOnly && !allowBus) continue;
     const dx = s.bx - s.ax, dy = s.by - s.ay, L2 = dx * dx + dy * dy, L = Math.sqrt(L2) || 1;
     let t = L2 ? ((x - s.ax) * dx + (y - s.ay) * dy) / L2 : 0;
     t = t < 0 ? 0 : t > 1 ? 1 : t;

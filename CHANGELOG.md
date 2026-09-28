@@ -4,7 +4,26 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
-## [0.14.0] – 2026-09-28
+## [0.15.0] – 2026-09-28
+
+### Hinzugefügt
+- Öffentlicher Verkehr nach dem echten VBB-Fahrplan (GTFS, CC BY 3.0 „VBB Verkehrsverbund Berlin-Brandenburg GmbH“):
+  Busse, Straßenbahnen, S- und U-Bahnen auf ihren wirklichen Linienwegen mit ihren Halten, Fahr- und Haltezeiten.
+  Der Fahrplan bestimmt den Takt zur Spieluhr (werktags, samstags, sonntags, auch Nachtlinien nach Mitternacht);
+  die Fahrzeuge selbst fahren in Echtzeit.
+- Busse (12 m, gelb, Liniennummer auf dem Dach) werden nahe der Kamera zu echten Verkehrsteilnehmern: sie folgen
+  ihrem Linienweg über den Spurgraph, halten an ihren Halten, Wartende steigen ein. Verlieren sie den Weg, geben
+  sie die Linie ab und fahren außer Sicht davon.
+- Straßenbahnen fahren auf Gleisen in der Fahrbahn (aus den Linienwegen gezeichnet), halten vor Hindernissen und
+  klingeln; ihre Wagen sind für Autos und Spielfigur feste Hindernisse, der Verkehr wartet hinter ihnen.
+- S- und U-Bahnen fahren auf ihren Gleisen, sichtbar nur, wo das Gleis oberirdisch liegt (Hochbahn, Bahndamm); im
+  Tunnel rumpeln sie hörbar unter der Straße. Nachts leuchten die Wagen, Scheinwerfer vorn.
+- Busspuren: Gegenbusspuren in Einbahnstraßen (`oneway:bus=no`) und reine Busstraßen sind nur für Busse; der
+  übrige Verkehr nutzt sie nie.
+- `npm run map:fetch -- --gtfs` lädt den Fahrplan, `npm run map:transit` baut daraus `web/data/berlin/transit.json`
+  (3,3 MB, ohne die Karte neu zu bauen).
+
+ – 2026-09-28
 
 ### Hinzugefügt
 - Wetter: sonnig, wolkig, bedeckt, Regen und (nur morgens) Nebel, je drei Stunden, mit 45 Minuten Übergang; fest aus

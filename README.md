@@ -87,6 +87,10 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   glänzt, Pfützen spiegeln Himmel und Lichter, Leute tragen Schirme, weniger sind draußen, Autos rutschen mehr. Nebel
   legt sich über alles. Fassaden sind auf der Sonnenseite heller. Nachts leuchten Neonschilder vor Bars, Clubs, Spätis
   und Imbissen.
+- **Busse und Bahnen nach dem VBB-Fahrplan:** Busse, Straßenbahnen, S- und U-Bahnen fahren ihre echten Linien im
+  Takt des Fahrplans zur Spieluhr. Busse halten an ihren Halten (Wartende steigen ein) und nutzen Busspuren, Straßenbahnen
+  fahren auf Gleisen in der Straße und klingeln, wenn man im Weg steht; S- und U-Bahnen sieht man auf Hochbahn und
+  Bahndamm, im Tunnel hört man sie. Fahrplandaten: VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY 3.0).
 - Mission „Kisten für den Kiez“: Auftrag am Späti in der Wrangelstraße (Wrangelkiez) annehmen → zur Lagerhalle in
   Neukölln fahren → dort anhalten und **A halten** zum Einladen → zurück zur Wrangelstraße → abliefern. Das Zeitlimit
   berechnet der Karten-Build aus der kürzesten Route (derzeit 8,7 km → 930 s). Scheitern bei Zeitablauf oder wenn das
@@ -160,7 +164,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 185 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 195 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -170,7 +174,8 @@ für den Stadtplan, `tiles/<x>_<y>.json` je 640 × 640 m; zusammen 138 MB) im Re
 Neu bauen, z. B. für aktuellere OSM-Daten oder andere Missionsorte:
 
 ```bash
-npm run map:fetch                     # OSM-Auszug Berlin (Geofabrik, PBF ~100 MB), LOR-Grenzen, Baumbestand, Einwohnerdichte und Verkehrsmengen (WFS Geoportal Berlin) → data/raw/ (gitignored, ~2 min)
+npm run map:fetch                     # OSM-Auszug Berlin (Geofabrik, PBF ~100 MB), LOR-Grenzen, Baumbestand, Einwohnerdichte und Verkehrsmengen (WFS Geoportal Berlin), VBB-Fahrplan (GTFS ~80 MB) → data/raw/ (gitignored, ~3 min)
+npm run map:transit                   # data/raw/gtfs.zip → web/data/berlin/transit.json (Busse und Bahnen, ~20 s, ohne die Karte neu zu bauen)
 npm run map:build                     # data/raw/ + data/places.json → web/data/berlin/ (deterministisch, ~40 s, braucht ~6 GB Arbeitsspeicher)
 npm run map:preview -- out.svg        # Sichtprüfung als SVG (Standard 4 × 4 km um den Späti; Ausschnitt: out.svg x y breite höhe in px)
 ```
@@ -310,7 +315,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 185 automatischen Tests grün, darunter:
+- Alle 195 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -391,6 +396,15 @@ in Edge `edge://inspect` mit der Konsole verbinden
     mit dem Wind; Leuchtreklame-Texte und Flackern; Fassadenlicht nach Sonnenstand; Regen im Klang; Zeichnen bei Regen
     in der Nacht und bei Nebel ohne ungültige Koordinaten, mit Leuchtreklame und Widerschein (19 Mutationsproben, alle
     erkannt);
+  - ÖPNV: ZIP- und CSV-Leser; Fahrplan-Build an einem künstlichen GTFS (Linie auf Berlin gekürzt, Halte auf dem Weg,
+    Fahrzeiten, Abfahrten nach Mitternacht, Regionalbahn draußen); der „normalste“ Stichtag gewinnt gegen Bauarbeiten und
+    Feiertage; Takt je Uhrzeit und Wochentag, Lage mit Halten nie rückwärts, Fahrzeuge gleichmäßig im Takt, neue fahren
+    ab, fertige verschwinden; echte Daten: U1, U8, S7, M29, M10 werktags morgens mindestens sechsmal je Stunde, alle Halte
+    auf dem Weg im Kartengebiet; Busse fahren an der Sonnenallee ihre Linie und bedienen Halte, kein Pkw benutzt eine
+    Busspur; Straßenbahn hält vor einem Hindernis, klingelt und schiebt Autos aus ihren Wagen; S-/U-Bahn nur auf
+    oberirdischem Gleis sichtbar; ein Bus steht am Halt, fährt ein gutes Stück seine Linie entlang und wird dicht an ihr
+    aufgesetzt (19 von 20 Mutationsproben erkannt; die 6-m-Grenze beim Aufsetzen wirkt bei den echten Daten nie, weil die
+    richtungsgebundene Spursuche schon nur nahe Spuren findet – sie bleibt als Sicherheitsrand);
   - Gebäude-Regeln im Build: Brückenpfeiler, Kreuzgänge, Dächer und schwebende Teile werden keine Häuser, Bauteile
     nur ohne umgebenden Umriss (das höchste einer Gruppe); an der echten Oberbaumbrücke stehen die Türme (≥ 30 m),
     kein Haus auf der Fahrbahn, ein Brückendeck unter dem POI, das über dem Wasser nicht als Wasser gilt; Krankenhäuser
