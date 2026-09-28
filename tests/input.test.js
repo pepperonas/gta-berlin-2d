@@ -44,3 +44,15 @@ test('Tastatur und Gamepad werden zusammengeführt (stärkerer Ausschlag gewinnt
   assert.equal(m.lx, 0.4);
   assert.equal(m.up, true);
 });
+
+test('Mitfahren: G bzw. Steuerkreuz unten als eigene Flanke; S/Pfeil runter lösen es nicht aus', async () => {
+  const { idleInput } = await import('../web/src/idle.js');
+  assert.equal(idleInput.ride, false);
+  const st = new InputState();
+  assert.equal(st.frame(readKeys(new Set(['KeyG'])), 1 / 60).ride, true);
+  assert.equal(st.frame(readKeys(new Set(['KeyG'])), 1 / 60).ride, false, 'nur die Flanke');
+  const st2 = new InputState();
+  assert.equal(st2.frame(readKeys(new Set(['KeyS', 'ArrowDown'])), 1 / 60).ride, false);
+  const pad = { buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 13, value: i === 13 ? 1 : 0 })), axes: [0, 0, 0, 0] };
+  assert.equal(new InputState().frame(readPad(pad), 1 / 60).ride, true, 'Steuerkreuz unten');
+});

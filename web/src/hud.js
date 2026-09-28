@@ -708,6 +708,8 @@ export class Hud {
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
+      ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
+      ['Bahn führen: Türen / Wenden', 'A', 'E'],
       ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
