@@ -1,6 +1,6 @@
 // Spielstand: ein Speicherplatz in localStorage (in der Xbox-Hülle: WebView2-Profil im App-Datenordner).
 // storage ist injizierbar (Tests nutzen eine Map-Attrappe).
-import { playerCar, resetPopulation } from './world.js';
+import { playerCar, resetPopulation, rideExit } from './world.js';
 import { insideBorder, inBuilding } from './map.js';
 
 const MAX_XY = 1e7; // grobe Plausibilität; ob die Position in der Stadt liegt, prüft applySave
@@ -10,7 +10,7 @@ export const SAVE_VERSION = 2; // 2 = echte Karte (Kreuzberg + Nord-Neukölln); 
 
 export function makeSave(w, now = Date.now()) {
   const car = w.cars.find((c) => c.id === w.playerCarId);
-  const pos = w.player.ride ? w.player.ride.lastStop : playerCar(w) ?? w.player; // Fahrgast: an der letzten Haltestelle zu Fuß
+  const pos = w.player.ride ? rideExit(w, w.player.ride) : playerCar(w) ?? w.player; // Fahrgast: an der letzten Haltestelle zu Fuß (wie endRide)
   return {
     version: SAVE_VERSION, savedAt: now,
     money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock), day: w.day, dayCount: w.dayCount ?? 0,

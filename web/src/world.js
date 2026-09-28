@@ -27,7 +27,7 @@ import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
 import { pointOn } from './transit.js';
-import { vehicleState, transitNear, alightSpot, stationExit, RIDE } from './ride.js';
+import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE } from './ride.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
@@ -508,6 +508,7 @@ function lastStopOf(st) {
 }
 export function boardTransit(w) {
   const p = w.player;
+  if (p.stun > 0) return false; // gestürzt (z. B. gerade abgesprungen): erst aufstehen
   const hit = transitNear(w, p.x, p.y, RIDE.reach).find((h) => !h.ref.playerTrain);
   if (!hit) return false;
   const st = vehicleState(w, hit.ref);
@@ -533,12 +534,20 @@ export function alightTransit(w) {
   p.ride = null; p.x = spot.x; p.y = spot.y;
   if (hop) {
     const c = st.cars[Math.min(r.car, st.cars.length - 1)];
-    p.x += Math.cos(c.angle) * 20; p.y += Math.sin(c.angle) * 20; // Schwung in Fahrtrichtung
+    const fx = p.x + Math.cos(c.angle) * 20, fy = p.y + Math.sin(c.angle) * 20; // Schwung in Fahrtrichtung
+    if (spotFreeHere(w, fx, fy, 8, p.lvl ?? 0)) { p.x = fx; p.y = fy; } // nur wenn dort nichts Festes steht
     p.stun = RIDE.stun;
     if (st.speed > RIDE.hurtFrom) hurtPlayer(w, RIDE.hurt, c.x, c.y);
   }
   w.events.push({ type: 'alight', hop, x: p.x, y: p.y });
   return true;
+}
+// Wo ein Fahrgast ohne Fahrzeug landet: letzte Haltestelle, bei S-/U-Bahn deren Straßenausgang (nicht das Gleisbett).
+// Gemeinsam für endRide und den Spielstand (save.js makeSave).
+export function rideExit(w, ride) {
+  const pat = w.city.transit?.patterns[ride.lastStop.pid];
+  const ex = pat && (pat.mode === 'ubahn' || pat.mode === 'sbahn') ? stationExit(w, pat, ride.lastStop.i) : ride.lastStop;
+  return { x: ex.x, y: ex.y };
 }
 // Fahrt beenden, ohne Fahrzeug (verschwunden, Teleport, K. o.): an der letzten Haltestelle zu Fuß
 export function endRide(w, reason) {
@@ -546,8 +555,7 @@ export function endRide(w, reason) {
   if (!r) return;
   p.ride = null;
   if (reason !== 'teleport') {
-    const pat = w.city.transit?.patterns[r.lastStop.pid];
-    const ex = pat && (pat.mode === 'ubahn' || pat.mode === 'sbahn') ? stationExit(w, pat, r.lastStop.i) : r.lastStop;
+    const ex = rideExit(w, r);
     p.x = ex.x; p.y = ex.y; p.lvl = 0;
   }
   w.events.push({ type: 'ride-end', reason, x: p.x, y: p.y });

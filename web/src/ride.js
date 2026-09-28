@@ -84,7 +84,7 @@ export function transitNear(w, x, y, r) {
 // Platz frei? Wie world.js spotFree (dort nicht exportiert): feste Hindernisse jeder Form – Segment (Wand/Zaun/Ufer/
 // Gebietsgrenze), Kreis (Baum, Poller) oder Rechteck (Kiste) – levelbewusst und ohne umgefahrene Poller (car.js
 // blocks(), dieselbe kanonische Prüfung wie collideCarWorld/pushCircleOutOfWorld/spotFree), dazu parkende/fahrende Autos.
-function spotFreeHere(w, x, y, r, lvl) {
+export function spotFreeHere(w, x, y, r, lvl) {
   const box = { x: x - r, y: y - r, w: 2 * r, h: 2 * r };
   for (const s of w.solids.query(box, [])) {
     if (!blocks(w, s, lvl)) continue;

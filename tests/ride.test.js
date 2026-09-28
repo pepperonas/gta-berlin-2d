@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { vehicleState, transitNear, speedOfPattern, alightSpot, stationExit, RIDE } from '../web/src/ride.js';
 import { positionAt, pointOn } from '../web/src/transit.js';
-import { createWorld, updateWorld, resetPopulation, endRide, teleportTo } from '../web/src/world.js';
+import { createWorld, updateWorld, resetPopulation, endRide, teleportTo, rideExit } from '../web/src/world.js';
 import { updateFight, hurtPlayer } from '../web/src/combat.js';
 import { execute } from '../web/src/console.js';
 import { makeSave, validateSave } from '../web/src/save.js';
@@ -169,6 +169,10 @@ test('Aufspringen und Abspringen während der Fahrt; Fahrt-Ende, wenn das Fahrze
   assert.ok(w.events.some((e) => e.type === 'alight' && e.hop), 'Absprung');
   assert.ok(w.player.stun > 0, 'betäubt nach dem Absprung');
   if (st.speed > RIDE.hurtFrom) assert.ok(w.player.hp < hp, 'verletzt bei hohem Tempo'); else assert.ok(w.player.hp <= hp);
+  // gestürzt: kein Wiederaufspringen, erst nach dem Aufstehen
+  standBeside(w, 'test', 0); press(w, { ride: true });
+  assert.equal(w.player.ride, null, 'betäubt: kein Einsteigen');
+  w.player.stun = 0;
   // Fahrzeug verschwindet → Notausstieg an der letzten Haltestelle
   standBeside(w, 'test', 0); press(w, { ride: true });
   assert.ok(w.player.ride, 'wieder aufgesprungen');
@@ -188,7 +192,9 @@ test('Während der Fahrt: kein Laufen, kein Schießen, Kamera folgt; Speichern =
   assert.ok(Math.hypot(w.player.x - st.cars[w.player.ride.car].x, w.player.y - st.cars[w.player.ride.car].y) < 5, 'sitzt im Wagen');
   assert.ok(!w.events.some((e) => e.type === 'shot' || e.type === 'swing'));
   const save = validateSave(makeSave(w));
-  assert.ok(Math.hypot(save.player.x - w.player.ride.lastStop.x, save.player.y - w.player.ride.lastStop.y) < 1);
+  const ex = rideExit(w, w.player.ride);
+  assert.ok(Math.hypot(save.player.x - ex.x, save.player.y - ex.y) < 1, 'Spielstand = Ausstiegsstelle');
+  assert.ok(Math.hypot(ex.x - w.player.ride.lastStop.x, ex.y - w.player.ride.lastStop.y) < 1, 'Tram: Ausstieg an der Haltestelle selbst');
   endRide(w, 'teleport');
   assert.equal(w.player.ride, null);
   // umgehauen während der Fahrt (z. B. Schuss durchs Fenster): Fahrt endet, niemand fährt als Toter weiter
@@ -223,4 +229,40 @@ test('Fahrt-Ende von außen: Teleport (Karte/Konsole), Schläger lassen vom Fahr
   assert.ok(w.events.some((e) => e.type === 'ride-end' && e.reason === 'teleport'));
   press(w, {});
   assert.equal(w.player.ride, null, 'bleibt ausgestiegen');
+});
+
+test('Speichern während einer U-Bahn-Fahrt: Straßenausgang wie beim Notausstieg, nicht das Gleisbett', () => {
+  const { w } = worldWithTram('dwell');
+  const u8 = tr.patterns.filter((p) => p.name === 'U8').sort((a, b) => b.stops.length - a.stops.length)[0];
+  const i = u8.stopNames.findIndex((n) => n.startsWith('U Kottbusser Tor'));
+  const track = pointOn(u8, u8.stops[i]), exit = stationExit(w, u8, i);
+  assert.ok(Math.hypot(exit.x - track.x, exit.y - track.y) > 5, 'Vorbedingung: Ausgang liegt nicht auf dem Gleis');
+  w.player.ride = { kind: 'passenger', ref: { pid: u8.id, key: 'none' }, mode: 'ubahn', car: 0,
+    lastStop: { x: track.x, y: track.y, name: u8.stopNames[i], i, pid: u8.id }, since: 0, line: 'U8', dest: '' };
+  const save = validateSave(makeSave(w));
+  endRide(w, 'gone');
+  assert.ok(Math.hypot(save.player.x - w.player.x, save.player.y - w.player.y) < 1, 'Spielstand = Notausstieg');
+  assert.ok(Math.hypot(save.player.x - exit.x, save.player.y - exit.y) < 1, 'am Straßenausgang');
+});
+
+test('Abspringen vor einem Poller: der Schwung schiebt den Spieler nicht ins Hindernis', () => {
+  const { w } = worldWithTram('moving');
+  standBeside(w, 'test', 0); press(w, { ride: true });
+  assert.ok(w.player.ride);
+  for (let i = 0; i < 20; i++) press(w, {});
+  const st = vehicleState(w, w.player.ride.ref);
+  assert.ok(st.speed > RIDE.hopOff, 'Vorbedingung: Absprung');
+  const spot = alightSpot(w, st, w.player.ride.car), c = st.cars[w.player.ride.car];
+  const post = { x: spot.x + Math.cos(c.angle) * 20, y: spot.y + Math.sin(c.angle) * 20, r: 6 };
+  const keys = w.solids.insert(post, { x: post.x - post.r, y: post.y - post.r, w: 2 * post.r, h: 2 * post.r });
+  try {
+    assert.deepEqual(alightSpot(w, st, w.player.ride.car), spot, 'Vorbedingung: Poller blockiert den Ausstiegsplatz selbst nicht');
+    press(w, { ride: true });
+    assert.equal(w.player.ride, null);
+    assert.ok(w.player.stun > 0);
+    assert.ok(Math.hypot(w.player.x - spot.x, w.player.y - spot.y) < 1, 'bleibt am freien Ausstiegsplatz');
+    assert.ok(Math.hypot(w.player.x - post.x, w.player.y - post.y) > post.r + 7, 'nicht im Poller');
+  } finally {
+    w.solids.remove(post, keys);
+  }
 });
