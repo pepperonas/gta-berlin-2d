@@ -1,6 +1,7 @@
 // Passanten: gehen auf dem Gehweg links und rechts der echten Straßen, bleiben mal stehen, biegen an
 // Kreuzungen ab oder überqueren die Straße, fliehen vor rasenden Autos, Hupen und Unfällen und stehen
 // nach einem Anfahren wieder auf.
+import { isDown } from './car.js';
 import { PED } from './config.js';
 import { circleVsRect, circleVsCircle, circleVsSegment } from './collision.js';
 import { pointAlong, projectOnPolyline } from './geom.js';
@@ -118,6 +119,7 @@ function moveWithCollision(ped, dx, dy, world) {
   ped.x += dx; ped.y += dy;
   const box = { x: ped.x - 10, y: ped.y - 10, w: 20, h: 20 };
   for (const r of world.solids.query(box, tmp)) {
+    if (isDown(world, r)) continue;
     const m = r.seg ? circleVsSegment(ped.x, ped.y, PED.radius, r)
       : r.r !== undefined ? circleVsCircle(ped.x, ped.y, PED.radius, r.x, r.y, r.r) : circleVsRect(ped.x, ped.y, PED.radius, r);
     if (m) { ped.x += m.nx * m.depth; ped.y += m.ny * m.depth; }

@@ -15,6 +15,9 @@ export const CAR = {
   restitution: 0.3,
 };
 
+// Poller und Schranken: ab dieser Aufprallgeschwindigkeit (px/s, ≈ 16 km/h) fährt ein Auto sie um
+export const KNOCK = { speed: 45, slow: 0.9, damage: 3 };
+
 export const PLAYER = { radius: 7, walk: 80, run: 155, enterDist: 40 };
 export const PED = { radius: 6, walk: 36, run: 120 };
 

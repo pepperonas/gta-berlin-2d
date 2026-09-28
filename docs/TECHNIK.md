@@ -161,6 +161,23 @@ Knoten; Sperrlinien (`barrier=*` als Weg), die eine Straße kreuzen, ebenso; bei
 auch knapp daneben verlaufende Straßen. Tordurchfahrten (`tunnel=building_passage`) öffnen die Hauswand im Korridor.
 Einzelne Poller auf Gehwegen sperren nichts (Berlin hat viele davon gegen Gehwegparken).
 
+Die Sperren gelten für den KI-Verkehr; das Spielerauto fährt Poller und Schranken ab etwa 16 km/h Aufprall-
+geschwindigkeit um (`car.js knockOver`, Schwelle `KNOCK` in `config.js`). Umgefahrene merkt sich die Welt unter dem
+Ortsschlüssel des Pollers (`world.knocked`, Ort → Fallrichtung) – nicht am Objekt, das beim Entladen der Kachel
+verschwindet; alle Kollisionen (Auto, Spielfigur, Passanten, Schüsse, Stellplatzprüfung) übergehen liegende Poller
+(`isDown`). Zäune, Mauern, Hecken und Pollerlinien öffnen sich an Tor-Knoten und überall, wo ein Weg oder eine
+Straße sie kreuzt (Schnittpunkt der Linien, auch ohne gemeinsamen Knoten – in OSM hat längst nicht jede Querung
+einen), jeweils `GATE_M` = 4,4 m breit. Vorher waren Tore 1,8 m breit und Querungen ohne Tor zu; das Tempelhofer
+Feld war mit dem Auto nicht erreichbar. `tests/helpers/city.js reachability` misst das per Flutfüllung auf einem
+Raster (Kreis mit Auto- bzw. Fußgängerradius gegen alle festen Hindernisse).
+
+**Silhouette** (`web/src/occlusion.js`, rein): Nach den tiefensortierten Objekten und dem Viadukt prüft der Renderer,
+ob die Spielfigur bzw. ihr Auto von etwas übermalt wurde, das in der Zeichenfolge nach ihr kommt: Baumkrone
+(Kreis über dem Stamm), Haus (Grundriss um Bruchteile des Dachversatzes verschoben – deckt Dach, Fassade und
+Tordurchfahrt) oder Viadukt/Bahnbrücke (halbe Deckbreite um das Gleis). Dann kommt ihr Umriss (Auto: abgerundetes
+Rechteck mit Frontscheibe, zu Fuß: Kreis mit Blickrichtung) nach der Lichtkarte obendrauf. Kosten: ein Punkt gegen
+die sichtbaren Häuser und Bäume je Bild.
+
 **Verkehrsfluss ohne Ampel** (`web/src/traffic.js`): Jede KI-Route besteht aus Spurstücken; vor dem Ende eines Stücks
 bittet das Auto um Einfahrt (`mayEnter`). Eine Kreuzung ohne Ampel hält eine Reservierung (`world.jres`: Zufahrt,
 Autos, Bewegung je Auto als Sehne Spurende → Zielspur). Hinein darf, wer hinter der Kreuzung Platz hat und entweder aus

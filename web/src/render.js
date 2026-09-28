@@ -26,6 +26,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
+import { coverOf } from './occlusion.js';
 import { wallColor, roofColors } from './buildcolors.js';
 import { WEAPONS } from './combat.js';
 import { benchAngle } from './life.js';
@@ -601,6 +602,16 @@ export class Renderer {
       ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.setLineDash(st[2]); ctx.stroke(pathOf(f)); ctx.setLineDash([]);
     }
     for (const b of barriers) {
+      const down = world.knocked?.get(b.key);
+      if (down !== undefined) { // umgefahren: liegt in Fahrtrichtung, Fuß als Stumpf
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(down);
+        ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0.5, -1, 11, 3.4);
+        ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.fillRect(0, -1.6, 10, 3.2);
+        ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.fillRect(b.kind ? 3 : 8, -1.6, b.kind ? 2.5 : 2, 3.2);
+        ctx.restore();
+        ctx.fillStyle = '#2a2c30'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.4, 0, Math.PI * 2); ctx.fill();
+        continue;
+      }
       ctx.fillStyle = b.kind ? '#c0392b' : '#3a3d42'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.6, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = b.kind ? '#f2f2f2' : '#9aa0a8'; ctx.beginPath(); ctx.arc(b.x - 0.6, b.y - 0.8, 1.1, 0, Math.PI * 2); ctx.fill();
     }
@@ -673,7 +684,12 @@ export class Renderer {
     this._depth = list;
 
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
-    this.drawTracks(rails.filter((r) => r.bridge), true);
+    const bridges = rails.filter((r) => r.bridge);
+    this.drawTracks(bridges, true);
+    // Verdeckt etwas die Spielfigur bzw. ihr Auto? Dann kommen ihre Umrisse ganz oben drauf (nach der Lichtkarte)
+    const pcar = pl.inCar ? world.cars.find((c) => c.id === pl.inCar) : null;
+    const who = pcar ?? (pl.dead ? null : pl);
+    this.stats.cover = who ? coverOf({ x: who.x, y: who.y, key: pcar ? who.y + 6 : who.y }, { trees, buildings, bridges, deck: TRACK.deck, cam, heightScale: RENDER.heightScale }) : null;
     for (const tr of this._trains ?? []) if (tr.mode !== 'tram') for (const c of tr.cars) drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t);
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
     // 8b) Wolkenschatten ziehen über Straßen und Dächer
@@ -719,6 +735,8 @@ export class Renderer {
 
     // Leuchtreklame leuchtet selbst (nach der Lichtkarte)
     if (this._neon.length) drawNeon(ctx, this._neon, t, Math.min(1, (L.dark - 0.25) * 3));
+
+    if (this.stats.cover) drawSilhouette(ctx, who, !!pcar, t);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -1187,6 +1205,27 @@ export class Renderer {
     }
     ctx.restore();
   }
+}
+
+// Umriss der verdeckten Spielfigur bzw. ihres Autos: helle Kontur mit orangem Schimmer, leicht pulsierend
+export function drawSilhouette(ctx, o, car, t) {
+  const a = 0.75 + 0.2 * Math.sin(t * 5);
+  ctx.save(); ctx.translate(o.x, o.y);
+  ctx.fillStyle = 'rgba(255,122,26,0.22)'; ctx.strokeStyle = `rgba(255,236,210,${a})`; ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  if (car) {
+    ctx.rotate(o.angle);
+    const L = o.hw, W = o.hh, r = Math.min(4, W * 0.5);
+    ctx.moveTo(-L + r, -W); ctx.lineTo(L - r, -W); ctx.quadraticCurveTo(L, -W, L, -W + r); ctx.lineTo(L, W - r); ctx.quadraticCurveTo(L, W, L - r, W);
+    ctx.lineTo(-L + r, W); ctx.quadraticCurveTo(-L, W, -L, W - r); ctx.lineTo(-L, -W + r); ctx.quadraticCurveTo(-L, -W, -L + r, -W); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L * 0.35, -W * 0.7); ctx.lineTo(L * 0.35, W * 0.7); ctx.stroke(); // Frontscheibe: zeigt die Fahrtrichtung
+  } else {
+    ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Math.cos(o.angle ?? 0) * 4, Math.sin(o.angle ?? 0) * 4); ctx.lineTo(Math.cos(o.angle ?? 0) * 11, Math.sin(o.angle ?? 0) * 11); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawCrate(ctx, c) {

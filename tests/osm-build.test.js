@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCity } from '../tools/osm/build.mjs';
+import { buildCity, GATE_M } from '../tools/osm/build.mjs';
+import { geoToPx } from './helpers/city.js';
 import { makeProjection } from '../tools/osm/geo.mjs';
 import { decodeCity, surfaceAt, locationName, districtAt, T } from '../web/src/map.js';
 import { segDist2, undelta, delta } from '../web/src/geom.js';
@@ -46,6 +47,10 @@ function fixture() {
     // Poller mitten auf dem Pollerweg (Modalfilter)
     N(90, 52.4935, 13.4285, { barrier: 'bollard' }), N(92, 52.4935, 13.4295),
     Wy(111, [9, 90, 92], { highway: 'residential', name: 'Pollerweg' }),
+    // Zaun, den ein Fußweg ohne Tor-Knoten kreuzt (bekommt eine Öffnung), und eine Hecke ohne Querung (bleibt zu)
+    N(120, 52.4938, 13.4240), N(121, 52.4938, 13.4270), Wy(112, [120, 121], { barrier: 'fence' }),
+    N(122, 52.49365, 13.4255), N(123, 52.49395, 13.4255), Wy(113, [122, 123], { highway: 'footway' }),
+    N(124, 52.4940, 13.4228), N(125, 52.4940, 13.4236), Wy(114, [124, 125], { barrier: 'hedge' }),
     // Ampel an der Kreuzung Teststraße/Querstraße (Signal-Knoten auf der Zufahrt, nicht auf dem Kreuzungsknoten)
     N(93, 52.49212, 13.4225, { highway: 'traffic_signals' }),
     // Abbiegeverbot: von der Teststraße nicht links in die Einbahn
@@ -316,4 +321,22 @@ test('Echte Karte: Oberbaumbrücke mit Brückendeck, Türmen und ohne Häuser au
     assert.notEqual(surfaceAt(c, x, y), T.WATER, 'Deck über dem Wasser ist kein Wasser'); checked++;
   }
   assert.ok(checked, 'Deckpunkt über Wasser gefunden');
+});
+
+test('Zäune: Öffnung, wo ein Weg sie kreuzt (auch ohne Tor-Knoten), breit genug für ein Auto; sonst geschlossen', () => {
+  const S = city.scale, meta = built.index.meta;
+  const [cx, cy] = geoToPx(meta, 52.4938, 13.4255), [hx, hy] = geoToPx(meta, 52.4940, 13.4232);
+  const fence = L('wall').filter((w) => w.sub === 'fence');
+  const pieces = fence.filter((w) => Math.abs(w.pts[1] - cy) < 20);
+  assert.equal(pieces.length, 2, 'Zaun in zwei Stücke geteilt');
+  const xs = pieces.flatMap((w) => [w.pts[0], w.pts[w.pts.length - 2]]).sort((a, b) => Math.abs(a - cx) - Math.abs(b - cx));
+  const gap = Math.abs(xs[0] - xs[1]);
+  assert.ok(gap >= 3.5 * S && gap <= 6 * S, `Lücke ${gap / S} m: ein Auto (2 m) passt durch`);
+  assert.ok(GATE_M >= 3.5, 'Torbreite reicht für ein Auto');
+  assert.ok(xs[0] < cx !== xs[1] < cx, 'Lücke liegt auf dem Weg');
+  const hedge = L('wall').filter((w) => w.sub === 'fence' && Math.abs(w.pts[1] - hy) < 20 && Math.abs((w.pts[0] + w.pts[w.pts.length - 2]) / 2 - hx) < 60);
+  assert.equal(hedge.length, 1, 'Hecke ohne Querung bleibt ganz');
+  assert.ok(Math.abs(hedge[0].pts[0] - hedge[0].pts[hedge[0].pts.length - 2]) > 7 * S, 'in voller Länge');
+  // gezeichnet wird der Zaun genau so (mit Lücke)
+  assert.equal(L('fence').filter((f) => Math.abs(f.pts[1] - cy) < 20).length, 2);
 });

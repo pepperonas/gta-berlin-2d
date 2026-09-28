@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.17.0] – 2026-09-28
+
+### Hinzugefügt
+- Poller und Schranken lassen sich mit dem Auto umfahren (ab etwa 16 km/h): sie fallen um, bremsen den Wagen etwas
+  und bleiben liegen, auch wenn der Stadtteil neu geladen wird. Zu Fuß sind stehende Poller weiter ein Hindernis
+  (zwischen ihnen passt man durch), über liegende läuft man drüber. Der KI-Verkehr meidet gesperrte Straßen weiter.
+- Silhouette: Wird die Spielfigur oder ihr Auto von einer Baumkrone, einem Haus (Dach, Fassade, Tordurchfahrt) oder
+  der Hochbahn bzw. einer Bahnbrücke verdeckt, zeichnet das Spiel ihren Umriss obendrauf (auch nachts).
+
+### Behoben
+- Eingezäunte Flächen waren mit dem Auto unerreichbar, darunter das ganze Tempelhofer Feld: Tore öffneten den Zaun
+  nur 1,8 m breit, und Wege, die einen Zaun ohne Tor-Knoten kreuzen, bekamen gar keine Öffnung. Jetzt öffnen Tore
+  und jede Querung eines Wegs oder einer Straße Zäune, Mauern, Hecken und Pollerlinien 4,4 m breit (56 000
+  Öffnungen); gezeichnet wird der Zaun ebenso mit Lücke. Das Auto erreicht damit 93–98 % der Fläche, die man zu Fuß
+  erreicht (nachgemessen per Flutfüllung in fünf Bezirken; der Rest sind Hofdurchgänge unter Autobreite).
+
 ## [0.16.0] – 2026-09-28
 
 ### Hinzugefügt

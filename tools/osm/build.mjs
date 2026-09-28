@@ -701,6 +701,7 @@ export function makeCutter(corridors, S) {
 
 // --- Zugänge und Verkehrsregeln -------------------------------------------------------------
 const CAR_BLOCKING = new Set(['bollard', 'block', 'post', 'cycle_barrier', 'jersey_barrier', 'planter', 'lift_gate', 'gate', 'swing_gate', 'chain', 'bar']);
+export const GATE_M = 4.4; // Breite einer Öffnung in Zaun oder Mauer (m)
 const FENCES = { fence: 0, wall: 1, hedge: 2, retaining_wall: 1, city_wall: 1, guard_rail: 0, handrail: 0, bollard: 3, block: 3, jersey_barrier: 1, planter: 2 };
 
 export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, W, H, walls }) {
@@ -759,8 +760,45 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
     if (t.highway === 'traffic_signals') signalNodes.push({ id: nd.id, x: p[0], y: p[1] });
   }
   // Zäune und Mauern als Wände (Tore darin bleiben offen)
-  const gates = [], gateNodes = new Set();
-  for (const nd of osm.tagged) if (['gate', 'swing_gate', 'kissing_gate', 'entrance', 'lift_gate'].includes(nd.tags.barrier)) { gateNodes.add(nd.id); const p = P(nd.id); if (p) gates.push([p[0], p[1], p[0], p[1], 0.9 * S]); }
+  // Öffnungen: an jedem Tor und überall, wo ein Weg oder eine Straße die Sperrlinie kreuzt (in OSM hat längst nicht jede
+  // Querung einen Tor-Knoten). GATE_M breit – genug für ein Auto, sonst wären eingezäunte Flächen wie das Tempelhofer
+  // Feld mit dem Wagen unerreichbar.
+  const gates = [], gateNodes = new Set(), gr = GATE_M / 2 * S;
+  for (const nd of osm.tagged) if (['gate', 'swing_gate', 'kissing_gate', 'entrance', 'lift_gate', 'hampshire_gate', 'motorcycle_barrier'].includes(nd.tags.barrier)) { gateNodes.add(nd.id); const p = P(nd.id); if (p) gates.push([p[0], p[1], p[0], p[1], gr]); }
+  const WG = 400, wayGrid = new Map();
+  for (const el of osm.ways.values()) {
+    const hw = el.tags?.highway;
+    if (!hw || ['motorway', 'trunk', 'proposed', 'construction', 'raceway', 'corridor', 'elevator'].includes(hw) || el.tags.tunnel === 'yes' || el.tags.bridge === 'yes' || el.tags.area === 'yes') continue;
+    let prev = null;
+    for (const id of el.nodes) {
+      const q = P(id);
+      if (q && prev) {
+        const seg = [prev[0], prev[1], q[0], q[1]];
+        for (let gx = Math.floor(Math.min(seg[0], seg[2]) / WG); gx <= Math.floor(Math.max(seg[0], seg[2]) / WG); gx++)
+          for (let gy = Math.floor(Math.min(seg[1], seg[3]) / WG); gy <= Math.floor(Math.max(seg[1], seg[3]) / WG); gy++) { const key = gx * 1000000 + gy; (wayGrid.get(key) ?? wayGrid.set(key, []).get(key)).push(seg); }
+      }
+      prev = q;
+    }
+  }
+  const fenceWays = [];
+  let openings = 0;
+  for (const el of [...osm.ways.values()].sort((a, b) => a.id - b.id)) {
+    if (FENCES[el.tags?.barrier] === undefined || el.tags.building) continue;
+    const raw = []; for (const id of el.nodes) { const q = P(id); if (q) raw.push(q[0], q[1]); }
+    fenceWays.push([el, raw]);
+    for (let i = 0; i < raw.length - 2; i += 2) {
+      const ax = raw[i], ay = raw[i + 1], bx = raw[i + 2], by = raw[i + 3], seen = new Set();
+      for (let gx = Math.floor(Math.min(ax, bx) / WG); gx <= Math.floor(Math.max(ax, bx) / WG); gx++)
+        for (let gy = Math.floor(Math.min(ay, by) / WG); gy <= Math.floor(Math.max(ay, by) / WG); gy++) for (const sg of wayGrid.get(gx * 1000000 + gy) ?? []) {
+          if (seen.has(sg)) continue; seen.add(sg);
+          const d = (bx - ax) * (sg[3] - sg[1]) - (by - ay) * (sg[2] - sg[0]);
+          if (Math.abs(d) < 1e-9) continue;
+          const t = ((sg[0] - ax) * (sg[3] - sg[1]) - (sg[1] - ay) * (sg[2] - sg[0])) / d, u = ((sg[0] - ax) * (by - ay) - (sg[1] - ay) * (bx - ax)) / d;
+          if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+          gates.push([ax + (bx - ax) * t, ay + (by - ay) * t, ax + (bx - ax) * t, ay + (by - ay) * t, gr]); openings++;
+        }
+    }
+  }
   const gateCut = makeCutter(gates, S);
   // Straßenstücke für den Schnitt mit Sperrlinien (Poller-Reihen wie Diagonalsperren, Mauern, Zäune quer über die Straße)
   const G = 400, roadGrid = new Map();
@@ -779,14 +817,13 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
     const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
     return t >= -0.01 && t <= 1.01 && u >= -0.01 && u <= 1.01;
   };
-  for (const el of [...osm.ways.values()].sort((a, b) => a.id - b.id)) {
-    const k = FENCES[el.tags?.barrier];
-    if (k === undefined || el.tags.building) continue;
-    const raw = []; for (const id of el.nodes) { const q = P(id); if (q) raw.push(q[0], q[1]); }
+  for (const [el, raw] of fenceWays) {
+    const k = FENCES[el.tags.barrier];
     const pts = simplify(raw, 0.3 * S);
     if (pts.length < 4 || !inside([pts[0], pts[1]])) continue;
-    fences.push([k, pts]);
-    walls.push(...gateCut(pts));
+    const open = gateCut(pts);
+    for (const q of open) fences.push([k, q]); // gezeichnet wie gebaut: mit Lücke an Toren und Wegen
+    walls.push(...open);
     if (el.nodes.some((id) => gateNodes.has(id))) continue; // Zaun mit Tor: Durchfahrt möglich
     // Kreuzt die Sperrlinie eine Straße, ist diese für Autos gesperrt (z. B. Diagonalsperre im Kiez).
     for (let i = 0; i < pts.length - 2; i += 2) {
@@ -863,7 +900,7 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
   return {
     out: { barriers: barriers.flat(), posts: posts.flat(), fences, crossings: crossings.flat(), signals: [...signals].sort((a, b) => a - b), turnBans: bans,
       vertexXY: (v) => [vertices[2 * v], vertices[2 * v + 1]] },
-    stats: { sperren: blockedEdges, poller: barriers.reduce((acc, b) => acc + b[5], 0) + posts.length, zaeune: fences.length, tueren: doors, ampeln: signals.size, querungen: crossings.length, abbiegeverbote: restrictions, durchfahrten: edges.filter((ed) => ed.pass).length },
+    stats: { zaunOeffnungen: openings, sperren: blockedEdges, poller: barriers.reduce((acc, b) => acc + b[5], 0) + posts.length, zaeune: fences.length, tueren: doors, ampeln: signals.size, querungen: crossings.length, abbiegeverbote: restrictions, durchfahrten: edges.filter((ed) => ed.pass).length },
   };
 }
 

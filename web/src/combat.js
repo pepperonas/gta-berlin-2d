@@ -3,6 +3,7 @@
 // Schüsse sind sofortige Strahlen: sie stoppen an Hauswänden, der Stadtgrenze, Bäumen und Kisten und treffen das
 // erste Ziel (Passant oder Auto). Nahkampf trifft in einem Bogen vor der Figur. Treffer erzeugen Ereignisse, aus denen
 // render.js Blut, Mündungsfeuer und Leuchtspuren macht und audio.js die Klänge.
+import { isDown } from './car.js';
 import { PED, CAR } from './config.js';
 import { wrapAngle } from './math.js';
 
@@ -103,6 +104,7 @@ export function castRay(w, ox, oy, ang, range, shooter = null) {
   const ex = ox + dx * range, ey = oy + dy * range;
   const box = { x: Math.min(ox, ex) - 2, y: Math.min(oy, ey) - 2, w: Math.abs(ex - ox) + 4, h: Math.abs(ey - oy) + 4 };
   for (const s of w.solids.query(box, tmp)) {
+    if (isDown(w, s)) continue;
     let t;
     if (s.seg) { if (s.kind !== 'building' && s.kind !== 'border') continue; t = raySegment(ox, oy, dx, dy, s); }
     else if (s.r !== undefined) t = rayCircle(ox, oy, dx, dy, s.x, s.y, s.r);

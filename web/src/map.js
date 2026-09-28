@@ -366,7 +366,7 @@ function install(city, key, json) {
 }
 
 function barrier(city, r, x, y, kind) {
-  const b = { x, y, kind, r: 0.15 * city.scale, layer: 'barrier' };
+  const b = { x, y, kind, r: 0.15 * city.scale, layer: 'barrier', key: `${Math.round(x)},${Math.round(y)}` }; // key: umgefahren (world.knocked)
   // Sicherheitsnetz: kein Poller auf einer befahrbaren Fahrbahn (der Build rückt sie an den Bordstein)
   if (postOnRoad(city, b)) { city.droppedPosts++; return; }
   put(r, city.render, b, { x: x - 10, y: y - 10, w: 20, h: 20 });

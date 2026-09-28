@@ -1,5 +1,5 @@
 // Arcade-Fahrphysik: Längs-/Querzerlegung der Geschwindigkeit, Quergrip, geschwindigkeitsabhängige Lenkung.
-import { CAR } from './config.js';
+import { CAR, KNOCK } from './config.js';
 import { clamp, sign } from './math.js';
 import { obbVsRect, obbVsObb, circleVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { T, surfaceAt } from './map.js';
@@ -103,14 +103,25 @@ export function collideCarWorld(car, world, events) {
     let hit = false;
     const box = obbBounds(car);
     for (const r of world.solids.query(box, tmp)) {
+      if (isDown(world, r)) continue;
       const m = r.seg ? obbVsSegment(car, r) : r.r !== undefined ? invert(circleVsObb(r.x, r.y, r.r, car)) : obbVsRect(car, r);
       if (!m) continue;
+      if (r.layer === 'barrier' && -(car.vx * m.nx + car.vy * m.ny) > KNOCK.speed) { knockOver(world, r, car, events); continue; }
       car.x += m.nx * m.depth; car.y += m.ny * m.depth;
       applyImpact(car, m.nx, m.ny, events);
       hit = true;
     }
     if (!hit) break;
   }
+}
+
+// Umgefahrene Poller/Schranken: je Welt gemerkt (über den Schlüssel, damit sie auch nach dem Nachladen der Kachel liegen)
+export const isDown = (world, s) => s.layer === 'barrier' && world.knocked?.has(s.key);
+function knockOver(world, r, car, events) {
+  (world.knocked ??= new Map()).set(r.key, Math.atan2(car.vy, car.vx));
+  car.vx *= KNOCK.slow; car.vy *= KNOCK.slow;
+  car.health = Math.max(0, car.health - KNOCK.damage);
+  if (events) events.push({ type: 'knock', x: r.x, y: r.y, carId: car.id });
 }
 
 function invert(m) { return m ? { nx: -m.nx, ny: -m.ny, depth: m.depth } : null; }

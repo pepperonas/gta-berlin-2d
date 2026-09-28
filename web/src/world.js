@@ -4,7 +4,7 @@ import { PLAYER, PED, TRAFFIC, CAR, PARKED, CLOCK } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
-import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage } from './car.js';
+import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage, isDown } from './car.js';
 import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
@@ -334,6 +334,7 @@ const tmp = [];
 function pushCircleOutOfWorld(w, obj, r) {
   const box = { x: obj.x - r - 2, y: obj.y - r - 2, w: 2 * r + 4, h: 2 * r + 4 };
   for (const s of w.solids.query(box, tmp)) {
+    if (isDown(w, s)) continue;
     const m = s.seg ? circleVsSegment(obj.x, obj.y, r, s) : s.r !== undefined ? circleVsCircle(obj.x, obj.y, r, s.x, s.y, s.r) : circleVsRect(obj.x, obj.y, r, s);
     if (m) { obj.x += m.nx * m.depth; obj.y += m.ny * m.depth; }
   }
@@ -342,6 +343,7 @@ function pushCircleOutOfWorld(w, obj, r) {
 function spotFree(w, x, y, r, ignoreCar) {
   const box = { x: x - r, y: y - r, w: 2 * r, h: 2 * r };
   for (const s of w.solids.query(box, tmp)) {
+    if (isDown(w, s)) continue;
     const m = s.seg ? circleVsSegment(x, y, r, s) : s.r !== undefined ? circleVsCircle(x, y, r, s.x, s.y, s.r) : circleVsRect(x, y, r, s);
     if (m) return false;
   }
