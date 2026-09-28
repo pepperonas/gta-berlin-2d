@@ -13,8 +13,8 @@ import { laneOffsets, parkingStrip } from './street.js';
 import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
-import { weatherLight, hasUmbrella } from './weather.js';
-import { drawCloudShadows, drawOvercast, drawRain, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn } from './wetfx.js';
+import { weatherLight, hasUmbrella, gustAt, strikesAt } from './weather.js';
+import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn, drawSnowGround, snowPattern, snowRoadPaths, roadSnowAlpha, drawSnowfall, drawFogBanks, drawLightning, drawSkyFlash, drawStormDebris, drawSpray } from './wetfx.js';
 import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
 import { transitVisible } from './transitlive.js';
@@ -26,6 +26,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
+import { litWindows, houseFraction, tvFlicker, WIN_TYPES, WIN_COLOR, WIN_LIGHT } from './windows.js';
 import { occludersOf, samplePoints, levelSurfaces, surfacesOver, trackLevel } from './occlusion.js';
 import { isStreet } from './signs.js';
 import { wallColor, roofColors } from './buildcolors.js';
@@ -255,28 +256,7 @@ function makeWindowPatterns(ctx) {
   return [mk(false), mk(false), mk(true)];
 }
 
-// Nachtfenster: 4 × 4 Fenster je Kachel, je Variante ein anderer Anteil erleuchtet (deterministisch).
-// Zwei deckungsgleiche Fassungen: fürs Bild (hell/dunkel) und für die Lichtkarte (nur die hellen Fenster, sonst leer).
-export const NIGHT_DENSITY = [0.2, 0.4, 0.6, 0.8];
-const litAt = (k, i) => hash01n(i * 31 + k * 977 + 5) < NIGHT_DENSITY[k];
 function hash01n(n) { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
-const nightPatternCache = new WeakMap();
-function nightWindowPatterns(ctx) {
-  let pats = nightPatternCache.get(ctx);
-  if (pats) return pats;
-  const mk = (k, forLight) => {
-    const c = makeCanvas(56, 64), g = c.getContext('2d');
-    for (let i = 0; i < 16; i++) {
-      const x = (i % 4) * 14 + 4, y = Math.floor(i / 4) * 16 + 4;
-      if (litAt(k, i)) { g.fillStyle = forLight ? '#fff3d2' : '#ffd98a'; g.fillRect(x, y, 6, 8); }
-      else if (!forLight) { g.fillStyle = '#262c38'; g.fillRect(x, y, 6, 8); }
-    }
-    return ctx.createPattern(c, 'repeat');
-  };
-  pats = { img: NIGHT_DENSITY.map((_, k) => mk(k, false)), light: NIGHT_DENSITY.map((_, k) => mk(k, true)) };
-  nightPatternCache.set(ctx, pats);
-  return pats;
-}
 const darkPatternCache = new WeakMap();
 function dark3(ctx) {
   let p = darkPatternCache.get(ctx);
@@ -288,11 +268,21 @@ function dark3(ctx) {
   }
   return p;
 }
-// Welche Nachtfenster-Variante ein Haus zeigt (-1 = alles dunkel). Streut je Haus um den Tagesanteil.
-export function nightVariant(b, windowsLit) {
-  if (windowsLit <= 0) return -1;
-  const f = windowsLit + (hash01n(b.seed % 100003) - 0.5) * 0.6;
-  return f < 0.1 ? -1 : Math.min(NIGHT_DENSITY.length - 1, Math.floor(f * NIGHT_DENSITY.length));
+// Schnee auf einem Auto: geparkte tragen eine geschlossene Haube auf Dach, Motorhaube und Kofferraum, fahrende nur
+// einen Rest auf dem Dach (der Fahrtwind weht ihn ab)
+export function drawCarSnow(ctx, c, depth, speed) {
+  const parked = c.role === 'curb' && speed < 5;
+  const a = Math.min(0.95, depth * (parked ? 1.3 : 0.45));
+  if (a < 0.04) return;
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle);
+  ctx.fillStyle = `rgba(240,244,250,${a})`;
+  const w = c.hw, hh = c.hh;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w * 0.42, -hh * 0.72, w * 0.8, hh * 1.44, 3) : ctx.rect(-w * 0.42, -hh * 0.72, w * 0.8, hh * 1.44); ctx.fill();
+  if (parked) {
+    ctx.fillStyle = `rgba(234,239,247,${a * 0.85})`;
+    ctx.fillRect(w * 0.45, -hh * 0.75, w * 0.45, hh * 1.5); ctx.fillRect(-w * 0.92, -hh * 0.75, w * 0.3, hh * 1.5);
+  }
+  ctx.restore();
 }
 
 const STAIN_LIFE = 90, STAIN_MAX = 160;
@@ -541,9 +531,21 @@ export class Renderer {
     const vw = W / s, vh = H / s;
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
+    this._time = t; this.stats.litWindows = 0; this._fog = world.weather?.fog ?? 0;
     const L0 = lightAt(world.clock ?? 780), wx = world.weather ?? null;
-    const L = this.light = wx ? weatherLight(L0, wx) : L0;
-    const tf = [s, W / 2 - cam.x * s, H / 2 - cam.y * s];
+    const snowD = this._snowD = world.snow ?? 0;
+    let L = wx ? weatherLight(L0, wx, snowD) : L0;
+    // Gewitter: Blitze erhellen die ganze Szene (Umgebungslicht kurz kalt-weiß, die Nacht wird für einen Moment Tag)
+    const strikes = this._strikes = wx?.thunder > 0.02 ? strikesAt(world.seed ?? 1, t, wx.thunder) : [];
+    const flash = this.stats.flash = strikes.reduce((m, st) => Math.max(m, st.flash), 0);
+    if (flash > 0.01) {
+      const k = Math.min(1, flash * 0.9), tgt = [1.1, 1.14, 1.3];
+      L = { ...L, ambient: L.ambient.map((a, i) => a + (tgt[i] - a) * k), dark: L.dark * (1 - k), sun: { ...L.sun, strength: 0 } };
+    }
+    this.light = L;
+    const gust = this._gust = wx ? gustAt(wx, t) : 1;
+    const tf = this._tf = [s, W / 2 - cam.x * s, H / 2 - cam.y * s];
+    this._wh = [Math.ceil(W), Math.ceil(H)];
     windowPatterns ??= makeWindowPatterns(ctx);
     cobblePattern ??= makeCobblePattern(ctx);
     ctx.lineDashOffset = 0; // gestrichelte Markierungen stehen fest auf der Straße
@@ -575,6 +577,9 @@ export class Renderer {
     ctx.fillRect(v.x - 5, v.y - 5, v.w + 10, v.h + 10);
     areas.sort((a, b) => a.kind - b.kind);
     for (const a of areas) if (a.kind !== AREA_KIND.bridge) { ctx.fillStyle = tex(AREA_TEXTURE[a.kind], AREA_COLOR[a.kind]); ctx.fill(pathOf(a), 'evenodd'); }
+
+    // 1b) Schneedecke auf Gehwegen, Höfen und Grün (Wasser, Straßen und Häuser kommen darüber)
+    this.stats.snowCover = drawSnowGround(ctx, v, snowD);
 
     // 2) Wasser mit Wellen und Kaikante
     for (const wa of water) {
@@ -632,11 +637,13 @@ export class Renderer {
         ctx.fillStyle = AREA_COLOR[AREA_KIND.bridge]; ctx.fill(pathOf(a), 'evenodd');
         const pl = tex('plaza', null); if (pl) { ctx.globalAlpha = 0.35; ctx.fillStyle = pl; ctx.fill(pathOf(a), 'evenodd'); ctx.globalAlpha = 1; }
         ctx.strokeStyle = '#5a4c40'; ctx.lineWidth = 3; ctx.stroke(pathOf(a));
+        if (snowD > 0.02) { const sp = snowPattern(ctx, snowD); if (sp) { ctx.fillStyle = sp; ctx.fill(pathOf(a), 'evenodd'); } }
       }
       if (!up) {
         // Wege, ebenerdige Gleise, dann Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst
         ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
         for (const p of P) ctx.stroke(pathOf(p));
+        this.snowOnPaths(P, snowD);
         this.drawTracks(rails.filter((r) => !r.bridge && lv(r) === lvl), false);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         for (const e of E) if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
@@ -652,6 +659,7 @@ export class Renderer {
         ctx.lineCap = 'round';
         ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
         for (const p of P) ctx.stroke(pathOf(p));
+        this.snowOnPaths(P, snowD);
         for (const j of J) { ctx.fillStyle = j.cobble ? cobble : asphalt; disc(j, j.r); }
         for (const e of E) {
           ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
@@ -666,7 +674,8 @@ export class Renderer {
       if (this.quality === 'high') this.drawDecals(E, city);
       this.drawStreetMarkings(E, city);
       if (lvl === 0) this.drawCrossings(crossings);
-      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, world.wet ?? 0, L);
+      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L);
+      if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
       // Straßenbahngleise in der Fahrbahn: am Boden der ganze Linienweg, oben nur die Stücke auf der Brücke
       ctx.lineCap = 'butt';
       if (lvl === 0) for (const sh of tramShapes) { const r = tramRails(sh); if (r) this.strokeTramRails(r); }
@@ -717,7 +726,8 @@ export class Renderer {
     const margin = 220;
     const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
     for (const b of buildings) list.push({ y: b.bbox.y + b.bbox.h, b, d: () => this.drawBuilding(b, cam) });
-    for (const tr of trees) list.push({ y: tr.y, tr, d: () => drawTree(ctx, tr, t, L.sun) });
+    const treeFx = { snow: snowD, wind: wx?.wind ?? null, storm: (wx?.storm ?? 0) * gust };
+    for (const tr of trees) list.push({ y: tr.y, tr, d: () => drawTree(ctx, tr, t, L.sun, treeFx) });
     const lamps = this._lamps ??= [];
     lamps.length = 0;
     for (const e of edges) for (const lp of edgeLamps(city, e)) if (near(lp.x, lp.y)) { lamps.push(lp); list.push({ y: lp.y, lp, d: () => drawLamp(ctx, lp, L.lampsOn) }); }
@@ -763,8 +773,8 @@ export class Renderer {
     for (const m of movers) if (m.late && !m.early) m.d(); // S-/U-Bahn auf Bahndamm und Viadukt
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
     // 8b) Wolkenschatten ziehen über Straßen und Dächer
-    this.stats.clouds = wx ? drawCloudShadows(ctx, v, wx, t, L0.sun.strength) : 0;
-    if (wx) drawOvercast(ctx, v, wx, L.dark);
+    this.stats.clouds = wx ? drawCloudShadows(ctx, v, wx, t, L0.sun.strength * (1 - 0.7 * snowD)) : 0;
+    if (wx) drawOvercast(ctx, v, wx, L.dark, snowD);
 
     // 9) Partikel
     for (const p of this.particles) {
@@ -791,8 +801,11 @@ export class Renderer {
     }
     if (overlayMarkers && !pl.inCar && !pl.dead) drawCrosshair(ctx, pl);
     // 9a) Regen und Nebel (vor der Lichtkarte: nachts werden sie mit dunkel)
-    this.stats.drops = wx ? drawRain(ctx, v, wx, t, s) : 0;
+    this.stats.debris = wx ? drawStormDebris(ctx, v, wx, t, gust) : 0;
+    this.stats.drops = wx ? drawRainLayers(ctx, v, wx, t, s, gust) : 0;
+    this.stats.flakes = wx ? drawSnowfall(ctx, v, wx, t, s, gust) : 0;
     this.stats.fog = wx ? drawFog(ctx, v, wx) : false;
+    this.stats.fogBanks = wx ? drawFogBanks(ctx, v, wx, t) : 0;
     this._neon = L.dark > 0.25 ? this.neonSigns(world, v) : [];
 
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
@@ -805,6 +818,9 @@ export class Renderer {
 
     // Leuchtreklame leuchtet selbst (nach der Lichtkarte)
     if (this._neon.length) drawNeon(ctx, this._neon, t, Math.min(1, (L.dark - 0.25) * 3));
+    // Blitz: Strahl und Himmelsblitz leuchten selbst (nach der Lichtkarte)
+    drawSkyFlash(ctx, v, flash * (L0.dark * 0.6 + 0.4));
+    this.stats.bolts = strikes.length ? drawLightning(ctx, v, strikes, cam) : 0;
 
     for (const c of covered) this.drawCovered(ctx, c, s, t);
 
@@ -1035,7 +1051,34 @@ export class Renderer {
       if (roof.style === 'flat') { ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p); } // Attika
     }
     if (hi) for (const d of roof.decor) drawDecor(ctx, d);
+    if ((this._snowD ?? 0) > 0.03) this.roofSnow(ctx, b, roof, g, p, this._snowD, sun, col);
     ctx.strokeStyle = col.line; ctx.lineWidth = 1.3; ctx.stroke(p);
+  }
+
+  // Schnee auf dem Dach: Dächer halten Schnee länger als die Straße (kalt, unberührt). Steildächer je Fallrichtung
+  // schattiert (Sonnenseite hell, Schattenseite bläulich), Grat bleibt als Linie sichtbar; Flachdach mit Verwehungen.
+  roofSnow(ctx, b, roof, g, p, depth, sun, col) {
+    const a = Math.min(0.96, depth * 1.35);
+    if (g.dome) {
+      const { x, y, r } = g.dome;
+      ctx.fillStyle = `rgba(236,241,248,${a * 0.85})`; ctx.beginPath(); ctx.arc(x, y, r * 0.92, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    if (g.facets.length) {
+      const rp = (b._roofPaths ??= roofPaths(g));
+      ctx.save(); ctx.clip(p, 'evenodd');
+      for (const bin of rp.bins) {
+        const lit = facadeLight(bin.nx, bin.ny, sun);
+        const c = lit >= 0 ? [238 + 14 * lit, 241 + 12 * lit, 248 + 5 * lit] : [226 + 22 * lit, 232 + 18 * lit, 246 + 4 * lit];
+        ctx.fillStyle = `rgba(${c.map(Math.round).join(',')},${a})`; ctx.fill(bin.path);
+      }
+      if (rp.ridges) { ctx.strokeStyle = `rgba(150,160,180,${0.35 * a})`; ctx.lineWidth = 1; ctx.stroke(rp.ridges); }
+      ctx.restore();
+      return;
+    }
+    const sp = snowPattern(ctx, Math.min(1, depth * 1.3));
+    ctx.fillStyle = sp ?? `rgba(236,241,248,${a})`; ctx.fill(p, 'evenodd');
+    if (roof.style === 'flat') { ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p); } // Attika ragt heraus
   }
 
   // Bänke (Holzlatten, zur Straße ausgerichtet), Fahrradständer mit ein paar Rädern, Mülleimer
@@ -1183,6 +1226,50 @@ export class Renderer {
 
   // Silhouette genau im verdeckten Teil: auf einer kleinen Hilfsfläche die Verdecker (Vereinigung) als Maske, den
   // Umriss darauf beschränkt (destination-in), dann ins Bild. Spielfigur orange, alle anderen hell und zurückhaltend.
+  // Schnee auf Fußwegen: die Textur der Schneedecke als Strich über den Weg (etwas dünner: da wird gelaufen)
+  snowOnPaths(P, depth) {
+    if (depth < 0.02 || !P.length) return;
+    const sp = snowPattern(this.ctx, depth * 0.85);
+    if (!sp) return;
+    const ctx = this.ctx;
+    ctx.strokeStyle = sp; ctx.lineWidth = 18;
+    for (const p of P) ctx.stroke(pathOf(p));
+  }
+
+  // Schnee auf Fahrbahnen: grauweißer Matsch, festgefahrene dunkle Reifenspuren je Fahrstreifen, Schneewälle am Rand.
+  // Der Matsch wird deckend in eine eigene Ebene gemalt und einmal halbtransparent aufgetragen – sonst summieren sich
+  // die Überlappungen an Kreuzungen zu hellen Flecken. Straßen mit viel Verkehr sind grauer (festgefahren, gestreut).
+  snowOnRoads(E, J, city, depth) {
+    const ctx = this.ctx, unit = city.scale ?? 10, tf = this._tf;
+    if (!tf || !E.length) return;
+    const [W, H] = this._wh ?? [1280, 720];
+    if (!this._slush || this._slush.width !== W || this._slush.height !== H) this._slush = makeCanvas(W, H);
+    const g = this._slush.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
+    g.setTransform(tf[0], 0, 0, tf[0], tf[1], tf[2]);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const slush = (cls) => (cls <= 3 ? '#b9bfc8' : cls <= 5 ? '#cfd4db' : cls <= 8 ? '#dfe3e9' : '#ebeef3');
+    for (const e of E) {
+      g.strokeStyle = slush(e.cls); g.lineWidth = e.w; g.stroke(pathOf(e));
+      if (e.fill && e._fillPath) { g.lineWidth = Math.abs(e.fill) + 2; g.stroke(e._fillPath); }
+    }
+    g.fillStyle = slush(5);
+    for (const j of J) { g.beginPath(); g.arc(j.x, j.y, j.r, 0, Math.PI * 2); g.fill(); }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = Math.min(0.88, 0.25 + depth * 0.75); ctx.drawImage(this._slush, 0, 0);
+    ctx.restore();
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const e of E) {
+      if (e.cls > 8) continue;
+      const a = roadSnowAlpha(e.cls, depth), sr = snowRoadPaths(e, unit, laneOffsets, linePath, offsetPolyline);
+      ctx.strokeStyle = `rgba(62,66,74,${Math.min(0.75, a * 0.9)})`; ctx.lineWidth = 0.55 * unit;
+      for (const p of sr.tracks) ctx.stroke(p);
+      ctx.strokeStyle = `rgba(246,248,252,${Math.min(1, a * 1.25)})`; ctx.lineWidth = 0.9 * unit;
+      for (const p of sr.berms) ctx.stroke(p);
+    }
+    ctx.restore();
+  }
+
   // Bewegte Objekte im Bild mit Ebene und Stichpunkten: { o, y (Tiefe), key, d (zeichnen), lvl, pts, hw, hh, angle,
   // late (S-/U-Bahn: über allem), skipCover }. Straßenbahnen und Züge haben keine eigene Ebene: sie liegen oben, wo ihr
   // Gleis auf einer Brücke liegt.
@@ -1192,7 +1279,13 @@ export class Renderer {
     const add = (o, y, key, d, hw, hh, angle, extra) => {
       out.push({ o, y, key, d, lvl: o.lvl ?? 0, hw, hh, angle, pts: samplePoints(o, hw, hh, angle), ...extra });
     };
-    for (const c of world.cars) if (near(c.x, c.y)) add(c, c.y + 6, c.y + 6, () => drawCar(ctx, c, t, L.sun), c.hw, c.hh, c.angle);
+    const snow = world.snow ?? 0, wet = world.wet ?? 0;
+    for (const c of world.cars) if (near(c.x, c.y)) add(c, c.y + 6, c.y + 6, () => {
+      const sp = Math.hypot(c.vx, c.vy);
+      if (sp > 120 && (wet > 0.3 || snow > 0.2)) drawSpray(ctx, c, sp, wet, snow);
+      drawCar(ctx, c, t, L.sun);
+      if (snow > 0.05) drawCarSnow(ctx, c, snow, sp);
+    }, c.hw, c.hh, c.angle);
     for (const p of world.peds) if (near(p.x, p.y)) {
       const act = p.state === 'hang' ? p.hang.act : null, down = p.state === 'down' || p.state === 'dead';
       const dog = p.style === 'dog' && !down, umbrella = wx && hasUmbrella(p.id, wx.rain) && (p.state === 'walk' || p.state === 'cross' || p.state === 'idle' || act === 'wait' || act === 'queue');
@@ -1336,11 +1429,47 @@ export class Renderer {
     this.stats.tracks = (this.stats.tracks ?? 0) + n;
   }
 
+  // Erleuchtete Fenster eines Hauses, je Spielminute neu bestimmt (windows.js), je Fassade zwischengespeichert
+  windowCache(b, L, frac) {
+    const key = Math.floor(L.minutes ?? 0) * 1000 + Math.round(frac * 200);
+    if (!b._win || b._win.key !== key) b._win = { key, faces: new Map(), frac, minutes: L.minutes ?? 0 };
+    return b._win;
+  }
+
+  // Brennende Fenster einer Fassade (im Fassaden-Koordinatensystem, Transform ist gesetzt): je Lichtfarbe ein Pfad;
+  // in der Lichtkarte heller, Fernseher flackern
+  drawLitWindows(ctx, cache, b, f, H, forLight) {
+    const id = f.ri * 4096 + f.ei;
+    let wins = cache.faces.get(id);
+    if (!wins) { wins = litWindows(b, id, f.L, H, cache.frac, cache.minutes, []); cache.faces.set(id, wins); }
+    if (!wins.length) return;
+    this.stats.litWindows = (this.stats.litWindows ?? 0) + wins.length;
+    const t = this._time ?? 0;
+    for (const type of WIN_TYPES) {
+      let any = false;
+      ctx.beginPath();
+      for (const w of wins) if (w.type === type) { ctx.rect(w.x, w.y, w.w, w.h); any = true; }
+      if (!any) continue;
+      ctx.fillStyle = (forLight ? WIN_LIGHT : WIN_COLOR)[type];
+      // im Nebel dringt das Fensterlicht nur gedämpft durch
+      const fogK = forLight ? 1 - 0.65 * Math.min(1, (this._fog ?? 0) / 1.4) : 1;
+      ctx.globalAlpha = fogK * (type === 'tv' ? tvFlicker(b.cx + f.ei, b.cy + f.ri, t) : 1);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (!forLight) { // Fensterkreuz: dunkle Sprossen über den hellen Scheiben
+      ctx.fillStyle = 'rgba(40,32,24,0.45)';
+      ctx.beginPath();
+      for (const w of wins) { ctx.rect(w.x + w.w / 2 - 0.35, w.y, 0.7, w.h); ctx.rect(w.x, w.y + w.h * 0.55, w.w, 0.6); }
+      ctx.fill();
+    }
+  }
+
   // Gebäude: sichtbare Fassaden (Kanten, deren Außennormale vom Dachversatz weg zeigt), dann das Dach.
   // night: null (normales Bild) oder { light: true, fill: Umgebungsfarbe } für die Lichtkarte.
   drawBuilding(b, cam, ctx = this.ctx, night = null) {
     const L = this.light;
-    const variant = L && L.windowsLit > 0 ? nightVariant(b, L.windowsLit) : -2; // -2: Tagesfenster
+    const nightWin = !!L && L.windowsLit > 0; // abends/nachts/bei trübem Wetter: dunkle Scheiben, einzelne erleuchtet
     const H = Math.max(18, b.height * RENDER.heightScale);
     const dx = (b.cx - cam.x) * H * 0.0005;
     const dy = -H * 0.5 + (b.cy - cam.y) * H * 0.00025;
@@ -1370,7 +1499,9 @@ export class Renderer {
     faces.sort((a, c) => a.depth - c.depth);
     let front = null;
     const lightMode = !!night;
-    const winPat = variant === -2 ? col.pat : variant >= 0 ? nightWindowPatterns(ctx)[lightMode ? 'light' : 'img'][variant] : lightMode ? null : dark3(ctx);
+    const winPat = !nightWin ? col.pat : lightMode ? null : dark3(ctx);
+    const frac = nightWin ? houseFraction(b, L.windowsLit, L.minutes ?? 0, L.gloom ?? 0) : 0;
+    const winCache = nightWin ? this.windowCache(b, L, frac) : null;
     for (const f of faces) {
       ctx.fillStyle = lightMode ? night.fill : col.faces[f.ny > 0.6 ? 0 : f.ny > -0.3 ? 1 : 2];
       ctx.beginPath();
@@ -1384,11 +1515,11 @@ export class Renderer {
         if (lit > 0.02) { ctx.fillStyle = `rgba(255,236,200,${0.22 * lit})`; ctx.fill(); }
         else if (lit < -0.02) { ctx.fillStyle = `rgba(10,14,30,${-0.2 * lit})`; ctx.fill(); }
       }
-      if (winPat && f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small) {
+      if (f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small && (winPat || winCache)) {
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
-        ctx.fillStyle = winPat;
-        ctx.fillRect(4, 2, f.L - 8, H - 4);
+        if (winPat) { ctx.fillStyle = winPat; ctx.fillRect(4, 2, f.L - 8, H - 4); }
+        if (winCache) this.drawLitWindows(ctx, winCache, b, f, H, lightMode);
         ctx.restore();
       }
       if (lightMode) continue;

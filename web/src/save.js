@@ -14,6 +14,7 @@ export function makeSave(w, now = Date.now()) {
   return {
     version: SAVE_VERSION, savedAt: now,
     money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock), day: w.day, dayCount: w.dayCount ?? 0,
+    wet: Math.round((w.wet ?? 0) * 100) / 100, snow: Math.round((w.snow ?? 0) * 100) / 100,
     player: { x: Math.round(pos.x), y: Math.round(pos.y) },
     car: car && !car.wrecked ? { x: Math.round(car.x), y: Math.round(car.y), angle: car.angle, health: car.health } : null,
   };
@@ -31,7 +32,8 @@ export function validateSave(s) {
   const clock = num(s.clock, 0, 1440) ? s.clock : null; // ältere Stände ohne Uhr: Uhr bleibt beim Spielstart
   const day = Number.isInteger(s.day) && s.day >= 0 && s.day < 7 ? s.day : null;
   const dayCount = Number.isInteger(s.dayCount) && s.dayCount >= 0 ? s.dayCount : null; // Tagnummer fürs Wetter
-  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, clock, day, dayCount, player: s.player, car };
+  const wet = num(s.wet, 0, 1) ? s.wet : null, snow = num(s.snow, 0, 1) ? s.snow : null; // Boden: nass, Schneedecke
+  return { version: s.version, savedAt: s.savedAt ?? 0, money: s.money, completed: s.completed, bestTime: s.bestTime, clock, day, dayCount, wet, snow, player: s.player, car };
 }
 
 export function writeSave(storage, w) {
@@ -51,6 +53,8 @@ export function applySave(w, s) {
   if (s.clock !== null && s.clock !== undefined) w.clock = s.clock;
   if (s.day !== null && s.day !== undefined) w.day = s.day;
   if (s.dayCount !== null && s.dayCount !== undefined) w.dayCount = s.dayCount;
+  if (s.wet != null) w.wet = s.wet;
+  if (s.snow != null) w.snow = s.snow;
   w.pendingSave = s;
   const p = s.car ?? s.player;
   if (p && insideBorder(w.city, p.x, p.y)) { w.camera.x = p.x; w.camera.y = p.y; }

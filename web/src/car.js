@@ -55,8 +55,8 @@ export function stepCar(car, dt, city) {
   vf -= vf * CAR.drag * surf.drag * dt;
   if (ctl.throttle === 0 && ctl.brake === 0 && Math.abs(vf) < 4) vf = 0;
 
-  // nasse Fahrbahn: 18 % weniger Seitenhalt (Nässe aus dem Wetter, world.js setzt car.wet)
-  const grip = (ctl.handbrake ? CAR.handbrakeGrip : CAR.grip * surf.grip) * (1 - 0.18 * (car.wet ?? 0));
+  // nasse Fahrbahn: 18 % weniger Seitenhalt, Schneedecke bis 45 % (Wetter aus world.js: car.wet, car.snow)
+  const grip = (ctl.handbrake ? CAR.handbrakeGrip : CAR.grip * surf.grip) * (1 - 0.18 * (car.wet ?? 0)) * (1 - 0.45 * (car.snow ?? 0));
   car.skid = Math.abs(vr) > 70 ? Math.min(1, Math.abs(vr) / 200) : 0;
   vr *= Math.exp(-grip * dt);
 

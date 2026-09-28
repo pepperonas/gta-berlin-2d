@@ -1,6 +1,7 @@
 // Umgebungsklang (rein rechnerisch): was man an der Kamera gerade hören müsste – Stadtrauschen, Verkehr, Vögel in
 // Grün und Bäumen bei Tag, Gemurmel vor Bars am Abend, Wasser am Ufer, das Rumpeln der Hochbahn, Martinshörner in der
 // Nähe und die Kirchenglocke zur vollen Stunde. audio.js macht daraus Klang; hier steht nur die Mischung (testbar).
+import { gustAt } from './weather.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { sirenHigh } from './fleet.js';
 import { positionAt, pointOn } from './transit.js';
@@ -58,11 +59,14 @@ export function ambienceAt(world) {
   }
   sirens.sort((a, b) => a.d - b.d);
   const night = wrap(world.clock) < 360 || wrap(world.clock) > 1260;
+  // Schnee schluckt den Stadtlärm (Schneedecke und fallender Schnee dämpfen), Sturm heult in Böen
+  const wx = world.weather, hush = 1 - 0.45 * clamp01(world.snow ?? 0) - 0.2 * clamp01(wx?.snow ?? 0);
   return {
-    hum: night ? 0.35 : 0.6,
-    traffic: clamp01(traffic / 2),
-    birds: clamp01(Math.min(1, green) * birdLevel(world.clock) * (1 - (world.weather?.rain ?? 0))), // bei Regen schweigen die Vögel
-    rain: clamp01(world.weather?.rain ?? 0),
+    hum: (night ? 0.35 : 0.6) * hush,
+    traffic: clamp01(traffic / 2) * hush,
+    wind: clamp01((wx?.storm ?? 0) * gustAt(wx, world.time) * 0.8 + 0.15 * (wx?.snow ?? 0) * (wx?.storm ?? 0)),
+    birds: clamp01(Math.min(1, green) * birdLevel(world.clock) * (1 - Math.min(1, (world.weather?.rain ?? 0) + (world.weather?.storm ?? 0) + (world.weather?.snow ?? 0)))), // bei Regen, Sturm, Schnee schweigen die Vögel
+    rain: Math.min(1.6, world.weather?.rain ?? 0), // bis 1,6 bei Starkregen
     bar: clamp01(bar),
     water: water * (0.4 + (night ? 0.2 : 0)),
     rumble: clamp01(rumble),

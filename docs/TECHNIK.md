@@ -201,7 +201,7 @@ Markierungen, Nässe; am Boden Zäune, Poller, Möbel); nach jeder Ebene folgen 
 höheren Fläche liegen (`occlusion.js levelSurfaces/surfacesOver`, im Portal zählt nichts als Decke), danach die
 Brücke über ihnen, die Silhouette zeigt den verdeckten Teil. Straßenbahnen haben keine eigene Ebene: sie liegen oben,
 wo ihr Linienweg auf einer Brücke und nicht zugleich auf einer Bodenstraße liegt (`trackLevel`, bei Überlappung gilt
-das Stück davor). Kollision, Verkehr und Oberfläche sind noch nicht ebenenbewusst (0.23.0).
+das Stück davor). Kollision, Verkehr und Oberfläche sind noch nicht ebenenbewusst (folgt).
 
 **Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
 Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten
@@ -371,6 +371,32 @@ Kamera versetzten Widerschein und bei Nebel einen größeren Hof. Fassaden: `fac
 × Sonnenstärke, als warme bzw. dunkle Lasur über der Grundfarbe. Leuchtreklame: aus den POIs im Bild (höchstens 40), am
 Gehweg vor dem Laden, nach der Lichtkarte gezeichnet (leuchtet selbst) plus farbiges Licht in der Lichtkarte. Wie der
 Tagesrhythmus gilt das Wetter nur in der Welt mit Standardbevölkerung; Tests und Titel-Demo bleiben klar.
+
+**Unwetter und Schnee** (`weather.js`, `wetfx.js`): Jedes Wetterbild ist ein Satz Werte `{ cloud, rain (bis 1,6),
+fog (bis 1,7), snow, storm, thunder }`, zwischen Blöcken stetig überblendet. Welche Bilder ein Tag hat, hängt an seiner
+Wetterlage (`dayType`: gewöhnlich, unbeständig mit Sturm und nachmittags Gewitter, Winter mit Schnee). Böen (`gustAt`)
+sind eine Summe inkommensurabler Sinuswellen der Spielzeit – kein Zufall, also in jedem Bild gleich. Blitze
+(`strikeInSlot`) fallen in 2,4-s-Fenster, je Fenster aus einem Hash; `flashAt` beschreibt Vor-, Haupt- und Nachblitze,
+`thunderBetween` liefert Donner, dessen Ankunft (Entfernung / 343 m/s) in einem halboffenen Zeitintervall liegt, damit
+kein Donner doppelt oder verschluckt wird. Die Schneedecke `w.snow` ist Simulationszustand wie die Nässe (wächst mit der
+Schneefallstärke, taut in ~25 min, bei Regen schneller, Tauwetter macht nass, steht im Spielstand) und nimmt den Autos
+bis zu 45 % Seitenhalt. Darstellung: Schneedecke als kachelbare 256-px-Textur je Höhenstufe (fraktales Wertrauschen;
+`snowCoverAlpha` schiebt eine Schwelle durch die gemessene Rauschverteilung: dünn = Flecken, tief = geschlossen), vor
+Wasser und Straßen gezeichnet; auf Straßen deckender Matsch in einer eigenen Bildschirmebene (sonst summieren sich die
+Überlappungen), dann Reifenspuren je Fahrstreifen und Schneewälle am Bordstein; Dächer je Fallrichtung nach Sonnenstand,
+Kronenpolster aus festen Hashes, Hauben auf geparkten Autos. Flocken, Regentropfen, Laub und Nebelschwaden sind wie der
+Regen Funktionen von Ort-Hash und Spielzeit (keine Partikellisten). Blitze: Zickzack mit Ästen aus dem Hash, nach der
+Lichtkarte gezeichnet, dazu kalt-weißes Umgebungslicht in der Lichtkarte selbst (die Szene wird hell, nicht nur
+überdeckt). Klang: Windschicht (Bandpass-Rauschen) nach Böen, Donner als Knall plus gefiltertes Grollen in Wellen,
+Schneedecke dämpft Stadt und Verkehr.
+
+**Fenster** (`web/src/windows.js`, gezeichnet in `render.js drawLitWindows`): Die Fassade ist ein Raster aus
+14 × 16-px-Zellen (deckungsgleich mit dem Fenstermuster). Je Etage bilden 2–4 Fenster eine Wohnung; ein Fenster brennt,
+wenn `0,78 × Hash(Wohnung) + 0,22 × Hash(Raum)` unter dem Anteil aus dem Tagesgang liegt – steigt der Anteil, gehen die
+Fenster einzeln und in zufälliger Folge an, Räume einer Wohnung kurz nacheinander. Nachts wird je 9 Minuten ausgewürfelt,
+wer kurz Licht macht. Arbeitsstätten haben einen eigenen Tagesgang, trübes Wetter hebt den Anteil tagsüber
+(`weatherLight` → `gloom`, `windowsLit`). Je Haus wird die Liste einmal pro Spielminute und Fassade berechnet; gezeichnet
+wird ein Pfad je Lichtfarbe, in der Lichtkarte heller und im Nebel gedämpft.
 
 **Öffentlicher Verkehr** (`tools/osm/zip.mjs`, `tools/osm/transit.mjs` → `transit.json`; `web/src/transit.js`,
 `web/src/transitlive.js`, `web/src/railart.js`):

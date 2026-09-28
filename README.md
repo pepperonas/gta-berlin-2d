@@ -98,6 +98,19 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   glänzt, Pfützen spiegeln Himmel und Lichter, Leute tragen Schirme, weniger sind draußen, Autos rutschen mehr. Nebel
   legt sich über alles. Fassaden sind auf der Sonnenseite heller. Nachts leuchten Neonschilder vor Bars, Clubs, Spätis
   und Imbissen.
+- **Unwetter und Schnee:** Starkregen mit Gischtschleier und Regenwänden, Sturm (Bäume biegen sich in den Böen, Laub
+  und Papier fegen übers Bild, der Regen treibt schräg, der Wind heult), Gewitter (Blitzstrahl mit Verästelungen,
+  Himmelsblitz, der die Nacht für einen Moment zum Tag macht, Donner mit Schallverzug), dichter Nebel mit ziehenden
+  Schwaden, Schneefall und Schneesturm. Schnee bleibt liegen – erst fleckig, dann geschlossen – auf Gehwegen, Grün,
+  Dächern (Sonnen- und Schattenseite), Baumkronen und geparkten Autos; auf den Straßen Matsch mit festgefahrenen
+  Reifenspuren und Schneewällen am Bordstein, Hauptstraßen freier als Nebenstraßen. Autos rutschen auf Schnee, Schnee
+  dämpft den Stadtlärm, Tauwetter macht die Straßen nass. Wintertage, unbeständige Tage (Sturm, nachmittags Gewitter)
+  und gewöhnliche Tage wechseln; `?wetter=starkregen|sturm|gewitter|dichternebel|schnee|schneesturm` und
+  `?schneedecke=0…1` legen es fest.
+- **Fenster gehen einzeln an:** Jedes Fenster hat seinen eigenen Zeitpunkt – abends gehen die Lichter in zufälliger
+  Folge nach und nach an, Räume einer Wohnung kurz nacheinander, nachts macht hier und da jemand Licht im Bad.
+  Glühlampenwarm, neutral, kaltweiß, gedimmt hinter dem Vorhang oder bläulich flackernder Fernseher; Büros und Schulen
+  haben abends noch Licht und sind nachts dunkel; bei trübem Wetter brennt auch tagsüber Licht.
 - **Busse und Bahnen nach dem VBB-Fahrplan:** Busse, Straßenbahnen, S- und U-Bahnen fahren ihre echten Linien im
   Takt des Fahrplans zur Spieluhr. Busse halten an ihren Halten (Wartende steigen ein) und nutzen Busspuren, Straßenbahnen
   fahren auf Gleisen in der Straße und klingeln, wenn man im Weg steht; S- und U-Bahnen sieht man auf Hochbahn und
@@ -181,7 +194,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 239 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 253 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -333,7 +346,20 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 239 automatischen Tests grün, darunter:
+- Alle 253 automatischen Tests grün, darunter:
+  - Fenster: je Fenster ein eigener Zeitpunkt (mehr als 60 % verschiedene Schwellen, höchstens 8 von 72 Fenstern je
+    2-%-Schritt, die ersten Lichter über die ganze Fassade verteilt), Wohnungsnachbarn näher beieinander als andere
+    Etagen, mittags dunkel, abends mehr als um 3 Uhr, nachts einzelne Wechsel, Fenster im Raster der Fassade, vier und
+    mehr Lichtfarben, Fernseher flackern, Büros abends hell und nachts dunkel; im Bild kommen zwischen 19 und 21 Uhr
+    fast jede zweite Minute Fenster dazu, nie mehr als 10 % auf einmal;
+  - Unwetter: alle elf Wetterbilder kommen vor, Schnee nur an Wintertagen, Gewitter nur nachmittags, Nebel nur morgens,
+    alle Werte minütlich stetig; Böen ohne Zufall, Sturm treibt Regen schräg und Laub durchs Bild; Blitze deterministisch
+    mit Nachblitzen, Donner nach Entfernung/Schallgeschwindigkeit, genau einmal (auch auf der Grenze zweier Abfragen);
+    Schneedecke wächst mit der Schneefallstärke, taut ohne, bei Regen schneller; dünn fleckig, tief geschlossen, Textur
+    kachelt; Hauptstraßen freier; Starkregen und dichter Nebel dunkler, Schnee hellt die Nacht auf; Autos rutschen auf
+    Schnee, Spielstand merkt sich Schnee und Nässe, Tauwetter macht nass; Wind hörbar, Schnee dämpft; Zeichnen bei allen
+    elf Wetterbildern ohne ungültige Koordinaten, Blitzstrahl im Bild (20 Mutationsproben, alle erkannt; eine zunächst
+    blinde führte zu einem Grenzfall-Test);
   - Ebenen: `levelOf` (Brücke, Unterführung, Tunnel, `bridge=no`, Klemmen) und die Bits im Kachelformat; an der
     Warschauer Brücke liegt die Brücke oben, die Tamara-Danz-Straße als Unterführung darunter, beide ohne gemeinsamen
     Knoten, verbunden nur über Portale; wer die Rampe hinauffährt, ist oben, wer unten durchläuft, bleibt unten; im

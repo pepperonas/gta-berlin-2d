@@ -293,7 +293,8 @@ export const TREE_STYLE = {
   Nadel: ['#1f4a26', '#2a5e30', '#3b7a40'], sonstige: ['#2f6b2a', '#3f8a35', '#58a748'],
 };
 
-export function drawTree(ctx, tr, t, sun) {
+// fx (optional): { snow 0…1 (Schnee auf der Krone), wind {x,y}, storm 0…1 (Böenstärke: Krone neigt sich und schwankt) }
+export function drawTree(ctx, tr, t, sun, fx = null) {
   const r = tr.size, lift = Math.min(r * 0.5, 30);
   // Bei Sonne wirft die Schattenebene (lighting.js) den Kronenschatten; sonst nur ein weicher Fleck unter dem Baum.
   if (!sun || sun.strength < 0.5) {
@@ -301,22 +302,46 @@ export function drawTree(ctx, tr, t, sun) {
     ctx.beginPath(); ctx.ellipse(tr.x, tr.y, r * 0.8, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.fillStyle = '#5b3d22'; ctx.fillRect(tr.x - Math.max(2, tr.r), tr.y - lift, Math.max(4, tr.r * 2), lift);
-  const sway = Math.sin(t * 1.3 + tr.x) * 0.8;
-  const cy = tr.y - lift;
-  if (sprites.tree) { ctx.drawImage(sprites.tree, tr.x - r + sway, cy - r, r * 2, r * 2); return; }
+  const storm = fx?.storm ?? 0, wl = fx?.wind ? Math.hypot(fx.wind.x, fx.wind.y) || 1 : 1;
+  const bend = storm * r * 0.18, shake = 0.8 + storm * r * 0.08 * (0.6 + 0.4 * Math.sin(t * 5.3 + tr.y));
+  const sway = Math.sin(t * (1.3 + storm * 2.4) + tr.x) * shake + (fx?.wind ? fx.wind.x / wl * bend : 0);
+  const swayY = fx?.wind ? fx.wind.y / wl * bend * 0.6 + Math.cos(t * 2.1 + tr.y) * storm * 1.5 : 0;
+  const cy = tr.y - lift + swayY;
+  const snow = fx?.snow ?? 0;
+  if (sprites.tree) { ctx.drawImage(sprites.tree, tr.x - r + sway, cy - r, r * 2, r * 2); if (snow > 0.03) drawCrownSnow(ctx, tr, tr.x + sway, cy, r, snow); return; }
   const spr = treeSprite(tr.genus, tr.seed % TREE_VARIANTS);
-  if (spr) { ctx.drawImage(spr, tr.x - r * 1.15 + sway, cy - r * 1.15, r * 2.3, r * 2.3); return; }
+  if (spr) { ctx.drawImage(spr, tr.x - r * 1.15 + sway, cy - r * 1.15, r * 2.3, r * 2.3); if (snow > 0.03) drawCrownSnow(ctx, tr, tr.x + sway, cy, r, snow); return; }
   const [c0, c1, c2] = TREE_STYLE[tr.genus] ?? TREE_STYLE.sonstige;
   if (tr.genus === 'Nadel') { // Nadelbaum: gezackte Krone
     ctx.fillStyle = c0; ctx.beginPath();
     for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, rr = k % 2 ? r * 0.72 : r; ctx.lineTo(tr.x + sway + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
     ctx.fill();
     ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(tr.x - r * 0.12 + sway, cy - r * 0.12, r * 0.55, 0, Math.PI * 2); ctx.fill();
+    if (snow > 0.03) drawCrownSnow(ctx, tr, tr.x + sway, cy, r, snow);
     return;
   }
   ctx.fillStyle = c0; ctx.beginPath(); ctx.arc(tr.x + sway, cy, r, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(tr.x - r * 0.18 + sway, cy - r * 0.18, r * 0.7, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(tr.x - r * 0.3 + sway, cy - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+  if (snow > 0.03) drawCrownSnow(ctx, tr, tr.x + sway, cy, r, snow);
+}
+
+// Schnee auf der Krone: Polster auf den oberen, lichtzugewandten Blattballen (links oben), je Baum fest verteilt;
+// Nadelbäume halten mehr Schnee
+function drawCrownSnow(ctx, tr, x, y, r, depth) {
+  const k = Math.min(1, depth * (tr.genus === 'Nadel' ? 1.4 : 1.1));
+  const n = 7 + (tr.seed % 5);
+  let a = (tr.seed * 2654435761) >>> 0; const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
+  ctx.fillStyle = `rgba(243,246,251,${0.9 * k})`;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const ang = Math.PI * (1.05 + rnd() * 0.75), d = r * (0.2 + rnd() * 0.62), rr = r * (0.12 + rnd() * 0.16) * (0.5 + 0.5 * k);
+    const px = x + Math.cos(ang) * d, py = y + Math.sin(ang) * d;
+    ctx.moveTo(px + rr, py); ctx.ellipse(px, py, rr, rr * 0.75, 0, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.fillStyle = `rgba(200,212,232,${0.35 * k})`; // Schattensaum unten rechts an den Polstern
+  ctx.beginPath(); ctx.arc(x + r * 0.15, y + r * 0.1, r * 0.72, 0.1 * Math.PI, 0.6 * Math.PI); ctx.lineTo(x + r * 0.15, y + r * 0.1); ctx.fill();
 }
 
 // Baumkronen-Sprites: je Gattung drei Varianten, einmal in 128 px gezeichnet und beim Zeichnen skaliert.

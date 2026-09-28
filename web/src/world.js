@@ -23,7 +23,7 @@ import { pickKind, KINDS } from './fleet.js';
 import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
-import { weatherAt, stepWet, peopleFactor, bikeFactor } from './weather.js';
+import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
 import { stepLevel, initialLevel } from './levels.js';
 
@@ -32,7 +32,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, forceWeather: null,
+    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, snow: 0, forceWeather: null,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -490,7 +490,10 @@ export function updateWorld(w, input, dt) {
   w.clock += dt * CLOCK.minutesPerSecond;
   if (w.clock >= 1440) { w.clock -= 1440; w.day = (w.day + 1) % 7; w.dayCount++; }
   w.weather = weatherAt(w.seed, w.dayCount, w.clock, w.forceWeather ?? (w.rhythm ? null : 'clear'));
-  w.wet = stepWet(w.wet, w.weather.rain, dt);
+  w.wet = stepWet(w.wet, Math.min(1, w.weather.rain), dt);
+  const snowWas = w.snow ?? 0;
+  w.snow = stepSnow(snowWas, w.weather, dt);
+  if (w.snow < snowWas) w.wet = Math.max(w.wet, Math.min(1, w.snow * 1.5)); // Tauwetter: Matsch und nasse Straßen
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;
 
@@ -518,7 +521,7 @@ export function updateWorld(w, input, dt) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
     // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
     if (c.role === 'curb' && c.driver === null && !c.wrecked && Math.abs(c.vx) + Math.abs(c.vy) < 2 && Math.abs(c.angVel) < 0.01) { c.vx = c.vy = c.angVel = 0; continue; }
-    c.wet = w.wet;
+    c.wet = w.wet; c.snow = w.snow;
     stepCar(c, dt, w.city);
     collideCarWorld(c, w, w.events);
   }

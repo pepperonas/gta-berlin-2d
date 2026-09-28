@@ -4,6 +4,33 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.23.0] – 2026-09-28
+
+### Hinzugefügt
+- Fenster gehen einzeln an: jedes Fenster hat seinen eigenen Zeitpunkt, abends gehen die Lichter nach und nach in
+  zufälliger Folge an, Räume einer Wohnung kurz nacheinander, nachts macht hier und da jemand kurz Licht. Warmes,
+  neutrales und kaltes Licht, gedimmt hinter dem Vorhang, flackernde Fernseher, Fensterkreuze; Büros, Schulen und
+  Hallen abends hell und nachts dunkel; bei trübem Wetter auch tagsüber Licht. Im Nebel dringt Fensterlicht nur gedämpft
+  durch. Vorher schaltete ein ganzes Haus in vier Stufen und das Muster wiederholte sich alle vier Fenster.
+- Starkregen: dichter, in drei Tiefen, mit Gischtschleier und durchziehenden Regenwänden.
+- Sturm: starker, böiger Wind; Bäume neigen sich und schwanken, Laub und Papier fegen durchs Bild, Regen treibt schräg,
+  der Wind heult; weniger Menschen und Räder unterwegs.
+- Gewitter (nachmittags an unbeständigen Tagen): Blitzstrahl mit Verästelungen und Einschlagslicht, Himmelsblitz mit
+  Nachblitzen, der die Szene – nachts auch – kurz hell macht; Donner kommt nach Entfernung verzögert, nah als Knall
+  mit Grollen, fern als dumpfes Rollen.
+- Dichter Nebel mit ziehenden Schwaden und kaum Sicht.
+- Schneefall und Schneesturm (an Wintertagen): Flocken in drei Tiefen, die im Wind treiben und taumeln, im Sturm als
+  Striche, weißer Dunst. Schnee bleibt liegen, je nach Dauer und Stärke fleckig bis geschlossen: auf Gehwegen, Grün,
+  Brückendecks, Dächern (Sonnenseite hell, Schattenseite bläulich), Baumkronen und geparkten Autos. Straßen bekommen
+  Matsch mit festgefahrenen Reifenspuren je Fahrstreifen und Schneewälle am Bordstein, Hauptstraßen sind freier.
+  Autos rutschen auf Schnee (bis 45 % weniger Seitenhalt), Schnee dämpft den Stadtlärm und hellt die Nacht auf,
+  Tauwetter macht die Straßen nass. Gischt bzw. Schneestaub hinter schnellen Autos.
+- `?wetter=starkregen|sturm|gewitter|dichternebel|schnee|schneesturm` und `?schneedecke=0…1` für die Sichtprüfung.
+
+### Geändert
+- Wetterlagen je Tag (gewöhnlich, unbeständig, Winter); Schneedecke und Nässe stehen im Spielstand.
+- Unter geschlossener Wolkendecke keine einzelnen Wolkenschatten mehr.
+
 ## [0.22.0] – 2026-09-28
 
 ### Hinzugefügt
@@ -24,7 +51,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Die Brüstung einer Brücke endet am Rampenfuß gerade statt mit einem runden Bogen über der Straße darunter.
 
 ### Bekannt
-- Kollisionen, Verkehr und Oberfläche wissen noch nichts von Ebenen (kommt mit 0.23.0); bis dahin bleiben die
+- Kollisionen, Verkehr und Oberfläche wissen noch nichts von Ebenen (folgt in einer späteren Version); bis dahin bleiben die
   bisherigen Zuschnitte der Wände unter Brücken.
 
 ## [0.21.1] – 2026-09-28

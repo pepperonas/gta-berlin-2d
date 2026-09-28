@@ -127,6 +127,12 @@ change in `web/`.
 - **Weather:** `weather.js` (pure: blocks per day from `seed`+`w.dayCount`, `weatherLight` adjusts `lightAt`, `stepWet`),
   world keeps `w.weather`/`w.wet` (only with `w.rhythm`, else clear; `w.forceWeather` / `?wetter=`); `wetfx.js` draws
   clouds, rain, wet roads + puddles (`e._puddles`), fog and neon signs; `render.js facadeLight` shades walls by sun.
+  Weather values are `{cloud, rain ≤1.6, fog ≤1.7, snow, storm, thunder}` (11 kinds, day types normal/unsettled/winter).
+  Gusts (`gustAt`), lightning (`strikeInSlot/strikesAt/flashAt`) and thunder arrival (`thunderBetween`, half-open
+  intervals) are pure functions of seed and `w.time`. Snow cover `w.snow` is sim state like `w.wet` (car grip, save).
+  Snow/rain/debris/fog banks are drawn from hashes + time (no particle lists); road slush goes through an offscreen layer.
+- **Windows:** `windows.js` (pure) decides per window (flat hash + room hash vs. `windowsLit`) whether it is lit and in
+  which colour; `render.js drawLitWindows` draws them per face, cached per building and game minute.
 - **Public transport:** `transit.json` (built by `tools/osm/transit.mjs` from VBB GTFS, own ZIP reader `zip.mjs`) →
   `transit.js prepareTransit` (patterns: shape, stop arc lengths, run times, departures per day type). The timetable only
   sets the headway at the game clock (vehicles run in real time); `stepTransit` keeps virtual vehicles (fare time τ) per

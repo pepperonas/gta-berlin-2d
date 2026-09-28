@@ -110,19 +110,6 @@ test('Tag/Nacht: bei Tag Hausschatten und keine Lichtkarte, nachts Lichtkarte pe
   assert.ok(!draws.some((d) => d.nan), 'keine NaN-Koordinaten');
 });
 
-test('Nachtfenster: je Haus fest (kein Flackern), mehr Licht am späten Abend, tagsüber keines', async () => {
-  const { nightVariant, NIGHT_DENSITY } = await import('../web/src/render.js');
-  const { lightAt } = await import('../web/src/daylight.js');
-  const houses = Array.from({ length: 400 }, (_, i) => ({ seed: (i * 7919 + 13) % 1000003 }));
-  const mean = (wl) => houses.reduce((a, b) => a + (nightVariant(b, wl) + 1), 0) / houses.length;
-  assert.ok(houses.every((b) => nightVariant(b, lightAt(12 * 60).windowsLit) === -1), 'mittags kein Fenster erleuchtet');
-  assert.ok(mean(lightAt(22 * 60).windowsLit) > mean(lightAt(3 * 60).windowsLit), 'abends mehr Licht als um 3 Uhr');
-  const v = houses.map((b) => nightVariant(b, 0.5));
-  assert.deepEqual(houses.map((b) => nightVariant(b, 0.5)), v, 'deterministisch');
-  assert.ok(new Set(v).size >= 3, 'Häuser unterscheiden sich');
-  assert.ok(v.every((k) => k >= -1 && k < NIGHT_DENSITY.length));
-});
-
 test('Qualitätsstufe: wechselt erst über dem Budget auf „niedrig“ und erst deutlich darunter zurück', async () => {
   const { nextQuality } = await import('../web/src/render.js');
   const { RENDER } = await import('../web/src/config.js');

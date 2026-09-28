@@ -60,7 +60,8 @@ export class Sound {
       s.connect(f); f.connect(g); g.connect(this.master); s.start(0, Math.random());
       return g;
     };
-    this.amb = { hum: layer('lowpass', 180), traffic: layer('bandpass', 420, 0.6), water: layer('highpass', 1400), bar: layer('bandpass', 850, 1.8), rumble: layer('lowpass', 90), rain: layer('highpass', 2600) };
+    this.amb = { hum: layer('lowpass', 180), traffic: layer('bandpass', 420, 0.6), water: layer('highpass', 1400), bar: layer('bandpass', 850, 1.8), rumble: layer('lowpass', 90), rain: layer('highpass', 2600), rainLow: layer('bandpass', 900, 0.5), wind: layer('bandpass', 380, 1.4) };
+    this.windFilter = this.amb.wind; // Heulen: Filterfrequenz folgt den Böen (setAmbience)
     const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = 440;
     const g = c.createGain(); g.gain.value = 0; o.connect(g); g.connect(this.master); o.start();
     this.siren = { o, g };
@@ -72,7 +73,9 @@ export class Sound {
     if (!this.ready || !this.amb) return;
     const t = this.ctx.currentTime, a = this.amb, set = (g, v) => g.gain.setTargetAtTime(v, t, 0.6);
     set(a.hum, 0.018 * mix.hum); set(a.traffic, 0.05 * mix.traffic); set(a.water, 0.012 * mix.water);
-    set(a.bar, 0.05 * mix.bar * (0.7 + 0.3 * Math.sin(t * 2.3) * Math.sin(t * 0.7))); set(a.rumble, 0.16 * mix.rumble); set(a.rain, 0.07 * (mix.rain ?? 0));
+    set(a.bar, 0.05 * mix.bar * (0.7 + 0.3 * Math.sin(t * 2.3) * Math.sin(t * 0.7))); set(a.rumble, 0.16 * mix.rumble); set(a.rain, 0.07 * Math.min(1, mix.rain ?? 0) + 0.05 * Math.max(0, (mix.rain ?? 0) - 1));
+    set(a.rainLow, 0.05 * Math.max(0, (mix.rain ?? 0) - 0.6)); // Starkregen prasselt auch tief
+    set(a.wind, 0.11 * (mix.wind ?? 0));
     const sr = mix.sirens?.[0];
     this.siren.g.gain.setTargetAtTime(sr ? 0.07 * sr.gain : 0, t, 0.15);
     if (sr) this.siren.o.frequency.setTargetAtTime(sr.high ? 585 : 440, t, 0.02);
@@ -81,6 +84,25 @@ export class Sound {
       for (let i = 0; i < n; i++) this.tone(base * (1 + (Math.random() - 0.5) * 0.3), 0.07, { type: 'sine', gain: 0.025 * mix.birds, at: i * 0.09, slide: (Math.random() - 0.3) * 900 });
       this.nextChirp = t + 0.4 + Math.random() * 2.2 / mix.birds;
     }
+  }
+
+  // Donner: nah ein trockener Knall, dann langes, an- und abschwellendes Grollen; fern nur tiefes Grollen
+  thunder(loud, near) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime, dur = near ? 5.5 : 7 + Math.random() * 3;
+    if (near) { this.burst(0.35, { freq: 3800, gain: 0.5 * loud, type: 'highpass' }); this.burst(0.8, { freq: 900, gain: 0.45 * loud }); }
+    const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(near ? 420 : 160, t); f.frequency.exponentialRampToValueAtTime(70, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+    // Grollen in Wellen (Echos an Häusern und Wolken)
+    let at = t + (near ? 0.15 : 0.3);
+    for (let k = 0; k < 5; k++) {
+      const peak = (0.55 * loud) * (1 - k * 0.15) * (0.6 + Math.random() * 0.4);
+      g.gain.linearRampToValueAtTime(peak, at + 0.25); at += 0.5 + Math.random() * 0.9;
+      g.gain.linearRampToValueAtTime(peak * 0.35, at);
+    }
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.1);
   }
 
   // Kirchenglocke: n Schläge (Grundton + unharmonische Teiltöne, langer Nachhall)

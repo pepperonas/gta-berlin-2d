@@ -9,6 +9,7 @@ import { Renderer } from './render.js';
 import { Hud, BASE } from './hud.js';
 import { Sound } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
+import { thunderBetween } from './weather.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -48,9 +49,12 @@ let demo = null;
 // ?uhr=21:30 stellt die Spieluhr jeder neuen Welt (Sichtprüfung von Tag, Dämmerung, Nacht)
 const forcedClock = parseClock(new URLSearchParams(location.search).get('uhr'));
 let clockSetFor = null;
-// ?wetter=regen|nebel|sonnig|wolkig|bedeckt legt das Wetter fest (Sichtprüfung)
-const WX_PARAM = { sonnig: 'clear', wolkig: 'cloudy', bedeckt: 'overcast', regen: 'rain', nebel: 'fog' };
+// ?wetter=sonnig|wolkig|bedeckt|regen|starkregen|sturm|gewitter|nebel|dichternebel|schnee|schneesturm legt das Wetter
+// fest (Sichtprüfung), ?schneedecke=0…1 die Schneehöhe am Boden
+const WX_PARAM = { sonnig: 'clear', wolkig: 'cloudy', bedeckt: 'overcast', regen: 'rain', starkregen: 'heavyrain', sturm: 'storm', gewitter: 'thunder', nebel: 'fog', dichternebel: 'densefog', schnee: 'snow', schneesturm: 'heavysnow' };
 const forcedWeather = WX_PARAM[new URLSearchParams(location.search).get('wetter')] ?? null;
+const forcedSnowRaw = parseFloat(new URLSearchParams(location.search).get('schneedecke'));
+const forcedSnow = Number.isFinite(forcedSnowRaw) ? Math.max(0, Math.min(1, forcedSnowRaw)) : forcedWeather === 'snow' ? 0.55 : forcedWeather === 'heavysnow' ? 1 : null;
 const getJson = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); });
 getJson('data/berlin/index.json').then((index) => {
   const city = openCity(index, (key) => getJson(`data/berlin/tiles/${key}.json`));
@@ -60,6 +64,7 @@ getJson('data/berlin/index.json').then((index) => {
   demo.mission.state = 'idle';
   demo.clock = forcedClock ?? 19 * 60 + 30; // Titel: Abendstimmung
   demo.forceWeather = forcedWeather;
+  if (forcedSnow !== null) demo.snow = forcedSnow;
   getJson('data/berlin/overview.json').then((ov) => { city.overview = ov; hud.overview = null; }).catch((err) => console.error(err));
   // Fahrplan (VBB): ohne ihn läuft das Spiel einfach ohne Busse und Bahnen
   getJson('data/berlin/transit.json').then((tj) => { city.transit = prepareTransit(tj); city.attribution += ` · ${tj.attribution}`; }).catch((err) => console.warn('Fahrplan nicht geladen:', err.message));
@@ -188,7 +193,14 @@ function frame(now) {
     const inp = input.frame(readRaw(), DT);
     applyPointer(inp);
     const events = updateGame(game, inp, DT);
-    if ((forcedClock !== null || forcedWeather) && game.world && game.world !== clockSetFor) { if (forcedClock !== null) game.world.clock = forcedClock; game.world.forceWeather = forcedWeather; if (forcedWeather === 'rain') game.world.wet = 1; clockSetFor = game.world; resetPopulation(game.world); }
+    if ((forcedClock !== null || forcedWeather || forcedSnow !== null) && game.world && game.world !== clockSetFor) {
+      const gw = game.world;
+      if (forcedClock !== null) gw.clock = forcedClock;
+      gw.forceWeather = forcedWeather;
+      if (['rain', 'heavyrain', 'storm', 'thunder'].includes(forcedWeather)) gw.wet = 1;
+      if (forcedSnow !== null) gw.snow = forcedSnow;
+      clockSetFor = gw; resetPopulation(gw);
+    }
     for (const e of events) playEvent(e);
     if (game.world) {
       renderer.handleEvents(events);
@@ -248,12 +260,15 @@ function draw() {
   if (live && sound.ready && now - ambT > 250) {
     ambT = now;
     sound.setAmbience(ambienceAt(w));
+    // Donner: kommt mit Schallgeschwindigkeit an (je weiter der Blitz, desto später und dumpfer)
+    if (thunderT !== null && w.weather?.thunder > 0.02) for (const c of thunderBetween(w.seed ?? 1, thunderT, w.time, w.weather.thunder)) sound.thunder(c.loud, c.near);
+    thunderT = w.time;
     const n = prevClock === null ? 0 : bellStrikes(w, prevClock);
     if (n && game.screen === 'playing') sound.bells(n);
     prevClock = w.clock;
   } else if (!live && sound.ready && now - ambT > 250) { ambT = now; sound.setAmbience({ hum: 0, traffic: 0, birds: 0, bar: 0, water: 0, rumble: 0, rain: 0, sirens: [] }); }
 }
-let ambT = 0, prevClock = null;
+let ambT = 0, prevClock = null, thunderT = null;
 
 function playEvent(e) {
   const map = { 'tram-bell': 'tram-bell', crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit', knock: 'impact' };
