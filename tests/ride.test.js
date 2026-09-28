@@ -56,3 +56,68 @@ test('Aussteigen: Platz neben dem Wagen, sonst null; Straßenausgang am Bahnhof'
   const ex = stationExit(w, u8, i), stop = pointOn(u8, u8.stops[i]);
   assert.ok(Math.hypot(ex.x - stop.x, ex.y - stop.y) < 400, 'Ausgang in der Nähe des Bahnsteigs');
 });
+
+// Kandidaten exakt wie alightSpot sie berechnet, damit der Test Hindernisse dorthin legen kann.
+function alightCandidates(st, i) {
+  const c = st.cars[Math.min(i, st.cars.length - 1)], nx = -Math.sin(c.angle), ny = Math.cos(c.angle), d = c.W / 2 + 12;
+  const last = st.cars[st.cars.length - 1];
+  return {
+    right: { x: c.x + nx * d, y: c.y + ny * d },
+    left: { x: c.x - nx * d, y: c.y - ny * d },
+    behind: { x: last.x - Math.cos(last.angle) * (last.L / 2 + 14), y: last.y - Math.sin(last.angle) * (last.L / 2 + 14) },
+  };
+}
+
+test('Aussteigen bei besetzten Plätzen: rechts (Baum) → links, auch das (parkendes Auto) → hinter dem letzten Wagen, auch das (Zaun) → kein Platz', () => {
+  // city.solids ist die geteilte Hash von realCity() (Singleton über die ganze Testdatei) – jedes Einfügen
+  // muss wieder entfernt werden, sonst blieben die Hindernisse für spätere Tests an derselben Stelle liegen.
+  const { w } = worldWithTram('dwell');
+  const st = vehicleState(w, { pid: m10.id, key: 'test' });
+  const { right, left, behind } = alightCandidates(st, 1);
+
+  let sp = alightSpot(w, st, 1);
+  assert.ok(sp && Math.hypot(sp.x - right.x, sp.y - right.y) < 1, 'frei: rechts gewählt');
+
+  const tree = { x: right.x, y: right.y, r: 10 }; // Kreis-Hindernis (Baum/Poller) – kein s.seg
+  const treeKeys = w.solids.insert(tree, { x: tree.x - tree.r, y: tree.y - tree.r, w: 2 * tree.r, h: 2 * tree.r });
+  try {
+    sp = alightSpot(w, st, 1);
+    assert.ok(sp && Math.hypot(sp.x - left.x, sp.y - left.y) < 1, 'rechts durch Baum blockiert → links gewählt');
+
+    const parked = { id: -1001, x: left.x, y: left.y, angle: 0, hw: 20, hh: 10 };
+    w.cars.push(parked);
+    try {
+      sp = alightSpot(w, st, 1);
+      assert.ok(sp && Math.hypot(sp.x - behind.x, sp.y - behind.y) < 1, 'links durch parkendes Auto blockiert → hinter dem letzten Wagen');
+
+      const wall = { ax: behind.x - 20, ay: behind.y, bx: behind.x + 20, by: behind.y, seg: true, kind: 'fence' };
+      const wallKeys = w.solids.insert(wall, { x: wall.ax, y: wall.ay - 1, w: wall.bx - wall.ax, h: 2 });
+      try {
+        assert.equal(alightSpot(w, st, 1), null, 'alle drei Plätze blockiert → kein Platz');
+      } finally {
+        w.solids.remove(wall, wallKeys);
+      }
+    } finally {
+      w.cars.pop();
+    }
+  } finally {
+    w.solids.remove(tree, treeKeys);
+  }
+});
+
+test('Fahrzeuglage für ein Bus-Muster ohne materialisiertes Auto: null statt Absturz (trainCars kennt keine Bus-Wagen)', () => {
+  const { w } = worldWithTram('moving');
+  const busPattern = tr.patterns.find((p) => p.mode === 'bus');
+  assert.ok(busPattern, 'Vorbedingung: es gibt ein Bus-Muster in den Testdaten');
+  w.transit.tracked.set(busPattern.id, { veh: [{ tau: 100, delay: 0, key: 'bus-test' }], acc: 0, n: 0 });
+  assert.equal(vehicleState(w, { pid: busPattern.id, key: 'bus-test' }), null, 'Bus-Fahrplan-Fahrzeug ohne KI-Auto → null');
+});
+
+test('Fahrzeuglage für ein Bus-Auto: nach dem Absturz (wrecked) null statt eines Geisterbusses', () => {
+  const { w } = worldWithTram('moving');
+  const bus = { id: 9001, x: 100, y: 100, angle: 0, vx: 10, vy: 0, wrecked: false, duty: { bus: true, pid: 0, stop: 2, s: 500, off: 0, boarding: false } };
+  w.cars.push(bus);
+  assert.ok(vehicleState(w, { carId: 9001 }), 'zunächst vorhanden');
+  bus.wrecked = true;
+  assert.equal(vehicleState(w, { carId: 9001 }), null, 'wrecked → null');
+});

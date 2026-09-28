@@ -2,7 +2,8 @@
 // Referenzen: { pid, key } = Fahrplan-Fahrzeug (transit.js), { carId } = Bus als KI-Auto, { playerTrain: true } = Zug,
 // den der Spieler führt (playertrain.js). Verschwindet ein Fahrzeug, liefert vehicleState null (world.js steigt dann aus).
 import { positionAt, pointOn, trainCars, BUS } from './transit.js';
-import { circleVsObb } from './collision.js';
+import { circleVsObb, circleVsSegment, circleVsCircle, circleVsRect } from './collision.js';
+import { blocks } from './car.js';
 import { undergroundAtS } from './tunnel.js';
 import { nearestPoi } from './map.js';
 import { nearestSpot, sidewalkPoint } from './pedestrians.js';
@@ -37,7 +38,9 @@ export function vehicleState(w, ref) {
   const s = w.transit?.tracked.get(ref.pid);
   const v = s?.veh.find((x) => x.key === ref.key && !x.gone);
   if (!v || v.live) return null;
-  const p = tr.patterns[ref.pid], pos = positionAt(p, v.tau);
+  const p = tr.patterns[ref.pid];
+  if (p.mode === 'bus') return null; // Busse fahren nur als KI-Auto ({ carId }, s. o.) – TRAIN[p.mode] wäre undefined
+  const pos = positionAt(p, v.tau);
   if (pos.done) return null;
   return { mode: p.mode, p, s: pos.s, speed: v.blockedT > 0 ? 0 : speedOfPattern(p, v.tau), cars: trainCars(p, pos.s), dwelling: pos.dwelling, stop: pos.stop, underground: undergroundAtS(w.city, p, pos.s) };
 }
@@ -78,16 +81,28 @@ export function transitNear(w, x, y, r) {
   return [...best.values()].sort((a, b) => a.dist - b.dist);
 }
 
+// Platz frei? Wie world.js spotFree (dort nicht exportiert): feste Hindernisse jeder Form – Segment (Wand/Zaun/Ufer/
+// Gebietsgrenze), Kreis (Baum, Poller) oder Rechteck (Kiste) – levelbewusst und ohne umgefahrene Poller (car.js
+// blocks(), dieselbe kanonische Prüfung wie collideCarWorld/pushCircleOutOfWorld/spotFree), dazu parkende/fahrende Autos.
+function spotFreeHere(w, x, y, r, lvl) {
+  const box = { x: x - r, y: y - r, w: 2 * r, h: 2 * r };
+  for (const s of w.solids.query(box, [])) {
+    if (!blocks(w, s, lvl)) continue;
+    const m = s.seg ? circleVsSegment(x, y, r, s) : s.r !== undefined ? circleVsCircle(x, y, r, s.x, s.y, s.r) : circleVsRect(x, y, r, s);
+    if (m) return false;
+  }
+  return w.cars.every((o) => !circleVsObb(x, y, r, o));
+}
+
 // Freier Platz neben Wagen i: rechts in Fahrtrichtung zuerst, dann links, dann hinter dem letzten Wagen
 export function alightSpot(w, st, i) {
   const c = st.cars[Math.min(i, st.cars.length - 1)], nx = -Math.sin(c.angle), ny = Math.cos(c.angle), d = c.W / 2 + 12;
   const cands = [[c.x + nx * d, c.y + ny * d], [c.x - nx * d, c.y - ny * d]];
   const last = st.cars[st.cars.length - 1];
   cands.push([last.x - Math.cos(last.angle) * (last.L / 2 + 14), last.y - Math.sin(last.angle) * (last.L / 2 + 14)]);
+  const lvl = w.player.lvl ?? 0;
   for (const [x, y] of cands) {
-    if (w.cars.some((o) => circleVsObb(x, y, 8, o))) continue;
-    if (w.solids.query({ x: x - 8, y: y - 8, w: 16, h: 16 }, []).some((s) => (s.lvl ?? 0) === (w.player.lvl ?? 0) && s.seg)) continue;
-    return { x, y };
+    if (spotFreeHere(w, x, y, 8, lvl)) return { x, y };
   }
   return null;
 }
