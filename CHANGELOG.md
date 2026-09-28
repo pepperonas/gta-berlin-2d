@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.28.0] – 2026-09-28
+
+### Neu
+- **Waffenrad am Controller:** LB halten öffnet das Rad, der rechte Stick wählt, Loslassen nimmt die Waffe, B bricht
+  ab; LB kurz tippen wechselt wie bisher zur vorigen Waffe.
+- Im offenen Rad: Mausrad dreht die Wahl weiter, 1–6 wählt sofort und schließt, Esc bricht ab (ohne Pausemenü).
+- Das Rad zeigt, wohin Maus oder Stick zeigen (Zeiger in der Mitte), die Munition jeder Waffe, die Zifferntasten und
+  einen Bedienhinweis; es blendet beim Öffnen ein, die Zeitlupe setzt weich ein und aus.
+
+### Behoben
+- Rechts halten beim Schießen (linke Taste gedrückt) öffnete kein Rad, das Loslassen ging verloren.
+- Loslassen außerhalb des Fensters oder ein Fensterwechsel ließen das Rad hängen.
+- Wer weit hinausgezogen hatte, musste den ganzen Weg zurück, bevor die Wahl wechselte (Zeiger jetzt auf den Radius
+  begrenzt).
+- Nach der Wahl riss die Figur herum zu der Stelle, an der der Mauszeiger beim Auswählen stand; das Ziel bleibt jetzt,
+  bis die Maus wieder bewegt wird.
+
 ## [0.27.0] – 2026-09-28
 
 ### Neu

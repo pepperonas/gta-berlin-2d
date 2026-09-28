@@ -246,27 +246,50 @@ export class Hud {
 
   // Waffenrad (rechte Maustaste halten): runde Segmente mit Symbolen, das gezeigte hell und etwas größer, in der Mitte
   // Name und Munition. hover = Index des gezeigten Segments.
-  drawWeaponWheel(p, hover) {
+  // opt: { vx, vy (Zeiger ab der Mitte, HUD-Einheiten), age (s seit dem Öffnen), pad (Controller) }
+  drawWeaponWheel(p, hover, opt = {}) {
     const c = this.ctx, cx = this.vw / 2, cy = this.vh / 2, n = WEAPONS.length;
     const R = WHEEL.radius, r0 = WHEEL.inner, gap = 0.035, step = 2 * Math.PI / n;
+    // Einblenden: kurz wachsen und aufhellen (ohne Bewegungswunsch sofort)
+    const u = Math.min(1, Math.max(0, (opt.age ?? 1) / (WHEEL.ease * 1.4))), e = 1 - (1 - u) ** 3;
     c.save();
-    c.fillStyle = 'rgba(8,10,14,0.35)'; c.fillRect(0, 0, this.vw, this.vh); // Welt dahinter abgedunkelt
+    c.globalAlpha = 0.35 + 0.65 * e;
+    c.fillStyle = `rgba(8,10,14,${(0.35 * e).toFixed(3)})`; c.fillRect(0, 0, this.vw, this.vh); // Welt dahinter abgedunkelt
+    c.translate(cx, cy); c.scale(0.86 + 0.14 * e, 0.86 + 0.14 * e); c.translate(-cx, -cy);
+    let icons = 0;
     for (let i = 0; i < n; i++) {
       const on = i === hover, sel = i === (p.weapon ?? 0), mid = i * step - Math.PI / 2; // 0 oben
       const a0 = mid - step / 2 + gap, a1 = mid + step / 2 - gap, Ro = on ? R + 10 : R;
       c.beginPath(); c.arc(cx, cy, Ro, a0, a1); c.arc(cx, cy, r0, a1, a0, true); c.closePath();
       c.fillStyle = on ? 'rgba(255,211,61,0.92)' : sel ? 'rgba(46,50,60,0.9)' : 'rgba(20,23,30,0.82)'; c.fill();
       c.lineWidth = on ? 3 : 1.5; c.strokeStyle = on ? '#fff3c4' : sel ? YELLOW : 'rgba(255,255,255,0.18)'; c.stroke();
-      const d = slotDir(i, n), rm = (r0 + Ro) / 2;
-      drawWeaponIcon(c, WEAPONS[i].id, cx + d.x * rm, cy + d.y * rm, on ? 86 : 72, on ? '#1a1c22' : sel ? YELLOW : '#e8e8e8');
-      this.counts = this.counts ?? {}; this.counts.wheelIcons = (this.counts.wheelIcons ?? 0) + 1;
+      const d = slotDir(i, n), rm = (r0 + Ro) / 2, wp = WEAPONS[i];
+      drawWeaponIcon(c, wp.id, cx + d.x * rm, cy + d.y * rm - 6, on ? 86 : 72, on ? '#1a1c22' : sel ? YELLOW : '#e8e8e8');
+      // Munition unter dem Symbol (Schusswaffen), die Taste daneben
+      const col = on ? 'rgba(26,28,34,0.85)' : 'rgba(255,255,255,0.6)';
+      if (!wp.melee) this.text(`${p.mag?.[i] ?? wp.mag}/${wp.mag}`, cx + d.x * rm, cy + d.y * rm + 30, { size: 12, weight: 800, align: 'center', color: (p.mag?.[i] ?? 1) === 0 && !on ? '#ff8080' : col, shadow: false });
+      if (!opt.pad) this.text(`${i + 1}`, cx + d.x * (Ro - 14), cy + d.y * (Ro - 14) + 5, { size: 11, weight: 800, align: 'center', color: on ? 'rgba(26,28,34,0.6)' : 'rgba(255,255,255,0.35)', shadow: false });
+      icons++;
     }
+    this.counts = this.counts ?? {}; this.counts.wheelIcons = (this.counts.wheelIcons ?? 0) + icons;
     // Mitte: Name und Munition der gezeigten Waffe
     const wp = WEAPONS[hover >= 0 ? hover : p.weapon ?? 0], k = WEAPONS.indexOf(wp);
     c.beginPath(); c.arc(cx, cy, r0 - 8, 0, Math.PI * 2); c.fillStyle = 'rgba(12,14,19,0.9)'; c.fill();
+    // Zeiger: wohin die Maus/der Stick gerade zeigt (auf den Innenkreis begrenzt)
+    const vl = Math.hypot(opt.vx ?? 0, opt.vy ?? 0);
+    if (vl > 2) {
+      const L = Math.min(r0 - 12, vl * (r0 - 12) / WHEEL.radius * 1.6), ux = opt.vx / vl, uy = opt.vy / vl;
+      c.strokeStyle = 'rgba(255,211,61,0.55)'; c.lineWidth = 3; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(cx + ux * 8, cy + uy * 8); c.lineTo(cx + ux * L, cy + uy * L); c.stroke();
+      c.fillStyle = YELLOW; c.beginPath(); c.arc(cx + ux * L, cy + uy * L, 4.5, 0, Math.PI * 2); c.fill();
+      this.counts.wheelPointer = true;
+    }
     this.text(wp.name.toUpperCase(), cx, cy - 4, { size: wp.name.length > 12 ? 12 : 15, weight: 800, align: 'center', color: YELLOW });
     this.text(wp.melee ? 'Nahkampf' : `${p.mag?.[k] ?? wp.mag} / ${wp.mag}`, cx, cy + 20, { size: 15, weight: 700, align: 'center', color: '#ddd' });
     c.restore();
+    // Bedienhinweis unter dem Rad
+    const hint = opt.pad ? 'Rechter Stick wählt · LB loslassen nimmt die Waffe · B bricht ab' : 'Maus zeigt · Loslassen nimmt die Waffe · Mausrad oder 1–6 · Esc bricht ab';
+    this.text(hint, cx, cy + R + 44, { size: 14, weight: 600, align: 'center', color: 'rgba(255,255,255,0.75)' });
     this.layout = { ...(this.layout ?? {}), wheel: { cx, cy, R, r0, hover } };
   }
 
@@ -685,7 +708,7 @@ export class Hud {
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
-      ['Waffenrad (zu Fuß)', '–', 'rechte Maus halten'],
+      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Hupe', 'X', 'H'],

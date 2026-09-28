@@ -3,6 +3,7 @@
 //  – gedrückt halten (zu Fuß): das Waffenrad öffnet sich, die Richtung der Maus ab der Stelle des Drucks wählt ein
 //    Segment, Loslassen nimmt die Waffe. In der Mitte (Totzone) bleibt die zuletzt gezeigte Wahl – wer nur kurz die Maus
 //    zurückzieht, verliert sie nicht. Solange das Rad offen ist, läuft das Spiel langsamer (WHEEL.slow).
+//  Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt.
 
 export const WHEEL = {
   hold: 0.22,    // s bis das Rad aufgeht (kürzer = Tippen)
@@ -10,6 +11,8 @@ export const WHEEL = {
   slow: 0.3,     // Spieltempo bei offenem Rad
   radius: 190,   // Außenradius (HUD-Einheiten)
   inner: 72,     // Innenradius
+  stickDead: 0.45, // Controller: Stickausschlag, ab dem gewählt wird
+  ease: 0.12,    // s: Zeitlupe und Einblenden
 };
 
 // Segment zur Richtung (dx, dy) bei n Waffen: 0 oben, im Uhrzeigersinn; -1 in der Totzone
@@ -26,34 +29,67 @@ export function slotDir(i, n) {
   return { x: Math.sin(a), y: -Math.cos(a) };
 }
 
-// Zustandsautomat der rechten Taste. Rückgaben der Methoden: { enterExit?, pick? (Index), opened?, closed? }
+// Zustandsautomat einer Rad-Taste (rechte Maustaste oder LB am Controller).
+// Rückgaben der Methoden: { tap? (kurz getippt), pick? (Index), opened?, closed? }
+//  – Maus: move(x, y) mit Bildschirmpunkten; die Bewegung wird als Zeiger ab der Mitte des Rads aufsummiert und auf den
+//    Radius begrenzt – wer weit hinausgezogen hat, wechselt beim Zurückziehen sofort, statt erst den ganzen Weg zurück.
+//  – Controller: aim(x, y) mit dem Stick (-1…1), Totzone WHEEL.stickDead; losgelassener Stick behält die Wahl.
+//  – nudge(±1): Mausrad dreht die Wahl weiter; choose(i): Zifferntaste wählt und schließt; cancel(): ohne Wahl zu.
+//  – sync(held): ist die Taste laut Gerät nicht mehr gedrückt (Loslassen außerhalb des Fensters, verlorenes Ereignis),
+//    wird wie beim Loslassen entschieden – so bleibt das Rad nie hängen.
 export function createRightButton(opts = {}) {
   const cfg = { ...WHEEL, ...opts };
-  const st = { down: false, t0: 0, x0: 0, y0: 0, open: false, hover: -1, n: 0 };
+  const st = { down: false, t0: 0, x0: 0, y0: 0, lx: 0, ly: 0, vx: 0, vy: 0, open: false, hover: -1, n: 0, openedAt: 0 };
+  const hoverFrom = (dx, dy, dead) => { const i = wheelSlot(dx, dy, st.n, dead); if (i >= 0) st.hover = i; };
   return {
     state: st,
     get open() { return st.open; },
-    press(t, x, y) { Object.assign(st, { down: true, t0: t, x0: x, y0: y, open: false, hover: -1 }); return {}; },
+    get down() { return st.down; },
+    press(t, x = 0, y = 0) { Object.assign(st, { down: true, t0: t, x0: x, y0: y, lx: x, ly: y, vx: 0, vy: 0, open: false, hover: -1 }); return {}; },
     // jeden Frame: canOpen = zu Fuß im Spiel; current = gewählte Waffe (Startwert der Anzeige), n = Anzahl Waffen
     tick(t, canOpen, current, n) {
       if (st.open && !canOpen) { st.open = false; st.down = false; return { closed: true }; } // eingestiegen, K. o. …
-      if (st.down && !st.open && canOpen && t - st.t0 >= cfg.hold - 1e-9) { st.open = true; st.hover = current; st.n = n; return { opened: true }; }
+      if (st.down && !st.open && canOpen && t - st.t0 >= cfg.hold - 1e-9) {
+        Object.assign(st, { open: true, hover: current, n, vx: 0, vy: 0, openedAt: t });
+        return { opened: true };
+      }
       return {};
     },
     move(x, y) {
+      const dx = x - st.lx, dy = y - st.ly; st.lx = x; st.ly = y;
       if (!st.open) return {};
-      const i = wheelSlot(x - st.x0, y - st.y0, st.n, cfg.dead);
-      if (i >= 0) st.hover = i;
+      st.vx += dx; st.vy += dy;
+      const d = Math.hypot(st.vx, st.vy), max = cfg.radius;
+      if (d > max) { st.vx *= max / d; st.vy *= max / d; }
+      hoverFrom(st.vx, st.vy, cfg.dead);
       return {};
     },
+    aim(x, y) {
+      if (!st.open) return {};
+      if (Math.hypot(x, y) < cfg.stickDead) return {};
+      st.vx = x * cfg.radius; st.vy = y * cfg.radius;
+      hoverFrom(x, y, 0);
+      return {};
+    },
+    nudge(d) { if (st.open && st.n) { st.hover = ((st.hover < 0 ? 0 : st.hover) + Math.sign(d) + st.n) % st.n; st.vx = st.vy = 0; } return {}; },
+    choose(i) { if (!st.open || !(i >= 0 && i < st.n)) return {}; st.open = false; st.down = false; return { pick: i, closed: true }; },
     release(t) {
       if (!st.down) return {};
       st.down = false;
       if (st.open) { st.open = false; return st.hover >= 0 ? { pick: st.hover, closed: true } : { closed: true }; }
-      return t - st.t0 < cfg.hold ? { enterExit: true } : {};
+      return t - st.t0 < cfg.hold ? { tap: true, enterExit: true } : {};
     },
-    cancel() { const was = st.open; st.down = false; st.open = false; return was ? { closed: true } : {}; },
+    sync(t, held) { return st.down && !held ? this.release(t) : {}; },
+    cancel() { const was = st.open; st.down = false; st.open = false; return was ? { closed: true, cancelled: true } : {}; },
   };
+}
+
+// Zeitlupe weich ein- und ausblenden: aktueller Faktor → Ziel (1 oder WHEEL.slow) in etwa WHEEL.ease Sekunden
+export function easeTimeScale(cur, open, dt) {
+  const target = open ? WHEEL.slow : 1;
+  const k = Math.min(1, dt / WHEEL.ease);
+  const next = cur + (target - cur) * k;
+  return Math.abs(next - target) < 0.005 ? target : next;
 }
 
 // Waffensymbole (Vektor, Canvas 2D): Mitte (x, y), Größe s (etwa Breite), Farbe col

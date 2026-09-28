@@ -456,6 +456,15 @@ Druckpunkt wählt das Segment (`wheelSlot`, 0 oben, im Uhrzeigersinn, 18 px Totz
 zu `weaponSlot` – dieselbe abstrakte Eingabe wie die Zifferntasten, die Simulation bleibt unberührt. Solange das Rad
 offen ist, füllt `main.js` den Zeitschritt-Speicher nur zu 30 % (Zeitlupe, weiter in festen Schritten) und unterdrückt
 das Feuern.
+Seit 0.28.0: Die rechte Taste kommt über `mousedown`/`mouseup` statt über Zeigerereignisse – `pointerdown` feuert nur
+für die erste Taste eines Zeigers, wer beim Schießen rechts drückte, bekam weder Rad noch Loslassen. Die Mausbewegung
+wird ab dem Öffnen aufsummiert und auf den Radius begrenzt, damit ein Zurückziehen sofort wirkt. `sync(held)` prüft bei
+jeder Mausbewegung `e.buttons`: Wurde außerhalb des Fensters losgelassen, entscheidet es nachträglich; Fensterwechsel
+schließt das Rad. Das Ziel wird beim Öffnen als Bildschirmpunkt gemerkt und gilt nach dem Schließen weiter, bis die
+Maus wieder bewegt wird – sonst drehte sich die Figur zu der Stelle, an der der Zeiger nach dem Auswählen steht. Am
+Controller dieselbe Automatik mit LB (eigene Instanz): tippen = vorige Waffe, halten = Rad mit dem rechten Stick, B
+bricht ab (der Druck wird danach nicht als Tritt gewertet, LB muss erst losgelassen werden). Zeitlupe und Einblenden
+laufen über 0,12 s (`easeTimeScale`).
 Gegenwehr ist ein Passanten-Zustand `fight` (hinlaufen, alle 0,9 s zuschlagen, Aufgeben nach 20 s oder 45 m); ob
 jemand sich wehrt, folgt aus seiner Nummer, nicht aus dem Welt-Zufall. Das K. o. nutzt denselben Ladeweg wie der
 Teleport (`findTeleportSpot`/`teleportTo`): Liegt das Ziel auf offenem Grund (Wiese, Platz, Gehweg/Hof), sucht

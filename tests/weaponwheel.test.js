@@ -1,7 +1,7 @@
 // Rechte Maustaste und Waffenrad (weaponwheel.js, gezeichnet in hud.js)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wheelSlot, slotDir, createRightButton, drawWeaponIcon, WHEEL } from '../web/src/weaponwheel.js';
+import { wheelSlot, slotDir, createRightButton, drawWeaponIcon, WHEEL, easeTimeScale } from '../web/src/weaponwheel.js';
 import { WEAPONS } from '../web/src/combat.js';
 
 test('Waffenrad: Richtung wählt das Segment (0 oben, im Uhrzeigersinn), Mitte ist Totzone', () => {
@@ -26,7 +26,7 @@ test('Rechte Maustaste: tippen = ein-/aussteigen, halten = Rad auf, Maus wählt,
   // Tippen
   rb.press(10, 500, 300);
   assert.deepEqual(rb.tick(10.1, true, 0, 6), {});
-  assert.deepEqual(rb.release(10.12), { enterExit: true });
+  assert.deepEqual(rb.release(10.12), { tap: true, enterExit: true });
   assert.equal(rb.open, false);
   // Halten öffnet das Rad, die Anzeige startet bei der aktuellen Waffe
   rb.press(20, 500, 300);
@@ -52,6 +52,65 @@ test('Rechte Maustaste: tippen = ein-/aussteigen, halten = Rad auf, Maus wählt,
   assert.deepEqual(rb.release(41.2), {});
   // Maus bei geschlossenem Rad ändert nichts
   const h = rb.state.hover; rb.move(0, -500); assert.equal(rb.state.hover, h);
+});
+
+test('Rad: Zeiger ist auf den Radius begrenzt – zurückziehen wechselt sofort, nicht erst nach dem ganzen Weg', () => {
+  const rb = createRightButton();
+  rb.press(0, 400, 400); rb.tick(1, true, 0, 6);
+  rb.move(400 + 900, 400 - 500); // weit nach rechts oben hinaus
+  assert.ok(Math.abs(Math.hypot(rb.state.vx, rb.state.vy) - WHEEL.radius) < 1e-9, 'begrenzt');
+  assert.equal(rb.state.hover, 1, 'rechts oben');
+  rb.move(400 + 900, 400 - 250); // 250 nach unten: rechts unten
+  assert.equal(rb.state.hover, 2, 'ohne Begrenzung bräuchte es hier über 500 px');
+  rb.move(400 + 900 - 400, 400 - 250 - 150); // zurück durch die Mitte nach links oben
+  assert.equal(rb.state.hover, 5);
+  // Bewegung vor dem Öffnen verschiebt den Zeiger nicht (Start in der Mitte)
+  const r2 = createRightButton();
+  r2.press(0, 100, 100); r2.move(400, 100); r2.tick(1, true, 3, 6);
+  assert.deepEqual([r2.state.vx, r2.state.vy, r2.state.hover], [0, 0, 3]);
+  r2.move(400, 100 - 60); assert.equal(r2.state.hover, 0, 'ab dem Öffnen gezählt');
+});
+
+test('Rad: Mausrad dreht weiter, Zifferntaste wählt und schließt, Abbrechen ohne Wahl, Controller-Stick, verpasstes Loslassen', () => {
+  const rb = createRightButton();
+  rb.press(0, 0, 0); rb.tick(1, true, 4, 6);
+  rb.nudge(1); assert.equal(rb.state.hover, 5); rb.nudge(1); assert.equal(rb.state.hover, 0, 'rundum');
+  rb.nudge(-3); assert.equal(rb.state.hover, 5, 'eine Raste = ein Feld, egal wie groß der Ausschlag');
+  assert.deepEqual(rb.choose(1), { pick: 1, closed: true }); assert.equal(rb.open, false);
+  assert.deepEqual(rb.release(2), {}, 'danach nichts mehr');
+  assert.deepEqual(rb.choose(2), {}, 'geschlossen: Ziffern normal');
+  rb.press(3, 0, 0); rb.tick(4, true, 2, 6);
+  assert.deepEqual(rb.cancel(), { closed: true, cancelled: true });
+  assert.deepEqual(rb.release(4.1), {}, 'abgebrochen: Loslassen wählt nicht');
+  // Controller: Stick mit Totzone, losgelassener Stick behält die Wahl
+  const pad = createRightButton();
+  pad.press(0); pad.tick(1, true, 0, 6);
+  pad.aim(0.2, 0.1); assert.equal(pad.state.hover, 0, 'Totzone');
+  pad.aim(0, 1); assert.equal(pad.state.hover, 3, 'unten');
+  pad.aim(-0.9, -0.5); assert.equal(pad.state.hover, 5);
+  pad.aim(0, 0); assert.equal(pad.state.hover, 5, 'Stick los: Wahl bleibt');
+  assert.deepEqual(pad.release(2), { pick: 5, closed: true });
+  pad.press(3); assert.deepEqual(pad.release(3.1), { tap: true, enterExit: true }, 'LB getippt');
+  // verpasstes Loslassen (außerhalb des Fensters): sync entscheidet wie release
+  const lost = createRightButton();
+  lost.press(0, 0, 0); lost.tick(1, true, 1, 6); lost.move(0, 80);
+  assert.deepEqual(lost.sync(1.2, true), {}, 'noch gedrückt');
+  assert.deepEqual(lost.sync(1.3, false), { pick: 3, closed: true });
+  assert.equal(lost.down, false); assert.deepEqual(lost.sync(1.4, false), {});
+  const tap = createRightButton(); tap.press(0, 0, 0);
+  assert.deepEqual(tap.sync(0.1, false), { tap: true, enterExit: true }, 'kurz: getippt');
+});
+
+test('Zeitlupe blendet weich ein und aus und kommt genau am Ziel an', () => {
+  let s = 1; const seq = [];
+  for (let i = 0; i < 45; i++) { s = easeTimeScale(s, true, 1 / 60); seq.push(s); }
+  assert.ok(seq[0] < 1 && seq[0] > 0.8, 'nicht schlagartig');
+  assert.ok(seq[11] < 0.45, 'nach 0,2 s fast da (spürbar, aber nicht träge)');
+  for (let i = 1; i < seq.length; i++) assert.ok(seq[i] <= seq[i - 1], 'monoton');
+  assert.equal(seq.at(-1), WHEEL.slow, 'kommt an');
+  for (let i = 0; i < 45; i++) s = easeTimeScale(s, false, 1 / 60);
+  assert.equal(s, 1);
+  assert.equal(easeTimeScale(1, true, 1), WHEEL.slow, 'großer Zeitschritt überschießt nicht');
 });
 
 test('Waffensymbole: jede Waffe hat ein eigenes Symbol, gültige Koordinaten, Zustand des Canvas unverändert', () => {
@@ -102,4 +161,13 @@ test('Waffenrad im HUD: ein Segment je Waffe mit Symbol, das gezeigte hervorgeho
   assert.equal(hud.layout.wheel.hover, 3);
   texts.length = 0; hud.drawWeaponWheel(p, 1);
   assert.ok(texts.includes('Nahkampf'), 'Nahkampfwaffe ohne Munition');
+  // Munition je Segment, Tasten 1–6, Zeiger, Hinweis je Gerät
+  texts.length = 0; hud.counts = {}; hud.drawWeaponWheel(p, 3, { vx: 40, vy: -30, age: 1 });
+  assert.ok(texts.includes(`5/${WEAPONS[3].mag}`), 'Munition am Segment');
+  for (let i = 1; i <= WEAPONS.length; i++) assert.ok(texts.includes(String(i)), `Taste ${i}`);
+  assert.ok(hud.counts.wheelPointer, 'Zeiger gezeichnet');
+  assert.ok(texts.some((t) => t.includes('Esc bricht ab')));
+  texts.length = 0; hud.counts = {}; hud.drawWeaponWheel(p, 3, { age: 0, pad: true });
+  assert.ok(!hud.counts.wheelPointer, 'ohne Ausschlag kein Zeiger');
+  assert.ok(texts.some((t) => t.includes('LB loslassen')) && !texts.includes('1'), 'Controller: eigener Hinweis, keine Zifferntasten');
 });

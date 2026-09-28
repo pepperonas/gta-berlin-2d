@@ -184,8 +184,8 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Angreifen / Schießen (zu Fuß) | RT | linke Maustaste oder Strg |
 | Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
 | Treten (zu Fuß) | B | V |
-| Waffe wechseln / wählen | LB / RB | Q, Mausrad / 1–6 |
-| Waffenrad (zu Fuß) | – | rechte Maustaste halten, Maus in Richtung der Waffe, loslassen wählt (Zeitlupe, solange offen) |
+| Waffe wechseln / wählen | LB tippen (zurück) / RB (vor) | Q, Mausrad / 1–6 |
+| Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | rechte Maustaste halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–6 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
 | Statistik | Menü „Statistik“ (Titel und Pause) | dito, oder Befehl `stats` |
@@ -197,7 +197,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 292 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 295 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -383,7 +383,13 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 292 automatischen Tests grün, darunter:
+- Alle 295 automatischen Tests grün, darunter:
+  - Waffenrad-Bedienung: Zeiger auf den Radius begrenzt (zurückziehen wechselt sofort), Bewegung vor dem Öffnen zählt
+    nicht, Mausrad dreht eine Raste je Feld, Zifferntaste wählt und schließt, Abbrechen ohne Wahl, Controller-Stick mit
+    Totzone (losgelassen bleibt die Wahl), LB tippen/halten, verpasstes Loslassen wird nachgeholt, Zeitlupe blendet
+    weich und kommt genau an, HUD mit Zeiger, Munition je Waffe, Tasten und Hinweis je Gerät (11 Mutationsproben, alle
+    erkannt); im Browser mit echten Mausereignissen: Rad beim Schießen, Esc ohne Pausemenü, Ziffer, Mausrad, Tippen
+    ohne Wechsel, Ziel bleibt nach der Wahl stehen;
   - Menschen: Typen nach Ort, Uhrzeit, Wochentag und Tätigkeit (Büroleute werktags in Mitte, Kiez und Punks in
     Kreuzberg statt Zehlendorf, nachts keine Senioren und Kinderwagen, Gitarre spielt nie ein Kinderwagen), jeder Typ
     vollständig und deterministisch, Tempo je Typ ohne Verbrauch des Welt-Zufalls; Gang: Stand ohne Schritt, Rennen
