@@ -19,6 +19,7 @@ const K = BUILDING_KIND, RS = ROOF_SHAPE, SUB = BUILDING_SUB;
 export const PITCHED = new Set(['gabled', 'hipped', 'pyramidal', 'mansard', 'skillion', 'round']);
 // Bezirke (Index + 1 wie im Bitfeld) mit großen Plattenbausiedlungen
 const PLATTE_BEZ = new Set([3, 4]); // Lichtenberg, Marzahn-Hellersdorf
+const NEUKOELLN = 6;
 
 export const lookOf = (b) => (b._look && b._look.v === b.look ? b._look : (b._look = { ...unpackLook(b.look), v: b.look }));
 
@@ -74,6 +75,8 @@ export function roofStyle(b, scale = 10) {
     const villa = lk.sub === SUB.villa || (m <= 10 && area < 350);
     if (villa && m <= 14) return r < 0.42 ? 'hipped' : r < 0.84 ? 'gabled' : r < 0.9 ? 'mansard' : 'flat';
     if (PLATTE_BEZ.has(lk.bez) && m >= 14) return 'flat';
+    // Nord-Neukölln: Mietshäuser meist mit durchgehendem Steildach über Vorderhaus und Flügeln
+    if (lk.bez === NEUKOELLN && m >= 12 && m <= 26) return r < 0.85 ? 'gabled' : r < 0.93 ? 'berlin' : 'flat';
     if (m >= 12 && m <= 26 && r < 0.62) return 'berlin'; // Altbau: Ziegelstreifen zur Straße und zum Hof
     if (m > 9 && m < 12 && r < 0.35) return 'hipped';
   }
@@ -103,7 +106,22 @@ const MAX_COURSE = 320; // Linien je Dach (größere Dächer bekommen weitere Re
 
 // Streifen entlang der Kanten eines Rings nach innen (Tiefe d), mit Gehrung: [{ pts: [p0, p1, q1, q0], nx, ny }]
 // nx, ny = Fallrichtung (nach außen). Innenseite je Ring über eine Punktprobe bestimmt (Löcher = Höfe umgekehrt).
-function bandFacets(ring, d, inside, out) {
+// Abstand von (x, y) in Richtung (nx, ny) bis zur nächsten Wand des Grundrisses (Strahl gegen alle Ringe), sonst Infinity
+function rayToWall(rings, x, y, nx, ny) {
+  let best = Infinity;
+  for (const r of rings) for (let i = 0; i < r.length; i += 2) {
+    const ax = r[i], ay = r[i + 1], ex = r[(i + 2) % r.length] - ax, ey = r[(i + 3) % r.length] - ay;
+    const den = nx * ey - ny * ex;
+    if (Math.abs(den) < 1e-9) continue;
+    const t = ((ax - x) * ey - (ay - y) * ex) / den, u = ((ax - x) * ny - (ay - y) * nx) / den;
+    if (t > 0.5 && u >= 0 && u <= 1 && t < best) best = t;
+  }
+  return best;
+}
+
+// depthOf(D): Dachtiefe einer Kante aus der Hausdicke D dahinter (gemessen per Strahl von der Kante nach innen, Median
+// aus drei Punkten) – so bekommt jeder Flügel seinen eigenen First, auch bei Vorderhaus mit schmalen Seitenflügeln.
+function bandFacets(ring, depthOf, inside, out, allRings = [ring]) {
   const n = ring.length / 2;
   if (n < 3) return;
   // Innenseite: links oder rechts der Kanten?
@@ -123,9 +141,16 @@ function bandFacets(ring, d, inside, out) {
     const L = Math.hypot(x1 - x0, y1 - y0) || 1;
     nin.push(-(y1 - y0) / L * side, (x1 - x0) / L * side);
   }
+  const de = [];
+  for (let i = 0; i < n; i++) {
+    const x0 = ring[2 * i], y0 = ring[2 * i + 1], x1 = ring[(2 * i + 2) % ring.length], y1 = ring[(2 * i + 3) % ring.length];
+    const D = [0.25, 0.5, 0.75].map((f) => rayToWall(allRings, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, nin[2 * i], nin[2 * i + 1])).sort((a, c) => a - c)[1];
+    de.push(depthOf(D));
+  }
   const q = [];
   for (let i = 0; i < n; i++) {
     const j = (i + n - 1) % n, ax = nin[2 * j], ay = nin[2 * j + 1], bx = nin[2 * i], by = nin[2 * i + 1];
+    const d = Math.min(de[j], de[i]); // an der Ecke gilt der flachere Flügel (Grat auf der Winkelhalbierenden)
     let mx = ax + bx, my = ay + by;
     const dot = 1 + ax * bx + ay * by;
     if (dot < 0.15) { mx = bx; my = by; } else { mx /= dot; my /= dot; }
@@ -138,6 +163,10 @@ function bandFacets(ring, d, inside, out) {
     const x0 = ring[2 * i], y0 = ring[2 * i + 1], x1 = ring[2 * k], y1 = ring[2 * k + 1];
     if (Math.hypot(x1 - x0, y1 - y0) < 1) continue;
     let ax = q[2 * i], ay = q[2 * i + 1], bx = q[2 * k], by = q[2 * k + 1];
+    // Spitze Ecke: der Gehrungspunkt kann auf der Außenseite dieser Traufe liegen – dann senkrecht einrücken
+    const nx = nin[2 * i], ny = nin[2 * i + 1], dd = Math.min(de[i], de[(i + n - 1) % n], de[k]);
+    if ((ax - x0) * nx + (ay - y0) * ny < 0.2 * dd) { ax = x0 + nx * dd; ay = y0 + ny * dd; }
+    if ((bx - x1) * nx + (by - y1) * ny < 0.2 * dd) { bx = x1 + nx * dd; by = y1 + ny * dd; }
     // Kante kürzer als die doppelte Tiefe: die Innenkante kehrt sich um (Fliege) – dann ist es ein Walmdreieck
     if ((bx - ax) * (x1 - x0) + (by - ay) * (y1 - y0) < 0) { ax = bx = (ax + bx) / 2; ay = by = (ay + by) / 2; }
     out.push({ pts: [x0, y0, x1, y1, bx, by, ax, ay], nx: -nin[2 * i], ny: -nin[2 * i + 1], edge: true });
@@ -187,20 +216,21 @@ export function roofGeometry(b, style = roofStyle(b), scale = 10) {
       g.ridges.push(...boxPt(o, b, o.t0, wm), ...boxPt(o, b, o.t1, wm));
     }
   } else {
-    let d, rings;
+    let depthOf, rings;
+    const lo = 0.8 * scale;
     if (box) {
       rings = [boxRing(o, b)];
-      d = style === 'mansard' ? Math.min(halfW * 0.35, 2.8 * scale) : style === 'berlin' ? Math.min(halfW * 0.6, 4.5 * scale) : halfW;
+      const d = Math.max(lo, style === 'mansard' ? Math.min(halfW * 0.35, 2.8 * scale) : style === 'berlin' ? Math.min(halfW * 0.6, 4.5 * scale) : halfW);
+      depthOf = () => d;
     } else {
       rings = b.rings;
-      let per = 0;
-      for (const r of rings) for (let i = 0; i < r.length; i += 2) per += Math.hypot(r[(i + 2) % r.length] - r[i], r[(i + 3) % r.length] - r[i + 1]);
-      const est = area / Math.max(1, per) * 1.05; // halbe Flügeltiefe (Rechteck: B/2, Blockrand mit Hof: Tiefe/2)
-      d = style === 'mansard' ? Math.min(est * 0.45, 2.8 * scale) : style === 'berlin' ? Math.min(est * 0.75, 4.5 * scale) : Math.min(est, halfW);
+      // Tiefe je Kante aus der Hausdicke dahinter: Steildach bis zum First in der Mitte (sehr tiefe Häuser ab 16 m
+      // behalten eine flache Mitte), Berliner Dach und Mansarde als Streifen
+      const f = style === 'mansard' ? [0.22, 2.8] : style === 'berlin' ? [0.38, 4.5] : [0.5, 8];
+      depthOf = (D) => Math.max(lo, Math.min(Number.isFinite(D) ? D * f[0] : f[1] * scale, f[1] * scale, halfW));
     }
-    d = Math.max(0.8 * scale, d);
     const inside = box ? (x, y) => pointInRings(x, y, rings) : (x, y) => pointInRings(x, y, b.rings);
-    for (const r of rings) bandFacets(r, d, inside, g.facets);
+    for (const r of rings) bandFacets(r, depthOf, inside, g.facets, rings);
     for (const f of g.facets) { const p = f.pts; g.ridges.push(p[0], p[1], p[6], p[7], p[6], p[7], p[4], p[5]); } // Grate und Innenkante
     g.flatCenter = style === 'berlin' || style === 'mansard';
   }

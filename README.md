@@ -174,7 +174,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 208 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 210 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -326,7 +326,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 208 automatischen Tests grün, darunter:
+- Alle 210 automatischen Tests grün, darunter:
   - Erreichbarkeit (Flutfüllung auf einem 0,5–0,8-m-Raster mit Auto- bzw. Fußgängerbreite gegen Hauswände, Zäune,
     Ufer, Bäume und Poller): das Tempelhofer Feld ist vom Columbiadamm aus mit dem Auto und zu Fuß erreichbar (Mitte,
     Nord-, Süd- und Ostrand); in Kreuzberg und Marzahn erreicht das Auto über 90 % der Fußgängerfläche; im Build
@@ -380,6 +380,8 @@ in Edge `edge://inspect` mit der Konsole verbinden
     keine verdrehte Fläche, Fallrichtung zur Traufe, Gauben im Grundriss, Ziegelreihen begrenzt; Rechteck mit
     Sattel- bzw. Walmdach exakt nachgerechnet; OSM-Farben und -Materialien gehen vor, Steildächer immer in Ziegel oder
     Schiefer, Flachdächer grau, fünfgeschossige Häuser in Marzahn-Hellersdorf sind Platte, dieselben in Mitte nicht;
+    Nord-Neukölln: Mietshäuser ohne OSM-Form zu 75–95 % mit Steildach, Kreuzberg nicht; Vorderhaus mit Seitenflügel
+    bekommt je Flügel den First in der Mitte (6 m bzw. 3,5 m hinter der Traufe);
     Aussehen aus den OSM-Tags kommt über den Karten-Build im Spiel an, ohne leere Felder in den Kacheln; beim Zeichnen
     ist die Dachfläche zur Sonne heller, wechselt mit dem Sonnenstand, Ziegelreihen nur in hoher Qualität (zwölf
     Mutationsproben, alle erkannt; eine anfangs blinde Probe führte zu einem schärferen Bezirkstest);

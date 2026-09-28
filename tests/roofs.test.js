@@ -44,7 +44,7 @@ test('Dachformen: OSM-Angabe hat Vorrang, sonst passend zu Art, Höhe und Typ; V
     if (!lk.shape && (b.kind === K.industrial || b.kind === K.warehouse)) assert.ok(st === 'corrugated' || (st === 'gabled' && b.kind === K.industrial) || (st === 'flat' && (lk.rmat === ROOF_MAT.green || lk.rmat === ROOF_MAT.tar)), `${st} auf Halle`);
     if (b.kind === K.industrial || b.kind === K.warehouse) assert.equal(fa, 'industry');
     if (!lk.shape && st === 'berlin') assert.ok(b.kind === K.house && b.meters >= 12 && b.meters <= 26, 'Berliner Dach nur auf Altbauhöhe');
-    if (!lk.shape && (st === 'gabled' || st === 'hipped') && b.kind === K.house) assert.ok(b.meters <= 14 || lk.sub === BUILDING_SUB.terrace, `geschätztes Steildach auf ${b.meters} m hohem Haus`);
+    if (!lk.shape && (st === 'gabled' || st === 'hipped') && b.kind === K.house) assert.ok(b.meters <= 14 || lk.sub === BUILDING_SUB.terrace || (lk.bez === 6 && b.meters <= 26), `geschätztes Steildach auf ${b.meters} m hohem Haus`);
     if (fa === 'platte') assert.ok(b.meters >= 14, 'Plattenbau nur ab 5 Geschossen');
   }
   assert.ok(tagged > 3000, `${tagged} Häuser mit OSM-Dachform`);
@@ -147,4 +147,36 @@ test('Dach einmal je Gebäude bestimmt und deterministisch', () => {
   const again = JSON.stringify(roofDecor(b, S, r.style, roofGeometry(b, r.style, S)));
   assert.equal(JSON.stringify(r.decor), again);
   assert.equal(JSON.stringify(roofGeometry(b, r.style, S)), JSON.stringify(r.geo));
+});
+
+test('Nord-Neukölln: Mietshäuser meist mit Steildach; OSM-Dachform geht vor', () => {
+  let n = 0, steep = 0;
+  for (const b of buildings) {
+    const lk = lookOf(b);
+    if (lk.bez !== 6 || lk.shape || b.kind !== K.house || b.meters < 12 || b.meters > 26 || lk.sub === BUILDING_SUB.villa) continue;
+    n++; if (roofStyle(b, S) === 'gabled') steep++;
+  }
+  assert.ok(n > 1000, `${n} Mietshäuser ohne OSM-Dachform in Neukölln`);
+  assert.ok(steep / n > 0.75 && steep / n < 0.95, `${(100 * steep / n).toFixed(0)} % Steildach`);
+  const b = { rings: [[0, 0, 100, 0, 100, 100, 0, 100]], cx: 50, cy: 50, bbox: { x: 0, y: 0, w: 100, h: 100 }, kind: K.house, meters: 18, seed: 1, look: packLook({ bez: 6, shape: ROOF_SHAPE.flat }) };
+  assert.equal(roofStyle(b, S), 'flat', 'OSM sagt flach');
+  // Kreuzberg (gleiches Haus ohne OSM-Form): weiter Berliner Dach bzw. flach, kein Pauschal-Steildach
+  let kb = 0;
+  for (let s = 0; s < 200; s++) if (roofStyle({ ...b, seed: s * 7919, look: packLook({ bez: 2 }) }, S) === 'gabled') kb++;
+  assert.equal(kb, 0);
+});
+
+test('Steildach über Vorderhaus mit Seitenflügel: jeder Flügel bekommt seinen First in der Mitte', () => {
+  // Vorderhaus 40 m × 12 m, Seitenflügel 7 m breit, 20 m tief nach hinten (L-Form)
+  const u = S, ring = [0, 0, 40 * u, 0, 40 * u, 12 * u, 7 * u, 12 * u, 7 * u, 32 * u, 0, 32 * u].map(Math.round);
+  const b = { rings: [ring], cx: 12 * u, cy: 10 * u, bbox: { x: 0, y: 0, w: 40 * u, h: 32 * u }, kind: K.house, meters: 18, seed: 5, look: packLook({ shape: ROOF_SHAPE.gabled }) };
+  const g = roofGeometry(b, 'gabled', S);
+  const depth = (f) => { const p = f.pts; return Math.hypot((p[4] + p[6]) / 2 - (p[0] + p[2]) / 2, (p[5] + p[7]) / 2 - (p[1] + p[3]) / 2); };
+  const street = g.facets.find((f) => f.pts[1] === 0 && f.pts[3] === 0); // Straßenfront (y = 0)
+  // am freien Ende (x = 40 m) liegt der First des Vorderhauses in der Mitte der 12 m Haustiefe
+  assert.ok(Math.abs(street.pts[5] - 6 * u) < 0.6 * u, `Vorderhaus: First 6 m hinter der Traufe (${(street.pts[5] / u).toFixed(1)} m)`);
+  assert.ok(depth(street) > 4 * u, 'kein flacher Streifen: das Vorderhaus ist fast bis zum First gedeckt');
+  const wing = g.facets.find((f) => f.pts[0] === 0 && f.pts[2] === 0); // Außenwand x = 0 (Vorderhaus + Flügel)
+  assert.ok(wing, 'Flügelfläche');
+  for (const x of [wing.pts[4], wing.pts[6]]) assert.ok(Math.abs(x - 3.5 * u) < 0.6 * u, `Flügel: First 3,5 m hinter der Traufe (${(x / u).toFixed(1)} m)`);
 });

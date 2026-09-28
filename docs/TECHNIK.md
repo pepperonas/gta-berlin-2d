@@ -233,8 +233,11 @@ ausgerichteten Hüllrechtecks) bekommen das Dach über dem Rechteck: Satteldach 
 Mittellinie, Walm-, Zelt- und Mansarddach als Streifen entlang der vier Kanten. Verwinkelte Grundrisse (Blockrand
 mit Hof, L-Formen) bekommen einen Streifen entlang jeder Außen- und Hofkante; die inneren Ecken liegen auf der
 Winkelhalbierenden (Gehrung, gedeckelt bei spitzen Winkeln), so treffen sich die Flächen auf dem Grat. Die Tiefe
-ist beim Walmdach die halbe Flügeltiefe (Fläche ÷ Umfang, beim Rechteck genau die halbe Breite – dann ist es ein
-echtes Walmdach mit First), beim Berliner Dach höchstens 4,5 m, bei der Mansarde 2,8 m. Ist eine Kante kürzer als
+gilt je Traufkante: ein Strahl von drei Punkten der Kante nach innen misst die Hausdicke dahinter (Median), beim
+Steildach liegt der First in ihrer Mitte (höchstens 8 m hinter der Traufe), beim Berliner Dach 38 % davon bis 4,5 m,
+bei der Mansarde 22 % bis 2,8 m; an einer Ecke gilt die kleinere Tiefe der beiden Kanten. So bekommen Vorderhaus
+und Seitenflügel je ihren First. In Nord-Neukölln (Bezirk Neukölln, Altbauhöhe) ist das geschätzte Dach meist ein
+Steildach statt des Berliner Dachs. Ist eine Kante kürzer als
 die doppelte Tiefe, kehrt sich die Innenkante um; dann wird die Fläche zum Walmdreieck. Jede Fläche kennt ihre
 Fallrichtung; der Renderer bündelt die Flächen eines Hauses nach Richtung (16 Stufen, je ein `Path2D`) und färbt jedes
 Bündel nach Sonnenstand (`facadeLight`, Helligkeit in 21 Stufen je Haus zwischengespeichert). Ziegelreihen (höchstens

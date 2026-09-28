@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.18.0] – 2026-09-28
+
+### Geändert
+- Nord-Neukölln: Mietshäuser (12–26 m) ohne Dachform in OSM bekommen meist (85 %) ein durchgehendes Steildach über
+  Vorderhaus und Flügeln statt des Berliner Dachs mit flacher Mitte; wo OSM die Dachform kennt, gilt die.
+- Dachtiefe je Traufkante: ein Strahl von der Kante nach innen misst die Hausdicke dahinter, der First liegt in ihrer
+  Mitte. Vorderhaus und Seitenflügel bekommen so je ihren eigenen First (vorher eine mittlere Tiefe fürs ganze Haus,
+  die im Vorderhaus einen flachen Streifen ließ). An Ecken gilt der schmalere Flügel.
+
+### Behoben
+- An sehr spitzen Grundriss-Ecken konnte ein Dach-Eckpunkt außerhalb der Traufe landen (verdrehte Fläche).
+
 ## [0.17.1] – 2026-09-28
 
 ### Behoben
