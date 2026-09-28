@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { vehicleState, transitNear, speedOfPattern, alightSpot, stationExit, RIDE } from '../web/src/ride.js';
 import { positionAt, pointOn } from '../web/src/transit.js';
-import { createWorld, updateWorld, resetPopulation, endRide } from '../web/src/world.js';
+import { createWorld, updateWorld, resetPopulation, endRide, teleportTo } from '../web/src/world.js';
+import { updateFight, hurtPlayer } from '../web/src/combat.js';
+import { execute } from '../web/src/console.js';
 import { makeSave, validateSave } from '../web/src/save.js';
-import { realCity, realTransit } from './helpers/city.js';
+import { realCity, realTransit, realOverview } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 
 const city = realCity(), tr = realTransit();
@@ -192,7 +194,33 @@ test('Während der Fahrt: kein Laufen, kein Schießen, Kamera folgt; Speichern =
   // umgehauen während der Fahrt (z. B. Schuss durchs Fenster): Fahrt endet, niemand fährt als Toter weiter
   standBeside(w, 'test'); press(w, { ride: true });
   assert.ok(w.player.ride);
-  w.player.dead = true; press(w, {});
+  hurtPlayer(w, 999, w.player.x + 30, w.player.y); // wie ein echter K. o. (setzt dead + deadT)
+  assert.ok(w.player.dead); press(w, {});
   assert.equal(w.player.ride, null);
+  assert.ok(w.events.some((e) => e.type === 'ride-end' && e.reason === 'ko'), 'Fahrt endet wegen K. o., nicht erst beim Aufwachen');
   assert.ok(Number.isFinite(w.player.x) && Number.isFinite(w.player.y));
+});
+
+test('Fahrt-Ende von außen: Teleport (Karte/Konsole), Schläger lassen vom Fahrgast ab', () => {
+  const { w } = worldWithTram('dwell');
+  standBeside(w, 'test'); press(w, { ride: true });
+  assert.ok(w.player.ride);
+  // Gegner geben auf, solange der Spieler im Wagen sitzt
+  const ped = { x: w.player.x + 10, y: w.player.y, state: 'fight', fightT: 0 };
+  assert.equal(updateFight(ped, w, 1 / 60, () => {}), false, 'Schläger lässt vom Fahrgast ab');
+  // Konsolen-tp beendet die Fahrt sofort (Teleport folgt, sobald die Kacheln da sind)
+  city.overview ??= realOverview(); // placeIndex (tp) braucht die Übersicht
+  const g = { world: w, teleport: null };
+  const res = execute('tp Kottbusser Tor', { game: g, world: w, city });
+  assert.notEqual(res.ok, false, 'tp ausgeführt');
+  assert.equal(w.player.ride, null); assert.ok(g.teleport);
+  // Teleport über die Karte (teleportTo) während einer Fahrt: Fahrt endet, Spieler steht an der Zielstelle
+  standBeside(w, 'test'); press(w, { ride: true });
+  if (!w.player.ride) { standBeside(w, 'test', 0); press(w, { ride: true }); }
+  assert.ok(w.player.ride, 'wieder eingestiegen');
+  teleportTo(w, { x: w.player.x + 50, y: w.player.y + 50, angle: 0 });
+  assert.equal(w.player.ride, null);
+  assert.ok(w.events.some((e) => e.type === 'ride-end' && e.reason === 'teleport'));
+  press(w, {});
+  assert.equal(w.player.ride, null, 'bleibt ausgestiegen');
 });
