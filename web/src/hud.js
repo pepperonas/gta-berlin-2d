@@ -709,9 +709,8 @@ export class Hud {
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
-      ['Bahn führen: Türen / Wenden', 'A', 'E'],
       ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
-      ['Aktion (Auftrag, Einladen)', 'A', 'E'],
+      ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Hupe', 'X', 'H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],
@@ -722,8 +721,8 @@ export class Hud {
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
     this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
     rows.forEach(([a, b, k], i) => {
-      const y = 210 + i * 42;
-      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - 28, 920, 42); }
+      const y = 210 + i * 40;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - 28, 920, 40); }
       this.text(a, x0 + 16, y, { size: 20, weight: 600 });
       this.text(b, x0 + 470, y, { size: 20, weight: 500, color: '#ddd' });
       this.text(k, x0 + 740, y, { size: 20, weight: 500, color: '#ddd' });

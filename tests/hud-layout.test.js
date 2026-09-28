@@ -70,3 +70,30 @@ test('Menübildschirme liegen im zentrierten 16:9-Rahmen: Einträge und Klickfl�
   }
   void idle;
 });
+
+test('Steuerungsbildschirm: Tabelle passt in den 720px-Rahmen mit Abstand', () => {
+  const g = createGame({ storage: memoryStorage(), city });
+  const textCalls = [];
+  const ctx = fakeCtx();
+  const origText = ctx.fillText;
+  ctx.fillText = function(text, x, y) { textCalls.push({ text: String(text), x, y }); return origText?.call(this, text, x, y); };
+
+  const hud = new Hud(ctx);
+  hud.begin(1920, 1080);
+  hud.drawControls();
+
+  // Alle Text-Y-Werte sollten ≤ 700 sein (720px Frame - 20px Abstand)
+  const textYs = textCalls.map(t => t.y);
+  const maxY = Math.max(...textYs);
+  assert.ok(maxY <= 700, `Kontrolltabelle überläuft: max y = ${maxY.toFixed(0)} > 700`);
+
+  // "Mitfahren" Zeile sollte vorhanden sein
+  assert.ok(textCalls.some(t => t.text.includes('Mitfahren')), 'Mitfahren-Zeile fehlt');
+
+  // "Bahn führen: Türen / Wenden" sollte NICHT als eigene Zeile vorhanden sein
+  const bahnRow = textCalls.filter(t => t.text === 'Bahn führen: Türen / Wenden');
+  assert.equal(bahnRow.length, 0, 'Bahn-Zeile sollte entfernt sein');
+
+  // "Türen/Wenden" sollte in der Aktion-Zeile enthalten sein
+  assert.ok(textCalls.some(t => t.text.includes('Türen/Wenden')), 'Türen/Wenden fehlt in Aktion-Zeile');
+});
