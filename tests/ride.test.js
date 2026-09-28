@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { vehicleState, transitNear, speedOfPattern, alightSpot, stationExit, RIDE } from '../web/src/ride.js';
 import { positionAt, pointOn } from '../web/src/transit.js';
-import { createWorld, updateWorld, resetPopulation } from '../web/src/world.js';
+import { createWorld, updateWorld, resetPopulation, endRide } from '../web/src/world.js';
+import { makeSave, validateSave } from '../web/src/save.js';
 import { realCity, realTransit } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 
@@ -120,4 +121,78 @@ test('Fahrzeuglage für ein Bus-Auto: nach dem Absturz (wrecked) null statt eine
   assert.ok(vehicleState(w, { carId: 9001 }), 'zunächst vorhanden');
   bus.wrecked = true;
   assert.equal(vehicleState(w, { carId: 9001 }), null, 'wrecked → null');
+});
+
+const press = (w, patch) => updateWorld(w, { ...idle(), ...patch }, 1 / 60);
+
+function standBeside(w, key, car = 1) {
+  const st = vehicleState(w, { pid: m10.id, key }), c = st.cars[car], nx = -Math.sin(c.angle), ny = Math.cos(c.angle);
+  w.player.x = c.x + nx * (c.W / 2 + 12); w.player.y = c.y + ny * (c.W / 2 + 12);
+}
+
+test('Fahrgast: G neben einer haltenden Tram steigt ein, Spieler fährt mit, G steigt neben der Tür aus', () => {
+  const { w } = worldWithTram('dwell');
+  standBeside(w, 'test');
+  press(w, { ride: true });
+  assert.equal(w.player.ride?.kind, 'passenger'); assert.equal(w.player.ride.mode, 'tram');
+  assert.ok(w.events.some((e) => e.type === 'board' && !e.hop));
+  let moved = 0; const x0 = w.player.x, y0 = w.player.y;
+  // bis zum nächsten Halt mitfahren (Verkehr vor der Tram kann sie aufhalten – daher großzügige Obergrenze)
+  for (let i = 0; i < 60 * 120; i++) {
+    press(w, {}); w.camera.x = w.player.x; w.camera.y = w.player.y;
+    moved = Math.max(moved, Math.hypot(w.player.x - x0, w.player.y - y0));
+    if (moved > 100 && vehicleState(w, w.player.ride.ref)?.dwelling) break;
+  }
+  assert.ok(moved > 100, `fährt mit (${moved.toFixed(0)} px)`);
+  const st = vehicleState(w, w.player.ride.ref);
+  assert.ok(st.dwelling, 'Vorbedingung: Tram hält wieder');
+  press(w, { ride: true });
+  assert.equal(w.player.ride, null);
+  assert.ok(w.events.some((e) => e.type === 'alight' && !e.hop));
+  assert.ok(Math.hypot(w.player.x - st.cars[1].x, w.player.y - st.cars[1].y) < 80, 'neben dem Wagen');
+  assert.ok(w.player.stun <= 0, 'kein Sturz bei stehender Bahn');
+});
+
+test('Aufspringen und Abspringen während der Fahrt; Fahrt-Ende, wenn das Fahrzeug verschwindet', () => {
+  const { w, v } = worldWithTram('moving');
+  standBeside(w, 'test', 0);
+  press(w, { ride: true });
+  assert.ok(w.player.ride, 'aufgesprungen'); assert.ok(w.events.some((e) => e.type === 'board' && e.hop));
+  for (let i = 0; i < 20; i++) press(w, {});
+  const st = vehicleState(w, w.player.ride.ref);
+  assert.ok(st && !st.dwelling && st.speed > RIDE.hopOff, `Vorbedingung: Tram fährt schneller als hopOff (${st?.speed})`);
+  const hp = w.player.hp;
+  press(w, { ride: true });
+  assert.equal(w.player.ride, null);
+  assert.ok(w.events.some((e) => e.type === 'alight' && e.hop), 'Absprung');
+  assert.ok(w.player.stun > 0, 'betäubt nach dem Absprung');
+  if (st.speed > RIDE.hurtFrom) assert.ok(w.player.hp < hp, 'verletzt bei hohem Tempo'); else assert.ok(w.player.hp <= hp);
+  // Fahrzeug verschwindet → Notausstieg an der letzten Haltestelle
+  standBeside(w, 'test', 0); press(w, { ride: true });
+  assert.ok(w.player.ride, 'wieder aufgesprungen');
+  const last = w.player.ride.lastStop;
+  v.gone = true;
+  press(w, {});
+  assert.equal(w.player.ride, null);
+  assert.ok(Number.isFinite(w.player.x) && Number.isFinite(w.player.y) && Math.hypot(w.player.x - last.x, w.player.y - last.y) < 400, 'an der letzten Haltestelle');
+  assert.ok(w.events.some((e) => e.type === 'ride-end' && e.reason === 'gone'));
+});
+
+test('Während der Fahrt: kein Laufen, kein Schießen, Kamera folgt; Speichern = letzte Haltestelle zu Fuß; tp beendet die Fahrt', () => {
+  const { w } = worldWithTram('dwell');
+  standBeside(w, 'test'); press(w, { ride: true });
+  const st = vehicleState(w, w.player.ride.ref);
+  press(w, { moveX: 1, fire: true, firePressed: true });
+  assert.ok(Math.hypot(w.player.x - st.cars[w.player.ride.car].x, w.player.y - st.cars[w.player.ride.car].y) < 5, 'sitzt im Wagen');
+  assert.ok(!w.events.some((e) => e.type === 'shot' || e.type === 'swing'));
+  const save = validateSave(makeSave(w));
+  assert.ok(Math.hypot(save.player.x - w.player.ride.lastStop.x, save.player.y - w.player.ride.lastStop.y) < 1);
+  endRide(w, 'teleport');
+  assert.equal(w.player.ride, null);
+  // umgehauen während der Fahrt (z. B. Schuss durchs Fenster): Fahrt endet, niemand fährt als Toter weiter
+  standBeside(w, 'test'); press(w, { ride: true });
+  assert.ok(w.player.ride);
+  w.player.dead = true; press(w, {});
+  assert.equal(w.player.ride, null);
+  assert.ok(Number.isFinite(w.player.x) && Number.isFinite(w.player.y));
 });

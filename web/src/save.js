@@ -10,7 +10,7 @@ export const SAVE_VERSION = 2; // 2 = echte Karte (Kreuzberg + Nord-Neukölln); 
 
 export function makeSave(w, now = Date.now()) {
   const car = w.cars.find((c) => c.id === w.playerCarId);
-  const pos = playerCar(w) ?? w.player;
+  const pos = w.player.ride ? w.player.ride.lastStop : playerCar(w) ?? w.player; // Fahrgast: an der letzten Haltestelle zu Fuß
   return {
     version: SAVE_VERSION, savedAt: now,
     money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock), day: w.day, dayCount: w.dayCount ?? 0,

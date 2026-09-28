@@ -7,7 +7,7 @@ import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
 import { KINDS } from './fleet.js';
 import { createCar } from './car.js';
-import { findTeleportSpot, openSpot, playerCar } from './world.js';
+import { findTeleportSpot, openSpot, playerCar, endRide } from './world.js';
 import { PLAYER_HP } from './combat.js';
 
 export const CONSOLE = { maxSuggestions: 8, maxLog: 8, logTime: 8, history: 50 };
@@ -118,6 +118,7 @@ export const COMMANDS = [
       if (!hit) return { ok: false, msg: `Kein Ort „${q}“` };
       const spot = findTeleportSpot(ctx.world, hit.x, hit.y);
       if (!spot) return { ok: false, msg: `${hit.name} liegt außerhalb` };
+      if (ctx.world.player.ride) endRide(ctx.world, 'teleport');
       ctx.game.teleport = { ...spot, auto: true, name: spot.name ?? hit.name }; // game.js bestätigt, sobald die Kacheln da sind
       return `Teleport: ${hit.name} (${hit.kind})`;
     } },

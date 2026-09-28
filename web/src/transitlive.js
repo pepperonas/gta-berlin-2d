@@ -23,7 +23,7 @@ function tramBlocked(w, p, v) {
   for (const d of [20, 45, 75]) {
     const q = pointOn(p, head + d);
     const hit = (x, y, r) => Math.hypot(x - q.x, y - q.y) < r;
-    if (!w.player.inCar && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
+    if (!w.player.inCar && !w.player.ride && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
     for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4)) return true;
     for (const b of w.bikes ?? []) if (b.state === 'ride' && hit(b.x, b.y, 18)) return true;
     for (const ped of w.peds) if (ped.state !== 'dead' && ped.state !== 'hang' && hit(ped.x, ped.y, 16)) return true;
@@ -156,7 +156,7 @@ function collideRail(w) {
       }
     }
     const pl = w.player;
-    if (!pl.inCar) {
+    if (!pl.inCar && !pl.ride) {
       const m = circleVsObb(pl.x, pl.y, 7, o);
       if (m) { pl.x += m.nx * m.depth; pl.y += m.ny * m.depth; }
     }

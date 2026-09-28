@@ -30,7 +30,7 @@ export function updateMission(m, ctx, dt) {
 
   switch (m.state) {
     case 'available':
-      if (!car && inZone(player.x, player.y, places.giver, MISSION.giverRadius)) {
+      if (!car && !player.ride && inZone(player.x, player.y, places.giver, MISSION.giverRadius)) {
         m.prompt = 'A: Auftrag annehmen';
         if (input.action) { m.state = 'briefing'; m.briefingPage = 0; events.push({ type: 'ui' }); }
       }

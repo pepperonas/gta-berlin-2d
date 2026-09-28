@@ -151,7 +151,7 @@ function currentAim(vx = pointer.vx, vy = pointer.vy) {
   if (!cam || input.lastDevice !== 'keyboard' || vx < 0 || !hud.s || !s) return null;
   return { x: cam.x + (vx * hud.s - W / 2) / s, y: cam.y + (vy * hud.s - H / 2) / s };
 }
-const playingOnFoot = () => game.screen === 'playing' && game.world && !game.world.player.inCar && !game.showBigMap && !game.teleport && !game.resultMenu;
+const playingOnFoot = () => game.screen === 'playing' && game.world && !game.world.player.inCar && !game.world.player.ride && !game.showBigMap && !game.teleport && !game.resultMenu;
 addEventListener('blur', () => { pointer.fire = false; });
 const activeMenu = () => (game.screen === 'title' ? game.titleMenu : game.screen === 'paused' ? game.pauseMenu : game.screen === 'playing' ? game.resultMenu : null);
 canvas.addEventListener('pointermove', (e) => {
