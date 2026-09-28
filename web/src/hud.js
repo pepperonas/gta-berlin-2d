@@ -720,9 +720,11 @@ export class Hud {
     const x0 = vw / 2 - 460;
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
     this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
+    // Reihenhöhe 34 (statt 40): 13 Zeilen enden bei y=618/Band bis 630 – Luft zur Fußzeile bleibt (Fuß-Klickfläche beginnt bei 654).
+    const rowH = 34;
     rows.forEach(([a, b, k], i) => {
-      const y = 210 + i * 40;
-      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - 28, 920, 40); }
+      const y = 210 + i * rowH;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - (rowH - 12), 920, rowH); }
       this.text(a, x0 + 16, y, { size: 20, weight: 600 });
       this.text(b, x0 + 470, y, { size: 20, weight: 500, color: '#ddd' });
       this.text(k, x0 + 740, y, { size: 20, weight: 500, color: '#ddd' });

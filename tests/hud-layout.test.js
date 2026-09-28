@@ -74,9 +74,12 @@ test('Menübildschirme liegen im zentrierten 16:9-Rahmen: Einträge und Klickfl�
 test('Steuerungsbildschirm: Tabelle passt in den 720px-Rahmen mit Abstand', () => {
   const g = createGame({ storage: memoryStorage(), city });
   const textCalls = [];
+  const rectCalls = [];
   const ctx = fakeCtx();
   const origText = ctx.fillText;
   ctx.fillText = function(text, x, y) { textCalls.push({ text: String(text), x, y }); return origText?.call(this, text, x, y); };
+  const origRect = ctx.fillRect;
+  ctx.fillRect = function(x, y, w, h) { rectCalls.push({ x, y, w, h }); return origRect?.call(this, x, y, w, h); };
 
   const hud = new Hud(ctx);
   hud.begin(1920, 1080);
@@ -96,4 +99,15 @@ test('Steuerungsbildschirm: Tabelle passt in den 720px-Rahmen mit Abstand', () =
 
   // "Türen/Wenden" sollte in der Aktion-Zeile enthalten sein
   assert.ok(textCalls.some(t => t.text.includes('Türen/Wenden')), 'Türen/Wenden fehlt in Aktion-Zeile');
+
+  // Die letzte Tabellenzeile darf den Fußzeilen-Hinweis ("B / Zurück") nicht überdecken: mindestens
+  // 12px Abstand zwischen der Unterkante des letzten schattierten Zeilenbands und der Klickfläche des
+  // Hinweises (beide aus den echten Zeichenaufrufen gelesen, nicht aus geschätzten Konstanten).
+  const footerHit = hud.hits.find((h) => h.kind === 'key');
+  assert.ok(footerHit, 'Fußzeilen-Hinweis (B / Zurück) fehlt');
+  const rowBands = rectCalls.filter((r) => Math.abs(r.w - 920) < 0.5);
+  assert.ok(rowBands.length > 0, 'Keine schattierten Zeilenbänder gefunden');
+  const lastRowBandBottom = Math.max(...rowBands.map((r) => r.y + r.h));
+  const gap = footerHit.y - lastRowBandBottom;
+  assert.ok(gap >= 12, `Letzte Tabellenzeile (Bandunterkante ${lastRowBandBottom.toFixed(0)}) reicht zu nah an den Fußzeilen-Hinweis (dessen Klickfläche beginnt bei ${footerHit.y.toFixed(0)}, Abstand ${gap.toFixed(0)}px)`);
 });
