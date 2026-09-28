@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.27.0] – 2026-09-28
+
+### Neu
+- **Verschiedene Menschen:** zwölf Typen (Alltag, Büro, Tourist, Senior, Jugendliche, Kiez, Handwerk, Punk, Kopftuch,
+  Kinderwagen, Jogger, Gassigeher) mit eigener Kleidung, Frisur, Kopfbedeckung, Statur und Zubehör. Welche unterwegs
+  sind, folgt aus Bezirk, Uhrzeit, Wochentag und Tätigkeit; der Typ bestimmt das Gehtempo (Senioren und Kinderwagen
+  langsam, Büroleute zügig).
+- **Gangbild** für Spieler und Passanten: Schritte und gegengleicher Armschwung im Takt des Tempos, Schulterdrehung,
+  Wippen, Rennen mit Vorlage und langen Schritten, weiches Anlaufen/Anhalten, Atmen und Gewichtsverlagerung im Stand,
+  geglättete Drehung. Der Spieler läuft in Laufrichtung und dreht den Oberkörper zum Ziel, entgegen der Zielrichtung
+  geht er rückwärts.
+- Neu gezeichnete Figur: Beine mit Schuhen (der gehobene Fuß größer), Ärmel und Hände, Rumpf je Oberteil (Jacke,
+  Anzug mit Krawatte, Mantel, Hoodie, Warnweste, Sport), Kopf mit Frisur und Kopfbedeckung, Licht von der Sonnenseite,
+  feine Kontur. Spieler in oranger Jacke mit weißem Rand.
+- Prüfseite `web/lab/figures.html`: alle Typen vergrößert in allen Posen.
+
 ## [0.26.0] – 2026-09-28
 
 ### Neu

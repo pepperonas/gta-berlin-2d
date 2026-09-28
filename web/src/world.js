@@ -8,7 +8,7 @@ import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed
 import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
-import { insideBorder, inBuilding, locationName, hash01, surfaceAt, T } from './map.js';
+import { insideBorder, inBuilding, locationName, hash01, surfaceAt, bezirkAt, T } from './map.js';
 import { parkingStrip } from './street.js';
 import { PARK } from './citycodes.js';
 import { pointAlong } from './geom.js';
@@ -20,6 +20,7 @@ import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
 import { pickKind, KINDS } from './fleet.js';
+import { pickKind as pickPersonKind, KINDS as PERSON_KINDS } from './figure.js';
 import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
@@ -116,9 +117,19 @@ function spawnPed(w, minR, maxR) {
   const ped = createPed(w.city, sp, w.rng);
   if (w.rhythm) { // Jogger und Hundehalter je nach Tageszeit
     ped.style = walkerStyle(w.clock, w.rng);
-    if (ped.style === 'jog') { ped.speed *= 2.3; ped.shirt = ['#e84393', '#00b894', '#0984e3', '#fdcb6e', '#d63031'][ped.id % 5]; }
+    if (ped.style === 'jog') ped.shirt = ['#e84393', '#00b894', '#0984e3', '#fdcb6e', '#d63031'][ped.id % 5];
   }
+  assignKind(w, ped);
   w.peds.push(ped);
+  return ped;
+}
+
+// Menschen-Typ (figure.js): Jogger/Gassigeher aus ihrem Stil, sonst nach Ort, Uhrzeit, Wochentag (und Tätigkeit) aus der
+// Nummer – deterministisch, ohne den Welt-Zufall zu verbrauchen. Der Typ bestimmt das Gehtempo mit.
+export function assignKind(w, ped, act = null) {
+  ped.kind = ped.style === 'jog' ? 'jogger' : ped.style === 'dog' ? 'dogwalker'
+    : pickPersonKind(ped.id, { minutes: w.clock, day: w.day, bezirk: bezirkAt(w.city, ped.x, ped.y), act });
+  ped.speed *= PERSON_KINDS[ped.kind]?.speed ?? 1;
   return ped;
 }
 
@@ -144,6 +155,7 @@ export function manageLife(w, all = false) {
     if (!sp) continue;
     const ped = createPed(w.city, sp, w.rng);
     Object.assign(ped, { x: s.x, y: s.y, facing: s.face, state: 'hang', hang: { ...s } });
+    assignKind(w, ped, s.act);
     hangers.set(key, ped); w.peds.push(ped);
   }
 }
@@ -439,6 +451,7 @@ function fleeingDriver(w, car, fromX, fromY, secs) {
   if (!sp) return null;
   const ped = createPed(w.city, sp, w.rng);
   const s = sideSpot(car, -1, 14); ped.x = s.x; ped.y = s.y;
+  ped.kind = hash01(ped.id * 7.3 + 1) < 0.3 ? 'business' : 'everyday'; // wer Auto fährt, schiebt keinen Kinderwagen
   scare(ped, fromX, fromY, secs);
   return ped;
 }
@@ -468,6 +481,7 @@ function updatePlayerOnFoot(w, input, dt) {
     const nx = mx / (Math.hypot(mx, my) || 1), ny = my / (Math.hypot(mx, my) || 1);
     p.x += nx * speed * dt; p.y += ny * speed * dt;
     p.angle = Math.atan2(ny, nx);
+    p.move = p.angle; // Laufrichtung (Beine); p.angle kann danach das Zielen übernehmen (Oberkörper)
     p.step += speed * dt;
   }
   pushCircleOutOfWorld(w, p, PLAYER.radius);

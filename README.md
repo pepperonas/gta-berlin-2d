@@ -197,7 +197,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 284 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 292 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -345,6 +345,16 @@ Fehlersuche im Debug-Build: Die Hülle schaltet Remote-Debugging frei. Im Device
 in Edge `edge://inspect` mit der Konsole verbinden
 ([Anleitung](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/remote-debugging-xbox)).
 
+## Menschen
+
+Passanten sind nicht mehr alle gleich: Alltag, Büroleute (Anzug, Aktentasche), Touristen (Cap oder Sonnenhut, Kamera,
+Rucksack), Senioren (Mantel, Hut, Stock, gebeugt und langsam), Jugendliche (Hoodie, Kopfhörer), Kiez (Beanie, Bart,
+Jutebeutel), Handwerk (Warnweste, Helm), Punks (Iro, Nieten), Frauen mit Kopftuch, Eltern mit Kinderwagen, Jogger und
+Gassigeher. Wer unterwegs ist, hängt von Bezirk, Uhrzeit, Wochentag und Tätigkeit ab; der Typ bestimmt auch das
+Gehtempo. Alle – auch der Spieler – laufen mit echtem Gangbild: Schritte und Armschwung im Takt des Tempos, Rennen mit
+Vorlage und langen Schritten, weiches Anlaufen und Anhalten, Atmen im Stand. Der Spieler läuft in Laufrichtung und
+dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). Prüfseite: `http://localhost:8080/lab/figures.html`.
+
 ## Befehlszeile und Statistik
 
 **Enter** öffnet im Spiel eine Befehlszeile (die Welt steht still, solange sie offen ist). Beim Tippen erscheinen
@@ -373,7 +383,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 284 automatischen Tests grün, darunter:
+- Alle 292 automatischen Tests grün, darunter:
+  - Menschen: Typen nach Ort, Uhrzeit, Wochentag und Tätigkeit (Büroleute werktags in Mitte, Kiez und Punks in
+    Kreuzberg statt Zehlendorf, nachts keine Senioren und Kinderwagen, Gitarre spielt nie ein Kinderwagen), jeder Typ
+    vollständig und deterministisch, Tempo je Typ ohne Verbrauch des Welt-Zufalls; Gang: Stand ohne Schritt, Rennen
+    weiter ausgreifend, Takt gedeckelt, kein Knick beim Anlaufen/Anhalten (zweite Differenz unter der Krümmung der
+    Schrittkurve), Bewegung unabhängig von der Bildrate, Drehung geglättet und begrenzt, Beine in Laufrichtung,
+    rückwärts beim Zielen; jeder Typ zeichnet in allen Posen ohne ungültige Werte und sieht anders aus. 16
+    Mutationsproben, alle schlagen an;
   - Befehlszeile: Zerlegen (Anführungszeichen), großzügige Uhrzeit, Trefferordnung (Namensanfang vor Wortanfang vor
     irgendwo, Umlaute egal), Vorschläge mit grauer Ergänzung (Befehle, Werte, Orte mit Leerzeichen), Tasten (Tab, ↑↓
     in Vorschlägen und Verlauf, Enter bleibt offen, leere Zeile/Esc schließt), jeder Befehl wirkt, falsche Eingaben

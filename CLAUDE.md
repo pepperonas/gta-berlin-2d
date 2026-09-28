@@ -94,9 +94,18 @@ change in `web/`.
   `render.js drawRoof` draws it, facade patterns per style come from `facadePatterns(ctx)`. Beware: `tests/render.test.js`
   identifies rails by stroke width (`TRACK.rail` = 1.6), so don't reuse that width for other strokes.
 - **Cars and people (presentation only):** `vehicles.js` (model from `car.id`, sprite cache per model × colour,
-  wheels/lights/blinkers per frame); `ai.blink` comes from `traffic.js blinkFor` (no RNG). Person looks come from
-  `assets.js personLook(p)` (hash of `p.id`). Never draw visual variety from `world.rng` — it would change the
-  simulation (traffic, tests).
+  wheels/lights/blinkers per frame); `ai.blink` comes from `traffic.js blinkFor` (no RNG). Never draw visual variety
+  from `world.rng` — it would change the simulation (traffic, tests).
+- **People:** `figure.js` (pure): person kinds (`KINDS`: everyday, business, tourist, senior, teen, hipster, worker,
+  punk, headscarf, parent, jogger, dogwalker) with weights by Bezirk/hour/weekday/activity; `pickKind(id, ctx)` is a
+  hash of the id (no RNG). `world.js assignKind` sets `ped.kind` at spawn and multiplies `ped.speed` by the kind's
+  speed (the only simulation effect). `figureLook(p)` derives clothes/hair/hat/accessories (cached `p._fig`);
+  `PLAYER_LOOK` is the player. `gait.js` (pure, render-only state `p._anim`): cadence from speed (capped), amplitude
+  and run blend eased, facing smoothed; `gaitPose` gives feet/hands/twist/bob/lean; `legFrame` turns the legs to the
+  movement direction (`player.move`, set in `updatePlayerOnFoot`; `player.angle` becomes the aim) and walks backwards
+  when aiming against it. `people.js drawPerson` draws it all (weapons, `ACT_ARMS`, sitting, lying). Visual check:
+  `web/lab/figures.html` (every kind × stand/walk/run/sit/weapon/lying, zoomed, with animation toggle).
+  `assets.js personLook` remains for bike riders (`critters.js`).
 - **Combat:** `combat.js` (pure: `WEAPONS`, `KICK`, `castRay`, `aimAssist`, `strike`, `shoot`, `hurtPed`, `hurtCar`,
   `updatePlayerCombat`). Input fields `fire/firePressed/kick/reload/weaponNext/weaponPrev/weaponSlot/aimX/aimY/aimWorld`
   (see `idle.js`); keyboard fire is Ctrl/mouse, never W (W is throttle/walk). Peds have `hp` and a `'dead'` state

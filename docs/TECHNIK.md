@@ -484,6 +484,16 @@ Pfad wie die Hausschatten; die Krone ist das Kronen-Sprite als schwarzer Umriss 
 Gattung) und weichgezeichnetem Rand, gezeichnet mit einer Streckmatrix I + (k−1)·u·uᵀ. Halbtransparente Stellen über
 einem Hausschatten bleiben deckend, weil alles in dieselbe Schattenebene geht.
 
+**Menschen (0.27.0).** Typ und Aussehen kommen aus einem Hash der Nummer (`figure.js`), nie aus dem Welt-Zufall: so
+ändert die Vielfalt die Reihenfolge der Zufallszahlen nicht, und dieselbe Person sieht nach jedem Neuzeichnen gleich
+aus. Die Gewichte je Typ werden mit Bezirk, Tageszeitfenster, Wochentag und Tätigkeit multipliziert. Einziger Einfluss
+auf die Simulation ist das Gehtempo. Das Gangbild (`gait.js`) lebt als reiner Darstellungszustand an der Figur
+(`p._anim`): die Geschwindigkeit wird aus der Änderung von `p.step` je Bild geschätzt; der Schritttakt wächst mit dem
+Tempo und ist gedeckelt (schneller heißt vor allem längere Schritte), Ausschlag und Laufpose folgen weich, der
+Zeitschritt ist auf 0,1 s begrenzt. Weil die Schrittlänge mit dem Ausschlag gegen null geht, kommen die Füße beim
+Anhalten nebeneinander. Beim Spieler sind Laufrichtung (`move`, Beine) und Zielrichtung (`angle`, Oberkörper) getrennt;
+über 100° Abstand geht er rückwärts, die Hüfte dreht höchstens ±80°.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

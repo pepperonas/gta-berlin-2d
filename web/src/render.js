@@ -3,7 +3,8 @@
 // Bildmitte weg → Seitenwände werden sichtbar).
 import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
-import { drawCar, drawPerson, drawTree, shade, drawDog } from './assets.js';
+import { drawCar, drawTree, shade, drawDog } from './assets.js';
+import { drawPerson } from './people.js';
 import { drawBike, drawBird, drawParkedScooter } from './critters.js';
 import { parkedScooters, riderShirt } from './bikes.js';
 import { playerCar, speedOf } from './world.js';
@@ -1330,7 +1331,7 @@ export class Renderer {
       }
     }
     const pl = world.player;
-    if (!pl.inCar) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
+    if (!pl.inCar) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
     return out;
   }
 

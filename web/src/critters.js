@@ -1,5 +1,6 @@
 // Darstellung von Rädern (mit Fahrer), E-Rollern, Tauben und Enten – reine Zeichnung, Aussehen aus der Nummer.
-import { smallShadow, shade, personLook, drawTorsoHead } from './assets.js';
+import { smallShadow, shade, personLook } from './assets.js';
+import { drawTorsoHead } from './people.js';
 
 const FRAMES = ['#1e272e', '#c0392b', '#2980b9', '#27ae60', '#ecf0f1', '#8e44ad', '#16a085', '#f39c12'];
 const SCOOTER = ['#2ecc71', '#1abc9c', '#e84393', '#f1c40f']; // Verleihroller in Leihfirmenfarben (ohne Marke)

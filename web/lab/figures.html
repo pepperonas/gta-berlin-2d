@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Figuren-Prüfstand</title>
+<style>
+  body { margin: 0; background: #9a9486; font: 13px system-ui, sans-serif; color: #222; }
+  canvas { display: block; }
+  #bar { position: fixed; top: 6px; right: 10px; background: rgba(255,255,255,.8); padding: 4px 8px; border-radius: 6px; }
+</style>
+<div id="bar"><label><input type="checkbox" id="live"> Animation</label> <label><input type="checkbox" id="night"> Nacht</label></div>
+<canvas id="c"></canvas>
+<script type="module">
+  // Alle Menschen-Typen vergrößert: Stand, vier Gangphasen, Rennen, Sitzen, mit Waffe, liegend.
+  import { drawPerson } from '../src/people.js';
+  import { KIND_IDS } from '../src/figure.js';
+  const cvs = document.getElementById('c'), ctx = cvs.getContext('2d');
+  const Z = 5, CELL = 24, cols = ['Stand', 'Gehen ¼', 'Gehen ½', 'Gehen ¾', 'Gehen 1', 'Rennen', 'Rennen ½', 'Sitzen', 'Waffe', 'Liegt'];
+  const rows = ['player', ...KIND_IDS];
+  cvs.width = (cols.length * CELL + 20) * Z + 120; cvs.height = (rows.length * CELL + 8) * Z + 30;
+  const sunDay = { dx: 0.5, dy: 0.7, len: 1, strength: 1 };
+  function frame(now) {
+    const live = document.getElementById('live').checked, sun = document.getElementById('night').checked ? null : sunDay;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cvs.width, cvs.height);
+    ctx.fillStyle = '#222';
+    cols.forEach((c, i) => ctx.fillText(c, 120 + (i * CELL + 4) * Z, 18));
+    rows.forEach((k, r) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#222'; ctx.fillText(k, 8, 30 + (r * CELL + CELL / 2) * Z);
+      cols.forEach((c, i) => {
+        const id = 1000 + r * 13 + (k === 'parent' || k === 'senior' ? 0 : 0);
+        const p = { id, x: 0, y: 0, facing: -Math.PI / 2, step: 0, kind: k === 'player' ? undefined : k };
+        const walk = i >= 1 && i <= 4, run = i === 5 || i === 6;
+        const t = now / 1000;
+        p._anim = { t, step: 0, v: run ? 150 : walk ? 60 : 0, amp: walk || run ? 1 : 0, run: run ? 1 : 0, face: -Math.PI / 2,
+          phase: live && (walk || run) ? t * (run ? 17 : 11) : walk ? (i - 1) * Math.PI / 2 + Math.PI / 4 : run ? (i - 5) * Math.PI + Math.PI / 2 : 0 };
+        ctx.setTransform(Z, 0, 0, Z, 120 + (i * CELL + CELL / 2) * Z, 30 + (r * CELL + CELL / 2) * Z);
+        ctx.fillStyle = (i + r) % 2 ? '#a8a294' : '#b3ad9f'; ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
+        drawPerson(ctx, p, { player: k === 'player', sun, time: t, act: i === 7 ? 'sit' : null, weapon: i === 8 ? 'pistol' : null, down: i === 9, dead: false });
+      });
+    });
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
