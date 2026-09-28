@@ -13,6 +13,9 @@ import { laneOffsets, parkingStrip } from './street.js';
 import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
+import { weatherLight, hasUmbrella } from './weather.js';
+import { drawCloudShadows, drawOvercast, drawRain, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn } from './wetfx.js';
+import { drawUmbrella } from './critters.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
@@ -300,6 +303,12 @@ const SIGNAL_RGB = { red: '255,60,48', yellow: '255,204,0', green: '52,199,89' }
 const SHOP_GLOW = new Set(['mall', 'supermarket', 'shop', 'food', 'drink', 'cafe', 'hotel', 'ubahn', 'sbahn']);
 
 // Schaufenster-Schein: vom Laden aus zum Gehweg der nächsten Straße (zwischengespeichert am POI)
+// Helligkeit einer Fassade aus der Sonnenrichtung: +1 voll beschienen, -1 ganz abgewandt (mal Sonnenstärke)
+export function facadeLight(nx, ny, sun) {
+  const L = Math.hypot(sun.dx, sun.dy) || 1;
+  return -(nx * sun.dx + ny * sun.dy) / L * sun.strength;
+}
+const hexRgb = (c) => `${parseInt(c.slice(1, 3), 16)},${parseInt(c.slice(3, 5), 16)},${parseInt(c.slice(5, 7), 16)}`;
 function shopGlowPoint(city, q) {
   if (q._glow !== undefined) return q._glow;
   const e = nearestEdge(city, q.x, q.y, 40 * city.scale, (o) => o.cls <= 8 && !o.bridge);
@@ -460,7 +469,8 @@ export class Renderer {
     const vw = W / s, vh = H / s;
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
-    const L = this.light = lightAt(world.clock ?? 780);
+    const L0 = lightAt(world.clock ?? 780), wx = world.weather ?? null;
+    const L = this.light = wx ? weatherLight(L0, wx) : L0;
     const tf = [s, W / 2 - cam.x * s, H / 2 - cam.y * s];
     windowPatterns ??= makeWindowPatterns(ctx);
     cobblePattern ??= makeCobblePattern(ctx);
@@ -547,6 +557,7 @@ export class Renderer {
     if (this.quality === 'high') this.drawDecals(edges, city);
     this.drawStreetMarkings(edges, world.city);
     this.drawCrossings(crossings);
+    this.stats.puddles = drawWetRoads(ctx, edges, junctions, pathOf, city, world.wet ?? 0, L);
     this.drawSignals(world, v);
     ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
     for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
@@ -615,6 +626,7 @@ export class Renderer {
       const act = p.state === 'hang' ? p.hang.act : null;
       list.push({ y: p.y, d: () => drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down: p.state === 'down' || p.state === 'dead', dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t }) });
       if (p.style === 'dog' && p.state !== 'dead' && p.state !== 'down') list.push({ y: p.y - 1, d: () => drawDog(ctx, p, t) });
+      if (wx && hasUmbrella(p.id, wx.rain) && (p.state === 'walk' || p.state === 'cross' || p.state === 'idle' || act === 'wait' || act === 'queue')) list.push({ y: p.y + 0.5, d: () => drawUmbrella(ctx, p, t) });
     }
     for (const b of world.bikes ?? []) if (near(b.x, b.y)) list.push({ y: b.y, d: () => drawBike(ctx, b, riderShirt(b), L.sun, t) });
     for (const a of world.animals ?? []) if (!a.z && near(a.x, a.y)) list.push({ y: a.y - 2, d: () => drawBird(ctx, a, L.sun) });
@@ -627,6 +639,9 @@ export class Renderer {
     // 8) Hochbahn (U1-Viadukt) und Bahnbrücken über allem, was darunter fährt
     this.drawTracks(rails.filter((r) => r.bridge), true);
     for (const a of world.animals ?? []) if (a.z > 0 && near(a.x, a.y)) drawBird(ctx, a, L.sun); // Vögel in der Luft über allem
+    // 8b) Wolkenschatten ziehen über Straßen und Dächer
+    this.stats.clouds = wx ? drawCloudShadows(ctx, v, wx, t, L0.sun.strength) : 0;
+    if (wx) drawOvercast(ctx, v, wx, L.dark);
 
     // 9) Partikel
     for (const p of this.particles) {
@@ -652,6 +667,10 @@ export class Renderer {
       ctx.restore();
     }
     if (overlayMarkers && !pl.inCar && !pl.dead) drawCrosshair(ctx, pl);
+    // 9a) Regen und Nebel (vor der Lichtkarte: nachts werden sie mit dunkel)
+    this.stats.drops = wx ? drawRain(ctx, v, wx, t, s) : 0;
+    this.stats.fog = wx ? drawFog(ctx, v, wx) : false;
+    this._neon = L.dark > 0.25 ? this.neonSigns(world, v) : [];
 
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
     this.stats.lights = 0;
@@ -660,6 +679,9 @@ export class Renderer {
       this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers),
         (g) => this.lightOccluders(g, cam, fill, L));
     }
+
+    // Leuchtreklame leuchtet selbst (nach der Lichtkarte)
+    if (this._neon.length) drawNeon(ctx, this._neon, t, Math.min(1, (L.dark - 0.25) * 3));
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -749,6 +771,36 @@ export class Renderer {
       const m = world.mission, p = world.city.places;
       const spots = m.state === 'toPickup' ? [p.pickup] : m.state === 'toDropoff' ? [p.dropoff] : m.state === 'idle' || m.state === 'briefing' ? [p.giver] : [];
       for (const z of spots) if (z && inView(z.x, z.y)) out.push({ x: z.x, y: z.y, r: 120, rgb: '255,211,61', a: 0.7 * k });
+    }
+    // Leuchtreklame wirft farbiges Licht auf den Gehweg
+    for (const n of this._neon ?? []) if (neonOn(n.q, world.time)) out.push({ x: n.x, y: n.y + 6, r: 60, rgb: n.rgb, a: 0.6 * k });
+    const wx = world.weather;
+    if (wx) {
+      // nasser Asphalt spiegelt: jedes Licht bekommt einen schwächeren, zur Kamera hin versetzten Widerschein
+      const wet = world.wet ?? 0;
+      if (wet > 0.05) for (let i = 0, n = out.length; i < n; i++) {
+        const l = out[i];
+        if (l.cone !== undefined || l.r > 300) continue;
+        out.push({ x: l.x, y: l.y + l.r * 0.35, r: l.r * 0.8, rgb: l.rgb, a: l.a * 0.35 * wet });
+      }
+      // Nebel: Lichter bekommen einen weiten Hof
+      if (wx.fog > 0.05) for (const l of out) if (l.cone === undefined) l.r *= 1 + 0.6 * wx.fog;
+    }
+    return out;
+  }
+
+  // Leuchtreklamen im Bild: Schriftzug über dem Gehweg vor Kneipen, Clubs, Spätis, Imbissen, Hotels (höchstens 40)
+  neonSigns(world, v) {
+    const city = world.city, out = [];
+    for (const q of city.poiHash?.query({ x: v.x - 80, y: v.y - 80, w: v.w + 160, h: v.h + 160 }, this._nq ??= []) ?? []) {
+      const text = neonText(q);
+      if (!text) continue;
+      const gp = shopGlowPoint(city, q);
+      if (!gp) continue;
+      const dx = q.x - gp[0], dy = q.y - gp[1], d = Math.hypot(dx, dy) || 1, S = city.scale;
+      const color = neonColor(q);
+      out.push({ q, text, color, rgb: hexRgb(color), x: gp[0] + dx / d * 1.6 * S, y: gp[1] + dy / d * 1.6 * S });
+      if (out.length >= 40) break;
     }
     return out;
   }
@@ -1021,7 +1073,7 @@ export class Renderer {
         if (L < 1) continue;
         const nx = out * ey / L, ny = -out * ex / L;
         if (nx * dx + ny * dy >= 0) continue;
-        faces.push({ x0, y0, ex, ey, L, ny, ri, ei: i / 2, depth: -((x0 + x1) * dx + (y0 + y1) * dy) });
+        faces.push({ x0, y0, ex, ey, L, nx, ny, ri, ei: i / 2, depth: -((x0 + x1) * dx + (y0 + y1) * dy) });
       }
     }
     faces.sort((a, c) => a.depth - c.depth);
@@ -1034,6 +1086,13 @@ export class Renderer {
       ctx.moveTo(f.x0, f.y0); ctx.lineTo(f.x0 + f.ex, f.y0 + f.ey);
       ctx.lineTo(f.x0 + f.ex + dx, f.y0 + f.ey + dy); ctx.lineTo(f.x0 + dx, f.y0 + dy); ctx.closePath();
       ctx.fill();
+      // Sonnenseite heller und wärmer, abgewandte Seite dunkler (Schatten zeigt von der Sonne weg)
+      const sun = !lightMode && this.light?.sun;
+      if (sun && sun.strength > 0.05) {
+        const lit = facadeLight(f.nx, f.ny, sun);
+        if (lit > 0.02) { ctx.fillStyle = `rgba(255,236,200,${0.22 * lit})`; ctx.fill(); }
+        else if (lit < -0.02) { ctx.fillStyle = `rgba(10,14,30,${-0.2 * lit})`; ctx.fill(); }
+      }
       if (winPat && f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small) {
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);

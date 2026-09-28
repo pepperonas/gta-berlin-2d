@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.14.0] – 2026-09-28
+
+### Hinzugefügt
+- Wetter: sonnig, wolkig, bedeckt, Regen und (nur morgens) Nebel, je drei Stunden, mit 45 Minuten Übergang; fest aus
+  Welt-Samen und Tagnummer, also für dieselbe Welt immer gleich. Das HUD zeigt das Wetter neben der Uhr.
+  `?wetter=regen|nebel|sonnig|wolkig|bedeckt` legt es fest.
+- Wolken nehmen der Sonne die Schatten, ziehen als große weiche Schatten mit dem Wind über Straßen und Dächer und
+  machen die Szene grauer.
+- Regen: fallende, windschiefe Tropfen mit Spritzern, Regenschleier, bei Regen gehen weniger Menschen raus und kaum
+  jemand fährt Rad; viele tragen Schirme (je Person fest). Der Boden wird nass (schnell) und trocknet langsam: nasser
+  Asphalt glänzt dunkel, an der Rinne stehen Pfützen, die tags den Himmel spiegeln; nachts spiegeln sich Laternen,
+  Scheinwerfer, Ampeln und Schaufenster darin. Auf nasser Fahrbahn haben Autos weniger Seitenhalt. Regen rauscht,
+  Vögel schweigen. Bei Regen und Nebel gehen Scheinwerfer auch tagsüber an.
+- Nebel: Dunst über allem, um die Bildmitte lichter, Lichter bekommen einen weiten Hof.
+- Fassaden: die der Sonne zugewandte Seite ist heller und wärmer, die abgewandte dunkler – mit dem Sonnenstand.
+- Leuchtreklame bei Nacht vor Kneipen und Bars (oft mit ihrem echten Namen), Clubs, Spätis, Döner- und Pizzaläden,
+  Imbissen und Hotels, in Neonfarben mit farbigem Schein auf dem Gehweg; manche Röhren flackern.
+
 ## [0.13.0] – 2026-09-28
 
 ### Hinzugefügt

@@ -23,13 +23,14 @@ import { pickKind, KINDS } from './fleet.js';
 import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
+import { weatherAt, stepWet, peopleFactor, bikeFactor } from './weather.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY,
+    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, forceWeather: null,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -46,6 +47,8 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   w.carTarget = cars; w.pedTarget = pedestrians;
   // Tagesrhythmus nur bei der Standardbevölkerung (Tests und Titel-Demo geben feste Zahlen vor)
   w.rhythm = cars === TRAFFIC.cars && pedestrians === TRAFFIC.pedestrians;
+  // Wetter ebenso nur dort (sonst immer klar – feste Bilder für Tests und Titel)
+  w.weather = weatherAt(seed, 0, w.clock, w.rhythm ? null : 'clear');
   w.camera.x = w.player.x; w.camera.y = w.player.y;
   w.focusKey = `world${++worldCount}`;
   w.loading = !city.focus(w.focusKey, w.camera.x, w.camera.y);
@@ -72,7 +75,7 @@ export function resetPopulation(w, keepCar = null) {
 // Startbevölkerung: im ganzen Umkreis verteilt (auch im Bild), danach nur noch außerhalb der Sicht.
 function populate(w) {
   w.populated = true;
-  if (w.rhythm) { const t = populationTargets(w.city, w.camera.x, w.camera.y, w.clock, w.day, TRAFFIC); w.carTarget = t.cars; w.pedTarget = t.peds; w._rhythmT = w.time; }
+  if (w.rhythm) { setTargets(w); w._rhythmT = w.time; }
   manageLife(w, true);
   manageAnimals(w, true);
   for (let k = 0; k < w.carTarget; k++) spawnTraffic(w, 120, TRAFFIC.spawnMax);
@@ -81,7 +84,12 @@ function populate(w) {
 }
 
 // Radfahrer und E-Roller: ein Anteil der Fußgänger-Zielzahl (nur mit Tagesrhythmus)
-const bikeTarget = (w) => (w.rhythm ? Math.round(w.pedTarget * BIKE.share) : 0);
+const bikeTarget = (w) => (w.rhythm ? Math.round(w.pedTarget * BIKE.share * bikeFactor(w.weather)) : 0);
+// Zielbevölkerung aus Tagesrhythmus und Ort, bei Regen und Nebel gehen weniger Menschen raus
+function setTargets(w) {
+  const t = populationTargets(w.city, w.camera.x, w.camera.y, w.clock, w.day, TRAFFIC);
+  w.carTarget = t.cars; w.pedTarget = Math.max(4, Math.round(t.peds * peopleFactor(w.weather)));
+}
 function spawnBike(w, minR, maxR) {
   const sp = bikeSpawn(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
   if (!sp) return null;
@@ -142,8 +150,7 @@ function managePopulation(w) {
   const cam = w.camera, far = TRAFFIC.despawn;
   if (w.rhythm && !(w.time - (w._rhythmT ?? -99) < 2)) { // Tageszeit und Ort bestimmen, wie viel los ist
     w._rhythmT = w.time;
-    const t = populationTargets(w.city, cam.x, cam.y, w.clock, w.day, TRAFFIC);
-    w.carTarget = t.cars; w.pedTarget = t.peds;
+    setTargets(w);
   }
   const keep = (c) => c.id === w.playerCarId || c.id === w.player.inCar || c.cargo || c.role === 'parked' || c.role === 'curb' || c.driver === 'player' || (c.duty && !c.done);
   // Festgefahrene KI-Autos außerhalb des Bildes abbauen (sie entstehen anderswo neu), damit sich nirgends ein Knoten hält
@@ -427,7 +434,9 @@ export function updateWorld(w, input, dt) {
   if (!streamWorld(w)) return;
   w.time += dt;
   w.clock += dt * CLOCK.minutesPerSecond;
-  if (w.clock >= 1440) { w.clock -= 1440; w.day = (w.day + 1) % 7; }
+  if (w.clock >= 1440) { w.clock -= 1440; w.day = (w.day + 1) % 7; w.dayCount++; }
+  w.weather = weatherAt(w.seed, w.dayCount, w.clock, w.forceWeather ?? (w.rhythm ? null : 'clear'));
+  w.wet = stepWet(w.wet, w.weather.rain, dt);
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;
 
@@ -455,6 +464,7 @@ export function updateWorld(w, input, dt) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
     // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
     if (c.role === 'curb' && c.driver === null && !c.wrecked && Math.abs(c.vx) + Math.abs(c.vy) < 2 && Math.abs(c.angVel) < 0.01) { c.vx = c.vy = c.angVel = 0; continue; }
+    c.wet = w.wet;
     stepCar(c, dt, w.city);
     collideCarWorld(c, w, w.events);
   }

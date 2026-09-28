@@ -7,6 +7,7 @@ import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
 import { WEAPONS, PLAYER_HP } from './combat.js';
 import { dayName } from './rhythm.js';
+import { WX_ICON } from './weather.js';
 import { undelta } from './geom.js';
 import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
@@ -198,7 +199,8 @@ export class Hud {
     this.text(locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
     const mw = this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
     const night = world.clock >= 1230 || world.clock < SUNRISE;
-    this.text(`${night ? '☾' : '☀'} ${dayName(world.day ?? 4)} ${formatClock(world.clock)}`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
+    const wx = world.weather, icon = wx && wx.kind !== 'clear' && (wx.cloud > 0.3 || wx.fog > 0.3) ? WX_ICON[wx.kind] : night ? '☾' : '☀';
+    this.text(`${icon} ${dayName(world.day ?? 4)} ${formatClock(world.clock)}`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
     // Geschäft/Lokal/Haltestelle in unmittelbarer Nähe
     const here = playerCar(world) ?? world.player;
     const poi = nearestPoi(world.city, here.x, here.y, car ? 120 : 180);

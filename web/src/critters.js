@@ -80,3 +80,17 @@ function drawDuckBody(ctx, a) {
   ctx.fillStyle = male ? '#1e6b3a' : '#7a5a3a'; ctx.beginPath(); ctx.arc(4, bob, 1.9, 0, 7); ctx.fill(); // Kopf (Erpel grün)
   ctx.fillStyle = '#e5b12e'; ctx.fillRect(5.4, bob - 0.6, 1.8, 1.2);                               // Schnabel
 }
+
+// Regenschirm von oben: Kreis mit Speichen über der Person, Farbe je Person fest
+const UMBRELLA = ['#1e272e', '#c0392b', '#2980b9', '#8e44ad', '#16a085', '#f39c12', '#2d3436', '#e84393'];
+export function drawUmbrella(ctx, p, t) {
+  const col = UMBRELLA[(p.id * 7 + 3) % UMBRELLA.length], r = 9.5;
+  const x = p.x + Math.cos(p.facing ?? 0) * 1.5, y = p.y - 3 + Math.sin(t * 2 + p.id) * 0.3;
+  ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(x + 2, y + 4, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = shade(col, 0.25); ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+  ctx.stroke();
+  ctx.fillStyle = shade(col, -0.4); ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fill();
+}

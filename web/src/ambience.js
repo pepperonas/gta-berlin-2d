@@ -55,7 +55,8 @@ export function ambienceAt(world) {
   return {
     hum: night ? 0.35 : 0.6,
     traffic: clamp01(traffic / 2),
-    birds: clamp01(Math.min(1, green) * birdLevel(world.clock)),
+    birds: clamp01(Math.min(1, green) * birdLevel(world.clock) * (1 - (world.weather?.rain ?? 0))), // bei Regen schweigen die Vögel
+    rain: clamp01(world.weather?.rain ?? 0),
     bar: clamp01(bar),
     water: water * (0.4 + (night ? 0.2 : 0)),
     rumble: clamp01(rumble),

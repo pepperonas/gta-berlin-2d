@@ -60,7 +60,7 @@ export class Sound {
       s.connect(f); f.connect(g); g.connect(this.master); s.start(0, Math.random());
       return g;
     };
-    this.amb = { hum: layer('lowpass', 180), traffic: layer('bandpass', 420, 0.6), water: layer('highpass', 1400), bar: layer('bandpass', 850, 1.8), rumble: layer('lowpass', 90) };
+    this.amb = { hum: layer('lowpass', 180), traffic: layer('bandpass', 420, 0.6), water: layer('highpass', 1400), bar: layer('bandpass', 850, 1.8), rumble: layer('lowpass', 90), rain: layer('highpass', 2600) };
     const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = 440;
     const g = c.createGain(); g.gain.value = 0; o.connect(g); g.connect(this.master); o.start();
     this.siren = { o, g };
@@ -72,7 +72,7 @@ export class Sound {
     if (!this.ready || !this.amb) return;
     const t = this.ctx.currentTime, a = this.amb, set = (g, v) => g.gain.setTargetAtTime(v, t, 0.6);
     set(a.hum, 0.018 * mix.hum); set(a.traffic, 0.05 * mix.traffic); set(a.water, 0.012 * mix.water);
-    set(a.bar, 0.05 * mix.bar * (0.7 + 0.3 * Math.sin(t * 2.3) * Math.sin(t * 0.7))); set(a.rumble, 0.16 * mix.rumble);
+    set(a.bar, 0.05 * mix.bar * (0.7 + 0.3 * Math.sin(t * 2.3) * Math.sin(t * 0.7))); set(a.rumble, 0.16 * mix.rumble); set(a.rain, 0.07 * (mix.rain ?? 0));
     const sr = mix.sirens?.[0];
     this.siren.g.gain.setTargetAtTime(sr ? 0.07 * sr.gain : 0, t, 0.15);
     if (sr) this.siren.o.frequency.setTargetAtTime(sr.high ? 585 : 440, t, 0.02);

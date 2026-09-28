@@ -265,6 +265,20 @@ abgeleitet aus Route und Abbiegewinkel, ohne Zufall. Ein Sprite in `assets/manif
   mit Filtern, Vogelrufe als kurze Tonfolgen, ein Folgetonhorn-Oszillator und Glocken mit unharmonischen Teiltönen um.
   Hochbahnzüge sind bis zu echten Fahrplänen ein fester Takt.
 
+**Wetter** (`web/src/weather.js` rein rechnerisch, `web/src/wetfx.js` zeichnet): je Tag acht Blöcke zu 3 h, Wetterbild
+aus einem Hash von Welt-Samen, Tagnummer (`w.dayCount`, gespeichert) und Block; 45 min Überblendung zum nächsten Block
+(über Mitternacht in den nächsten Tag). `weatherLight` passt das Tageslicht an: Sonnenschatten × (1 − 0,85 × Bewölkung),
+Umgebungslicht gedämpft, und nur Regen und Nebel heben `dark` (die Lichtkarte mit Scheinwerfern kommt dann auch am Tag –
+bloße Wolken nicht, das spart die Lichtkarte). Die Nässe `w.wet` ist Simulationszustand (0,025/s rauf je Regenstärke,
+1/600 s runter) und senkt den Seitenhalt der Autos um bis zu 18 %. Darstellung: Wolkenschatten als vorgerenderte weiche
+Flecken auf einem 260-m-Weltraster, die mit dem Wind wandern; Regen als bis zu 420 Striche und Spritzer aus Hashes und
+Spielzeit (keine Partikelliste); nasse Straßen werden dunkel übermalt, Pfützen je Kante deterministisch an der Rinne
+(nie auf Durchfahrten oder unter Überbauungen); in der Lichtkarte bekommt jedes Licht bei Nässe einen schwächeren, zur
+Kamera versetzten Widerschein und bei Nebel einen größeren Hof. Fassaden: `facadeLight` = −(Wandnormale · Schattenrichtung)
+× Sonnenstärke, als warme bzw. dunkle Lasur über der Grundfarbe. Leuchtreklame: aus den POIs im Bild (höchstens 40), am
+Gehweg vor dem Laden, nach der Lichtkarte gezeichnet (leuchtet selbst) plus farbiges Licht in der Lichtkarte. Wie der
+Tagesrhythmus gilt das Wetter nur in der Welt mit Standardbevölkerung; Tests und Titel-Demo bleiben klar.
+
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
 Strahlen ab der Körpermitte gegen die vorhandenen Kollisionsdaten (Hauswand-Segmente, Stadtgrenze, Baumkreise,
