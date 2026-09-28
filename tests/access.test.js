@@ -188,3 +188,10 @@ test('Silhouetten im Stadtverkehr: verdeckte Autos und Passanten bekommen einen 
   assert.ok(list.length < all, `nicht alle (${list.length} von ${all})`);
   for (const c of list) assert.ok(c.occ.length > 0 && c.occ.every((o) => ['tree', 'building', 'bridge'].includes(o.kind)));
 });
+
+test('Silhouetten der anderen sind dezent, die der Spielfigur deutlich', async () => {
+  const { SILHOUETTE } = await import('../web/src/render.js');
+  const o = SILHOUETTE.other, p = SILHOUETTE.player;
+  assert.ok(o.fill <= 0.08 && o.stroke <= 0.35 && o.width <= 1, 'andere: schwach');
+  assert.ok(p.fill > 2 * o.fill && p.stroke > 2 * o.stroke && p.width > o.width, 'Spielfigur hebt sich ab');
+});

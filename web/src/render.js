@@ -1148,8 +1148,9 @@ export class Renderer {
     sil.translate(c.x, c.y); sil.rotate(c.angle ?? 0);
     silhouettePath(sil, c);
     const pulse = 0.75 + 0.2 * Math.sin(t * 5);
-    sil.fillStyle = c.player ? 'rgba(255,122,26,0.3)' : 'rgba(255,255,255,0.14)'; sil.fill();
-    sil.strokeStyle = c.player ? `rgba(255,236,210,${pulse})` : 'rgba(255,255,255,0.6)'; sil.lineWidth = c.player ? 2 : 1.4; sil.stroke();
+    const st = c.player ? SILHOUETTE.player : SILHOUETTE.other;
+    sil.fillStyle = `rgba(${st.rgb},${st.fill})`; sil.fill();
+    sil.strokeStyle = c.player ? `rgba(255,236,210,${pulse})` : `rgba(${st.rgb},${st.stroke})`; sil.lineWidth = st.width; sil.stroke();
     if (c.hw) { sil.beginPath(); sil.moveTo(c.hw * 0.35, -c.hh * 0.7); sil.lineTo(c.hw * 0.35, c.hh * 0.7); sil.stroke(); } // Frontscheibe: Fahrtrichtung
     sil.setTransform(1, 0, 0, 1, 0, 0); sil.globalCompositeOperation = 'destination-in'; sil.drawImage(this._silMask, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
@@ -1252,6 +1253,12 @@ export class Renderer {
     ctx.restore();
   }
 }
+
+// Silhouetten: Spielfigur deutlich (orange, pulsierend), alle anderen dezent
+export const SILHOUETTE = {
+  player: { rgb: '255,122,26', fill: 0.3, stroke: 0.9, width: 2 },
+  other: { rgb: '255,255,255', fill: 0.06, stroke: 0.32, width: 1 },
+};
 
 // Umriss eines Fahrzeugs (abgerundetes Rechteck mit Frontscheibe) bzw. einer Person (Kreis) im Ursprung
 function silhouettePath(g, o) {

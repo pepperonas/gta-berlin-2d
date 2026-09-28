@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.19.1] – 2026-09-28
+
+### Geändert
+- Silhouetten der anderen Fahrzeuge und Personen schwächer (Fläche 6 % statt 14 %, Kontur 32 % statt 60 %, dünner);
+  die Spielfigur bleibt deutlich orange. Werte zentral in `render.js SILHOUETTE`.
+
 ## [0.19.0] – 2026-09-28
 
 ### Geändert
