@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lightAt, formatClock, parseClock, SHADOW_MAX } from '../web/src/daylight.js';
-import { addBuildingShadow, casterBox, shadowOffset } from '../web/src/lighting.js';
+import { addBuildingShadow, casterBox, shadowOffset, treeShadowGeom, addTrunkShadow, crownShadowSprite, Lighting } from '../web/src/lighting.js';
 import { CLOCK } from '../web/src/config.js';
 import { realCity } from './helpers/city.js';
 import { createWorld, updateWorld } from '../web/src/world.js';
@@ -120,4 +120,46 @@ test('Schatten werfende Häuser außerhalb des Bildes werden gefunden (Suchfenst
   assert.ok(ox > 0);
   assert.ok(box.x <= -ox + 1, 'Fenster reicht nach Westen, woher die Schatten kommen');
   assert.ok(box.x + box.w >= v.w, 'deckt das Bild ab');
+});
+
+test('Baumschatten: Stamm vom Fuß bis in die Krone, Krone quer so breit wie der Baum, bei tiefer Sonne gestreckt', () => {
+  const tree = { x: 1000, y: 2000, size: 40, r: 3, genus: 'Tilia', seed: 7 };
+  const low = lightAt(19 * 60 + 30).sun, high = lightAt(13 * 60).sun;
+  const a = treeShadowGeom(tree, low), b = treeShadowGeom(tree, high);
+  for (const s of [a, b]) {
+    assert.ok(Math.abs(Math.hypot(s.ux, s.uy) - 1) < 1e-9);
+    assert.ok(s.mid > s.top && s.top > 0, 'Kronenmitte höher als der Kronenansatz');
+    assert.ok(Math.abs(s.cx - (tree.x + s.ux * s.mid)) < 1e-9 && Math.abs(s.cy - (tree.y + s.uy * s.mid)) < 1e-9, 'Krone liegt auf der Stammlinie');
+    assert.ok(s.mid - s.major < s.top, 'Kronenschatten beginnt vor dem Kronenansatz: Stamm und Krone hängen zusammen');
+    assert.equal(s.minor, tree.size * 0.95, 'quer so breit wie die Krone');
+    assert.ok(s.w0 >= tree.r && s.w1 < s.w0, 'Stamm am Fuß so dick wie der Baum, nach oben dünner');
+  }
+  assert.ok(a.mid > 2 * b.mid, `Abendschatten länger (${a.mid.toFixed(0)} gegen ${b.mid.toFixed(0)})`);
+  assert.ok(a.major / a.minor > 1.3 && b.major / b.minor < 1.2, 'tiefe Sonne streckt die Krone, Mittagssonne kaum');
+  assert.ok(a.major / a.minor <= 3, 'Streckung begrenzt');
+  // Richtung wie die Hausschatten
+  const [ox, oy] = shadowOffset(low, 100);
+  assert.ok((a.ux * ox + a.uy * oy) / Math.hypot(ox, oy) > 0.999);
+  // Stamm: geschlossenes Viereck, der Fußpunkt liegt darin
+  const pts = [];
+  const g = { moveTo: (x, y) => pts.push([x, y]), lineTo: (x, y) => pts.push([x, y]), closePath: () => pts.push('close') };
+  addTrunkShadow(g, a);
+  assert.equal(pts.length, 5); assert.equal(pts[4], 'close');
+  const mid = [(pts[0][0] + pts[3][0]) / 2, (pts[0][1] + pts[3][1]) / 2];
+  assert.ok(Math.hypot(mid[0] - tree.x, mid[1] - tree.y) < 1e-9, 'beginnt am Stammfuß');
+  assert.ok(Math.hypot(pts[0][0] - pts[3][0], pts[0][1] - pts[3][1]) > Math.hypot(pts[1][0] - pts[2][0], pts[1][1] - pts[2][1]), 'verjüngt');
+});
+
+test('Baumschatten zeichnen: ohne Canvas (Node) eine gestreckte Scheibe statt des Bilds, keine ungültigen Zahlen', () => {
+  assert.equal(crownShadowSprite('Tilia', 0), null, 'ohne Canvas kein Bild');
+  const calls = [];
+  const g = new Proxy({}, { get(t, k) { if (k in t) return t[k]; return (...a) => { if (a.some((v) => typeof v === 'number' && !Number.isFinite(v))) throw new Error(`NaN in ${k}`); calls.push(k); }; }, set(t, k, v) { t[k] = v; return true; } });
+  const L = new Lighting();
+  L.shadow = { width: 800, height: 600, getContext: () => g };
+  const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set(t, k, v) { t[k] = v; return true; } });
+  const trees = [{ x: 0, y: 0, size: 30, r: 2, genus: 'Betula', seed: 1 }, { x: 100, y: 50, size: 50, r: 4, genus: 'Nadel', seed: 2 }];
+  L.drawShadows(ctx, 800, 600, [1, 0, 0], lightAt(18 * 60).sun, [], trees);
+  assert.equal(calls.filter((k) => k === 'arc').length, 2, 'je Baum eine Krone');
+  assert.equal(calls.filter((k) => k === 'transform').length, 2, 'je Baum gestreckt');
+  assert.ok(calls.filter((k) => k === 'closePath').length >= 2, 'je Baum ein Stamm');
 });

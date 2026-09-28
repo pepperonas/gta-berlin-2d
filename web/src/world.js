@@ -91,7 +91,7 @@ const bikeTarget = (w) => (w.rhythm ? Math.round(w.pedTarget * BIKE.share * bike
 // Zielbevölkerung aus Tagesrhythmus und Ort, bei Regen und Nebel gehen weniger Menschen raus
 function setTargets(w) {
   const t = populationTargets(w.city, w.camera.x, w.camera.y, w.clock, w.day, TRAFFIC);
-  w.carTarget = t.cars; w.pedTarget = Math.max(4, Math.round(t.peds * peopleFactor(w.weather)));
+  w.carTarget = Math.round(t.cars * (w.trafficScale ?? 1)); w.pedTarget = Math.max(w.pedScale === 0 ? 0 : 4, Math.round(t.peds * peopleFactor(w.weather) * (w.pedScale ?? 1))); // Dichte (Konsole: verkehr, passanten)
 }
 function spawnBike(w, minR, maxR) {
   const sp = bikeSpawn(w.city, w.rng, w.camera.x, w.camera.y, minR, maxR);
@@ -488,7 +488,7 @@ export function updateWorld(w, input, dt) {
   if (w.pendingSave && !resolveSave(w)) { w.loading = true; return; }
   if (!streamWorld(w)) return;
   w.time += dt;
-  w.clock += dt * CLOCK.minutesPerSecond;
+  w.clock += dt * CLOCK.minutesPerSecond * (w.clockRate ?? 1); // Tempo der Spieluhr (Konsole: tempo)
   if (w.clock >= 1440) { w.clock -= 1440; w.day = (w.day + 1) % 7; w.dayCount++; }
   w.weather = weatherAt(w.seed, w.dayCount, w.clock, w.forceWeather ?? (w.rhythm ? null : 'clear'));
   w.wet = stepWet(w.wet, Math.min(1, w.weather.rain), dt);
@@ -593,7 +593,7 @@ export function updateWorld(w, input, dt) {
       if (!mm || !touch(w.city, ped, c)) continue;
       if (speedOf(c) > 55) {
         knockDown(ped, c.x, c.y);
-        w.events.push({ type: 'hit', x: ped.x, y: ped.y });
+        w.events.push({ type: 'hit', x: ped.x, y: ped.y, carId: c.id, player: c.id === p.inCar, speed: speedOf(c) });
         for (const o of w.peds) if (o !== ped && Math.hypot(o.x - ped.x, o.y - ped.y) < 110) scare(o, ped.x, ped.y);
       } else { ped.x += mm.nx * mm.depth; ped.y += mm.ny * mm.depth; }
     }
@@ -609,7 +609,7 @@ export function updateWorld(w, input, dt) {
       b.state = 'lying'; b.t = 0; b.speed = 0;
       const sp = nearestSpot(w.city, b.x, b.y);
       if (sp) { const ped = createPed(w.city, sp, w.rng); Object.assign(ped, { x: b.x, y: b.y, shirt: riderShirt(b) }); knockDown(ped, c.x, c.y); w.peds.push(ped); }
-      w.events.push({ type: 'hit', x: b.x, y: b.y, strength: Math.min(1, speedOf(c) / 300) });
+      w.events.push({ type: 'hit', x: b.x, y: b.y, strength: Math.min(1, speedOf(c) / 300), carId: c.id, player: c.id === w.player.inCar, bike: true, speed: speedOf(c) });
       break;
     }
   }

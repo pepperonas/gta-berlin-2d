@@ -6,7 +6,10 @@ import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
 import { WEAPONS, PLAYER_HP } from './combat.js';
+const WEAPON_NAMES = Object.fromEntries(WEAPONS.map((w) => [w.id, w.name]));
 import { WHEEL, slotDir, drawWeaponIcon } from './weaponwheel.js';
+import { CONSOLE } from './console.js';
+import { STAT_SECTIONS, formatStat, accuracy } from './stats.js';
 import { dayName } from './rhythm.js';
 import { WX_ICON } from './weather.js';
 import { undelta } from './geom.js';
@@ -143,6 +146,103 @@ export class Hud {
     v.cx = wx - (vx - m.x - m.w / 2) / f; v.cy = wy - (vy - m.y - m.h / 2) / f;
   }
   panBigMap(dx, dy) { if (this.bigMap && this.mapView) { this.mapView.cx -= dx / this.bigMap.f; this.mapView.cy -= dy / this.bigMap.f; } }
+
+  // Befehlszeile: Eingabe unten links mit Vorschau (grau) und blinkender Marke, darüber die Vorschläge (gewählter hell,
+  // Art/Hilfe rechts), darüber die letzten Meldungen. Geschlossen: nur frische Meldungen (verblassen nach CONSOLE.logTime).
+  drawConsole(con, now) {
+    // rechts neben der Minikarte, links vor der Waffen-/Autoanzeige (Stand des letzten Bildes), sonst am linken Rand
+    const c = this.ctx, m = this.m, L = this.layout ?? {}, mm = L.minimap;
+    const x = mm && mm.y + mm.h > this.vh / 2 ? mm.x + mm.w + 16 : m.x;
+    const right = Math.min(...[L.weapon, L.car].filter((r) => r && r.y + r.h > this.vh / 2).map((r) => r.x - 16), this.vw - m.x);
+    const w = Math.max(320, Math.min(760, right - x));
+    let y = this.vh - m.y - 44;
+    const lines = con.log.filter((l) => con.open || now - l.t < CONSOLE.logTime);
+    if (!con.open && !lines.length) return;
+    c.save();
+    if (con.open) {
+      this.panel(x, y, w, 40, 0.88);
+      const fs = 19;
+      const tw = this.text('>', x + 14, y + 27, { size: fs, weight: 800, color: YELLOW, shadow: false });
+      const tx = x + 26 + tw;
+      const typed = this.text(con.text, tx, y + 27, { size: fs, weight: 600, shadow: false });
+      if (con.sugg?.ghost && con.sel < 0) this.text(con.sugg.ghost, tx + typed, y + 27, { size: fs, weight: 600, color: 'rgba(255,255,255,0.35)', shadow: false });
+      if (Math.floor(now * 2) % 2 === 0) { c.fillStyle = YELLOW; c.fillRect(tx + typed + 1, y + 10, 2, 22); }
+      if (!con.text) this.text('Befehl eingeben – Tab ergänzt, ↑↓ wählt, Enter führt aus, Esc schließt', tx + 8, y + 27, { size: 14, weight: 500, color: 'rgba(255,255,255,0.4)', shadow: false });
+      const items = con.sugg?.items ?? [];
+      if (items.length) {
+        const rh = 28, h = items.length * rh + 12;
+        y -= h + 6;
+        this.panel(x, y, w, h, 0.9);
+        items.forEach((it, i) => {
+          const yy = y + 6 + i * rh;
+          if (i === con.sel || (con.sel < 0 && i === 0)) { c.fillStyle = i === con.sel ? 'rgba(255,211,61,0.25)' : 'rgba(255,255,255,0.06)'; rr(c, x + 6, yy, w - 12, rh - 2, 6); c.fill(); }
+          this.text(it.label, x + 18, yy + 19, { size: 16, weight: i === con.sel ? 800 : 600, color: i === con.sel ? YELLOW : '#fff', shadow: false });
+          if (it.hint) this.text(it.hint, x + w - 16, yy + 19, { size: 13, weight: 500, align: 'right', color: '#aaa', shadow: false });
+        });
+        this.counts = this.counts ?? {}; this.counts.suggestions = items.length;
+      }
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i], a = con.open ? 1 : Math.max(0, 1 - (now - l.t) / CONSOLE.logTime);
+      y -= 24;
+      this.text(l.text, x + 6, y + 16, { size: 15, weight: l.text.startsWith('>') ? 500 : 700, color: l.ok ? `rgba(255,255,255,${a})` : `rgba(255,128,128,${a})` });
+    }
+    c.restore();
+  }
+
+  // Bildrate, Zeichenzeit und Qualitätsstufe oben in der Mitte (Konsole: fps)
+  drawFps(fps, ms, quality) {
+    const x = this.vw / 2 - 110, y = 10;
+    this.panel(x, y, 220, 30, 0.7);
+    this.text(`${Math.round(fps)} fps · ${ms.toFixed(1)} ms · ${quality === 'high' ? 'hoch' : 'niedrig'}`, this.vw / 2, y + 21, { size: 14, weight: 700, align: 'center', color: fps >= 50 ? '#8f8' : fps >= 30 ? YELLOW : '#f88', shadow: false });
+  }
+
+  // Statistik: vier Abschnitte in zwei Spalten, je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
+  // (Schüsse/Schläge, Treffer, Quote, Tote). inGame: Spielwelt dahinter.
+  drawStats(stats, inGame) {
+    this.fillScreen(inGame ? 'rgba(5,6,10,0.82)' : 'rgba(5,6,10,0.94)');
+    this.inFrame(() => {
+      const c = this.ctx, vw = this.vw, g = stats.game, t = stats.total;
+      this.text('STATISTIK', vw / 2, 58, { size: 36, align: 'center', weight: 900, color: YELLOW });
+      const cols = [[STAT_SECTIONS[0], STAT_SECTIONS[1]], [STAT_SECTIONS[2], STAT_SECTIONS[3]]], colW = 520, x0 = vw / 2 - colW - 20;
+      let rows = 0, bottom = 0;
+      cols.forEach((secs, ci) => {
+        const x = x0 + ci * (colW + 40);
+        let y = 96;
+        this.text('dieses Spiel', x + colW - 150, y, { size: 13, align: 'right', color: '#999', weight: 700 });
+        this.text('insgesamt', x + colW - 8, y, { size: 13, align: 'right', color: '#999', weight: 700 });
+        for (const [title, list] of secs) {
+          y += 28; this.text(title.toUpperCase(), x, y, { size: 15, weight: 800, color: YELLOW });
+          for (const [k, label, fmt] of list) {
+            y += 22;
+            if (rows++ % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.04)'; c.fillRect(x - 6, y - 16, colW + 12, 22); }
+            this.text(label, x, y, { size: 15, weight: 500, shadow: false });
+            this.text(formatStat(g[k] ?? 0, fmt), x + colW - 150, y, { size: 15, weight: 700, align: 'right', shadow: false });
+            this.text(formatStat(t[k] ?? 0, fmt), x + colW - 8, y, { size: 15, weight: 700, align: 'right', color: '#ccc', shadow: false });
+          }
+        }
+        bottom = Math.max(bottom, y);
+      });
+      // Waffen: direkt unter den Spalten (alles passt in den 720er-Rahmen)
+      let y = bottom + 38;
+      const wx = vw / 2 - 560;
+      this.text('WAFFEN', wx, y, { size: 15, weight: 800, color: YELLOW });
+      const heads = ['Schüsse / Schläge', 'Kugeln', 'Treffer', 'Quote', 'Tote'];
+      heads.forEach((h, i) => this.text(h, wx + 330 + i * 150, y, { size: 13, align: 'right', color: '#999', weight: 700 }));
+      this.text('(dieses Spiel / insgesamt)', wx + 1090, y, { size: 12, align: 'right', color: '#777', weight: 600 });
+      for (const [id, wg] of Object.entries(g.weapons)) {
+        const wt = t.weapons[id];
+        y += 21;
+        drawWeaponIcon(c, id, wx + 12, y - 5, 20, '#ddd');
+        this.text(WEAPON_NAMES[id] ?? id, wx + 32, y, { size: 15, weight: 600, shadow: false });
+        const cells = [[wg.shots, wt.shots], [wg.bullets, wt.bullets], [wg.hits, wt.hits], [`${accuracy(wg)} %`, `${accuracy(wt)} %`], [wg.kills, wt.kills]];
+        cells.forEach(([a, b], i) => this.text(`${typeof a === 'number' ? a.toLocaleString('de-DE') : a} / ${typeof b === 'number' ? b.toLocaleString('de-DE') : b}`, wx + 330 + i * 150, y, { size: 15, weight: 600, align: 'right', shadow: false }));
+      }
+      this.counts = this.counts ?? {}; this.counts.statsBottom = y + 30;
+      this.text('Esc / B: zurück', vw / 2, y + 30, { size: 14, align: 'center', color: '#888', weight: 600 });
+      this.counts = this.counts ?? {}; this.counts.statRows = rows;
+    });
+  }
 
   // Waffenrad (rechte Maustaste halten): runde Segmente mit Symbolen, das gezeigte hell und etwas größer, in der Mitte
   // Name und Munition. hover = Index des gezeigten Segments.
@@ -586,7 +686,8 @@ export class Hud {
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
       ['Waffenrad (zu Fuß)', '–', 'rechte Maus halten'],
-      ['Aktion (Auftrag, Einladen)', 'A', 'E / Enter'],
+      ['Aktion (Auftrag, Einladen)', 'A', 'E'],
+      ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Hupe', 'X', 'H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],
       ['Pause', 'Menü-Taste', 'Esc / P'],

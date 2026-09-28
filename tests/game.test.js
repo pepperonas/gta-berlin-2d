@@ -8,6 +8,11 @@ import { realCity } from './helpers/city.js';
 const city = realCity();
 
 const press = (g, patch) => updateGame(g, { ...idle(), ...patch }, 1 / 60);
+// Mit dem Steuerkreuz zum Eintrag mit dieser id gehen (wie ein Spieler, ohne Pfeiltasten abzuzählen)
+function goTo(g, menu, id) {
+  for (let i = 0; i < 20 && menu().items[menu().index].id !== id; i++) press(g, { menuDown: true });
+  assert.equal(menu().items[menu().index].id, id, `Menüeintrag ${id}`);
+}
 
 test('Menü überspringt deaktivierte Einträge und läuft rund', () => {
   const m = createMenu([{ id: 'a', enabled: false }, { id: 'b' }, { id: 'c' }]);
@@ -28,9 +33,9 @@ test('Titel → Neues Spiel → Pause → Speichern → Hauptmenü → Fortsetze
   g.world.money = 777;
   press(g, { pause: true });
   assert.equal(g.screen, 'paused');
-  press(g, { menuDown: true }); press(g, { confirm: true });
+  goTo(g, () => g.pauseMenu, 'save'); press(g, { confirm: true });
   assert.equal(g.toast.text, 'Spiel gespeichert');
-  for (let i = 0; i < 3; i++) press(g, { menuDown: true });
+  goTo(g, () => g.pauseMenu, 'title');
   press(g, { confirm: true });
   assert.equal(g.screen, 'title');
   assert.equal(g.titleMenu.items[0].enabled, true);
@@ -47,7 +52,7 @@ test('B im Pausemenü setzt fort; Steuerungsseite kehrt zum Aufrufer zurück', (
   press(g, { back: true });
   assert.equal(g.screen, 'playing');
   press(g, { pause: true });
-  for (let i = 0; i < 3; i++) press(g, { menuDown: true });
+  goTo(g, () => g.pauseMenu, 'controls');
   press(g, { confirm: true });
   assert.equal(g.screen, 'controls');
   press(g, { back: true });
@@ -57,7 +62,7 @@ test('B im Pausemenü setzt fort; Steuerungsseite kehrt zum Aufrufer zurück', (
 test('Beenden nur, wenn die Hülle es anbietet', () => {
   assert.ok(!createGame({ storage: memoryStorage(), city }).titleMenu.items.some((i) => i.id === 'quit'));
   const g = createGame({ storage: memoryStorage(), canQuit: true, city });
-  for (let i = 0; i < 2; i++) press(g, { menuDown: true });
+  goTo(g, () => g.titleMenu, 'quit');
   press(g, { confirm: true });
   assert.ok(g.quitRequested);
 });

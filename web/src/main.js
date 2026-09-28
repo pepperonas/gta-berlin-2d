@@ -1,6 +1,6 @@
 // Browser-Einstieg: Canvas, Hauptschleife (fester 60-Hz-Takt), Eingabequellen, Xbox-Hüllen-Brücke.
 import { DT } from './config.js';
-import { createGame, updateGame, setCity, requestTeleport, confirmTeleport } from './game.js';
+import { createGame, updateGame, setCity, requestTeleport, confirmTeleport, applyStoredStats } from './game.js';
 import { openCity } from './map.js';
 import { createWorld, updateWorld, playerCar, speedOf, resetPopulation } from './world.js';
 import { parseClock } from './daylight.js';
@@ -11,6 +11,8 @@ import { Sound } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
 import { thunderBetween } from './weather.js';
 import { createRightButton, WHEEL } from './weaponwheel.js';
+import { consoleKey, openConsole } from './console.js';
+import { openStatsStore } from './statsdb.js';
 import { WEAPONS } from './combat.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
@@ -72,11 +74,43 @@ getJson('data/berlin/index.json').then((index) => {
   getJson('data/berlin/transit.json').then((tj) => { city.transit = prepareTransit(tj); city.attribution += ` · ${tj.attribution}`; }).catch((err) => console.warn('Fahrplan nicht geladen:', err.message));
 }).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
 
+// Statistik in IndexedDB: beim Start laden (über alle Spiele + Stand des gespeicherten Spiels), alle 5 s und beim
+// Verlassen der Seite speichern
+let statsStore = null, statsFlushT = 0;
+openStatsStore().then(async (st) => {
+  statsStore = st;
+  const [total, saved] = await Promise.all([st.get('total'), st.get('game')]);
+  applyStoredStats(game, total, saved);
+}).catch((err) => console.warn('Statistik nicht verfügbar:', err));
+function flushStats(force = false) {
+  if (!statsStore || (!game.statsDirty && !force)) return;
+  game.statsDirty = false;
+  statsStore.put('total', game.stats.total).catch(() => {});
+  if (game.world) statsStore.put('game', game.stats.game).catch(() => {});
+}
+addEventListener('pagehide', () => flushStats(true));
+addEventListener('visibilitychange', () => { if (document.hidden) flushStats(true); });
+
 let manifest = {};
 fetch('assets/manifest.json').then((r) => r.json()).then(async (m) => { manifest = m; sound.setManifest(m); await loadSprites(m); }).catch(() => {});
 
+// Befehlszeile (console.js): Enter öffnet sie im Spiel; solange sie offen ist, gehen alle Tasten nur an sie
+const consoleCtx = () => ({ game, world: game.world, city: game.city ?? game.world?.city });
+const consoleAllowed = () => game.screen === 'playing' && game.world && !game.showBigMap && !game.teleport && !game.resultMenu && !game.world.player.dead;
 addEventListener('keydown', (e) => {
-  keys.add(e.code); latched.add(e.code); input.lastDevice = 'keyboard'; sound.unlock();
+  input.lastDevice = 'keyboard'; sound.unlock();
+  if (game.console.open) {
+    e.preventDefault();
+    const r = consoleKey(game.console, e.key, consoleCtx(), performance.now() / 1000);
+    if (r === 'run') sound.play('ui'); else if (r === 'close') sound.play('ui-back'); else if (r === 'nav') sound.play('ui-move');
+    return;
+  }
+  if ((e.code === 'Enter' || e.code === 'NumpadEnter') && consoleAllowed()) {
+    e.preventDefault(); openConsole(game.console, consoleCtx());
+    keys.clear(); latched.clear(); pointer.fire = false; sound.play('ui-move');
+    return;
+  }
+  keys.add(e.code); latched.add(e.code);
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -208,6 +242,8 @@ function readRaw() {
 let last = performance.now(), acc = 0, hintT = 0;
 function frame(now) {
   const elapsed = Math.min(0.1, (now - last) / 1000); last = now;
+  renderer.debug = game.debug;
+  if ((statsFlushT += elapsed) > 5) { statsFlushT = 0; flushStats(); }
   // Waffenrad: öffnet nach dem Halten, schließt, wenn man nicht mehr zu Fuß spielt; solange offen, läuft die Welt langsam
   wheelResult(rightBtn.tick(now / 1000, playingOnFoot() && !game.world?.player.dead, game.world?.player.weapon ?? 0, WEAPONS.length));
   acc += rightBtn.open ? elapsed * WHEEL.slow : elapsed;
@@ -251,6 +287,10 @@ function updateDemo(dt) {
   renderer.update(demo, dt);
 }
 
+// Bildrate für die FPS-Anzeige (gleitender Mittelwert der letzten Bilder)
+let fpsLast = 0, fpsVal = 0;
+function fpsMeter() { const t = performance.now(), d = t - fpsLast; fpsLast = t; if (d > 0 && d < 1000) fpsVal = fpsVal ? fpsVal * 0.92 + (1000 / d) * 0.08 : 1000 / d; return fpsVal; }
+
 function draw() {
   // Welt: immer mindestens den 16:9-Ausschnitt zeigen (wie das HUD), mehr Platz zeigt mehr Stadt
   const worldScale = Math.min(W / (BASE.w * 600 / BASE.h), H / 600);
@@ -259,7 +299,7 @@ function draw() {
     if (demo) renderer.draw(demo, W, H, worldScale, false);
     else { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H); }
     hud.begin(W, H);
-    if (game.screen === 'controls') hud.drawControls(); else hud.drawTitle(game);
+    if (game.screen === 'controls') hud.drawControls(); else if (game.screen === 'stats') hud.drawStats(game.stats, false); else hud.drawTitle(game);
     if (!sound.ready && !host) hud.text('Taste drücken für Ton', hud.vw / 2, hud.vh - hud.m.y - 40, { size: 15, align: 'center', color: '#aaa', weight: 500 });
   } else {
     renderer.draw(game.world, W, H, worldScale);
@@ -270,10 +310,13 @@ function draw() {
       if (game.showBigMap) hud.drawBigMap(game.world); else hud.mapView = null;
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
       if (rightBtn.open) hud.drawWeaponWheel(game.world.player, rightBtn.state.hover);
+      hud.drawConsole(game.console, performance.now() / 1000);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);
     else if (game.screen === 'controls') hud.drawControls();
+    else if (game.screen === 'stats') hud.drawStats(game.stats, true);
   }
+  if (game.debug.fps) hud.drawFps(fpsMeter(), renderer.stats.ms, renderer.quality);
   hud.toast(game.toast);
   updateCursor();
   const car = game.world && game.screen === 'playing' ? playerCar(game.world) : null;

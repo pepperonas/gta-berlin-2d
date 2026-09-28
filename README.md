@@ -174,7 +174,8 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Gas / Bremse, Rückwärts | RT / LT | W / S |
 | Handbremse | RB oder B | Leertaste |
 | Ein-/Aussteigen | Y | F oder rechte Maustaste (tippen) |
-| Aktion (Auftrag, Einladen, Abliefern) | A | E / Enter |
+| Aktion (Auftrag, Einladen, Abliefern) | A | E |
+| Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
 | Hupe | X | H |
 | Stadtplan | Ansicht-Taste | M |
 | Menüs | Steuerkreuz, A / B | Maus: zeigen wählt aus, Klick bestätigt; Tastenhinweise (A/B) sind anklickbar |
@@ -187,6 +188,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Waffenrad (zu Fuß) | – | rechte Maustaste halten, Maus in Richtung der Waffe, loslassen wählt (Zeitlupe, solange offen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
+| Statistik | Menü „Statistik“ (Titel und Pause) | dito, oder Befehl `stats` |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
 
 ## Auf dem Mac spielen und testen
@@ -195,7 +197,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 264 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 284 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -343,11 +345,47 @@ Fehlersuche im Debug-Build: Die Hülle schaltet Remote-Debugging frei. Im Device
 in Edge `edge://inspect` mit der Konsole verbinden
 ([Anleitung](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/remote-debugging-xbox)).
 
+## Befehlszeile und Statistik
+
+**Enter** öffnet im Spiel eine Befehlszeile (die Welt steht still, solange sie offen ist). Beim Tippen erscheinen
+Vorschläge – Befehle, erlaubte Werte, bei `tp` alle Orte Berlins (Bezirke, Ortsteile, Bahnhöfe, Kieze, Straßen) –, der
+erste steht grau hinter dem Getippten und kommt mit **Tab** oder **→** in die Zeile. `hilfe` listet alles.
+
+| Befehl | Wirkung |
+|---|---|
+| `zeit 21:30` · `zeit 7` · `zeit abend` | Uhrzeit (auch `21.30`, `2130`, `9h`; Wörter: morgen, mittag, nachmittag, abend, daemmerung, nacht, mitternacht) |
+| `tempo 10` · `tempo 0` | Tempo der Spieluhr (0 = Uhr steht) |
+| `wetter schneesturm` · `wetter auto` | Wetter festlegen bzw. wieder natürlich |
+| `schnee 0.5` · `nass 1` | Schneedecke / Nässe der Straßen 0–1 |
+| `verkehr 2` · `passanten 0` | Dichte von Autos / Fußgängern |
+| `tp kottbusser tor` | Teleport ohne Rückfrage (lädt den Stadtteil nach) |
+| `geld +1000` · `leben` · `munition` · `gott an` · `auto polizei` · `reparieren` | Schummeln (wird in der Statistik gezählt) |
+| `fps` · `ebenen` · `silhouetten` · `qualitaet niedrig` | Anzeigen zum Prüfen: Bildrate, Brückenebenen, Umrisse, Zeichenqualität |
+| `stats` | Statistik öffnen |
+
+Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
+Brücken, Teleports, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, Tote (erschossen
+/ Nahkampf), Schüsse, Kugeln, Treffer und Trefferquote **je Waffe**, zerstörte Autos, Aufträge, verdientes Geld,
+Krankenhauskosten und Cheats. Gespeichert wird lokal in **IndexedDB** (Datenbank `gta-berlin`, alle 5 s und beim
+Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
+
 ## Stand und Prüfumfang
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 264 automatischen Tests grün, darunter:
+- Alle 284 automatischen Tests grün, darunter:
+  - Befehlszeile: Zerlegen (Anführungszeichen), großzügige Uhrzeit, Trefferordnung (Namensanfang vor Wortanfang vor
+    irgendwo, Umlaute egal), Vorschläge mit grauer Ergänzung (Befehle, Werte, Orte mit Leerzeichen), Tasten (Tab, ↑↓
+    in Vorschlägen und Verlauf, Enter bleibt offen, leere Zeile/Esc schließt), jeder Befehl wirkt, falsche Eingaben
+    ändern nichts, nur erfolgreiche Cheats zählen, Schummelgeld ist kein verdientes Geld; im Spiel steht die Welt bei
+    offener Zeile still, `tp` teleportiert ohne Rückfrage auch zu noch ladenden Stadtteilen;
+  - Statistik: Strecke zu Fuß/im Auto, Sprünge zählen nicht, Kugeln je Waffe (Schrot jede Kugel), Treffer und Tote nur
+    vom Spieler, Unfälle/Poller/Wrack nur am eigenen Auto, Brücken je Auffahrt, verdientes Geld nur als Zuwachs,
+    Einlesen fremder/kaputter Stände, Zusammenzählen, IndexedDB-Weg und Rückfall; eine späte Datenbank-Antwort mischt
+    nie ein altes Spiel in ein neues; die Seite passt in den 720er-Rahmen;
+  - Baumschatten: Stamm vom Fuß bis in die Krone, Krone quer so breit wie der Baum und bei tiefer Sonne entlang der
+    Sonne gestreckt, Richtung wie die Hausschatten. Für 17 Prüfungen aus diesen drei Bereichen wurde gegengeprüft, dass
+    sie fehlschlagen, wenn man den Fehler absichtlich wieder einbaut;
   - Gebäude aus Bauteilen: Sockel mit Hochhaus (beide), Turm auf dem Block (eigenes Gebäude), Obergeschosse über der
     Arkade heben das Haus darunter, Überbauung ohne etwas darunter entfällt, Pfeiler im Wasser wird kein Haus, Art aus
     `building:part`;

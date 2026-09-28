@@ -45,7 +45,7 @@ export function readKeys(k) {
   return {
     lx, ly,
     rt: any('KeyW', 'ArrowUp') ? 1 : 0, lt: any('KeyS', 'ArrowDown') ? 1 : 0,
-    a: any('KeyE', 'Enter'), b: any('Escape', 'Backspace'), x: any('KeyH'), y: any('KeyF'),
+    a: any('KeyE'), b: any('Escape', 'Backspace'), x: any('KeyH'), y: any('KeyF'),
     lb: false, rb: any('Space'), view: any('KeyM'), menu: any('Escape', 'KeyP'),
     up: any('ArrowUp', 'KeyW'), down: any('ArrowDown', 'KeyS'), left: any('ArrowLeft', 'KeyA'), right: any('ArrowRight', 'KeyD'),
     sprint: any('ShiftLeft', 'ShiftRight'), confirmKey: any('Enter', 'Space'),

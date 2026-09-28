@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.26.0] – 2026-09-28
+
+### Neu
+- **Befehlszeile** (Enter im Spiel): Uhrzeit, Spieluhr-Tempo, Wetter, Schnee, Nässe, Verkehrs- und Passantendichte,
+  Teleport zu jedem Ort Berlins, Cheats (Geld, Gesundheit, Munition, Gottmodus, Fahrzeug, Reparatur) und Anzeigen zum
+  Prüfen (Bildrate, Ebenen, Silhouetten, Zeichenqualität). Vorschläge beim Tippen mit grauer Ergänzung (Tab/→),
+  ↑↓ wählt Vorschläge bzw. blättert im Verlauf; die Welt steht still, solange die Zeile offen ist.
+- **Statistik** je Spiel und über alle Spiele, gespeichert in IndexedDB: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit,
+  Spielzeit, Brücken, Teleports, überfahrene Menschen und Radfahrer, Unfälle, Poller, geklaute Autos, Tote (erschossen
+  / Nahkampf), Schüsse, Kugeln, Treffer und Quote je Waffe, zerstörte Autos, Aufträge, Geld, Krankenhauskosten,
+  Cheats. Menüpunkt „Statistik“ im Titel und in der Pause, Befehl `stats`.
+
+### Geändert
+- „Aktion“ liegt nur noch auf E (Enter öffnet die Befehlszeile); in Menüs bestätigt Enter weiter.
+- **Baumschatten** neu: der Stamm wirft einen Streifen vom Fuß bis in die Krone (der Schatten hängt am Baum), die Krone
+  wirft ihren eigenen lappigen Umriss statt einer Scheibe, mit weichem Rand und Lichtflecken je nach Baumart (Birke
+  licht, Kastanie und Nadelbaum dicht), und wird bei tiefer Sonne entlang der Sonne gestreckt.
+
 ## [0.25.2] – 2026-09-28
 
 ### Behoben

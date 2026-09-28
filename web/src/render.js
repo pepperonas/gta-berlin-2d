@@ -538,6 +538,7 @@ export class Renderer {
       this.quality = nextQuality(this.quality, this.stats.ms);
       ts.length = 0;
     }
+    if (this.debug?.quality) this.quality = this.debug.quality; // Konsole: qualitaet hoch|niedrig (auto = null)
   }
 
   drawFrame(world, W, H, scale, overlayMarkers) {
@@ -838,7 +839,8 @@ export class Renderer {
     drawSkyFlash(ctx, v, flash * (L0.dark * 0.6 + 0.4));
     this.stats.bolts = strikes.length ? drawLightning(ctx, v, strikes, cam) : 0;
 
-    for (const c of covered) this.drawCovered(ctx, c, s, t);
+    if (this.debug?.silhouettes !== false) for (const c of covered) this.drawCovered(ctx, c, s, t);
+    if (this.debug?.levels) this.drawLevelDebug(city, v, s);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -1427,6 +1429,29 @@ export class Renderer {
     sil.setTransform(1, 0, 0, 1, 0, 0); sil.globalCompositeOperation = 'destination-in'; sil.drawImage(this._silMask, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.drawImage(this._sil, 0, 0, px, px, c.x - R, c.y - R, 2 * R, 2 * R);
+  }
+
+  // Konsole „ebenen“: Ebene jeder Straße/jedes Wegs (Zahl in der Mitte, Farbe je Ebene), Portale als Kreise
+  drawLevelDebug(city, v, s) {
+    const ctx = this.ctx, col = { '-2': '#8e44ad', '-1': '#2980b9', 0: 'rgba(255,255,255,0.5)', 1: '#f39c12', 2: '#e74c3c', 3: '#ff66cc' };
+    ctx.save();
+    ctx.font = `bold ${Math.round(12 / s)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const f of city.render.query(v, this._dq ??= [])) {
+      if ((f.layer !== 'edge' && f.layer !== 'path') || !f.pts) continue;
+      const l = f.lvl ?? 0;
+      if (l === 0 && f.layer === 'path') continue;
+      ctx.strokeStyle = col[l] ?? '#fff'; ctx.lineWidth = 2 / s; ctx.stroke(pathOf(f));
+      const k = (f.pts.length >> 2) << 1, x = f.pts[k], y = f.pts[k + 1];
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - 8 / s, y - 7 / s, 16 / s, 14 / s);
+      ctx.fillStyle = col[l] ?? '#fff'; ctx.fillText(String(l), x, y);
+    }
+    for (const p of city.portals?.query(v, this._dq2 ??= []) ?? []) {
+      ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2 / s; ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#00e5ff'; ctx.fillText(`${p.lo}…${p.hi}`, p.x, p.y - p.r - 8 / s);
+    }
+    ctx.restore();
+    this.stats.levelDebug = true;
   }
 
   // Radwege neben der Fahrbahn (cycleway=track): rote Pflasterstreifen jenseits des Bordsteins, auf Brücken nicht auf der

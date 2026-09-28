@@ -465,6 +465,25 @@ Tempelhofer Feld also über einen Kilometer weit. Auf Fahrbahn oder Haus bleibt 
 nächsten Fahrspur. liegt das nächste Krankenhaus in einem ungeladenen Stadtteil, wartet die
 Welt, bis er da ist.
 
+**Befehlszeile und Statistik (0.26.0).** `console.js` ist rein (ohne DOM): `tokenize` → `suggest` (Befehle, Werte,
+Orte; Treffer nach Namensanfang, Wortanfang, irgendwo, dann Art und Länge) → `execute`. Die Ortsliste für `tp` baut
+`placeIndex` einmal je Stadt aus `overview.json` (Bezirke, Ortsteile, Bahnhöfe, Kieze, Straßen – je Straßenname die
+Mitte des längsten Stücks). Ein Teleport aus der Konsole trägt `auto` und wird von `game.js` ohne Dialog ausgeführt,
+sobald die Kacheln am Ziel da sind. Befehle ändern nur Weltfelder, die es schon gibt (`clock`, `forceWeather`, `snow`,
+`wet`, `clockRate`, `trafficScale`, `pedScale`, `god`) oder die Anzeige (`game.debug`), die Simulation bleibt
+deterministisch. `stats.js` bucht je Simulationsschritt die Ereignisse der Welt (Schüsse mit Waffe und Kugelzahl,
+Treffer und Tote mit Urheber, Unfälle mit Auto-ID …) plus Teleports/Cheats aus `game.statQueue` in zwei Stände
+(Spiel, gesamt); Strecke aus der Bewegung der Spielfigur, Sprünge über 60 m zählen nicht. `statsdb.js` speichert in
+IndexedDB (Schlüssel `total`, `game`), sonst im Arbeitsspeicher; `applyStoredStats` übernimmt die asynchrone Antwort,
+ohne ein altes Spiel in ein neues zu mischen.
+
+**Baumschatten (0.26.0).** `treeShadowGeom` rechnet die Krone als Kugel in ihrer Höhe (Mitte ≈ 1,8 × Kronenradius,
+Ansatz ≈ 0,8 ×, Höhen mit `TREE_HS` = 0,45 gestaucht): quer so breit wie die Krone, entlang der Sonne um √(1+L²)
+gestreckt (höchstens dreifach). Der Stamm ist ein verjüngter Streifen vom Fuß bis zur Kronenmitte im selben deckenden
+Pfad wie die Hausschatten; die Krone ist das Kronen-Sprite als schwarzer Umriss mit Löchern (Lichtflecken, Zahl je
+Gattung) und weichgezeichnetem Rand, gezeichnet mit einer Streckmatrix I + (k−1)·u·uᵀ. Halbtransparente Stellen über
+einem Hausschatten bleiben deckend, weil alles in dieselbe Schattenebene geht.
+
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an
 ungeregelten Kreuzungen (stattdessen Reservierung, s. o.),
 keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straßen außerhalb der Grenze nur als Kulisse.

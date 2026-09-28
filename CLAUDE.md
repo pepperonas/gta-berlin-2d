@@ -182,6 +182,14 @@ change in `web/`.
   so check changes with those, not with a single run.
 - **Pedestrians** walk along road edges at a per-side sidewalk offset (cached, shrunk if it would hit a building), pick the
   next edge at nodes, cross streets, and wait for approaching cars.
+- **Console and statistics:** `console.js` (pure: `tokenize`/`suggest`/`execute`/`consoleKey`, `placeIndex` from
+  `overview.json` for `tp`) is opened by Enter in `main.js` (Action is E only); while open, `game.js` freezes the world.
+  Console teleports carry `auto` and are confirmed by `game.js` once tiles are loaded. `stats.js trackStep` books world
+  events + `game.statQueue` (teleport, cheat) into `game.stats.game`/`total`; `statsdb.js` persists them in IndexedDB
+  (`applyStoredStats` merges the async answer). New counters need a row in `STAT_SECTIONS`; events that count must
+  carry who caused them (`player`, `weapon`, `carId`).
+- **Tree shadows:** `lighting.js treeShadowGeom` (pure) + `addTrunkShadow` (trunk strip in the opaque shadow path) +
+  `crownShadowSprite` (crown sprite as black silhouette with gaps and blurred edge, stretched along the sun).
 - **Mission** (`mission.js`) is a state machine; save (`save.js`) is one `localStorage` slot, auto-written after a
   completed mission, with `memoryStorage()` for tests and a corrupt-save path.
 - **Assets:** all graphics/sounds are self-generated placeholders; real files can be swapped in via

@@ -39,7 +39,7 @@ export function isFighter(ped) {
 // Treffer auf die Spielfigur (Faustschlag, Anfahren); bei 0 LP K. o. (world.js schickt sie ins Krankenhaus)
 export function hurtPlayer(w, dmg, fromX, fromY) {
   const p = initCombat(w.player);
-  if (p.dead || p.inCar || dmg <= 0) return;
+  if (p.dead || p.inCar || dmg <= 0 || w.god) return; // Gottmodus (Konsole): unverwundbar
   p.hp = Math.max(0, p.hp - dmg); p.sinceHurt = 0; p.hurtFlash = 1;
   w.events.push({ type: 'player-hurt', x: p.x, y: p.y, dmg });
   w.events.push({ type: 'blood', x: p.x, y: p.y, a: Math.atan2(p.y - fromY, p.x - fromX), n: 3 });
@@ -166,14 +166,15 @@ export function meltargets(w, p, ang, wp) {
 
 // --- Wirkung -----------------------------------------------------------------------------------------------------
 
-export function hurtPed(w, ped, dmg, fromX, fromY, melee = false) {
+// src (optional): { weapon, player } – wer mit welcher Waffe, für die Statistik (kill-Ereignis)
+export function hurtPed(w, ped, dmg, fromX, fromY, melee = false, src = null) {
   if (ped.state === 'dead') return;
   ped.hp = (ped.hp ?? PED_HP) - dmg;
   const a = Math.atan2(ped.y - fromY, ped.x - fromX);
   w.events.push({ type: 'blood', x: ped.x, y: ped.y, a, n: melee ? 4 : 7 });
   if (ped.hp <= 0) {
     ped.state = 'dead'; ped.deadT = 0; ped.threat = { x: fromX, y: fromY }; ped.fall = a;
-    w.events.push({ type: 'kill', x: ped.x, y: ped.y, id: ped.id });
+    w.events.push({ type: 'kill', x: ped.x, y: ped.y, id: ped.id, weapon: src?.weapon ?? null, player: !!src?.player });
   } else {
     ped.state = 'down'; ped.t = melee ? 1.4 : 2.2; ped.threat = { x: fromX, y: fromY }; ped.fall = a;
     if (isFighter(ped)) ped.angry = true; // steht auf und schlägt zurück
@@ -181,21 +182,23 @@ export function hurtPed(w, ped, dmg, fromX, fromY, melee = false) {
   }
 }
 
-export function hurtCar(w, car, dmg, fromX, fromY) {
+export function hurtCar(w, car, dmg, fromX, fromY, src = null) {
   if (car.wrecked) return;
   car.health = Math.max(0, car.health - dmg * CAR_BULLET_FACTOR);
   w.events.push({ type: 'impact', x: car.x, y: car.y, metal: true });
   if (car.driver === 'npc') car.shotAt = { x: fromX, y: fromY }; // world.js: Fahrer steigt aus und flieht
-  if (car.health <= 0) { car.wrecked = true; w.events.push({ type: 'wreck', x: car.x, y: car.y, carId: car.id }); }
+  if (car.health <= 0) { car.wrecked = true; w.events.push({ type: 'wreck', x: car.x, y: car.y, carId: car.id, weapon: src?.weapon ?? null, player: !!src?.player }); }
 }
 
 // Nahkampfschlag (Waffe oder Tritt) in Richtung ang
 export function strike(w, p, wp, ang) {
   const hits = meltargets(w, p, ang, wp);
   w.events.push({ type: 'swing', x: p.x, y: p.y, weapon: wp.id, hit: hits.length > 0 });
+  const src = { weapon: wp.id, player: p === w.player };
   for (const t of hits) {
+    w.events.push({ type: 'weapon-hit', weapon: wp.id, player: src.player, target: t.hw !== undefined ? 'car' : 'ped' });
     if (t.hw !== undefined) { w.events.push({ type: 'thud', x: t.x, y: t.y }); continue; } // Auto: nur ein Scheppern
-    hurtPed(w, t, wp.dmg, p.x, p.y, true);
+    hurtPed(w, t, wp.dmg, p.x, p.y, true, src);
   }
   return hits.length;
 }
@@ -208,11 +211,13 @@ export function shoot(w, p, wp, ang, rng) {
     const off = wp.pellets > 1 ? (k / (wp.pellets - 1) - 0.5) * wp.spread + (rng() - 0.5) * 0.06 : gauss(rng) * wp.spread;
     const a = ang + off, r = castRay(w, p.x, p.y, a, wp.range, null, p.lvl); // ab Körpermitte: trifft auch aus nächster Nähe
     traces.push([r.x, r.y]);
-    if (r.hit?.type === 'ped') hurtPed(w, r.hit.obj, wp.dmg, p.x, p.y);
-    else if (r.hit?.type === 'car') hurtCar(w, r.hit.obj, wp.dmg, p.x, p.y);
+    const src = { weapon: wp.id, player: p === w.player };
+    if (r.hit?.type === 'ped' || r.hit?.type === 'car') w.events.push({ type: 'weapon-hit', weapon: wp.id, player: src.player, target: r.hit.type });
+    if (r.hit?.type === 'ped') hurtPed(w, r.hit.obj, wp.dmg, p.x, p.y, false, src);
+    else if (r.hit?.type === 'car') hurtCar(w, r.hit.obj, wp.dmg, p.x, p.y, src);
     else if (r.hit?.type === 'wall') w.events.push({ type: 'impact', x: r.x, y: r.y });
   }
-  w.events.push({ type: 'shot', x: mx, y: my, a: ang, weapon: wp.id, traces });
+  w.events.push({ type: 'shot', x: mx, y: my, a: ang, weapon: wp.id, traces, player: p === w.player });
 }
 
 function gauss(rng) { return (rng() + rng() + rng() - 1.5) * 0.8; }

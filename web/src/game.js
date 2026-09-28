@@ -3,6 +3,8 @@
 import { createWorld, updateWorld, restartMission, findTeleportSpot, teleportTo } from './world.js';
 import { readSave, writeSave, applySave } from './save.js';
 import { resetMission } from './mission.js';
+import { createConsole } from './console.js';
+import { createStats, createTracker, trackStep, mergeStats } from './stats.js';
 
 export function createMenu(items) { return { items, index: Math.max(0, items.findIndex((i) => i.enabled !== false)) }; }
 
@@ -29,7 +31,11 @@ export function menuInput(menu, input) {
 
 // city: dekodierte Karte; im Browser kommt sie asynchron nach (setCity), bis dahin zeigt der Titel „Lade Stadt …“.
 export function createGame({ storage, canQuit = false, seed = 1989, city = null } = {}) {
-  const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false, teleport: null };
+  const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false, teleport: null,
+    console: createConsole(), debug: { fps: false, levels: false, silhouettes: true, quality: null },
+    // Statistik: dieses Spiel und über alle Spiele (main.js lädt/speichert sie in IndexedDB); savedGame = Stand des
+    // gespeicherten Spiels (für „Fortsetzen“), statQueue = Ereignisse außerhalb der Simulation (Teleport, Cheats)
+    stats: { game: createStats(), total: createStats(), savedGame: null }, tracker: createTracker(), statQueue: [], statsDirty: false };
   g.titleMenu = buildTitleMenu(g);
   return g;
 }
@@ -54,13 +60,13 @@ function resolveTeleport(g) {
   const spot = findTeleportSpot(g.world, t.x, t.y);
   if (spot?.pending) return;
   if (!spot) { g.toast = { text: 'Dort kann man nicht hin', t: 2 }; g.teleport = null; g.world.city.release('teleport'); return; }
-  g.teleport = spot;
+  g.teleport = t.auto ? { ...spot, auto: true, name: t.name ?? spot.name } : spot; // Konsole: bleibt ohne Rückfrage
 }
 
 export function confirmTeleport(g, yes) {
   if (!g.teleport) return;
   if (yes && g.teleport.pending) return; // Ziel lädt noch
-  if (yes) { teleportTo(g.world, g.teleport); g.showBigMap = false; g.toast = { text: `Teleportiert: ${g.teleport.name}`, t: 2.5 }; }
+  if (yes) { teleportTo(g.world, g.teleport); g.showBigMap = false; g.toast = { text: `Teleportiert: ${g.teleport.name}`, t: 2.5 }; g.statQueue.push({ type: 'teleport' }); }
   else g.world.city.release('teleport');
   g.teleport = null;
 }
@@ -71,6 +77,7 @@ function buildTitleMenu(g) {
     { id: 'continue', label: 'Fortsetzen', enabled: hasSave },
     { id: 'new', label: 'Neues Spiel' },
     { id: 'controls', label: 'Steuerung' },
+    { id: 'stats', label: 'Statistik' },
   ];
   if (g.canQuit) items.push({ id: 'quit', label: 'Beenden' });
   const m = createMenu(items);
@@ -84,6 +91,7 @@ function pauseMenu() {
     { id: 'save', label: 'Spiel speichern' },
     { id: 'restart', label: 'Mission neu starten' },
     { id: 'controls', label: 'Steuerung' },
+    { id: 'stats', label: 'Statistik' },
     { id: 'title', label: 'Zum Hauptmenü' },
   ]);
 }
@@ -94,9 +102,19 @@ function resultMenu(success) {
     : [{ id: 'retry', label: 'Erneut versuchen' }, { id: 'continue', label: 'Frei weiterspielen' }]);
 }
 
+// Antwort der Statistik-Datenbank übernehmen (kommt asynchron, evtl. erst nach dem Spielstart): Gesamtstand und schon
+// Gezähltes zusammenzählen; der Stand des gespeicherten Spiels gehört nur zu „Fortsetzen“ – in ein neues Spiel darf er
+// nicht hineinlaufen.
+export function applyStoredStats(g, total, saved) {
+  g.stats.total = mergeStats(total, g.stats.total);
+  if (g.world && g.stats.continued) g.stats.game = mergeStats(saved, g.stats.game);
+  else if (!g.world) g.stats.savedGame = saved;
+}
+
 export function startNewGame(g) {
   g.world = createWorld({ city: g.city, seed: g.seed });
   g.screen = 'playing';
+  g.stats.game = createStats(); g.stats.savedGame = null; g.stats.continued = false; g.tracker = createTracker(); g.statsDirty = true; // neue Zählung
 }
 
 export function continueGame(g) {
@@ -105,6 +123,7 @@ export function continueGame(g) {
   g.world = createWorld({ city: g.city, seed: g.seed });
   applySave(g.world, s);
   g.screen = 'playing';
+  g.stats.game = g.stats.savedGame ?? createStats(); g.stats.continued = true; g.tracker = createTracker(); // Statistik des gespeicherten Spiels
   g.toast = { text: 'Spielstand geladen', t: 2 };
   return true;
 }
@@ -132,11 +151,12 @@ export function updateGame(g, input, dt) {
       if (r === 'continue') continueGame(g);
       else if (r === 'new') startNewGame(g);
       else if (r === 'controls') { g.returnTo = 'title'; g.screen = 'controls'; }
+      else if (r === 'stats') { g.returnTo = 'title'; g.screen = 'stats'; }
       else if (r === 'quit') g.quitRequested = true;
       break;
     }
-    case 'controls':
-      if (input.back || input.confirm) { g.screen = g.returnTo; ev.push({ type: 'ui-back' }); }
+    case 'controls': case 'stats':
+      if (input.back || input.confirm || (g.screen === 'stats' && input.pause)) { g.screen = g.returnTo; ev.push({ type: 'ui-back' }); }
       break;
     case 'paused': {
       const r = pick(g.pauseMenu);
@@ -144,15 +164,19 @@ export function updateGame(g, input, dt) {
       else if (r === 'save') saveGame(g);
       else if (r === 'restart') { restartMission(g.world); g.screen = 'playing'; g.toast = { text: 'Mission neu gestartet', t: 2 }; }
       else if (r === 'controls') { g.returnTo = 'paused'; g.screen = 'controls'; }
+      else if (r === 'stats') { g.returnTo = 'paused'; g.screen = 'stats'; }
       else if (r === 'title') { g.screen = 'title'; g.titleMenu = buildTitleMenu(g); g.world = null; }
       break;
     }
     case 'playing': {
       const w = g.world, m = w.mission;
-      // Bestätigungsdialog für den Teleport: Welt steht still, A/Enter = ja, B/Esc = nein.
+      if (g.console.open) break; // Befehlszeile offen: die Welt steht still (Tasten gehen nur an die Konsole)
+      // Bestätigungsdialog für den Teleport: Welt steht still, A/Enter = ja, B/Esc = nein. Aus der Konsole (auto)
+      // ohne Rückfrage, sobald die Kacheln am Ziel da sind.
       if (g.teleport) {
         resolveTeleport(g);
         if (!g.teleport) break;
+        if (g.teleport.auto && !g.teleport.pending) { confirmTeleport(g, true); break; }
         if (input.confirm) { confirmTeleport(g, true); ev.push({ type: 'ui' }); }
         else if (input.back || input.pause) { confirmTeleport(g, false); ev.push({ type: 'ui-back' }); }
         break;
@@ -171,6 +195,9 @@ export function updateGame(g, input, dt) {
       }
       updateWorld(w, input, dt);
       ev.push(...w.events);
+      // Statistik: Ereignisse dieses Schritts plus die der Konsole/des Stadtplans (Teleport, Cheats)
+      trackStep([g.stats.game, g.stats.total], g.tracker, w, g.statQueue.length ? [...w.events, ...g.statQueue.splice(0)] : w.events, dt);
+      g.statsDirty = true;
       break;
     }
   }

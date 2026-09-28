@@ -348,7 +348,7 @@ function drawCrownSnow(ctx, tr, x, y, r, depth) {
 // Lappige Krone aus überlappenden Blattballen, Licht von links oben, dunkler Rand – wirkt weicher als drei Kreise.
 export const TREE_VARIANTS = 3;
 const treeSprites = new Map();
-function treeSprite(genus, variant) {
+export function treeSprite(genus, variant) {
   const key = genus + '|' + variant;
   if (treeSprites.has(key)) return treeSprites.get(key);
   let c = null;
