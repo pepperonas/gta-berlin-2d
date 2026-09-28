@@ -105,8 +105,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Beschriftung folgt dem Maßstab wie bei kiez-finder: ganz Berlin mit den 12 Bezirken, näher die Ortsteile (Tegel,
   Prenzlauer Berg …), dann die Kiez-Namen aus OSM (Flughafenkiez, Reuterkiez … – 568 Kieze) und Bahnhöfe, ab etwa 3 m
   je Bildpunkt die Namen der Hauptstraßen und ab 2,6 m aller Straßen, entlang der Straße und ohne Überlappung.
-  **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; man landet zu Fuß
-  auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
+  **Teleport:** Klick auf den Stadtplan, dann Bestätigungsdialog; auf offenem Grund (Park, Feld, Platz, Hof) landet
+  man genau dort bzw. an der nächsten freien Stelle bis 30 m – zu Fuß wie im Auto, etwa mitten auf dem Tempelhofer
+  Feld; auf einer Straße oder einem Haus zu Fuß auf dem nächsten Gehweg, im Auto auf der nächsten Fahrspur in Fahrtrichtung, Verkehr und Passanten entstehen sofort am
   neuen Ort. Während eines laufenden Auftrags gesperrt (sonst wäre die Mission trivial). Tastensymbole wechseln zwischen Controller und Tastatur.
 - **Tageszeit und Licht:** Die Spieluhr läuft beschleunigt (1 Echtsekunde = 1 Spielminute, ein Tag = 24 min, neues
   Spiel um 16:00, die Uhrzeit steht im HUD und im Spielstand). Die Sonne steht wie im Berliner Sommer (Aufgang 5:30,
@@ -173,7 +174,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 207 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 208 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -325,7 +326,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 207 automatischen Tests grün, darunter:
+- Alle 208 automatischen Tests grün, darunter:
   - Erreichbarkeit (Flutfüllung auf einem 0,5–0,8-m-Raster mit Auto- bzw. Fußgängerbreite gegen Hauswände, Zäune,
     Ufer, Bäume und Poller): das Tempelhofer Feld ist vom Columbiadamm aus mit dem Auto und zu Fuß erreichbar (Mitte,
     Nord-, Süd- und Ostrand); in Kreuzberg und Marzahn erreicht das Auto über 90 % der Fußgängerfläche; im Build
@@ -442,7 +443,9 @@ in Edge `edge://inspect` mit der Konsole verbinden
   - ein 90-s-Dauertest mit 24 Autos und 55 Passanten (0,0 % der Stichproben neben der Fahrbahn, kein Auto in einer Hauswand,
     kein Passant in einem Gebäude) und ein Test, dass die Bevölkerung der Kamera folgt;
   - Teleport: nur bei offenem Stadtplan, außerhalb des Gebiets abgelehnt, Abbruch ändert nichts, Welt steht während des
-    Dialogs, Ziel zu Fuß auf dem Gehweg bzw. im Auto auf der Fahrbahn, während eines Auftrags gesperrt;
+    Dialogs, Ziel zu Fuß auf dem Gehweg bzw. im Auto auf der Fahrbahn, während eines Auftrags gesperrt; auf offenem
+    Grund genau dorthin (Tempelhofer Feld zu Fuß und im Auto, nie in ein Haus, freier Punkt bleibt, wo er ist;
+    vier Mutationsproben, alle erkannt);
   - Gleise maßstäblich (Spurweite 1435 mm, zwei Schienen je Gleis) und in Ebenen gezeichnet (Bett → Schwellen →
     Schienen über alle Gleise), damit parallele Gleise und Weichen sich nicht übermalen;
   - Straßenquerschnitt aus Tag-Kombinationen (Breite, Park-/Radstreifen, Spuren, Tempo, Belag, enge Straßen);

@@ -247,3 +247,33 @@ test('Kachel lädt nicht: kein erneuter Versuch in jedem Bild, sondern nach eine
     assert.equal(q.inbox.length, 2);
   } finally { console.error = orig; }
 });
+
+test('Teleport auf offenen Grund (Tempelhofer Feld): genau dorthin, zu Fuß und im Auto; auf Häuser weiter zur Straße', async () => {
+  const { requestTeleport, confirmTeleport } = await import('../web/src/game.js');
+  const { playerCar, openSpot } = await import('../web/src/world.js');
+  const { inBuilding, surfaceAt, T } = await import('../web/src/map.js');
+  const { openRealCity, realIndex, geoToPx } = await import('./helpers/city.js');
+  const c2 = openRealCity(), meta = realIndex().meta;
+  const g = createGame({ storage: memoryStorage(), city: c2 });
+  press(g, { confirm: true });
+  const w = g.world;
+  const go = (x, y) => { g.showBigMap = true; assert.ok(requestTeleport(g, x, y)); for (let i = 0; i < 20 && g.teleport?.pending; i++) press(g, {}); confirmTeleport(g, true); };
+  const [fx, fy] = geoToPx(meta, 52.4735, 13.4010);
+  c2.loadArea(fx - 6000, fy - 6000, fx + 6000, fy + 6000);
+  assert.equal(surfaceAt(c2, fx, fy), T.GRASS, 'Feldmitte ist Wiese');
+  go(fx, fy);
+  assert.ok(Math.hypot(w.player.x - fx, w.player.y - fy) < 30 * c2.scale, `zu Fuß auf dem Feld (${Math.round(Math.hypot(w.player.x - fx, w.player.y - fy) / c2.scale)} m daneben)`);
+  // im Auto auf das Feld: Wagen steht frei auf der Wiese
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  w.player.inCar = car.id; car.driver = 'player';
+  const [gx, gy] = geoToPx(meta, 52.4760, 13.4000);
+  go(gx, gy);
+  assert.equal(playerCar(w), car);
+  assert.ok(Math.hypot(car.x - gx, car.y - gy) < 30 * c2.scale, 'Auto auf dem Feld');
+  assert.ok(!inBuilding(c2, car.x, car.y) && surfaceAt(c2, car.x, car.y) !== T.WATER);
+  // freie Stelle: der Punkt selbst, wenn frei; in einem Haus gibt es keine
+  assert.deepEqual(openSpot(w, fx, fy, false), { x: fx, y: fy, angle: 0 }, "freier Punkt bleibt, wo er ist");
+  const b = c2.list('building').find((x) => Math.min(x.bbox.w, x.bbox.h) > 80 * c2.scale);
+  const sp = openSpot(w, b.bbox.x + b.bbox.w / 2, b.bbox.y + b.bbox.h / 2, true);
+  assert.ok(!sp || !inBuilding(c2, sp.x, sp.y), 'nie im Haus');
+});

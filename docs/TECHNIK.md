@@ -351,7 +351,11 @@ Zielhilfe sucht im Kegel um die Zielrichtung das Ziel mit kleinstem „Winkel ×
 Maus-Zielen rechnet `main.js` in einen Weltpunkt um (`aimWorld`), wie Menüklicks als abstrakte Eingabe.
 Gegenwehr ist ein Passanten-Zustand `fight` (hinlaufen, alle 0,9 s zuschlagen, Aufgeben nach 20 s oder 45 m); ob
 jemand sich wehrt, folgt aus seiner Nummer, nicht aus dem Welt-Zufall. Das K. o. nutzt denselben Ladeweg wie der
-Teleport (`findTeleportSpot`/`teleportTo`): liegt das nächste Krankenhaus in einem ungeladenen Stadtteil, wartet die
+Teleport (`findTeleportSpot`/`teleportTo`): Liegt das Ziel auf offenem Grund (Wiese, Platz, Gehweg/Hof), sucht
+`openSpot` den Punkt selbst und dann Ringe bis 30 m nach einer freien Stelle (kein Haus, kein Wasser, kein
+Hindernis; im Auto die ganze Karosserie in vier Ausrichtungen) – vorher sprang man immer zur nächsten Straße, vom
+Tempelhofer Feld also über einen Kilometer weit. Auf Fahrbahn oder Haus bleibt es beim nächsten Gehweg bzw. der
+nächsten Fahrspur. liegt das nächste Krankenhaus in einem ungeladenen Stadtteil, wartet die
 Welt, bis er da ist.
 
 **Bewusste Vereinfachungen:** feste Ampelumläufe statt Signalplänen, keine StVO-Vorfahrt („rechts vor links“) an

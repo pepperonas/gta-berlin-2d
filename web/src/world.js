@@ -8,7 +8,7 @@ import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed
 import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
-import { insideBorder, inBuilding, locationName, hash01 } from './map.js';
+import { insideBorder, inBuilding, locationName, hash01, surfaceAt, T } from './map.js';
 import { parkingStrip } from './street.js';
 import { PARK } from './citycodes.js';
 import { pointAlong } from './geom.js';
@@ -225,7 +225,11 @@ export function findTeleportSpot(w, x, y) {
   const city = w.city;
   if (!insideBorder(city, x, y)) return null;
   if (!city.focus('teleport', x, y)) return { pending: true, x, y };
-  let spot = null;
+  // Abseits der Fahrbahn (Park, Feld, Platz, Hof): genau dorthin bzw. an die nächste freie Stelle bis 30 m –
+  // sonst landete man an der nächsten Straße, auf dem Tempelhofer Feld also über einen Kilometer daneben.
+  const ground = surfaceAt(city, x, y);
+  let spot = ground === T.GRASS || ground === T.PLAZA || ground === T.SIDEWALK ? openSpot(w, x, y, !!playerCar(w)) : null;
+  if (spot) { spot.name = locationName(city, spot.x, spot.y); return spot; }
   if (playerCar(w)) {
     const hit = nearestLane(buildLaneGraph(city), x, y, undefined, 3000);
     if (hit) {
@@ -239,6 +243,37 @@ export function findTeleportSpot(w, x, y) {
   if (!spot || !insideBorder(city, spot.x, spot.y) || inBuilding(city, spot.x, spot.y)) return null;
   spot.name = locationName(city, spot.x, spot.y);
   return spot;
+}
+
+// Freie Stelle auf offenem Grund (kein Haus, kein Wasser, kein Hindernis) um (x, y), zuerst der Punkt selbst
+export function openSpot(w, x, y, car) {
+  const city = w.city, S = city.scale;
+  const free = (px, py, angle) => {
+    if (!insideBorder(city, px, py)) return false;
+    const t = surfaceAt(city, px, py);
+    if (t === T.BUILDING || t === T.WATER || inBuilding(city, px, py)) return false;
+    if (!car) return spotFree(w, px, py, PLAYER.radius + 2);
+    const probe = { x: px, y: py, angle, hw: CAR.length / 2 + 4, hh: CAR.width / 2 + 4 };
+    for (const s of w.solids.query(obbBounds(probe), [])) {
+      if (isDown(w, s)) continue;
+      if (s.seg ? obbVsSegment(probe, s) : s.r !== undefined ? circleVsObb(s.x, s.y, s.r, probe) : obbVsRect(probe, s)) return false;
+    }
+    // die ganze Karosserie auf festem Grund (nicht halb im Wasser)
+    for (const [u, v] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const cx = px + Math.cos(angle) * u * probe.hw - Math.sin(angle) * v * probe.hh, cy = py + Math.sin(angle) * u * probe.hw + Math.cos(angle) * v * probe.hh;
+      if (surfaceAt(city, cx, cy) === T.WATER) return false;
+    }
+    return w.cars.every((c) => c.id === w.player.inCar || Math.hypot(c.x - px, c.y - py) > 40);
+  };
+  const angles = car ? [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4] : [0];
+  for (let r = 0; r <= 30 * S; r += 2 * S) {
+    const n = r ? Math.max(8, Math.round(2 * Math.PI * r / (2 * S))) : 1;
+    for (let k = 0; k < n; k++) {
+      const px = x + Math.cos(k / n * 2 * Math.PI) * r, py = y + Math.sin(k / n * 2 * Math.PI) * r;
+      for (const a of angles) if (free(px, py, a)) return { x: px, y: py, angle: a };
+    }
+  }
+  return null;
 }
 
 export function teleportTo(w, spot) {

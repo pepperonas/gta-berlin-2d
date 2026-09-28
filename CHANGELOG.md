@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.17.1] – 2026-09-28
+
+### Behoben
+- Teleport auf offenen Grund (Parks, Plätze, Höfe, das Tempelhofer Feld) landete immer an der nächsten Straße – vom
+  Tempelhofer Feld aus über einen Kilometer entfernt am Columbiadamm oder an der Ringbahnstraße. Jetzt landet man
+  genau am gewählten Punkt bzw. an der nächsten freien Stelle bis 30 m, zu Fuß wie im Auto. Klicks auf Straßen und
+  Häuser führen weiter zum nächsten Gehweg bzw. zur nächsten Fahrspur.
+
 ## [0.17.0] – 2026-09-28
 
 ### Hinzugefügt
