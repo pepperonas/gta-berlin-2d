@@ -609,24 +609,35 @@ export class Renderer {
     for (const p of paths) if (!p.bridge) ctx.stroke(pathOf(p));
     this.drawTracks(rails.filter((r) => !r.bridge), false);
 
-    // 4) Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst, Brücken zuletzt
+    // 4) Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst, Brücken zuletzt. Wege auf Brücken liegen
+    // zwischen beiden: über den Straßen unten, unter den Fahrbahnen auf derselben Brücke (Gehwege neben der Fahrbahn).
     edges.sort((a, b) => (a.bridge - b.bridge) || (b.cls - a.cls));
-    // Bordstein (heller Stein), davor der dunkle Rinnstein, dann die Fahrbahn
-    for (const e of edges) {
-      if (e.bridge) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
-      else if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
-    }
-    for (const e of edges) if (!e.bridge && e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
+    const ground = edges.filter((e) => !e.bridge), onBridge = edges.filter((e) => e.bridge);
+    this.stats.tracks = 0;
+    for (const e of ground) if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
+    for (const e of ground) if (e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
     for (const j of junctions) if (!j.bridge) {
       ctx.fillStyle = CURB; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = GUTTER; ctx.beginPath(); ctx.arc(j.x, j.y, j.r + 0.7, 0, Math.PI * 2); ctx.fill();
     }
     const asphalt = tex('asphalt', ASPHALT), cobble = tex('cobble', cobblePattern);
-    for (const j of junctions) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
-    for (const e of edges) {
-      ctx.strokeStyle = e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobble : asphalt;
-      ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
+    const surface = (e) => (e.cls === 10 ? '#a8a296' : e.cls === 11 ? '#8a8272' : e.cs.surface === SURFACE.cobble ? cobble : asphalt);
+    for (const j of junctions) if (!j.bridge) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
+    for (const e of ground) { ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e)); }
+    this.drawTracks2(ground);
+    for (const e of onBridge) { ctx.strokeStyle = '#7d7a73'; ctx.lineWidth = e.w + 14; ctx.stroke(pathOf(e)); }
+    ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
+    for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
+    for (const j of junctions) if (j.bridge) { ctx.fillStyle = j.cobble ? cobble : asphalt; ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
+    for (const e of onBridge) {
+      ctx.strokeStyle = surface(e); ctx.lineWidth = e.w; ctx.stroke(pathOf(e));
+      if (e.fill) { // Lücke zur Gegenfahrbahn: Fahrbahn bis dorthin
+        e._fillPath ??= linePath(offsetPolyline(e.pts, Math.sign(e.fill) * (e.w / 2 + Math.abs(e.fill) / 2)));
+        ctx.lineWidth = Math.abs(e.fill) + 2; ctx.stroke(e._fillPath);
+      }
     }
+    this.drawTracks2(onBridge);
+    this.stats.bridgeFills = onBridge.filter((e) => e.fill).length;
     if (this.quality === 'high') this.drawDecals(edges, city);
     this.drawStreetMarkings(edges, world.city);
     this.drawCrossings(crossings);
@@ -640,8 +651,6 @@ export class Renderer {
       this.stats.tramShapes = shapes.size;
     }
     this.drawSignals(world, v);
-    ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
-    for (const p of paths) if (p.bridge) ctx.stroke(pathOf(p));
     ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
 
     // Zäune, Mauern, Hecken, Poller
@@ -1226,6 +1235,22 @@ export class Renderer {
     sil.setTransform(1, 0, 0, 1, 0, 0); sil.globalCompositeOperation = 'destination-in'; sil.drawImage(this._silMask, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.drawImage(this._sil, 0, 0, px, px, c.x - R, c.y - R, 2 * R, 2 * R);
+  }
+
+  // Radwege neben der Fahrbahn (cycleway=track): rote Pflasterstreifen jenseits des Bordsteins, auf Brücken nicht auf der
+  // Seite zur Gegenfahrbahn (dort liegt die Lücke, die zur Fahrbahn gehört)
+  drawTracks2(list) {
+    const ctx = this.ctx;
+    let n = 0;
+    for (const e of list) for (const [sd, side] of [[e.cs.left, -1], [e.cs.right, 1]]) {
+      if (!sd.track || (e.fill && Math.sign(e.fill) === side)) continue;
+      const key = side < 0 ? '_trackL' : '_trackR';
+      e[key] ??= linePath(offsetPolyline(e.pts, side * (e.w / 2 + 4 + sd.track / 2)));
+      ctx.strokeStyle = '#a4574b'; ctx.lineWidth = sd.track; ctx.stroke(e[key]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 0.8; ctx.stroke(e[key]);
+      n++;
+    }
+    this.stats.tracks = (this.stats.tracks ?? 0) + n;
   }
 
   // Gebäude: sichtbare Fassaden (Kanten, deren Außennormale vom Dachversatz weg zeigt), dann das Dach.

@@ -171,6 +171,16 @@ einen), jeweils `GATE_M` = 4,4 m breit. Vorher waren Tore 1,8 m breit und Querun
 Feld war mit dem Auto nicht erreichbar. `tests/helpers/city.js reachability` misst das per Flutfüllung auf einem
 Raster (Kreis mit Auto- bzw. Fußgängerradius gegen alle festen Hindernisse).
 
+**Brücken** (`build.mjs bridgeFills` und Geländer, `render.js` Straßenschritt): Gegenläufige Einbahn-Brückenfahrbahnen
+gleichen Namens, deren Bordsteine höchstens 7 m auseinanderliegen, bekommen die Lücke als Fahrbahn (`fill`,
+Kachelfeld 12, Vorzeichen wie `offsetLine`: + rechts der Kantenrichtung). Geländer entstehen für alle Brückenwege
+(Straßen und Wege), werden aber mit `makeCutter` überall entfernt, wo eine andere Brückenfahrbahn samt Gehwegbreite
+(2,5 m), ein anderer Brückenweg, eine gefüllte Lücke oder eine Straße darunter liegt – der eigene Korridor zählt
+nicht (Kennung je Weg). So steht ein Geländer nur am äußeren Rand der ganzen Brücke. Zeichenfolge: Straßen am Boden →
+Bordstein der Brücken → Wege auf Brücken → Brückenfahrbahnen samt Lücke → Radwege → Markierungen.
+Radwege neben der Fahrbahn (`cycleway:*=track`, `crosssection.mjs cycleTrack`) stehen im Querschnitt (`track` je Seite,
+Kachelfelder 13/14) und werden jenseits des Bordsteins als rote Streifen gezeichnet.
+
 **Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
 Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten
 an einem Kreisel (`junction=roundabout/circular`). Knoten näher als 45 m (Richtungsfahrbahnen) und alle Knoten eines

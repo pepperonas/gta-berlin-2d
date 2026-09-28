@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.21.0] – 2026-09-28
+
+### Hinzugefügt
+- Radwege neben der Fahrbahn (`cycleway=track`, z. B. auf der Oberbaumbrücke 3 m außen): rote Pflasterstreifen
+  jenseits des Bordsteins, auch auf Brücken.
+
+### Behoben
+- Oberbaumbrücke: zwischen den beiden Richtungsfahrbahnen lag ein 4,5 m breiter Streifen Brückendeck, der wie ein
+  Radweg in der Mitte aussah. Liegen die Richtungsfahrbahnen einer Brücke bis 7 m auseinander, ist die Lücke jetzt
+  Fahrbahn; der Radweg liegt außen.
+- Warschauer Brücke: Brückengeländer standen als unsichtbare Wände mitten auf der Gegenfahrbahn (jede Brückenfahrbahn
+  hatte beidseitig ein Geländer, die Richtungsfahrbahnen liegen dort teils übereinander) und Geländer von Brückenwegen
+  sperrten die Straße darunter. Geländer stehen jetzt nur noch am äußeren Rand der ganzen Brücke; Wege auf Brücken
+  haben ebenfalls ein Geländer, damit niemand ins Wasser läuft.
+- Gehwege auf Brücken wurden über die Fahrbahn gezeichnet (heller Streifen quer über der Warschauer Brücke). Jetzt:
+  Straßen unten, darüber die Brückenwege, darüber die Brückenfahrbahnen.
+
 ## [0.20.1] – 2026-09-28
 
 ### Behoben

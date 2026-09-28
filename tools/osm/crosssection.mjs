@@ -45,6 +45,14 @@ export function cycleLane(t, side) {
   return w >= 0.8 && w <= 3.5 ? w : 1.6;
 }
 
+// Radweg neben der Fahrbahn (baulich getrennt, cycleway=track; m, 0 = keiner) – liegt außerhalb des Bordsteins.
+export function cycleTrack(t, side) {
+  const v = sideTag(t, 'cycleway', side) ?? t.cycleway;
+  if (v !== 'track') return 0;
+  const w = num(t[`cycleway:${side}:width`] ?? t['cycleway:both:width'] ?? t['cycleway:width']);
+  return w >= 0.8 && w <= 4 ? w : 2;
+}
+
 export function maxspeedOf(t, base) {
   const v = t.maxspeed;
   if (v === 'walk') return 7;
@@ -100,8 +108,8 @@ export function crossSection(t, base, oneway) {
   }
   return {
     width, fwd, bwd,
-    left: { park: L.kind, parkW: L.width, orient: L.orient, cycle: cL },
-    right: { park: R.kind, parkW: R.width, orient: R.orient, cycle: cR },
+    left: { park: L.kind, parkW: L.width, orient: L.orient, cycle: cL, track: cycleTrack(t, 'left') },
+    right: { park: R.kind, parkW: R.width, orient: R.orient, cycle: cR, track: cycleTrack(t, 'right') },
     maxspeed: maxspeedOf(t, base), surface: surfaceOf(t), lit: t.lit === 'yes' ? 1 : 0, gaslight: t.lit_by_gaslight === 'yes' ? 1 : 0,
   };
 }

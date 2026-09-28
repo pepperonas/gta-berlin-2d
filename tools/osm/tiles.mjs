@@ -52,13 +52,14 @@ export function tileCity(g, { tile, meta, places }) {
     return k;
   };
 
-  // Straßenkanten: [gid, a, b (Knoten der Kachel), Klasse, Breite dm, Name, Einbahn, Merkmale, Zwischenpunkte, Querschnitt]
+  // Straßenkanten: [gid, a, b (Knoten der Kachel), Klasse, Breite dm, Name, Einbahn, Merkmale, Zwischenpunkte, Querschnitt,
+  // Kfz/Tag ÷ 100, Brückenlücke dm (optional; + rechts der Kantenrichtung)]
   g.edges.forEach((ed, gid) => {
     const pts = [g.vertices[2 * ed.a], g.vertices[2 * ed.a + 1], ...ed.p, g.vertices[2 * ed.b], g.vertices[2 * ed.b + 1]];
     const flags = ed.br | (ed.in << 1) | ((ed.blocked ? 1 : 0) << 2) | (ed.pass << 3);
     const x = ed.c <= 8 ? ed.x : [ed.x[10], ed.x[11]]; // Nebenwege: nur Tempo + Belag
     each(bboxOf(pts, ed.w / 10 * S / 2 + S), (t) => {
-      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1)]);
+      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1), ...(ed.fill ? [Math.round(ed.fill / S * 10)] : [])]);
     });
   });
   // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1, kleinste Klasse]

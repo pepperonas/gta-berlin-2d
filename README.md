@@ -48,6 +48,9 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   sperren Straßen für den KI-Verkehr, Fußgänger kommen durch, und mit Schwung fährt man sie um (sie bleiben liegen);
   rund 47 000 Zäune, Mauern und Hecken, an Toren und überall, wo ein Weg sie kreuzt, 4,4 m breit offen – eingezäunte
   Flächen wie das Tempelhofer Feld erreicht man auch mit dem Auto; 41 000 Hauseingänge als Türen.
+- **Brücken:** Geländer nur am äußeren Rand der Brücke (nie auf einer Fahrbahn, nicht über der Straße darunter),
+  Richtungsfahrbahnen mit schmaler Lücke bilden eine Fahrbahn, Gehwege liegen unter der Brückenfahrbahn; Radwege
+  neben der Fahrbahn (`cycleway=track`) als rote Streifen.
 - **Wegweiser:** An großen Kreuzungen und Kreiseln stehen gelbe Wegweiser: je Ausfahrt ein Pfeil in Kartenrichtung
   mit den Ortsteilen, in die sie führt (aus der OSM-Beschilderung oder aus dem Straßenverlauf), „Zentrum“ und
   B-Nummer; weiße Zeilen nennen Straßen im selben Ortsteil; jedes Ziel steht nur einmal auf einem Schild, verdeckte
@@ -178,7 +181,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 226 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 230 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -330,7 +333,11 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 226 automatischen Tests grün, darunter:
+- Alle 230 automatischen Tests grün, darunter:
+  - Brücken: Lücke zwischen gegenläufigen Brückenfahrbahnen bis 7 m wird Fahrbahn, zur richtigen Seite, nur bei
+    gleichem Namen; `cycleway=track` im Querschnitt; an Oberbaum- und Warschauer Brücke kein Geländerstück auf einer
+    Fahrbahn, Lücke gefüllt, Radweg außen; Brückenwege unter der Brückenfahrbahn gezeichnet, Radwege auf der Brücke
+    gezeichnet (10 Mutationsproben, alle erkannt; zwei zunächst blinde führten zu schärferen Prüfungen);
   - Wegweiser: an einer künstlichen Kreuzung je Zufahrt ein Schild rechts 35 m davor, Zeilen links → geradeaus →
     rechts, kein Wenden (auch nicht in eine andere Straße), Einbahnstraßen, OSM-Beschilderung vor der Verfolgung
     (Tag nur in Weg-Richtung, `destination:backward` dagegen, Relation nur für ihre Zufahrt), „Zentrum“ nur Richtung

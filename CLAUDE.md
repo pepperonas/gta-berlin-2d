@@ -133,6 +133,10 @@ change in `web/`.
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop
   skips them via `isDown(world, s)`. `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
+- **Bridges:** railings are cut (`makeCutter(corridors)(pts, skipId)`) wherever another bridge way, a filled gap or a
+  ground road lies, so they only stand at the outer edge; `bridgeFills` gives close dual carriageways a `fill` (tile edge
+  field 12). `cs.left/right.track` = cycle tracks beside the curb (x[13], x[14]). Draw order in `render.js`: ground roads →
+  bridge curbs → bridge paths → bridge carriageways (+fill) → tracks → markings.
 - **Direction signs:** built by `tools/osm/signs.mjs buildSigns` (pure: junction clusters incl. roundabouts, approaches/
   exits by oneway, destinations from OSM `destination_sign`/`destination:*` or traced Ortsteile + „Zentrum“, placement
   via `build.mjs roadClearance`), tile field `signs`, decoded by `web/src/signs.js decodeSign` into layer `'sign'`;
