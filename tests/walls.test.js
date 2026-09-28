@@ -3,20 +3,22 @@ import assert from 'node:assert/strict';
 import { surfaceIndex, cutWhere } from '../tools/osm/build.mjs';
 import { realCity, openRealCity, realIndex, geoToPx, reachability } from './helpers/city.js';
 import { segDist2 } from '../web/src/geom.js';
+import { blocks } from '../web/src/car.js';
 
 const S = 10;
 
-// Unsichtbare Wände (Ufer, Gleisränder, Brückengeländer) auf befahrbarer Fläche: Fahrbahn, Lücke zur Gegenfahrbahn,
-// Radweg neben der Fahrbahn, Kreuzungsscheibe. Zäune sind sichtbar und zählen nicht.
+// Unsichtbare Wände (Ufer, Gleisränder, Brückengeländer) auf befahrbarer Fläche derselben Ebene: Fahrbahn, Lücke zur
+// Gegenfahrbahn, Radweg neben der Fahrbahn, Kreuzungsscheibe. Zäune sind sichtbar und zählen nicht. Ein Geländer über
+// der Straße darunter oder ein Ufer unter der Brücke ist keine Sperre (andere Ebene).
 function invisibleOnSurface(city, [x0, y0, x1, y1]) {
   const q = [], hits = [];
-  const onSurface = (x, y) => {
+  const onSurface = (x, y, lvl) => {
     for (const s of city.edgeSegs.query({ x: x - 1, y: y - 1, w: 2, h: 2 }, q)) {
       const e = s.e;
       if (!e?.cs) continue;
       const d = Math.sqrt(segDist2(x, y, s.ax, s.ay, s.bx, s.by));
-      if (e.junction) { if (d <= e.w / 2 - 1) return 'Kreuzung'; continue; }
-      if (e.cls > 8) continue;
+      if (e.junction) { if (d <= e.w / 2 - 1 && (e.lo ?? 0) <= lvl && lvl <= (e.lvl ?? 0)) return 'Kreuzung'; continue; }
+      if (e.cls > 8 || (e.lvl ?? 0) !== lvl) continue;
       if (d <= e.w / 2 - 1) return e.name || 'Fahrbahn';
       const dx = s.bx - s.ax, dy = s.by - s.ay, side = Math.sign((x - s.ax) * -dy + (y - s.ay) * dx) || 1;
       if (e.fill && Math.sign(e.fill) === side && d <= e.w / 2 + Math.abs(e.fill) - 1) return `${e.name} (Lücke)`;
@@ -33,8 +35,8 @@ function invisibleOnSurface(city, [x0, y0, x1, y1]) {
       for (let k = 0; k < n; k++) {
         const f = (k + 0.5) / n, x = p[i] + (p[i + 2] - p[i]) * f, y = p[i + 1] + (p[i + 3] - p[i + 1]) * f;
         if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-        const h = onSurface(x, y);
-        if (h) hits.push(`${w.sub} auf ${h} bei ${Math.round(x)},${Math.round(y)}`);
+        const h = onSurface(x, y, w.lvl ?? 0);
+        if (h) hits.push(`${w.sub} (Ebene ${w.lvl ?? 0}) auf ${h} bei ${Math.round(x)},${Math.round(y)}`);
       }
     }
   }
@@ -60,7 +62,7 @@ test('Oberbaumbrücke: über die ganze Breite (beide Richtungen, Lücke, Radwege
   city.loadArea(...box);
   const e = [...city.edges.values()].find((q) => q.name === 'Oberbaumbrücke');
   const p = e.pts, dx = p[2] - p[0], dy = p[3] - p[1], L = Math.hypot(dx, dy), rx = -dy / L, ry = dx / L;
-  const car = reachability(city, box, [p[0] + dx * 0.1, p[1] + dy * 0.1], 11, { cell: 4, solidFilter: (s) => s.layer !== 'barrier' });
+  const car = reachability(city, box, [p[0] + dx * 0.1, p[1] + dy * 0.1], 11, { cell: 4, solidFilter: (s) => s.layer !== 'barrier' && blocks({}, s, e.lvl) }); // was ein Auto auf der Brücke sperrt
   let tot = 0; const miss = [];
   for (let f = 0.1; f <= 0.91; f += 0.1) for (let o = -e.w / 2 - Math.abs(e.fill) + 12; o <= e.w / 2 + 4 + e.cs.right.track - 12; o += 5) {
     tot++; if (!car(p[0] + dx * f + rx * o, p[1] + dy * f + ry * o)) miss.push([f.toFixed(1), Math.round(o)]);

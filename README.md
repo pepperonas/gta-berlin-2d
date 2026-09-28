@@ -194,7 +194,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 253 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 256 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -346,7 +346,13 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 253 automatischen Tests grün, darunter:
+- Alle 256 automatischen Tests grün, darunter:
+  - Physik nach Ebenen: Stadtgrenze sperrt jede Ebene, Häuser/Bäume/Poller den Boden, Wände nur ihre Ebene; an der
+    Warschauer Brücke quert ein Brückengeländer die Unterführung – unten fährt ein Auto hindurch, mit Ebene 1 prallt es
+    ab; Kaimauer läuft unter der Oberbaumbrücke weiter; auf der Brückenachse oben Fahrbahn, unten Wasser, neben der
+    Fahrbahn oben Gehweg; Kontakte nur auf derselben Ebene oder im gemeinsamen Portal; ein KI-Auto auf der Brücke bremst
+    nicht für ein Auto darunter; ein Schuss trifft nicht durchs Deck (10 Mutationsproben, alle erkannt; zwei zunächst
+    blinde führten zu schärferen Untergrund-Prüfungen);
   - Fenster: je Fenster ein eigener Zeitpunkt (mehr als 60 % verschiedene Schwellen, höchstens 8 von 72 Fenstern je
     2-%-Schritt, die ersten Lichter über die ganze Fassade verteilt), Wohnungsnachbarn näher beieinander als andere
     Etagen, mittags dunkel, abends mehr als um 3 Uhr, nachts einzelne Wechsel, Fenster im Raster der Fassade, vier und

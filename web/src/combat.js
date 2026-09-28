@@ -3,7 +3,7 @@
 // Schüsse sind sofortige Strahlen: sie stoppen an Hauswänden, der Stadtgrenze, Bäumen und Kisten und treffen das
 // erste Ziel (Passant oder Auto). Nahkampf trifft in einem Bogen vor der Figur. Treffer erzeugen Ereignisse, aus denen
 // render.js Blut, Mündungsfeuer und Leuchtspuren macht und audio.js die Klänge.
-import { isDown } from './car.js';
+import { blocks } from './car.js';
 import { PED, CAR } from './config.js';
 import { wrapAngle } from './math.js';
 
@@ -98,13 +98,14 @@ export function rayObb(ox, oy, dx, dy, b) {
 const tmp = [];
 // Erster Treffer entlang eines Strahls. Hindernisse: Hauswände, Stadtgrenze, Bäume, Kisten (Zäune, Gleise, Kaikanten
 // und Geländer sind niedrig – Kugeln fliegen darüber).
-export function castRay(w, ox, oy, ang, range, shooter = null) {
+// lvl: Ebene des Schützen – Wände anderer Ebenen, Menschen und Autos auf anderer Ebene (unter/auf der Brücke) trifft er nicht
+export function castRay(w, ox, oy, ang, range, shooter = null, lvl = shooter?.lvl ?? 0) {
   const dx = Math.cos(ang), dy = Math.sin(ang);
   let best = range, hit = null;
   const ex = ox + dx * range, ey = oy + dy * range;
   const box = { x: Math.min(ox, ex) - 2, y: Math.min(oy, ey) - 2, w: Math.abs(ex - ox) + 4, h: Math.abs(ey - oy) + 4 };
   for (const s of w.solids.query(box, tmp)) {
-    if (isDown(w, s)) continue;
+    if (!blocks(w, s, lvl)) continue;
     let t;
     if (s.seg) { if (s.kind !== 'building' && s.kind !== 'border') continue; t = raySegment(ox, oy, dx, dy, s); }
     else if (s.r !== undefined) t = rayCircle(ox, oy, dx, dy, s.x, s.y, s.r);
@@ -112,12 +113,12 @@ export function castRay(w, ox, oy, ang, range, shooter = null) {
     if (t < best) { best = t; hit = { type: 'wall' }; }
   }
   for (const ped of w.peds) {
-    if (ped.state === 'dead' || ped === shooter) continue;
+    if (ped.state === 'dead' || ped === shooter || (ped.lvl ?? 0) !== (lvl ?? 0)) continue;
     const t = rayCircle(ox, oy, dx, dy, ped.x, ped.y, PED.radius + 2);
     if (t < best) { best = t; hit = { type: 'ped', obj: ped }; }
   }
   for (const car of w.cars) {
-    if (car.id === w.player.inCar) continue;
+    if (car.id === w.player.inCar || (car.lvl ?? 0) !== (lvl ?? 0)) continue;
     const t = rayObb(ox, oy, dx, dy, car);
     if (t < best) { best = t; hit = { type: 'car', obj: car }; }
   }
@@ -135,7 +136,7 @@ export function aimAssist(w, p, ang, range, cone = ASSIST.cone) {
     if (da > cone) return;
     const sc = da * 300 + d; // lieber nah an der Zielrichtung, dann nah an der Figur
     if (sc < score) {
-      const a = Math.atan2(dy, dx), r = castRay(w, p.x, p.y, a, d + 20);
+      const a = Math.atan2(dy, dx), r = castRay(w, p.x, p.y, a, d + 20, null, p.lvl);
       if (r.hit && r.hit.obj === obj) { score = sc; best = { obj, ang: a }; }
     }
   };
@@ -205,7 +206,7 @@ export function shoot(w, p, wp, ang, rng) {
   const traces = [];
   for (let k = 0; k < wp.pellets; k++) {
     const off = wp.pellets > 1 ? (k / (wp.pellets - 1) - 0.5) * wp.spread + (rng() - 0.5) * 0.06 : gauss(rng) * wp.spread;
-    const a = ang + off, r = castRay(w, p.x, p.y, a, wp.range); // ab Körpermitte: trifft auch aus nächster Nähe
+    const a = ang + off, r = castRay(w, p.x, p.y, a, wp.range, null, p.lvl); // ab Körpermitte: trifft auch aus nächster Nähe
     traces.push([r.x, r.y]);
     if (r.hit?.type === 'ped') hurtPed(w, r.hit.obj, wp.dmg, p.x, p.y);
     else if (r.hit?.type === 'car') hurtCar(w, r.hit.obj, wp.dmg, p.x, p.y);

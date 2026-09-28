@@ -2,6 +2,7 @@
 // auch für sie), aber nur auf der rechten Spur, seitlich versetzt – auf dem Radstreifen, wo der Querschnitt einen hat,
 // sonst am rechten Fahrbahnrand. Hauptstraßen ohne Radstreifen meiden sie. Die meisten halten bei Rot, manche nicht.
 // Dazu abgestellte E-Roller auf dem Gehweg (reine Darstellung, deterministisch je Straße).
+import { touch } from './levels.js';
 import { buildLaneGraph, turnAngle } from './roadgraph.js';
 import { laneOffsets } from './street.js';
 import { offsetPolyline, polylineLength, pointAlong } from './geom.js';
@@ -69,16 +70,16 @@ function aheadDist(b, world) {
     best = Math.min(best, along);
   };
   for (const o of world.cars) {
-    if (Math.abs(o.x - b.x) > 90 || Math.abs(o.y - b.y) > 90) continue;
+    if (Math.abs(o.x - b.x) > 90 || Math.abs(o.y - b.y) > 90 || !touch(world.city, b, o)) continue;
     const cosA = Math.cos(o.angle - b.angle);
     // stehender Querverkehr (wartet an der Kreuzung – auch auf dieses Rad): vorbeifahren statt gegenseitig warten
     if (Math.abs(cosA) < 0.6 && Math.abs(o.vx) + Math.abs(o.vy) < 20) continue;
     test(o.x, o.y, o.hh + 5, o.hw * Math.abs(cosA));
   }
-  for (const p of world.peds) if (p.state !== 'dead' && Math.abs(p.x - b.x) < 45 && Math.abs(p.y - b.y) < 45) test(p.x, p.y, 9);
-  for (const o of world.bikes) if (o !== b && o.state === 'ride' && Math.abs(o.x - b.x) < 45 && Math.abs(o.y - b.y) < 45) test(o.x, o.y, 8);
+  for (const p of world.peds) if (p.state !== 'dead' && Math.abs(p.x - b.x) < 45 && Math.abs(p.y - b.y) < 45 && touch(world.city, b, p)) test(p.x, p.y, 9);
+  for (const o of world.bikes) if (o !== b && o.state === 'ride' && Math.abs(o.x - b.x) < 45 && Math.abs(o.y - b.y) < 45 && touch(world.city, b, o)) test(o.x, o.y, 8);
   const pl = world.player;
-  if (!pl.inCar) test(pl.x, pl.y, 10);
+  if (!pl.inCar && touch(world.city, b, pl)) test(pl.x, pl.y, 10);
   return best;
 }
 

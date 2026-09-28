@@ -262,18 +262,18 @@ function install(city, key, json) {
   for (const [gid, k, p] of json.fences) acquire(city, t, 'g' + gid, (r) => { const f = line('fence', { kind: k }, p); put(r, city.render, f, f.bbox); track(city, 'fence', f); r.drop = () => untrack(city, 'fence', f); });
 
   // Wände (Ufer, Gleise, Geländer, Zäune) und die Stadtgrenze: nur Kollision
-  const addLine = (r, pts, closed, kind) => {
+  const addLine = (r, pts, closed, kind, lvl = 0) => {
     const n = pts.length;
     for (let i = 0; i < n - 2 + (closed ? 2 : 0); i += 2) {
       const ax = pts[i], ay = pts[i + 1], bx = pts[(i + 2) % n], by = pts[(i + 3) % n];
       if (ax === bx && ay === by) continue;
-      put(r, city.solids, { ax, ay, bx, by, seg: true, kind }, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
+      put(r, city.solids, lvl ? { ax, ay, bx, by, seg: true, kind, lvl } : { ax, ay, bx, by, seg: true, kind }, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
     }
   };
-  for (const [gid, kind, p] of json.walls) acquire(city, t, 'g' + gid, (r) => {
-    // kind: Kollisionsart ('border' für die Stadtgrenze), sub: Art der Wand (Ufer, Gleis, Geländer, Zaun)
-    const pts = undelta(p), f = { pts, kind: kind === WALL_KIND.border ? 'border' : 'wall', sub: WALL_NAMES[kind] ?? 'other', layer: 'wall' };
-    addLine(r, pts, false, f.kind); track(city, 'wall', f); r.drop = () => untrack(city, 'wall', f);
+  for (const [gid, kind, p, lvl = 0] of json.walls) acquire(city, t, 'g' + gid, (r) => {
+    // kind: Kollisionsart ('border' für die Stadtgrenze), sub: Art der Wand (Ufer, Gleis, Geländer, Zaun), lvl: Ebene
+    const pts = undelta(p), f = { pts, kind: kind === WALL_KIND.border ? 'border' : 'wall', sub: WALL_NAMES[kind] ?? 'other', layer: 'wall', lvl };
+    addLine(r, pts, false, f.kind, lvl); track(city, 'wall', f); r.drop = () => untrack(city, 'wall', f);
   });
 
   for (const [gid, h, kind, rings, walls, doors, look, rc, fc] of json.buildings) acquire(city, t, 'g' + gid, (r) => {
@@ -426,9 +426,11 @@ export function turnBetween(a, b, n) {
 const tmp = [];
 const pt = { x: 0, y: 0, w: 0, h: 0 };
 
-export function onRoad(city, x, y, margin = 0) {
+// lvl (optional): nur Fahrbahnen dieser Ebene (Kreuzungsscheiben gehören allen Ebenen von lo bis hi)
+export function onRoad(city, x, y, margin = 0, lvl = null) {
   pt.x = x; pt.y = y;
   for (const s of city.edgeSegs.query(pt, tmp)) {
+    if (lvl !== null && !onLevel(s.e, lvl)) continue;
     const r = s.e.w / 2 + margin;
     if (segDist2(x, y, s.ax, s.ay, s.bx, s.by) <= r * r) return s.e;
   }
@@ -465,14 +467,20 @@ export function inBuilding(city, x, y) {
   return null;
 }
 
-export function surfaceAt(city, x, y) {
+const onLevel = (e, lvl) => (e.junction ? (e.lo ?? e.lvl ?? 0) <= lvl && lvl <= (e.lvl ?? 0) : (e.lvl ?? 0) === lvl);
+
+// Untergrund an (x, y). lvl (optional) = Ebene dessen, der dort steht: auf der Brücke zählt nur die Brücke (nie das
+// Wasser oder Haus darunter), am Boden zählen Brücken darüber nicht (unter der Brücke ist Wasser Wasser).
+export function surfaceAt(city, x, y, lvl = null) {
   if (x < 0 || y < 0 || x > city.width || y > city.height) return T.BUILDING;
-  const road = onRoad(city, x, y);
+  const road = onRoad(city, x, y, 0, lvl);
   if (road) return road.cs.surface === SURFACE.cobble ? T.COBBLE : T.ROAD;
+  if (lvl !== null && lvl >= 1) return T.PLAZA; // Gehweg oder Deck der Brücke
   pt.x = x; pt.y = y;
   let best = T.SIDEWALK, onBridge = false;
   for (const f of city.polys.query(pt, tmp)) {
     if (!pointInRings(x, y, f.rings)) continue;
+    if (lvl !== null && f.kind === AREA_KIND.bridge && f.layer !== 'building' && f.layer !== 'water') continue; // Deck liegt darüber
     if (f.layer === 'building') return T.BUILDING;
     if (f.layer === 'water') { if (!onBridge) best = T.WATER; }
     else if (f.kind === AREA_KIND.bridge) { onBridge = true; best = T.PLAZA; } // Brückendeck liegt über dem Wasser

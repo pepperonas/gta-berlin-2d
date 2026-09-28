@@ -37,7 +37,7 @@ const SURFACE = {
 
 export function stepCar(car, dt, city) {
   const ctl = car.wrecked ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : car.controls;
-  const surf = SURFACE[city ? surfaceAt(city, car.x, car.y) : T.ROAD] ?? SURFACE[T.ROAD];
+  const surf = SURFACE[city ? surfaceAt(city, car.x, car.y, car.lvl ?? null) : T.ROAD] ?? SURFACE[T.ROAD];
   let c = Math.cos(car.angle), s = Math.sin(car.angle);
   let vf = car.vx * c + car.vy * s;
   let vr = -car.vx * s + car.vy * c;
@@ -103,7 +103,7 @@ export function collideCarWorld(car, world, events) {
     let hit = false;
     const box = obbBounds(car);
     for (const r of world.solids.query(box, tmp)) {
-      if (isDown(world, r)) continue;
+      if (!blocks(world, r, car.lvl)) continue;
       const m = r.seg ? obbVsSegment(car, r) : r.r !== undefined ? invert(circleVsObb(r.x, r.y, r.r, car)) : obbVsRect(car, r);
       if (!m) continue;
       if (r.layer === 'barrier' && -(car.vx * m.nx + car.vy * m.ny) > KNOCK.speed) { knockOver(world, r, car, events); continue; }
@@ -113,6 +113,17 @@ export function collideCarWorld(car, world, events) {
     }
     if (!hit) break;
   }
+}
+
+// Sperrt ein festes Hindernis ein Objekt der Ebene lvl? Die Stadtgrenze immer; Häuser, Bäume, Kisten und Poller stehen
+// am Boden und sperren Boden und Unterführung, nicht die Brücke darüber; Wände (Ufer, Gleisrand, Geländer, Zaun) nur
+// ihre eigene Ebene. Umgefahrene Poller sperren nichts mehr.
+export function blocks(world, s, lvl = 0) {
+  if (isDown(world, s)) return false;
+  if (s.kind === 'border') return true;
+  const L = lvl ?? 0;
+  if (s.seg && s.kind === 'wall') return (s.lvl ?? 0) === L;
+  return L <= 0;
 }
 
 // Umgefahrene Poller/Schranken: je Welt gemerkt (über den Schlüssel, damit sie auch nach dem Nachladen der Kachel liegen)

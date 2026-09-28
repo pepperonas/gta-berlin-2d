@@ -39,7 +39,7 @@ test('Radwege neben der Fahrbahn (cycleway=track) kommen in den Querschnitt, Rad
   assert.equal(cs.right.track, 3); assert.equal(cs.right.cycle, 0); assert.equal(cs.left.track, 0);
 });
 
-test('Oberbaumbrücke und Warschauer Brücke: kein Geländer auf einer Fahrbahn, Lücke gefüllt, Radwege außen', () => {
+test('Oberbaumbrücke und Warschauer Brücke: kein Geländer auf einer Fahrbahn derselben Ebene, Lücke gefüllt, Radwege außen', () => {
   const meta = realIndex().meta, city = openRealCity();
   for (const [name, lat, lon] of [['Oberbaumbrücke', 52.50195, 13.44565], ['Warschauer Brücke', 52.5056, 13.44905]]) {
     const [x, y] = geoToPx(meta, lat, lon);
@@ -51,7 +51,7 @@ test('Oberbaumbrücke und Warschauer Brücke: kein Geländer auf einer Fahrbahn,
       for (let i = 0; i < p.length - 2; i += 2) {
         const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2;
         if (Math.hypot(mx - x, my - y) > 2500) continue;
-        segs++; if (onRoad(city, mx, my)) bad++;
+        segs++; if (onRoad(city, mx, my, 0, w.lvl ?? 0)) bad++; // Fahrbahn derselben Ebene (über der Straße darunter darf es stehen)
       }
     }
     assert.ok(segs > 4, `${name}: Geländer vorhanden (${segs})`);

@@ -201,7 +201,16 @@ Markierungen, Nässe; am Boden Zäune, Poller, Möbel); nach jeder Ebene folgen 
 höheren Fläche liegen (`occlusion.js levelSurfaces/surfacesOver`, im Portal zählt nichts als Decke), danach die
 Brücke über ihnen, die Silhouette zeigt den verdeckten Teil. Straßenbahnen haben keine eigene Ebene: sie liegen oben,
 wo ihr Linienweg auf einer Brücke und nicht zugleich auf einer Bodenstraße liegt (`trackLevel`, bei Überlappung gilt
-das Stück davor). Kollision, Verkehr und Oberfläche sind noch nicht ebenenbewusst (folgt).
+das Stück davor). Physik nach Ebenen: Wände tragen eine Ebene (Ufer 0,
+Gleisrand die des Gleises, Geländer die der Brücke; Kachelfeld 3 der Wandzeile), und eine einzige Regel
+(`car.js blocks`) entscheidet für jede Kollision: die Stadtgrenze sperrt immer, Häuser, Bäume, Kisten und Poller den
+Boden und alles darunter, Wände nur ihre eigene Ebene. Kontakte zwischen Beweglichen (Auto–Auto, Auto–Fußgänger,
+Spielfigur, Rad), Hindernisse der KI, Fußgänger an der Fahrbahn und Schüsse gelten nur auf derselben Ebene – oder wenn
+beide im selben Portal stehen, das beide Ebenen verbindet, damit dicht hintereinander fahrende Autos am Rampenfuß nicht
+durcheinander hindurchfahren (`levels.js touch`). `surfaceAt(…, lvl)` sieht auf der Brücke nur die Brücke (Fahrbahn,
+sonst fester Grund) und am Boden Wasser und Häuser auch unter der Brücke. Der Build schneidet unsichtbare Wände nur
+noch mit Fahrflächen derselben Ebene auf: Kaimauern und Gleisränder laufen unter Brücken weiter, Geländer über den
+Straßen darunter – vorher mussten sie dort weggeschnitten werden, weil alles in einer Ebene lag.
 
 **Wegweiser** (`tools/osm/signs.mjs`, rein; Spiel `web/src/signs.js`, gezeichnet in `render.js drawSign`): Kreuzung =
 Knoten, an dem sich mindestens zwei verschieden benannte Straßen bis Klasse 4 (secondary) treffen, oder ein Knoten

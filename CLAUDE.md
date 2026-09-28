@@ -147,9 +147,10 @@ change in `web/`.
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
 - **Invisible walls:** quays, rail side walls and railings are finally cut with `build.mjs surfaceIndex` + `cutWhere` (exact
   point test of the drivable surface per side via `reachOf`: carriageway + bridge gap + cycle track, junction discs, incl.
-  passages/blocked roads). `tests/walls.test.js` scans the core area and known bridges for leftovers.
-- **Bridges:** railings are cut (`makeCutter(corridors)(pts, skipId)`) wherever another bridge way, a filled gap or a
-  ground road lies, so they only stand at the outer edge; `bridgeFills` gives close dual carriageways a `fill` (tile edge
+  passages/blocked roads), per level (`onSurfaceAt(L)`, `surfCutAt(L)`). `tests/walls.test.js` scans the core area and known
+  bridges for leftovers on the same level.
+- **Bridges:** railings are cut (`railCutAt(L)(pts, skipId)`) wherever another bridge way of the same level or a filled gap
+  lies, so they only stand at the outer edge (they continue over roads below); `bridgeFills` gives close dual carriageways a `fill` (tile edge
   field 12). `cs.left/right.track` = cycle tracks beside the curb (x[13], x[14]). Draw order in `render.js`: ground roads →
   bridge curbs → bridge paths → bridge carriageways (+fill) → tracks → markings.
 - **Direction signs:** built by `tools/osm/signs.mjs buildSigns` (pure: junction clusters incl. roundabouts, approaches/

@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.24.0] – 2026-09-28
+
+### Hinzugefügt
+- Physik nach Ebenen: Wer auf der Brücke fährt oder läuft, stößt nur mit dem zusammen, was auf der Brücke ist; wer
+  darunter durchfährt, fährt unter Geländer und Brückenverkehr hindurch. Wände tragen ihre Ebene (Ufer am Boden,
+  Gleisränder auf der Ebene des Gleises, Geländer auf der Brücke); Häuser und Bäume stehen am Boden. Autos, Menschen,
+  Räder und die Spielfigur berühren sich nur auf derselben Ebene (am Rampenfuß beide), die KI bremst auf der Brücke
+  nicht mehr für Verkehr darunter, Fußgänger unten warten nicht auf Autos oben, Schüsse gehen nicht durchs Deck.
+- Untergrund nach Ebene: auf der Brücke zählt nur die Brücke (kein Wasser, kein Haus darunter), am Boden ist Wasser
+  unter der Brücke Wasser.
+
+### Geändert
+- Kaimauern und Gleisränder laufen unter Brücken durch, Brückengeländer über den Straßen darunter – vorher mussten sie
+  dort weggeschnitten werden, weil alles in einer Ebene lag (man konnte von der Brücke ins Wasser oder aufs Gleis
+  darunter geraten).
+
 ## [0.23.0] – 2026-09-28
 
 ### Hinzugefügt

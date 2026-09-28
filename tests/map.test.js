@@ -253,7 +253,7 @@ test('Keine Poller, Zäune oder Gleiswände auf befahrbaren Fahrbahnen (die KI s
   assert.equal(city.list('barrier').filter((b) => postOnRoad(city, b)).length, 0, 'Poller auf der Fahrbahn');
   const m = realIndex().meta.access;
   assert.ok(m.pollerVerschoben > 1000 && m.pollerEntfernt < m.pollerVerschoben / 10, 'Build rückt an den Bordstein statt zu löschen');
-  // Wände (Zäune, Gleise) gegen die Fahrbahnen der KI prüfen
+  // Wände (Zäune, Gleise) gegen die Fahrbahnen der KI derselben Ebene prüfen
   const drivable = city.list('edge').filter((e) => e.cls <= 8 && !e.blocked && !e.passage);
   let bad = 0;
   for (const wl of city.list('wall').filter((f) => f.sub === 'fence' || f.sub === 'rail')) {
@@ -262,6 +262,7 @@ test('Keine Poller, Zäune oder Gleiswände auf befahrbaren Fahrbahnen (die KI s
       const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2;
       for (const s of city.edgeSegs.query({ x: mx, y: my, w: 0, h: 0 }, [])) {
         if (s.e.junction || s.e.cls > 8 || s.e.blocked || s.e.passage) continue;
+        if ((s.e.lvl ?? 0) !== (wl.lvl ?? 0)) continue; // Gleis unter der Straßenbrücke: andere Ebene, keine Sperre
         if (segDist2(mx, my, s.ax, s.ay, s.bx, s.by) < (s.e.w / 2 - 1) ** 2) { bad++; break; }
       }
     }

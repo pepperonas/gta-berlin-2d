@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { levelOf, isBridge } from '../tools/osm/levels.mjs';
-import { packLvl, unpackLvl, LVL_MIN, LVL_MAX } from '../web/src/citycodes.js';
+import { packLvl, unpackLvl, LVL_MIN, LVL_MAX, SURFACE } from '../web/src/citycodes.js';
 import { stepLevel, initialLevel } from '../web/src/levels.js';
 import { levelSurfaces, surfacesOver, onSurface, trackLevel } from '../web/src/occlusion.js';
 import { openRealCity, realIndex, geoToPx } from './helpers/city.js';
@@ -176,3 +176,96 @@ test('Zeichnen nach Ebenen: Auto unter der Brücke kommt vor der Brücke und bek
 function reverse(p) { const o = []; for (let i = p.length - 2; i >= 0; i -= 2) o.push(p[i], p[i + 1]); return o; }
 function polyLen(p) { let s = 0; for (let i = 0; i < p.length - 2; i += 2) s += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]); return s; }
 function inPortal(city, x, y) { return city.portals.query({ x: x - 1, y: y - 1, w: 2, h: 2 }, []).some((p) => Math.hypot(x - p.x, y - p.y) <= p.r + 20); }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Physik nach Ebenen: Wände, Kontakte, KI, Schüsse und Untergrund gelten nur auf der eigenen Ebene
+// ---------------------------------------------------------------------------------------------------------------
+import { blocks, createCar, stepCar, collideCarWorld } from '../web/src/car.js';
+import { touch } from '../web/src/levels.js';
+import { obstacleAhead } from '../web/src/traffic.js';
+import { castRay } from '../web/src/combat.js';
+import { surfaceAt, T, onRoad } from '../web/src/map.js';
+
+test('Sperren nach Ebene: Stadtgrenze immer, Häuser/Bäume/Poller am Boden, Wände nur auf ihrer Ebene', () => {
+  const w = {};
+  assert.ok(blocks(w, { seg: true, kind: 'border' }, 2), 'Stadtgrenze sperrt jede Ebene');
+  assert.ok(blocks(w, { seg: true, kind: 'building' }, 0) && blocks(w, { seg: true, kind: 'building' }, -1));
+  assert.ok(!blocks(w, { seg: true, kind: 'building' }, 1), 'Brücke fährt über das Haus hinweg');
+  assert.ok(blocks(w, { x: 0, y: 0, r: 3 }, 0) && !blocks(w, { x: 0, y: 0, r: 3 }, 1), 'Baum');
+  assert.ok(blocks(w, { seg: true, kind: 'wall', lvl: 1 }, 1) && !blocks(w, { seg: true, kind: 'wall', lvl: 1 }, 0) && !blocks(w, { seg: true, kind: 'wall', lvl: 1 }, -1), 'Geländer');
+  assert.ok(blocks(w, { seg: true, kind: 'wall' }, 0) && !blocks(w, { seg: true, kind: 'wall' }, 1), 'Ufer am Boden');
+  assert.ok(!blocks({ knocked: new Map([['k', 0]]) }, { layer: 'barrier', key: 'k', x: 0, y: 0, r: 2 }, 0), 'umgefahrener Poller');
+});
+
+test('Warschauer Brücke: das Geländer steht über der Unterführung – unten fährt man durch, oben nicht; Ufer laufen unter Brücken weiter', () => {
+  const { city } = warschau();
+  const under = [...city.edges.values()].filter((e) => e.name === 'Tamara-Danz-Straße' && e.lvl === -1);
+  // eine Stelle der Unterführung, über der ein Brückengeländer (Ebene ≥ 1) die Fahrbahn quert
+  let cross = null;
+  for (const e of under) for (const [x, y] of walk(e.pts, 5)) {
+    if (cross) break;
+    for (const s of city.solids.query({ x: x - 3, y: y - 3, w: 6, h: 6 }, [])) {
+      if (!s.seg || s.kind !== 'wall' || !(s.lvl >= 1)) continue;
+      const dx = s.bx - s.ax, dy = s.by - s.ay, L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (y - s.ay) * dy) / L2));
+      if (Math.hypot(s.ax + dx * t - x, s.ay + dy * t - y) < 3) { cross = { x, y, e, wall: s }; break; }
+    }
+  }
+  assert.ok(cross, 'Geländer der Brücke quert die Unterführung (vorher wurde es dort weggeschnitten)');
+  // ein Auto fährt die Unterführung entlang durch diese Stelle: auf Ebene −1 frei, mit Ebene 1 prallt es am Geländer ab
+  const drive = (lvl) => {
+    const p = cross.e.pts;
+    let best = 0; for (let i = 0; i < p.length - 2; i += 2) { const d = Math.hypot(p[i] - cross.x, p[i + 1] - cross.y); if (i === 0 || d < best) best = i; }
+    const i = Math.min(best, p.length - 4), a = Math.atan2(p[i + 3] - p[i + 1], p[i + 2] - p[i]);
+    const c = createCar({ x: cross.x - Math.cos(a) * 80, y: cross.y - Math.sin(a) * 80, angle: a }); c.lvl = lvl;
+    c.vx = Math.cos(a) * 250; c.vy = Math.sin(a) * 250;
+    const world = { solids: city.solids, knocked: new Map() }, ev = [];
+    for (let k = 0; k < 60; k++) { c.controls.throttle = 0.4; stepCar(c, 1 / 60, city); collideCarWorld(c, world, ev); }
+    return (c.x - cross.x) * Math.cos(a) + (c.y - cross.y) * Math.sin(a); // wie weit hinter dem Geländer
+  };
+  assert.ok(drive(-1) > 60, 'unten: unter der Brücke hindurch');
+  assert.ok(drive(1) < 5, 'Gegenprobe: auf Ebene 1 ist es eine Wand');
+  // Ufer unter der Oberbaumbrücke: Uferwand (Ebene 0) liegt jetzt unter der Brückenfahrbahn
+  const meta = realIndex().meta, c2 = openRealCity(), [ox, oy] = geoToPx(meta, 52.50195, 13.44565);
+  c2.loadArea(ox - 3000, oy - 3000, ox + 3000, oy + 3000);
+  const ob = [...c2.edges.values()].filter((e) => e.name === 'Oberbaumbrücke');
+  const quayUnder = c2.list('wall').filter((w) => w.sub === 'quay').some((w) => w.pts.some((_, i) => i % 2 === 0 && ob.some((e) => onSurface(levelSurfaces({ edges: [e] }, 1)[0], w.pts[i], w.pts[i + 1]))));
+  assert.ok(quayUnder, 'Kaimauer läuft unter der Brücke durch');
+  // Untergrund: oben Brücke, unten Wasser
+  const e = ob[0], mx = (e.pts[0] + e.pts[e.pts.length - 2]) / 2, my = (e.pts[1] + e.pts[e.pts.length - 1]) / 2;
+  assert.notEqual(surfaceAt(c2, mx, my, 1), T.WATER, 'auf der Brücke kein Wasser');
+  // auf der Fahrbahnachse mitten über der Spree: oben Straße, unten Wasser
+  const onWater = [];
+  const along = walk(e.pts, 10);
+  for (const [x, y] of along.slice(Math.floor(along.length * 0.2), Math.ceil(along.length * 0.8))) if (surfaceAt(c2, x, y, 0) === T.WATER) onWater.push([x, y]);
+  assert.ok(onWater.length, 'unter der Brückenfahrbahn liegt Wasser (Ebene 0)');
+  const [wx, wy] = onWater[Math.floor(onWater.length / 2)];
+  assert.equal(surfaceAt(c2, wx, wy, 1), e.cs.surface === SURFACE.cobble ? T.COBBLE : T.ROAD, 'oben: Fahrbahn der Brücke');
+  // neben der Fahrbahn auf der Brücke (Gehweg): oben fester Grund, unten weiter Wasser
+  const ux = e.pts[e.pts.length - 2] - e.pts[0], uy = e.pts[e.pts.length - 1] - e.pts[1], ul = Math.hypot(ux, uy) || 1;
+  let side = null;
+  for (const sgn of [1, -1]) {
+    const off = e.w / 2 + Math.abs(e.fill ?? 0) + 30, sx = wx - uy / ul * off * sgn, sy = wy + ux / ul * off * sgn;
+    if (!side && surfaceAt(c2, sx, sy, 0) === T.WATER && !onRoad(c2, sx, sy, 0, 1)) side = [sx, sy];
+  }
+  assert.ok(side, 'Stelle neben der Brückenfahrbahn über dem Wasser');
+  assert.equal(surfaceAt(c2, side[0], side[1], 1), T.PLAZA, 'Gehweg/Deck der Brücke, nicht Wasser');
+});
+
+test('Kontakte nur auf derselben Ebene (im Portal beide): Auto oben bremst nicht für Auto unten, Schuss trifft nicht durchs Deck', () => {
+  const city = { portals: { query: () => [{ x: 0, y: 0, r: 50, lo: 0, hi: 1 }] } };
+  assert.ok(touch(city, { x: 500, y: 0, lvl: 1 }, { x: 510, y: 0, lvl: 1 }));
+  assert.ok(!touch(city, { x: 500, y: 0, lvl: 1 }, { x: 510, y: 0, lvl: 0 }), 'über/unter der Brücke');
+  assert.ok(touch(city, { x: 10, y: 0, lvl: 1 }, { x: -10, y: 0, lvl: 0 }), 'am Rampenfuß berühren sich beide Ebenen');
+  assert.ok(!touch(city, { x: 10, y: 0, lvl: 2 }, { x: -10, y: 0, lvl: 0 }), 'Portal verbindet nur seine Ebenen');
+  // KI: stehendes Auto direkt voraus – auf derselben Ebene ein Hindernis, eine Ebene tiefer nicht
+  const me = createCar({ x: 1000, y: 1000, angle: 0 }); me.lvl = 1; me.driver = 'npc';
+  const other = createCar({ x: 1050, y: 1000, angle: 0 }); other.driver = null;
+  const world = { city: { portals: { query: () => [] } }, cars: [me, other], peds: [], bikes: [], railObs: [], player: { inCar: 1, x: 0, y: 0 } };
+  other.lvl = 1; assert.ok(obstacleAhead(me, world).dOther < 100, 'gleiche Ebene: bremsen');
+  other.lvl = -1; assert.equal(obstacleAhead(me, world).dOther, Infinity, 'darunter: weiterfahren');
+  // Schuss: trifft den Passanten auf der eigenen Ebene, den auf der Straße unter der Brücke nicht
+  const ped = { x: 1100, y: 1000, lvl: 0, state: 'walk' };
+  const w2 = { solids: { query: () => [] }, peds: [ped], cars: [], player: { inCar: null } };
+  assert.equal(castRay(w2, 1000, 1000, 0, 300, null, 0).hit?.obj, ped);
+  assert.equal(castRay(w2, 1000, 1000, 0, 300, null, 1).hit, null, 'durchs Deck hindurch trifft man nicht');
+});

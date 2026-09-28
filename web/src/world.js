@@ -4,7 +4,7 @@ import { PLAYER, PED, TRAFFIC, CAR, PARKED, CLOCK } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
-import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage, isDown } from './car.js';
+import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage, blocks } from './car.js';
 import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
 import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
@@ -25,7 +25,7 @@ import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js'
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
-import { stepLevel, initialLevel } from './levels.js';
+import { stepLevel, initialLevel, touch } from './levels.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -256,7 +256,7 @@ export function openSpot(w, x, y, car) {
     if (!car) return spotFree(w, px, py, PLAYER.radius + 2);
     const probe = { x: px, y: py, angle, hw: CAR.length / 2 + 4, hh: CAR.width / 2 + 4 };
     for (const s of w.solids.query(obbBounds(probe), [])) {
-      if (isDown(w, s)) continue;
+      if (!blocks(w, s, 0)) continue;
       if (s.seg ? obbVsSegment(probe, s) : s.r !== undefined ? circleVsObb(s.x, s.y, s.r, probe) : obbVsRect(probe, s)) return false;
     }
     // die ganze Karosserie auf festem Grund (nicht halb im Wasser)
@@ -323,6 +323,7 @@ export function parkingSlots(city, e) {
 function slotFree(w, slot) {
   const probe = { x: slot.x, y: slot.y, angle: slot.angle, hw: CAR.length / 2, hh: CAR.width / 2 };
   for (const s of w.solids.query(obbBounds(probe), [])) {
+    if (!blocks(w, s, 0)) continue;
     const m = s.seg ? obbVsSegment(probe, s) : s.r !== undefined ? circleVsObb(s.x, s.y, s.r, probe) : obbVsRect(probe, s);
     if (m && m.depth > 1) return false;
   }
@@ -370,16 +371,16 @@ const tmp = [];
 function pushCircleOutOfWorld(w, obj, r) {
   const box = { x: obj.x - r - 2, y: obj.y - r - 2, w: 2 * r + 4, h: 2 * r + 4 };
   for (const s of w.solids.query(box, tmp)) {
-    if (isDown(w, s)) continue;
+    if (!blocks(w, s, obj.lvl)) continue;
     const m = s.seg ? circleVsSegment(obj.x, obj.y, r, s) : s.r !== undefined ? circleVsCircle(obj.x, obj.y, r, s.x, s.y, s.r) : circleVsRect(obj.x, obj.y, r, s);
     if (m) { obj.x += m.nx * m.depth; obj.y += m.ny * m.depth; }
   }
 }
 
-function spotFree(w, x, y, r, ignoreCar) {
+function spotFree(w, x, y, r, ignoreCar, lvl = 0) {
   const box = { x: x - r, y: y - r, w: 2 * r, h: 2 * r };
   for (const s of w.solids.query(box, tmp)) {
-    if (isDown(w, s)) continue;
+    if (!blocks(w, s, lvl)) continue;
     const m = s.seg ? circleVsSegment(x, y, r, s) : s.r !== undefined ? circleVsCircle(x, y, r, s.x, s.y, s.r) : circleVsRect(x, y, r, s);
     if (m) return false;
   }
@@ -527,7 +528,7 @@ export function updateWorld(w, input, dt) {
   }
   for (let i = 0; i < w.cars.length; i++) for (let j = i + 1; j < w.cars.length; j++) {
     const a = w.cars[i], b = w.cars[j];
-    const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r) collideCars(a, b, w.events);
+    const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r && touch(w.city, a, b)) collideCars(a, b, w.events);
   }
 
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
@@ -559,7 +560,7 @@ export function updateWorld(w, input, dt) {
   if (!p.inCar) {
     for (const c of w.cars) {
       const mm = circleVsObb(p.x, p.y, PLAYER.radius, c);
-      if (!mm) continue;
+      if (!mm || !touch(w.city, p, c)) continue;
       p.x += mm.nx * mm.depth; p.y += mm.ny * mm.depth;
       if (speedOf(c) > 120 && p.stun <= 0 && !p.dead) { p.stun = 0.8; w.events.push({ type: 'bump', x: p.x, y: p.y }); hurtPlayer(w, speedOf(c) * 0.12, c.x, c.y); }
     }
@@ -589,7 +590,7 @@ export function updateWorld(w, input, dt) {
     for (const c of w.cars) {
       if (ped.state === 'down') break;
       const mm = circleVsObb(ped.x, ped.y, PED.radius, c);
-      if (!mm) continue;
+      if (!mm || !touch(w.city, ped, c)) continue;
       if (speedOf(c) > 55) {
         knockDown(ped, c.x, c.y);
         w.events.push({ type: 'hit', x: ped.x, y: ped.y });

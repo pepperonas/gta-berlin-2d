@@ -100,3 +100,18 @@ export function stepLevel(city, obj) {
   }
   return obj.lvl ?? 0;
 }
+
+// Können sich zwei Objekte berühren (Stoß, Kontakt, Hindernis für die KI, Schuss)? Auf derselben Ebene immer; auf
+// verschiedenen nur, wenn beide im selben Portal stehen, das beide Ebenen verbindet (am Rampenfuß wechseln zwei dicht
+// hintereinander fahrende Autos nicht im selben Moment die Ebene – sie dürfen dort nicht durcheinander hindurchfahren).
+export function touch(city, a, b) {
+  const la = a.lvl ?? 0, lb = b.lvl ?? 0;
+  if (la === lb) return true;
+  if (!city?.portals) return false;
+  for (const p of city.portals.query(around(a.x, a.y, 1), qTouch)) {
+    if (la < p.lo || la > p.hi || lb < p.lo || lb > p.hi) continue;
+    if (Math.hypot(a.x - p.x, a.y - p.y) <= p.r + 30 && Math.hypot(b.x - p.x, b.y - p.y) <= p.r + 30) return true;
+  }
+  return false;
+}
+const qTouch = [];

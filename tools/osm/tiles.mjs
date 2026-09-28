@@ -69,7 +69,7 @@ export function tileCity(g, { tile, meta, places }) {
   const lines = (list, maxLen, rec) => { for (const it of list) for (const piece of chunkPolyline(it.p, maxLen)) { const id = gid++; each(bboxOf(piece), (t) => rec(t, id, it, piece)); } };
   lines(g.paths, tile, (t, id, it, p) => t.paths.push([id, it.br | (it.pass << 1) | (packLvl(it.lvl ?? 0) << 2), delta(p)])); // Ebene: Bits 2–4
   lines(g.rails, tile, (t, id, it, p) => t.rails.push([id, it.br, it.sub, delta(p), ...(it.lvl ? [it.lvl] : [])])); // Ebene optional
-  lines(g.walls.map((p, i) => ({ p, kind: g.wallKind?.[i] ?? 0 })), tile / 2, (t, id, it, p) => t.walls.push([id, it.kind, delta(p)]));
+  lines(g.walls.map((p, i) => ({ p, kind: g.wallKind?.[i] ?? 0, lvl: g.wallLvl?.[i] ?? 0 })), tile / 2, (t, id, it, p) => t.walls.push(it.lvl ? [id, it.kind, delta(p), it.lvl] : [id, it.kind, delta(p)]));
   lines(g.border.map((r) => ({ p: [...r, r[0], r[1]], kind: WALL_KIND.border })), tile / 2, (t, id, it, p) => t.walls.push([id, it.kind, delta(p)]));
   lines(g.access.fences.map(([k, p]) => ({ p, k })), tile / 2, (t, id, it, p) => t.fences.push([id, it.k, delta(p)]));
 

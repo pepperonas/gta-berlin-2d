@@ -1,6 +1,7 @@
 // Verkehr: Rechtsverkehr auf dem echten Straßennetz. KI-Fahrer folgen ihrer Spur (Pure Pursuit),
 // wählen an Kreuzungen die nächste Spur, bremsen vor Kurven und Hindernissen, lösen Blockaden,
 // fahren sich frei und suchen nach einem Unfall die nächste passende Spur.
+import { touch } from './levels.js';
 import { clamp, wrapAngle } from './math.js';
 import { forwardSpeed } from './car.js';
 import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane, laneDir } from './roadgraph.js';
@@ -215,7 +216,7 @@ function zebraAhead(car, world) {
     const rx = z.x - car.x, ry = z.y - car.y, along = rx * c + ry * s;
     if (along <= 0 || along > 200 || Math.abs(-rx * s + ry * c) > z.edge.w / 2 + 20) continue;
     const reach = z.edge.w / 2 + 25;
-    if (world.peds.some((p) => p.state !== 'down' && Math.hypot(p.x - z.x, p.y - z.y) < reach)) best = Math.min(best, along);
+    if (world.peds.some((p) => p.state !== 'down' && Math.hypot(p.x - z.x, p.y - z.y) < reach && touch(world.city, car, p))) best = Math.min(best, along);
   }
   return best;
 }
@@ -224,13 +225,14 @@ function zebraAhead(car, world) {
 // Gemessen wird entlang des Wegs, den das Auto gleich fährt (Route ab der Fahrzeugmitte), nicht entlang seiner Achse:
 // mitten im Abbiegen zeigt die Achse noch schräg, und ein Auto, das auf der Gegenspur korrekt wartet, läge sonst „im Weg“
 // – beide warteten dann ewig aufeinander.
-function obstacleAhead(car, world) {
+export function obstacleAhead(car, world) {
   const c = Math.cos(car.angle), s = Math.sin(car.angle);
   let dCar = Infinity, dOther = Infinity, playerBlock = false, blocker = null, pedBlock = false;
   const path = aheadPath(car);
   // Längere/breitere Fahrzeuge (LKW, Müllauto): Abstände gelten zwischen den Stoßstangen wie bei zwei Pkw (42 × 20 px)
   const myL = car.hw - 21, myW = car.hh - 10;
   const check = (ox, oy, lat, isAiCar, isPlayer, obj = null, isPed = false) => {
+    if (obj && !touch(world.city, car, obj)) return; // auf der Brücke bremst niemand für den Verkehr darunter
     const rx = ox - car.x, ry = oy - car.y;
     const oL = obj?.hw !== undefined ? obj.hw - 21 : 0, ext = myL + oL;
     if (rx * rx + ry * ry > (110 + ext) ** 2) return;
@@ -262,7 +264,7 @@ function obstacleAhead(car, world) {
   for (const b of world.bikes ?? []) if (b.state === 'ride') check(b.x, b.y, 14, false, false, b, true); // Radfahrer: dahinter bleiben
   for (const o of world.railObs ?? []) check(o.x, o.y, 22, false, false, o); // Straßenbahnwagen: warten, bis sie vorbei sind
   const pl = world.player;
-  if (!pl.inCar) check(pl.x, pl.y, 17, false, true);
+  if (!pl.inCar && touch(world.city, car, pl)) check(pl.x, pl.y, 17, false, true);
   return { dCar, dOther, playerBlock, blocker, pedBlock };
 }
 
@@ -558,7 +560,7 @@ export function mayEnter(world, car, from, to) {
   // Dahinter Platz? Kein stehendes Auto kurz hinter der Einmündung (sonst blockiert man die Kreuzung)
   const sx = to.pts[0], sy = to.pts[1], ux = to.pts[2] - sx, uy = to.pts[3] - sy, L = Math.hypot(ux, uy) || 1;
   for (const o of world.cars) {
-    if (o === car || o.wrecked) continue;
+    if (o === car || o.wrecked || !touch(world.city, car, o)) continue;
     const rx = o.x - sx, ry = o.y - sy, along = (rx * ux + ry * uy) / L, lat = Math.abs(-rx * uy + ry * ux) / L;
     if (along > -10 && along < 55 && lat < 14 && Math.hypot(o.vx, o.vy) < 25) return false;
   }
