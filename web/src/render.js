@@ -26,6 +26,7 @@ import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
 import { roofOf } from './roofs.js';
+import { wallColor, roofColors } from './buildcolors.js';
 import { WEAPONS } from './combat.js';
 import { benchAngle } from './life.js';
 import { FURN_KIND } from './citycodes.js';
@@ -34,15 +35,6 @@ const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
   [AREA_KIND.cemetery]: '#5b8a47', [AREA_KIND.grass]: '#5d9340', [AREA_KIND.pitch]: '#4d8c3c',
   [AREA_KIND.sand]: '#d6c48d', [AREA_KIND.wood]: '#3e7631', [AREA_KIND.bridge]: '#8c7a68',
-};
-const WALLS = {
-  [BUILDING_KIND.house]: ['#c9b79c', '#d6c7a1', '#c4a484', '#b8a488', '#d9c9b3', '#c7a9a0', '#b3aa9a', '#d4bfa0', '#a89080', '#e0d4bd'],
-  [BUILDING_KIND.public]: ['#a3b1a0', '#9aa3ab', '#b0aaa0', '#c2b8a6'],
-  [BUILDING_KIND.industrial]: ['#8f9aa6', '#9aa0a3', '#858d93', '#a3a8a0'],
-  [BUILDING_KIND.church]: ['#a0674e', '#8f5a45'],
-  [BUILDING_KIND.small]: ['#9d968c', '#8c877f'],
-  [BUILDING_KIND.spaeti]: ['#d9c46a'],
-  [BUILDING_KIND.warehouse]: ['#7f8a93'],
 };
 // POI-Darstellung: Farbe und Kurzzeichen je Kategorie (Haltestellen wie im Berliner Liniennetz: U blau, S grün, H gelb).
 export const POI_STYLE = {
@@ -228,12 +220,26 @@ function facadePatterns(ctx) {
   return f;
 }
 
-const ROOF_TILE = ['#9c5a44', '#a8664c', '#8f5240', '#b0725a', '#74655e'];
-const ROOF_FLAT = '#8b857d';
-function mix(hexA, hexB, t) {
-  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
-  const c = (sh) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t);
-  return `#${((1 << 24) | (c(16) << 16) | (c(8) << 8) | c(0)).toString(16).slice(1)}`;
+// Dachflächen nach Fallrichtung gebündelt (je 22,5° ein Pfad): ein fill je Richtung statt je Fläche. Einmal je Gebäude.
+function roofPaths(g) {
+  const bins = new Map();
+  for (const f of g.facets) {
+    const k = ((Math.round(Math.atan2(f.ny, f.nx) / (Math.PI / 8)) % 16) + 16) % 16;
+    let e = bins.get(k);
+    if (!e) bins.set(k, e = { path: new Path2D(), nx: Math.cos(k * Math.PI / 8), ny: Math.sin(k * Math.PI / 8) });
+    const q = f.pts;
+    e.path.moveTo(q[0], q[1]); e.path.lineTo(q[2], q[3]); e.path.lineTo(q[4], q[5]); e.path.lineTo(q[6], q[7]); e.path.closePath();
+  }
+  const seg = (a) => { if (!a.length) return null; const pa = new Path2D(); for (let i = 0; i < a.length; i += 4) { pa.moveTo(a[i], a[i + 1]); pa.lineTo(a[i + 2], a[i + 3]); } return pa; };
+  return { bins: [...bins.values()], courses: seg(g.courses), ridges: seg(g.ridges) };
+}
+const ROOF_DEFAULT_SUN = { dx: 0.55, dy: 0.84, strength: 0.5 }; // Schatten nach rechts unten = Licht von links oben
+// Farbe einer Dachfläche nach Neigung zur Sonne (gerastert und je Gebäude zwischengespeichert)
+function roofShade(col, lit) {
+  const k = Math.max(-10, Math.min(10, Math.round(lit * 10)));
+  let c = col.lit[k + 10];
+  if (!c) c = col.lit[k + 10] = shade(col.roofHex, k > 0 ? k * 0.026 : k * 0.034);
+  return c;
 }
 
 let windowPatterns = null;
@@ -340,6 +346,19 @@ function drawDecor(ctx, d) {
   else if (d.t === 'solar') { ctx.fillRect(-l / 2 + 0.8, -w / 2 + 0.8, l - 1.6, w - 1.6); ctx.fillStyle = 'rgba(160,190,230,0.35)'; for (let x = -l / 2 + l / 5; x < l / 2; x += l / 5) ctx.fillRect(x, -w / 2, 0.6, w); }
   else if (d.t === 'terrace') { for (let y = -w / 2 + 2; y < w / 2; y += 4) ctx.fillRect(-l / 2 + 1, y, l - 2, 1.6); }
   else ctx.fillRect(-l / 2 + 1.5, -w / 2 + 1.5, l - 3, w - 3);
+  ctx.restore();
+}
+
+// Gaube: kleines Satteldach quer zur Traufe, Fenster zur Traufseite
+function drawDormer(ctx, d, col, sun) {
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a);
+  const w = d.w, l = d.l, ly = -Math.sin(d.a) * d.nx + Math.cos(d.a) * d.ny, s = ly >= 0 ? 1 : -1;
+  const ux = Math.cos(d.a), uy = Math.sin(d.a);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(-w / 2 + 1.2, -l / 2 + 1.2, w, l);
+  ctx.fillStyle = roofShade(col, facadeLight(-ux, -uy, sun)); ctx.fillRect(-w / 2, -l / 2, w / 2, l);
+  ctx.fillStyle = roofShade(col, facadeLight(ux, uy, sun)); ctx.fillRect(0, -l / 2, w / 2, l);
+  ctx.fillStyle = col.faces[1]; ctx.fillRect(-w / 2, s > 0 ? l / 2 - 2.4 : -l / 2, w, 2.4); // Stirnseite in Fassadenfarbe
+  ctx.fillStyle = '#39414d'; ctx.fillRect(-w * 0.25, s > 0 ? l / 2 - 2 : -l / 2 + 0.4, w * 0.5, 1.6);
   ctx.restore();
 }
 
@@ -885,37 +904,46 @@ export class Renderer {
   // An Kreuzungen enden die Markierungen am Rand der Querstraße.
   // Dach in Dachkoordinaten (bereits um die Schrägansicht verschoben)
   drawRoof(ctx, b, col, roof, p) {
-    ctx.fillStyle = col.roof; ctx.fill(p, 'evenodd');
-    const hi = this.quality === 'high';
-    if (roof.style === 'pitched' || roof.style === 'corrugated') {
-      const a = roof.axis, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
-      const r = b.rings[0];
+    ctx.fillStyle = col.center; ctx.fill(p, 'evenodd');
+    const hi = this.quality === 'high', g = roof.geo;
+    const L = this.light?.sun;
+    const sun = L && L.strength > 0.05 ? { dx: L.dx, dy: L.dy, strength: Math.max(0.45, L.strength) } : ROOF_DEFAULT_SUN;
+    if (g.dome) { // Kuppel: Kreis mit Glanz zur Sonne, Rippen, Laterne
+      const { x, y, r } = g.dome, sl = Math.hypot(sun.dx, sun.dy) || 1;
+      ctx.fillStyle = col.roof; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(x + sun.dx / sl * r * 0.25, y + sun.dy / sl * r * 0.25, r * 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(x - sun.dx / sl * r * 0.32, y - sun.dy / sl * r * 0.32, r * 0.45, 0, Math.PI * 2); ctx.fill();
+      if (hi) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; ctx.moveTo(x + Math.cos(a) * r * 0.2, y + Math.sin(a) * r * 0.2); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+        ctx.stroke();
+      }
+      ctx.fillStyle = col.parapet; ctx.beginPath(); ctx.arc(x, y, Math.max(3, r * 0.18), 0, Math.PI * 2); ctx.fill();
+    } else if (g.facets.length) { // geneigte Flächen, je Fallrichtung nach Sonnenstand schattiert
+      const rp = (b._roofPaths ??= roofPaths(g));
+      ctx.save(); ctx.clip(p, 'evenodd');
+      for (const bin of rp.bins) { ctx.fillStyle = roofShade(col, facadeLight(bin.nx, bin.ny, sun)); ctx.fill(bin.path); }
+      if (hi && rp.courses) { ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1; ctx.stroke(rp.courses); }
+      if (rp.ridges) { ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1.1; ctx.stroke(rp.ridges); }
+      ctx.restore();
+      if (hi) for (const d of g.dormers) drawDormer(ctx, d, col, sun);
+    } else if (roof.style === 'corrugated' && hi) { // Wellblech: Rillen quer zur Hauptachse
+      const a = roof.axis, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux, r = b.rings[0];
       let t0 = Infinity, t1 = -Infinity, wmax = 0;
       for (let i = 0; i < r.length; i += 2) {
         const qx = r[i] - b.cx, qy = r[i + 1] - b.cy, t = qx * ux + qy * uy, w = Math.abs(qx * nx + qy * ny);
         if (t < t0) t0 = t; if (t > t1) t1 = t; if (w > wmax) wmax = w;
       }
       ctx.save(); ctx.clip(p, 'evenodd');
-      if (roof.style === 'pitched') { // Satteldach: eine Dachhälfte im Schatten, First entlang der Hauptachse
-        const B = 1e4;
-        ctx.fillStyle = col.roofB; ctx.beginPath();
-        ctx.moveTo(b.cx - ux * B, b.cy - uy * B); ctx.lineTo(b.cx + ux * B, b.cy + uy * B);
-        ctx.lineTo(b.cx + ux * B + nx * B, b.cy + uy * B + ny * B); ctx.lineTo(b.cx - ux * B + nx * B, b.cy - uy * B + ny * B); ctx.fill();
-        const inset = Math.min(wmax * 0.9, (t1 - t0) / 2);
-        ctx.strokeStyle = col.parapet; ctx.lineWidth = 1.5; ctx.beginPath();
-        ctx.moveTo(b.cx + ux * (t0 + inset), b.cy + uy * (t0 + inset)); ctx.lineTo(b.cx + ux * (t1 - inset), b.cy + uy * (t1 - inset)); ctx.stroke();
-      } else if (hi) { // Wellblech: Rillen quer zur Hauptachse
-        ctx.strokeStyle = 'rgba(0,0,0,0.13)'; ctx.lineWidth = 1; ctx.beginPath();
-        for (let t = Math.ceil(t0 / 6) * 6; t < t1; t += 6) {
-          ctx.moveTo(b.cx + ux * t - nx * wmax, b.cy + uy * t - ny * wmax); ctx.lineTo(b.cx + ux * t + nx * wmax, b.cy + uy * t + ny * wmax);
-        }
-        ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.13)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let t = Math.ceil(t0 / 6) * 6; t < t1; t += 6) {
+        ctx.moveTo(b.cx + ux * t - nx * wmax, b.cy + uy * t - ny * wmax); ctx.lineTo(b.cx + ux * t + nx * wmax, b.cy + uy * t + ny * wmax);
       }
-      ctx.restore();
-    } else {
-      if (hi) { const gr = texture(ctx, 'gravel'); if (gr) { ctx.fillStyle = gr; ctx.fill(p, 'evenodd'); } }
-      if (roof.style === 'berlin') { ctx.strokeStyle = col.rim; ctx.lineWidth = 7; ctx.stroke(p); } // Ziegelrand zur Straße und zum Hof
-      ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p);                            // Attika
+      ctx.stroke(); ctx.restore();
+    }
+    if (roof.style === 'flat' || roof.style === 'berlin' || roof.style === 'mansard') {
+      if (hi && roof.style === 'flat') { const gr = texture(ctx, 'gravel'); if (gr) { ctx.fillStyle = gr; ctx.fill(p, 'evenodd'); } }
+      if (roof.style === 'flat') { ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p); } // Attika
     }
     if (hi) for (const d of roof.decor) drawDecor(ctx, d);
     ctx.strokeStyle = col.line; ctx.lineWidth = 1.3; ctx.stroke(p);
@@ -1074,14 +1102,9 @@ export class Renderer {
     const dy = -H * 0.5 + (b.cy - cam.y) * H * 0.00025;
     const roof = roofOf(b);
     if (!b._col) {
-      const pal = WALLS[b.kind] ?? WALLS[0];
-      const wall = pal[b.seed % pal.length];
-      const tile = ROOF_TILE[(b.seed >> 3) % ROOF_TILE.length];
-      const K = BUILDING_KIND;
-      const base = roof.style === 'pitched' ? (b.kind === K.church ? ((b.seed >> 5) % 3 ? '#555b64' : '#5f8f7f') : b.kind === K.small ? mix(wall, '#6f6a62', 0.5) : tile)
-        : roof.style === 'corrugated' ? (b.kind === K.warehouse ? '#7f8a93' : mix(wall, '#9aa2a8', 0.6))
-          : b.kind === K.spaeti ? shade(wall, 0.08) : mix(wall, ROOF_FLAT, 0.55);
-      b._col = { roof: base, roofB: shade(base, -0.2), rim: tile, parapet: shade(base, 0.2), line: shade(wall, -0.3),
+      const wall = wallColor(b, roof.facade);
+      const rc = roofColors(b, roof.style, wall);
+      b._col = { roof: rc.skin, roofHex: rc.skin, center: rc.center, parapet: shade(rc.center, 0.2), line: shade(wall, -0.3), lit: [],
         faces: [shade(wall, -0.12), shade(wall, -0.24), shade(wall, -0.36)],
         pat: facadePatterns(ctx)[roof.facade][(b.seed >> 7) % 3] };
     }

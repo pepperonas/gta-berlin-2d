@@ -31,3 +31,20 @@ export const SURFACE = { asphalt: 0, cobble: 1, plates: 2, unpaved: 3 };
 // Baumgattungen (Berliner Baumbestand, botanischer Gattungsname); Index = Code im Kartenformat, 0 = sonstige.
 export const TREE_GENERA = ['sonstige', 'Tilia', 'Acer', 'Platanus', 'Aesculus', 'Quercus', 'Robinia', 'Betula', 'Populus',
   'Carpinus', 'Fraxinus', 'Prunus', 'Salix', 'Sorbus', 'Crataegus', 'Ulmus', 'Nadel'];
+
+// Aussehen eines Gebäudes aus OSM (Kachelformat: 7. Feld „look“ als Bitfeld, 8./9. Feld Dach-/Fassadenfarbe als
+// RGB + 1, 0 = unbekannt). Unbekanntes schätzt das Spiel aus Art, Höhe, Grundriss und Bezirk (roofs.js).
+export const ROOF_SHAPE = { none: 0, flat: 1, gabled: 2, hipped: 3, pyramidal: 4, mansard: 5, skillion: 6, dome: 7, round: 8 };
+export const ROOF_MAT = { none: 0, tiles: 1, concrete: 2, tar: 3, metal: 4, glass: 5, slate: 6, green: 7 };
+export const WALL_MAT = { none: 0, plaster: 1, brick: 2, concrete: 3, glass: 4, wood: 5, stone: 6, metal: 7 };
+export const BUILDING_SUB = { none: 0, villa: 1, terrace: 2, apartments: 3, commercial: 4, civic: 5, garage: 6 };
+// Bezirke in der Reihenfolge von index.json (alphabetisch); im Bitfeld als Index + 1
+export const BEZIRKE = ['Charlottenburg-Wilmersdorf', 'Friedrichshain-Kreuzberg', 'Lichtenberg', 'Marzahn-Hellersdorf', 'Mitte',
+  'Neukölln', 'Pankow', 'Reinickendorf', 'Spandau', 'Steglitz-Zehlendorf', 'Tempelhof-Schöneberg', 'Treptow-Köpenick'];
+
+export function packLook({ shape = 0, rmat = 0, wmat = 0, sub = 0, bez = 0 }) {
+  return shape | (rmat << 4) | (wmat << 7) | (sub << 10) | (bez << 13);
+}
+export function unpackLook(v = 0) {
+  return { shape: v & 15, rmat: (v >> 4) & 7, wmat: (v >> 7) & 7, sub: (v >> 10) & 7, bez: (v >> 13) & 15 };
+}

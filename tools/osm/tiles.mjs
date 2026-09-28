@@ -72,10 +72,15 @@ export function tileCity(g, { tile, meta, places }) {
   lines(g.border.map((r) => ({ p: [...r, r[0], r[1]], kind: WALL_KIND.border })), tile / 2, (t, id, it, p) => t.walls.push([id, it.kind, delta(p)]));
   lines(g.access.fences.map(([k, p]) => ({ p, k })), tile / 2, (t, id, it, p) => t.fences.push([id, it.k, delta(p)]));
 
-  // Gebäude: [gid, Höhe dm, Art, Ringe, eigene Wandzüge oder 0, Türen oder 0]
+  // Gebäude: [gid, Höhe dm, Art, Ringe, eigene Wandzüge oder 0, Türen oder 0, Aussehen, Dachfarbe, Fassadenfarbe]
+  // (die letzten drei entfallen am Ende, wenn 0; siehe citycodes.js packLook)
   g.buildings.forEach((b) => {
     const id = gid++;
-    each(bboxOf(b.rings[0].pts), (t) => t.buildings.push([id, b.h, b.k, b.rings.map((r) => delta(r.pts)), b.walls ? b.walls.map(delta) : 0, b.doors ?? 0]));
+    each(bboxOf(b.rings[0].pts), (t) => {
+      const row = [id, b.h, b.k, b.rings.map((r) => delta(r.pts)), b.walls ? b.walls.map(delta) : 0, b.doors ?? 0, b.look ?? 0, b.rc ?? 0, b.fc ?? 0];
+      while (row.length > 6 && !row[row.length - 1]) row.pop(); // Aussehen nur, wenn bekannt
+      t.buildings.push(row);
+    });
     b.gid = id; // für Tests/Statistik
   });
   // Flächen: kleine mehrfach abgelegt (gid), große je Kachel abgeschnitten (gid −1)

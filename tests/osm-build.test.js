@@ -4,7 +4,7 @@ import { buildCity } from '../tools/osm/build.mjs';
 import { makeProjection } from '../tools/osm/geo.mjs';
 import { decodeCity, surfaceAt, locationName, districtAt, T } from '../web/src/map.js';
 import { segDist2, undelta, delta } from '../web/src/geom.js';
-import { BUILDING_KIND } from '../web/src/citycodes.js';
+import { BUILDING_KIND, ROOF_SHAPE, WALL_MAT, BUILDING_SUB, unpackLook } from '../web/src/citycodes.js';
 
 // Kleine künstliche Stadt: zwei aneinandergrenzende Bezirke, eine Straße mit Kanal und Brücke,
 // eine Einbahnstraße, ein Wohnhaus, eine Lagerhalle, ein Baum.
@@ -41,7 +41,7 @@ function fixture() {
     // Tordurchfahrt durch ein Haus
     N(80, 52.49228, 13.4254), N(81, 52.4934, 13.4254),
     N(82, 52.4925, 13.4250), N(83, 52.4925, 13.4258), N(84, 52.4931, 13.4258), N(85, 52.4931, 13.4250),
-    Wy(103, [82, 83, 84, 85, 82], { building: 'apartments' }),
+    Wy(103, [82, 83, 84, 85, 82], { building: 'apartments', 'roof:shape': 'gabled', 'roof:colour': '#a04a3a', 'building:material': 'brick' }),
     Wy(110, [80, 81], { highway: 'service', tunnel: 'building_passage' }),
     // Poller mitten auf dem Pollerweg (Modalfilter)
     N(90, 52.4935, 13.4285, { barrier: 'bollard' }), N(92, 52.4935, 13.4295),
@@ -133,6 +133,20 @@ test('Gebäude: Höhe aus Geschossen, Späti und Lagerhalle markiert, Kiez über
   assert.equal(house.meters, 13.8);
   assert.deepEqual(city.kieze.map((k) => k.n), ['Testkiez']);
   for (const t of built.tiles.values()) for (const b of t.buildings) assert.ok(undelta(b[3][0]).every(Number.isInteger), 'Ganzzahl-Koordinaten');
+});
+
+test('Gebäude: Aussehen aus OSM (Dachform, Farbe, Material, Typ, Bezirk) kommt im Spiel an', () => {
+  const withLook = L('building').filter((b) => b.roofRgb >= 0);
+  assert.equal(withLook.length, 1, 'genau das Haus mit roof:colour');
+  const b = withLook[0], lk = unpackLook(b.look);
+  assert.equal(b.roofRgb, 0xa04a3a);
+  assert.equal(b.wallRgb, -1, 'keine Fassadenfarbe angegeben');
+  assert.equal(lk.shape, ROOF_SHAPE.gabled);
+  assert.equal(lk.wmat, WALL_MAT.brick);
+  assert.equal(lk.sub, BUILDING_SUB.apartments);
+  assert.ok(lk.bez > 0, 'Bezirk eingetragen');
+  // Häuser ohne OSM-Farben kommen ohne die Farbfelder (Kachelgröße)
+  for (const t of built.tiles.values()) for (const row of t.buildings) assert.ok(row.length <= 9 && (row.length < 8 || row[row.length - 1] !== 0));
 });
 
 test('Missionsorte eingerastet, Zeitlimit aus der Route', () => {

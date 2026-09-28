@@ -274,13 +274,14 @@ function install(city, key, json) {
     addLine(r, pts, false, f.kind); track(city, 'wall', f); r.drop = () => untrack(city, 'wall', f);
   });
 
-  for (const [gid, h, kind, rings, walls, doors] of json.buildings) acquire(city, t, 'g' + gid, (r) => {
+  for (const [gid, h, kind, rings, walls, doors, look, rc, fc] of json.buildings) acquire(city, t, 'g' + gid, (r) => {
     const rs = rings.map(undelta), o = rs[0];
     let cx = 0, cy = 0; for (let i = 0; i < o.length; i += 2) { cx += o[i]; cy += o[i + 1]; }
     const b = { id: gid, kind, meters: h / 10, height: h / 10 * S, rings: rs, outer: rs.map((_, i) => i === 0), sign: rs.map(signedArea).map(Math.sign),
       cx: cx / (o.length / 2), cy: cy / (o.length / 2), bbox: bboxOf(o, {}), seed: Math.floor(hash01(gid * 7 + 3) * 1e9), layer: 'building',
       walls: walls ? walls.map(undelta) : null, // eigene Wandzüge, wo eine Tordurchfahrt die Fassade öffnet
-      doors: doors || null }; // [Ring, Kante, Anteil ×1000]
+      doors: doors || null, // [Ring, Kante, Anteil ×1000]
+      look: look || 0, roofRgb: rc ? rc - 1 : -1, wallRgb: fc ? fc - 1 : -1 }; // Aussehen aus OSM (citycodes.js unpackLook)
     put(r, city.render, b, b.bbox); put(r, city.polys, b, b.bbox);
     if (b.walls) for (const w of b.walls) addLine(r, w, false, 'building');
     else for (const ring of b.rings) addLine(r, ring, true, 'building');

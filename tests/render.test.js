@@ -160,3 +160,39 @@ test('Nacht: Laternen gezeichnet und in der Lichtkarte; Häuser verdecken Bodenl
   occl = 0; r.quality = 'high'; w.clock = 12 * 60; r.draw(w, 1280, 720, 1.2);
   assert.equal(occl, 0, 'tagsüber keine Lichtkarte');
 });
+
+test('Dächer: Flächen zur Sonne heller, abgewandte dunkler; Ziegelreihen und Gauben nur in hoher Qualität', async () => {
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
+  const { Renderer } = await import('../web/src/render.js');
+  const { roofOf } = await import('../web/src/roofs.js');
+  const { packLook, ROOF_SHAPE, BUILDING_KIND } = await import('../web/src/citycodes.js');
+  const fills = [], strokes = [];
+  const ctx = new Proxy({ lineWidth: 1 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'fill') return (p) => { if (p && typeof p === 'object') fills.push(t.fillStyle); };
+      if (k === 'stroke') return (p) => strokes.push({ w: t.lineWidth, s: t.strokeStyle, path: !!p });
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (k === 'measureText') return () => ({ width: 10 });
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const r = new Renderer(ctx);
+  const b = { rings: [[0, 0, 300, 0, 300, 120, 0, 120]], cx: 150, cy: 60, bbox: { x: 0, y: 0, w: 300, h: 120 }, kind: BUILDING_KIND.house,
+    meters: 8, height: 80, seed: 99, roofRgb: -1, wallRgb: -1, look: packLook({ shape: ROOF_SHAPE.gabled }), sign: [1] };
+  const roof = roofOf(b);
+  const col = { roof: '#808080', roofHex: '#808080', center: '#808080', parapet: '#999', line: '#333', lit: [], faces: ['#aaa', '#999', '#888'] };
+  const lum = (s) => s.match(/\d+/g).slice(0, 3).map(Number).reduce((a, c) => a + c, 0);
+  const shades = (dy) => { fills.length = 0; col.lit = []; r.light = { sun: { dx: 0, dy, strength: 1 } }; r.drawRoof(ctx, b, col, roof, new Path2D()); return fills.slice(1).map(lum); };
+  // Schatten zeigt nach unten (+y): Sonne im Norden, die Nordfläche (fällt nach −y ab) ist die helle
+  const north = roof.geo.facets.findIndex((f) => f.ny < 0);
+  const a = shades(1), bb = shades(-1);
+  assert.equal(a.length, 2, 'zwei Dachflächen');
+  assert.ok(a[north] > a[1 - north], 'Sonnenseite heller');
+  assert.ok(bb[north] < bb[1 - north], 'Sonne gewechselt: andere Seite hell');
+  r.quality = 'high'; strokes.length = 0; shades(1);
+  const courses = strokes.filter((s) => s.path && s.w === 1).length;
+  r.quality = 'low'; strokes.length = 0; shades(1);
+  assert.ok(courses > strokes.filter((s) => s.path && s.w === 1).length, 'Ziegelreihen nur in hoher Qualität');
+});

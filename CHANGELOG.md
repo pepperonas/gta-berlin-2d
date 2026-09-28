@@ -4,6 +4,28 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.16.0] – 2026-09-28
+
+### Hinzugefügt
+- Dächer mit echter Form: Sattel-, Walm-, Zelt-, Mansard-, Pult-, Tonnen- und Kuppeldach als einzelne Dachflächen,
+  je nach Sonnenstand hell oder dunkel schattiert, mit Ziegelreihen, First- und Gratlinien, Gauben und Schornsteinen
+  auf dem First. Das Berliner Dach ist ein geneigter Ziegel- oder Schieferstreifen zu Straße und Hof um eine flache
+  Bitumenmitte (vorher ein farbiger Rand). Verwinkelte Grundrisse (Blockrand mit Hof, L-Formen) bekommen den Streifen
+  entlang jeder Außen- und Hofkante mit Gehrung an den Ecken.
+- Aussehen aus OpenStreetMap: Dachform (`roof:shape`, gut 100 000 Häuser), Dach- und Fassadenfarbe
+  (`roof:colour`, `building:colour`), Dach- und Fassadenmaterial, Gebäudetyp (Villa, Reihenhaus, Mietshaus, Geschäft,
+  öffentliches Gebäude, Garage) und der Bezirk kommen je Gebäude in die Kacheln (+3 MB).
+- Mehr Abwechslung: realistische Dachfarben (Biberschwanz- und Pfannenziegel, Schiefer/Anthrazit, Betondachstein,
+  Bitumen und Kies, Kupfer auf Kirchen und Kuppeln, Gründächer), Fassaden nach Material (Backstein, Beton, Glas, Holz,
+  Naturstein), Stuckfarben im Altbau, helle Putzvillen, farbig sanierte Plattenbauten in Marzahn-Hellersdorf und
+  Lichtenberg (dort ab fünf Geschossen Platte mit Flachdach), Villen und Einfamilienhäuser mit Walm- oder Satteldach.
+
+### Geändert
+- Flachdächer grau statt beige; Dachaufbauten auf dem Berliner Dach nur noch auf der flachen Mitte.
+
+### Behoben
+- Fehlende Versionsüberschrift von 0.14.0 im Changelog.
+
 ## [0.15.0] – 2026-09-28
 
 ### Hinzugefügt
@@ -23,7 +45,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - `npm run map:fetch -- --gtfs` lädt den Fahrplan, `npm run map:transit` baut daraus `web/data/berlin/transit.json`
   (3,3 MB, ohne die Karte neu zu bauen).
 
- – 2026-09-28
+## [0.14.0] – 2026-09-28
 
 ### Hinzugefügt
 - Wetter: sonnig, wolkig, bedeckt, Regen und (nur morgens) Nebel, je drei Stunden, mit 45 Minuten Übergang; fest aus

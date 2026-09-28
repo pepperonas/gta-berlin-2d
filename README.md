@@ -115,9 +115,14 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 - **Boden mit Details:** Gehweg, Asphalt, Kopfsteinpflaster, Gras, Wald, Sand, Plätze und Gleisschotter haben
   Texturen; Bordsteine mit Rinnstein, Gullys, Kanaldeckel, Asphaltflicken, Risse und Ölflecken auf den Parkstreifen;
   Baumscheiben unter Straßenbäumen, Baumkronen als Blattballen, dunkleres Wasser am Ufer.
-- **Häuser:** Dachformen nach Gebäudeart (Berliner Dach mit Ziegelrand, Flachdach mit Attika, Satteldach, Wellblech)
-  mit Schornsteinen, Lichtschächten, Oberlichtern, Lüftungsgeräten, Solarmodulen und Dachterrassen; Fassaden als
-  Altbau, Plattenbau, Neubau oder Industriebau; Kontaktschatten am Fassadenfuß.
+- **Häuser:** Dachform aus OpenStreetMap (`roof:shape`), sonst nach Gebäudeart, Höhe und Typ geschätzt: Berliner Dach
+  (geneigter Ziegel- oder Schieferstreifen zu Straße und Hof um eine flache Mitte), Sattel-, Walm-, Zelt-, Mansard-,
+  Pult-, Tonnen- und Kuppeldach als einzelne, nach Sonnenstand schattierte Dachflächen mit Ziegelreihen, Graten,
+  Gauben und Schornsteinen; Flachdach mit Attika, Kies, Schornsteinen, Lichtschächten, Oberlichtern, Lüftungsgeräten,
+  Solarmodulen und Dachterrassen; Wellblech auf Hallen. Farben aus OSM (`roof:colour`, `building:colour`, Material),
+  sonst aus Paletten je Stil und Bezirk (Ziegel, Schiefer, Kupfer, Gründach; Stuck im Altbau, Putzvillen, farbige
+  Platte in Marzahn-Hellersdorf und Lichtenberg); Fassaden als Altbau, Plattenbau, Neubau oder Industriebau;
+  Kontaktschatten am Fassadenfuß.
 - **Autos und Menschen:** fünf Automodelle (Kleinwagen, Limousine, Kombi, Transporter, Berliner Taxi) mit Scheiben,
   Spiegeln und lenkenden Vorderrädern, Blinker der KI vor dem Abbiegen, Rückfahrlicht; Passanten mit Armen und Beinen
   im Gang, verschiedener Kleidung und Haarfarbe, manche mit Rucksack oder Tasche.
@@ -164,7 +169,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 195 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 201 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -220,7 +225,8 @@ web/                 das Spiel (statisch, läuft so im Browser und in der Xbox-H
   src/lamps.js       Standorte der Straßenlaternen (ohne Canvas)
   src/decals.js      Gullys, Kanaldeckel, Flicken, Risse, Ölflecken je Straße (ohne Canvas)
   src/textures.js    Bodentexturen als Muster
-  src/roofs.js       Dachform, Fassadenstil und Dachaufbauten je Gebäude (ohne Canvas)
+  src/roofs.js       Dachform, Dachflächen, Gauben, Fassadenstil und Dachaufbauten je Gebäude (ohne Canvas)
+  src/buildcolors.js Fassaden- und Dachfarben aus OSM, Material, Stil und Bezirk (ohne Canvas)
   src/vehicles.js    Automodelle, Sprite-Cache, Räder, Licht, Blinker
   src/combat.js      Waffen, Zielhilfe, Schüsse (Strahltest), Nahkampf, Treffer (ohne DOM)
   src/hud.js         HUD, Menüs, Overlays (Title-Safe-Rand 5 %)
@@ -315,7 +321,7 @@ in Edge `edge://inspect` mit der Konsole verbinden
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 195 automatischen Tests grün, darunter:
+- Alle 201 automatischen Tests grün, darunter:
   - die Kartenpipeline an einer kleinen künstlichen Stadt (Projektion, Grenzvereinigung, Straßengraph, Einbahnstraße,
     Kaimauer an der Brücke offen, Geländer, Gebäudehöhe, Missionsorte, Bäume an den Bordstein, POI-Kategorien,
     Bahnhof-/Adress-Dubletten, deterministischer Build);
@@ -354,9 +360,15 @@ in Edge `edge://inspect` mit der Konsole verbinden
     Fahrbahn und außerhalb der Kreuzungsfläche, auf Pflaster keine Flicken, Ölflecken nur mit Parkstreifen,
     deterministisch; jede Bodentextur genau einmal je Zeichenfläche gemalt, ohne Canvas einfarbiger Rückfall (fünf
     Mutationsproben, alle erkannt);
-  - Dächer: über 50 000 Dachaufbauten im Kerngebiet liegen ganz im Grundriss, überlappen nicht und folgen der
-    Hauptachse; Dachform und Fassade passen zur Gebäudeart (Kirchen Satteldach, Industrie Wellblech, Satteldach nur bis
-    9 m, Plattenbau nur über 24 m), einmal je Haus bestimmt und deterministisch (fünf Mutationsproben, alle erkannt);
+  - Dächer: über 60 000 Dachaufbauten im Kerngebiet liegen ganz im Grundriss (auch Schornsteine auf dem First),
+    überlappen nicht und folgen der Hauptachse; OSM-Dachformen (über 3000 Häuser im Kerngebiet) haben Vorrang,
+    geschätzte Formen passen zu Art und Höhe, alle Formen kommen vor; über 97 % der Dachflächen liegen im Grundriss,
+    keine verdrehte Fläche, Fallrichtung zur Traufe, Gauben im Grundriss, Ziegelreihen begrenzt; Rechteck mit
+    Sattel- bzw. Walmdach exakt nachgerechnet; OSM-Farben und -Materialien gehen vor, Steildächer immer in Ziegel oder
+    Schiefer, Flachdächer grau, fünfgeschossige Häuser in Marzahn-Hellersdorf sind Platte, dieselben in Mitte nicht;
+    Aussehen aus den OSM-Tags kommt über den Karten-Build im Spiel an, ohne leere Felder in den Kacheln; beim Zeichnen
+    ist die Dachfläche zur Sonne heller, wechselt mit dem Sonnenstand, Ziegelreihen nur in hoher Qualität (zwölf
+    Mutationsproben, alle erkannt; eine anfangs blinde Probe führte zu einem schärferen Bezirkstest);
   - Autos und Menschen: Modell je Auto fest, alle fünf Modelle kommen vor, Taxis elfenbein, Spielerauto Limousine;
     die KI blinkt vor dem Rechts- bzw. Linksabbiegen richtig, geradeaus und weit vor der Kreuzung nicht; Sprite-Cache
     bleibt begrenzt, ohne Canvas flacher Rückfall; Aussehen der Passanten je Person fest und vielfältig (sechs

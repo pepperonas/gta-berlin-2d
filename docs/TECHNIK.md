@@ -203,9 +203,26 @@ enthält (sonst ist der Umriss das Gebäude); ineinanderliegende Teile bilden ei
 seinem Umriss übernommen wird. `man_made=bridge`-Flächen werden Brückendecks (`AREA_KIND.bridge`), über dem Wasser
 gezeichnet. Der Index trägt alle Krankenhäuser (`hospitals`).
 
-**Häuser** (`web/src/roofs.js`, gezeichnet in `render.js drawRoof`): OSM kennt Dachformen in Berlin nur lückenhaft,
-deshalb entscheidet das Spiel aus Gebäudeart, Höhe und Seed: Altbau (12–24 m) meist mit „Berliner Dach“, niedrige
-Wohnhäuser meist Satteldach, Industrie Wellblech. Aufbauten werden je Haus einmal gewürfelt (Anzahl nach Grundfläche)
+**Häuser** (`web/src/roofs.js`, Farben `web/src/buildcolors.js`, gezeichnet in `render.js drawRoof`): Der
+Karten-Build übernimmt je Gebäude, was OSM weiß – Dachform (`roof:shape`, in Berlin an etwa jedem fünften Haus),
+Dach- und Fassadenfarbe, Material, Gebäudetyp – plus den Bezirk, als Bitfeld und zwei Farbzahlen am Ende des
+Gebäude-Eintrags (`tools/osm/looks.mjs`, Codes in `citycodes.js`; leere Felder entfallen, zusammen +3 MB). Fehlt
+die Dachform, schätzt das Spiel aus Gebäudeart, Höhe, Typ, Bezirk und Seed: Altbau (12–26 m) meist mit „Berliner
+Dach“, Villen und Einfamilienhäuser Walm- oder Satteldach, Reihenhäuser Satteldach, Plattenbauten in
+Marzahn-Hellersdorf und Lichtenberg flach, Industrie Wellblech.
+
+Die Dachgeometrie (`roofGeometry`) wird einmal je Haus gerechnet. Kompakte Grundrisse (mindestens 82 % ihres
+ausgerichteten Hüllrechtecks) bekommen das Dach über dem Rechteck: Satteldach als zwei Hälften mit First auf der
+Mittellinie, Walm-, Zelt- und Mansarddach als Streifen entlang der vier Kanten. Verwinkelte Grundrisse (Blockrand
+mit Hof, L-Formen) bekommen einen Streifen entlang jeder Außen- und Hofkante; die inneren Ecken liegen auf der
+Winkelhalbierenden (Gehrung, gedeckelt bei spitzen Winkeln), so treffen sich die Flächen auf dem Grat. Die Tiefe
+ist beim Walmdach die halbe Flügeltiefe (Fläche ÷ Umfang, beim Rechteck genau die halbe Breite – dann ist es ein
+echtes Walmdach mit First), beim Berliner Dach höchstens 4,5 m, bei der Mansarde 2,8 m. Ist eine Kante kürzer als
+die doppelte Tiefe, kehrt sich die Innenkante um; dann wird die Fläche zum Walmdreieck. Jede Fläche kennt ihre
+Fallrichtung; der Renderer bündelt die Flächen eines Hauses nach Richtung (16 Stufen, je ein `Path2D`) und färbt jedes
+Bündel nach Sonnenstand (`facadeLight`, Helligkeit in 21 Stufen je Haus zwischengespeichert). Ziegelreihen (höchstens
+320 Linien je Dach) und Grate sind je ein weiterer Pfad; der Grundriss dient als Clip. Die Zeichenzeit blieb beim
+Nachmessen an neun Orten zwischen 0,7 und 2,9 ms je Bild. Aufbauten werden je Haus einmal gewürfelt (Anzahl nach Grundfläche)
 und nur angenommen, wenn ein 5 × 5-Punkteraster über der Fläche samt Rand im Grundriss liegt. Alles hängt am
 Gebäudeobjekt und verschwindet mit ihm, wenn seine Kachel entladen wird. Niedrige Qualitätsstufe: ohne Aufbauten,
 Kiesmuster und Wellblechrillen.

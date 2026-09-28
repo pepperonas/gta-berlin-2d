@@ -9,8 +9,9 @@ import { crossSection, maxspeedOf, surfaceOf } from './crosssection.mjs';
 import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, unionOutline, bboxOfFeatures } from './geo.mjs';
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
+import { buildingLook } from './looks.mjs';
 import { ringIndex, insideIndex, pointInRings } from '../../web/src/geom.js';
-import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA, FURN_KIND, DENS_CELL_M, DTV_ESTIMATE } from '../../web/src/citycodes.js';
+import { WALL_KIND, ROAD_CLASS, ROAD_CLASSES, TRAFFIC_MAX_CLASS, AREA_KIND, BUILDING_KIND, TREE_TRUNK_M, TREE_FREE_MAX_CLASS, POI_CAT, PARK, PARK_ORIENT, TREE_GENERA, FURN_KIND, DENS_CELL_M, DTV_ESTIMATE, packLook, BEZIRKE } from '../../web/src/citycodes.js';
 
 const num = (v) => { const m = /^\s*(-?\d+(?:[.,]\d+)?)/.exec(v ?? ''); return m ? parseFloat(m[1].replace(',', '.')) : NaN; };
 
@@ -64,7 +65,7 @@ export function mergeParts(buildings, parts) {
   for (const r of roots) {
     let best = r;
     for (const q of r.group) if (q.h > best.h || (q.h === best.h && area(q) > area(best))) best = q;
-    buildings.push({ id: best.id, h: best.h, k: best.k, rings: best.rings, measured: best.measured, fromParts: true });
+    buildings.push({ id: best.id, h: best.h, k: best.k, rings: best.rings, measured: best.measured, fromParts: true, look: best.look, rc: best.rc, fc: best.fc });
   }
   return { added: roots.length, merged };
 }
@@ -246,7 +247,11 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       if (!rings.length || !rings[0].outer) continue;
       if (Math.abs(ringArea(rings[0].pts)) < 4 * S * S) continue; // < 4 m²
       const [h, measured] = buildingHeight(t);
-      const b = { id: poly.id, h: Math.round(h * 10), k: buildingKind(t), rings, measured };
+      const lk = buildingLook(t), r0 = rings[0].pts;
+      let mx = 0, my = 0;
+      for (let i = 0; i < r0.length; i += 2) { mx += r0[i]; my += r0[i + 1]; }
+      const bez = BEZIRKE.indexOf(bezirkAt(mx / (r0.length / 2), my / (r0.length / 2))) + 1;
+      const b = { id: poly.id, h: Math.round(h * 10), k: buildingKind(t), rings, measured, look: packLook({ ...lk, bez }), rc: lk.rc, fc: lk.fc };
       if (bt === 'part') parts.push(b);
       else { if (measured) heightMeasured++; buildings.push(b); }
     } else if (isWater(t)) {

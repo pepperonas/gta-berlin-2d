@@ -87,7 +87,7 @@ change in `web/`.
 - **Ground detail:** `textures.js texture(ctx, kind)` (world-space patterns, cached per context, `null` without a
   canvas → flat colour); `decals.js edgeDecals` (pure, cached `e._decals`, Path2D per kind in `e._decalPaths`); tree
   crowns are per-genus sprites in `assets.js`. Test stubs for `Path2D`/`OffscreenCanvas` must accept any method.
-- **Buildings:** `roofs.js roofOf(b)` (pure, cached `b._roof`: roof style, facade style, main axis, decor list);
+- **Buildings:** OSM look per building (`tools/osm/looks.mjs` → tile row fields 7–9: packed `look` bitfield with roof shape/materials/type/Bezirk, roof and facade RGB + 1; trailing zeros dropped; codes in `citycodes.js`, decoded as `b.look`/`b.roofRgb`/`b.wallRgb`). `roofs.js roofOf(b)` (pure, cached `b._roof`: style from OSM shape or estimate, facade style, main axis, `geo` = roof facets with fall direction + tile courses + ridges + dormers, decor list); colours from `buildcolors.js` (pure). `render.js` caches the facet `Path2D`s per building in `b._roofPaths`;
   `render.js drawRoof` draws it, facade patterns per style come from `facadePatterns(ctx)`. Beware: `tests/render.test.js`
   identifies rails by stroke width (`TRACK.rail` = 1.6), so don't reuse that width for other strokes.
 - **Cars and people (presentation only):** `vehicles.js` (model from `car.id`, sprite cache per model × colour,
