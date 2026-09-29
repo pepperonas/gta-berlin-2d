@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.30.0] – 2026-09-29
+
+### Neu
+- **Wetter wirkt aufs Fahren:** Nässe, Schnee und Glätte verlängern den Bremsweg (etwa +30 %, doppelt, dreifach),
+  lassen die Räder durchdrehen und das Heck rutschen, schwächen die Lenkung.
+- **Temperatur** (neben der Uhr) und **Glätte:** Nässe bei Frost friert über, Brücken zuerst; unter Brücken und in
+  Durchfahrten bleibt es trocken.
+- **Aquaplaning** an den sichtbaren Pfützen über etwa 70 km/h, mit Spritzwasser und Platschen.
+- **Sturmböen** versetzen Autos, auf Brücken stärker, leichte Autos mehr.
+- **KI-Verkehr** fährt bei schlechtem Wetter langsamer, bremst sanfter, hält in Fahrt mehr Abstand.
+- **Eigener Zug:** schlechtere Haftung auf nassen oder vereisten Schienen (im Tunnel trocken).
+- Warnschild über dem Tacho, Konsole `glaette` und `temp`, Statistik „Aquaplaning“.
+
 ## [0.29.0] – 2026-09-29
 
 ### Neu

@@ -466,6 +466,22 @@ wird ein Pfad je Lichtfarbe, in der Lichtkarte heller und im Nebel gedämpft.
 - Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; wo der Linienweg einer Straßenbahn in der Gegenspur
   liegt, warten entgegenkommende Busse auf die Bahn und die Bahn auf sie (offener Punkt).
 
+**Wetter auf der Straße** (`web/src/weather.js temperatureAt/stepIce`, `web/src/traction.js`):
+- Temperatur ist eine reine Tageskurve (Tiefst 5 Uhr, Höchst 15 Uhr; Winter −6…+3, wechselhaft +4…+14, normal
+  +8…+22 °C, je Tag ±2 °C aus dem Samen); die Nacht läuft stetig zum Tiefstwert des Folgetags. Glätte `w.ice` ist
+  Spielzustand wie Nässe und Schnee: wächst bei Nässe und ≤ 0 °C, taut darüber, wird gespeichert.
+- `roadCondition` bewertet eine Stelle: überdacht (höhere Ebene darüber, Durchfahrt) ⇒ trocken, Brücke ⇒ Glätte ×1,5,
+  Pfütze = eine der gezeichneten `edgePuddles`-Ellipsen der nächsten Fahrbahn. `tractionOf` macht daraus Faktoren für
+  Bremsen/Anfahren/Seitenhalt/Lenkung (nass 0,77/0,85/0,82/0,95, Schnee 0,5/0,55/0,55/0,8, Glätte 0,33/0,4/0,35/0,65),
+  multipliziert, nie unter dem Glättewert. `world.js` schreibt sie je Schritt ans Auto (`car.traction`), prüft die
+  Vorderräder auf Pfützen (Aquaplaning 0,35 s über 70 km/h, Gierimpuls aus dem Pfützen-Hash) und addiert Böen
+  (`gustAt`, quer zur Windrichtung, Brücke ×1,6, geteilt durch die Fahrzeuggröße). Fehlt `car.traction`, ist es trocken.
+- KI: Zieltempo ×(0,6 + 0,4·Bremsfaktor), Bremskurven mit 90·Bremsfaktor px/s², Folgeabstand in Fahrt ×1/Bremsfaktor;
+  der Abstand im Stand bleibt (Schlangen und Engstellen-Reservierungen unverändert).
+- Zug: `stepDrive` bekommt die Schienenhaftung (nass 0,75, Frost 0,6, Tunnel 1) für Bremse, Notbremse, Zugkraft und
+  die Zwangsbremsung.
+- Grenzen: Fußgänger und Radfahrer unberührt, keine Jahreszeiten, keine Streufahrzeuge; Glätte ist flächig.
+
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
 Strahlen ab der Körpermitte gegen die vorhandenen Kollisionsdaten (Hauswand-Segmente, Stadtgrenze, Baumkreise,

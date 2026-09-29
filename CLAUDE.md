@@ -152,6 +152,12 @@ change in `web/`.
   Gusts (`gustAt`), lightning (`strikeInSlot/strikesAt/flashAt`) and thunder arrival (`thunderBetween`, half-open
   intervals) are pure functions of seed and `w.time`. Snow cover `w.snow` is sim state like `w.wet` (car grip, save).
   Snow/rain/debris/fog banks are drawn from hashes + time (no particle lists); road slush goes through an offscreen layer.
+- **Weather on the road:** `weather.js temperatureAt` (pure) + `w.ice` (`stepIce`, saved; `w.forceTemp` via console
+  `temp`) → `traction.js roadCondition/tractionOf` (grip factors, floor = ice value; covered spots dry, bridges ×1.5
+  ice; puddles = `edgePuddles`), written per step to `car.traction` by `world.js applyWeather` (also `car.aqua`
+  aquaplaning, `gustPush`); `car.js`, `traffic.js` (slower, gentler braking, longer following distance; standstill gap
+  unchanged) and `trainphysics.js` (`input.adhesion` from `playertrain.js trainAdhesion`, tunnels = 1) read only
+  factors. Missing `car.traction` = dry. HUD: temperature next to the clock, `roadWarning` sign.
 - **Windows:** `windows.js` (pure) decides per window (flat hash + room hash vs. `windowsLit`) whether it is lit and in
   which colour; `render.js drawLitWindows` draws them per face, cached per building and game minute.
 - **Public transport:** `transit.json` (built by `tools/osm/transit.mjs` from VBB GTFS, own ZIP reader `zip.mjs`) →

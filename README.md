@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.29.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.30.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -376,6 +376,18 @@ die Stadt abgedunkelt, die Röhren mit Bahnsteigen, Bahnhofsnamen und den Zügen
 Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; eine Straßenbahn in einer Straße mit Gegenverkehr auf
 dem Gleis kann mit einem entgegenkommenden Bus hängen bleiben (Fahrplandaten legen die Strecke dort in die Gegenspur).
 
+## Wetter und Fahren
+
+Das Wetter wirkt aufs Fahren. Auf nasser Straße wird der Bremsweg etwa ein Drittel länger, auf Schnee etwa doppelt,
+auf Glätte etwa dreimal so lang; Anfahren, Seitenhalt und Lenkung lassen entsprechend nach, auf Glätte drehen die Räder
+durch. **Glätte** entsteht, wo es nass ist und die Temperatur (neben der Uhr) unter 0 °C fällt – an Wintertagen oft
+früh morgens; Brücken frieren zuerst, unter Brücken und in Durchfahrten bleibt die Straße trocken. Wer schneller als
+etwa 70 km/h durch eine der sichtbaren **Pfützen** am Fahrbahnrand fährt, schwimmt kurz auf (**Aquaplaning**, mit
+Spritzwasser). **Sturmböen** versetzen Autos quer, auf Brücken stärker, leichte Autos mehr als Transporter. Der
+**KI-Verkehr** fährt bei schlechtem Wetter langsamer, bremst sanfter und hält mehr Abstand. Als **Zugführer** bremst
+man auf nassen oder vereisten Schienen schlechter (im Tunnel ist es trocken), die Zwangsbremsung hält trotzdem vor
+jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee, Sturm, Nässe.
+
 ## Befehlszeile und Statistik
 
 **Enter** öffnet im Spiel eine Befehlszeile (die Welt steht still, solange sie offen ist). Beim Tippen erscheinen
@@ -387,7 +399,8 @@ erste steht grau hinter dem Getippten und kommt mit **Tab** oder **→** in die 
 | `zeit 21:30` · `zeit 7` · `zeit abend` | Uhrzeit (auch `21.30`, `2130`, `9h`; Wörter: morgen, mittag, nachmittag, abend, daemmerung, nacht, mitternacht) |
 | `tempo 10` · `tempo 0` | Tempo der Spieluhr (0 = Uhr steht) |
 | `wetter schneesturm` · `wetter auto` | Wetter festlegen bzw. wieder natürlich |
-| `schnee 0.5` · `nass 1` | Schneedecke / Nässe der Straßen 0–1 |
+| `schnee 0.5` · `nass 1` · `glaette 0.8` | Schneedecke / Nässe / Glätte der Straßen 0–1 (Glätte taut über 0 °C) |
+| `temp` · `temp -5` · `temp auto` | Temperatur zeigen, erzwingen, wieder natürlich |
 | `verkehr 2` · `passanten 0` | Dichte von Autos / Fußgängern |
 | `tp kottbusser tor` | Teleport ohne Rückfrage (lädt den Stadtteil nach) |
 | `geld +1000` · `leben` · `munition` · `gott an` · `auto polizei` · `reparieren` | Schummeln (wird in der Statistik gezählt) |
@@ -395,7 +408,7 @@ erste steht grau hinter dem Getippten und kommt mit **Tab** oder **→** in die 
 | `stats` | Statistik öffnen |
 
 Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
-Brücken, Teleports, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, Tote (erschossen
+Brücken, Teleports, Aquaplaning, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, Tote (erschossen
 / Nahkampf), Schüsse, Kugeln, Treffer und Trefferquote **je Waffe**, zerstörte Autos, Aufträge, verdientes Geld,
 Krankenhauskosten und Cheats, dazu im Nahverkehr: Mitfahrten, Strecke als Fahrgast und als Zugführer, geführte Bahnen,
 bediente Halte, Trinkgeld, Auf- und Abspringen. Gespeichert wird lokal in **IndexedDB** (Datenbank `gta-berlin`, alle 5 s und beim
@@ -405,7 +418,17 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 342 automatischen Tests grün, darunter:
+- Alle 368 automatischen Tests grün, darunter:
+  - Wetter-Fahrphysik: Temperaturkurve (Spanne je Tagestyp, 5/15 Uhr, stetig über Mitternacht, erzwungener Schnee
+    ≤ +1 °C), Glätte nur bei Nässe und Frost, Spielstand mit Glätte, alter Stand ohne; Haftungsfaktoren (trocken exakt
+    1, Mischung mit Untergrenze), überdacht trocken, Brücke glatter, Pfütze nur in der gezeichneten Ellipse und bei
+    Nässe; Bremsweg aus 50 km/h ≈ 1 : 1,3 : 2 : 3, Anfahren/Lenken schwächer, Aquaplaning nur über 70 km/h in einer
+    echten Pfütze mit genau einem Ereignis, gleich bei 30 und 60 fps; Böen 0,5–1 m Versatz, Brücke stärker, schwere
+    Autos weniger, geparkte nie; KI auf freier Strecke langsamer, vor Rot sanfter bremsend und vor der Linie, Schlange
+    ohne Auffahren, 3 min Glätte an einer engen Stelle ohne Dauerstau; eigener Zug bremst auf nassen Schienen länger
+    (auch in der Welt), Zwangsbremsung unter der verringerten Kurve, Tunnel trocken; Warnschild mit Vorrang und ohne
+    Überlappung, Temperatur neben der Uhr, Platschen, Statistik. Jede Schutzprüfung mit Mutationsprobe (über 25, alle
+    erkannt; mehrere zunächst blinde führten zu schärferen Tests);
   - Nahverkehr: eigene Taste fürs Mitfahren (G/Steuerkreuz unten, nicht S/Pfeil); einsteigen in Reichweite eines
     Wagens auch in Fahrt, aussteigen neben dem Wagen (nie in Wand, Baum, Poller oder Auto), Abspringen mit Sturz und ab
     40 km/h Schaden, unter Tage nur am Bahnsteig mit Ausgang an der Straße; verschwindet das Fahrzeug, Teleport, K. o.
