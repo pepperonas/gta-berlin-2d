@@ -160,6 +160,9 @@ change in `web/`.
   factors. Missing `car.traction` = dry (and dry + no storm skips the lookup: `car.traction = DRY`). `under()` counts a
   higher edge as a roof only if it doesn't connect to the own level nearby (bridge approaches aren't covered); viaducts
   (rails of higher level, not at their ends) cover too. HUD: temperature next to the clock, `roadWarning` sign.
+- **Snow tracks:** `snowtracks.js` (pure, presentation only): `render.js drawSnowTrails` records rear-wheel segments of
+  all `world.cars` per frame into a ring buffer (world time, reset per world), fades them (`trailAlpha`: age, snowfall).
+  Note that `npm run map:build` wipes `web/data/berlin/` — rerun `npm run map:transit` afterwards.
 - **Windows:** `windows.js` (pure) decides per window (flat hash + room hash vs. `windowsLit`) whether it is lit and in
   which colour; `render.js drawLitWindows` draws them per face, cached per building and game minute.
 - **Public transport:** `transit.json` (built by `tools/osm/transit.mjs` from VBB GTFS, own ZIP reader `zip.mjs`) →
@@ -193,7 +196,8 @@ change in `web/`.
 - **Access:** fences/walls/hedges/bollard lines open `GATE_M` (4.4 m) at gate nodes and wherever any highway way crosses
   them (build, `accessAndRules`). Barrier posts block AI traffic via `e.blocked`, but the player's car knocks them over
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop
-  skips them via `isDown(world, s)`. `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
+  skips them via `isDown(world, s)`. Bollard lines (OSM ways `barrier=bollard/block`, `FENCES.bollard`) are emitted as
+  posts every ≤ 1.5 m, not as walls, so they can be knocked over too (`keepPostsOffRoads` moves those on open roads). `tests/helpers/city.js reachability` flood-fills a grid for car/foot radius;
   `tests/access.test.js` checks Tempelhofer Feld and car-vs-foot coverage.
 - **Invisible walls:** quays, rail side walls and railings are finally cut with `build.mjs surfaceIndex` + `cutWhere` (exact
   point test of the drivable surface per side via `reachOf`: carriageway + bridge gap + cycle track, junction discs, incl.

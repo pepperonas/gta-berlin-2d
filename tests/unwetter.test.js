@@ -199,6 +199,15 @@ test('Zeichnen bei jedem Wetter: gültige Koordinaten, Schnee liegt, Flocken, Bl
     if (kind === 'densefog') assert.ok(r.stats.fogBanks > 0, 'Nebelschwaden');
     if (kind === 'heavyrain') assert.ok(r.stats.drops > 500, `Starkregen ${r.stats.drops}`);
   }
+  // Reifenspuren: ein Auto im Bild fährt durch den Schnee → Spuren werden gezeichnet; ohne Schnee keine
+  w.forceWeather = 'snow'; w.snow = 0.8;
+  const c = w.cars.find((q) => Math.abs(q.x - w.camera.x) < 300 && Math.abs(q.y - w.camera.y) < 200) ?? w.cars[0];
+  c.x = w.camera.x - 100; c.y = w.camera.y; c.angle = 0;
+  for (let i = 0; i < 20; i++) { c.x += 8; w.time += 0.05; r.draw(w, 1280, 720, 1); }
+  assert.ok(r.stats.snowTrails > 10, `Schneespuren ${r.stats.snowTrails}`);
+  assert.deepEqual(bad, [], 'Spuren');
+  w.snow = 0; r.draw(w, 1280, 720, 1);
+  assert.ok(!r.stats.snowTrails, 'ohne Schnee keine Spuren');
   // Gewitter: im Moment eines nahen Blitzes Strahl und Himmelsblitz
   w.forceWeather = 'thunder'; w.snow = 0; run(w, 0.1);
   const s = [...Array(3000).keys()].map((i) => strikeInSlot(w.seed, i + Math.floor(w.time / STRIKE.slot) + 1, 1)).find((x) => x && x.near);

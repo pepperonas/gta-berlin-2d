@@ -15,6 +15,7 @@ import { cutPolyline } from './roadgraph.js';
 import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
 import { weatherLight, hasUmbrella, gustAt, strikesAt } from './weather.js';
+import { createTrails, recordTrails, visibleTrails } from './snowtracks.js';
 import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn, drawSnowGround, snowPattern, snowRoadPaths, roadSnowAlpha, drawSnowfall, drawFogBanks, drawLightning, drawSkyFlash, drawStormDebris, drawSpray } from './wetfx.js';
 import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
@@ -709,6 +710,7 @@ export class Renderer {
       if (lvl === 0) this.drawCrossings(crossings);
       this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L);
       if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
+      if (lvl === 0) this.drawSnowTrails(world, v, snowD);
       // Straßenbahngleise in der Fahrbahn: am Boden der ganze Linienweg, oben nur die Stücke auf der Brücke
       ctx.lineCap = 'butt';
       if (lvl === 0) for (const sh of tramShapes) { const r = tramRails(sh); if (r) this.strokeTramRails(r); }
@@ -1290,6 +1292,21 @@ export class Renderer {
 
   // Silhouette genau im verdeckten Teil: auf einer kleinen Hilfsfläche die Verdecker (Vereinigung) als Maske, den
   // Umriss darauf beschränkt (destination-in), dann ins Bild. Spielfigur orange, alle anderen hell und zurückhaltend.
+  // Reifenspuren im Schnee (snowtracks.js): aufgezeichnet je Bild aus den Autos, dunkle Rillen über dem Schnee;
+  // neue Welt (Neustart, geladener Spielstand) → neue Spuren
+  drawSnowTrails(world, v, depth) {
+    if (this._trailWorld !== world) { this._trails = createTrails(); this._trailWorld = world; }
+    recordTrails(this._trails, world.cars, world.time ?? 0, depth);
+    const segs = visibleTrails(this._trails, v, world.time ?? 0, depth, world.weather?.snow ?? 0, this._trailSegs ??= []);
+    this.stats.snowTrails = segs.length;
+    if (!segs.length) return;
+    const ctx = this.ctx, unit = world.city.scale ?? 10, B = 4, paths = [];
+    for (const q of segs) { const k = Math.min(B - 1, Math.floor(q.a / 0.55 * B)); (paths[k] ??= new Path2D()); paths[k].moveTo(q.ax, q.ay); paths[k].lineTo(q.bx, q.by); }
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 0.32 * unit;
+    for (let k = 0; k < B; k++) if (paths[k]) { ctx.strokeStyle = `rgba(88,96,108,${((k + 0.5) / B * 0.55).toFixed(3)})`; ctx.stroke(paths[k]); }
+    ctx.restore();
+  }
+
   // Schnee auf Fußwegen: die Textur der Schneedecke als Strich über den Weg (etwas dünner: da wird gelaufen)
   snowOnPaths(P, depth) {
     if (depth < 0.02 || !P.length) return;

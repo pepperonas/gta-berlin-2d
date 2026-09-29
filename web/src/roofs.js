@@ -320,7 +320,7 @@ export function roofDecor(b, scale = 10, style = roofStyle(b, scale), geo = null
       const s = 4 * Math.floor(rnd() * (rid.length / 4)), u = 0.2 + rnd() * 0.6;
       const x = rid[s] + (rid[s + 2] - rid[s]) * u, y = rid[s + 1] + (rid[s + 3] - rid[s + 1]) * u;
       const h = l / 2 + 0.3 * scale;
-      if ([[1, 1], [-1, 1], [-1, -1], [1, -1]].some(([u, v]) => !pointInRings(x + ca * u * h - sa * v * h, y + sa * u * h + ca * v * h, b.rings))) continue;
+      if (!rectInside(b, x, y, h, h, ca, sa)) continue; // exakt, nicht nur die Ecken (eine Einbuchtung liegt dazwischen, Haus 761547)
       if (out.some((o) => Math.hypot(o.x - x, o.y - y) < 3 * scale)) continue;
       out.push({ t: 'chimney', x, y, l, w: l, a });
     }

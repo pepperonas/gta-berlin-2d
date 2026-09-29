@@ -1045,9 +1045,19 @@ export function accessAndRules(osm, { P, S, edges, vertices, vIndex, buildings, 
     const k = FENCES[el.tags.barrier];
     const pts = simplify(raw, 0.3 * S);
     if (pts.length < 4 || !inside([pts[0], pts[1]])) continue;
-    const open = gateCut(pts);
-    for (const q of open) fences.push([k, q]); // gezeichnet wie gebaut: mit Lücke an Toren und Wegen
-    walls.push(...open);
+    if (k === FENCES.bollard) {
+      // Pollerreihe (Weg barrier=bollard/block): einzelne Poller höchstens 1,5 m auseinander statt einer Wand – so fährt
+      // man sie wie Einzelpoller um; Fußgänger kommen durch, Autos (2 m) nicht. Poller auf freien Fahrbahnen rückt
+      // keepPostsOffRoads weg, auf gesperrten (Diagonalsperre, unten) bleiben sie als Sperre stehen.
+      for (let i = 0; i < pts.length - 2; i += 2) {
+        const ax = pts[i], ay = pts[i + 1], dx = pts[i + 2] - ax, dy = pts[i + 3] - ay, n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (1.5 * S)));
+        for (let j = i ? 1 : 0; j <= n; j++) posts.push([Math.round(ax + dx * j / n), Math.round(ay + dy * j / n), 0]);
+      }
+    } else {
+      const open = gateCut(pts);
+      for (const q of open) fences.push([k, q]); // gezeichnet wie gebaut: mit Lücke an Toren und Wegen
+      walls.push(...open);
+    }
     if (el.nodes.some((id) => gateNodes.has(id))) continue; // Zaun mit Tor: Durchfahrt möglich
     // Kreuzt die Sperrlinie eine Straße derselben Ebene, ist diese für Autos gesperrt (z. B. Diagonalsperre im Kiez).
     // Ein Zaun am Ufer unter einer Brücke sperrt die Brücke darüber nicht (so war die Elsenbrücke gesperrt).

@@ -51,6 +51,8 @@ function fixture() {
     N(120, 52.4938, 13.4240), N(121, 52.4938, 13.4270), Wy(112, [120, 121], { barrier: 'fence' }),
     N(122, 52.49365, 13.4255), N(123, 52.49395, 13.4255), Wy(113, [122, 123], { highway: 'footway' }),
     N(124, 52.4940, 13.4228), N(125, 52.4940, 13.4236), Wy(114, [124, 125], { barrier: 'hedge' }),
+    // Pollerreihe als Linie (OSM-Weg barrier=bollard): wird zu einzelnen Pollern, die man umfahren kann
+    N(126, 52.4943, 13.4240), N(127, 52.4943, 13.4250), Wy(115, [126, 127], { barrier: 'bollard' }),
     // Ampel an der Kreuzung Teststraße/Querstraße (Signal-Knoten auf der Zufahrt, nicht auf dem Kreuzungsknoten)
     N(93, 52.49212, 13.4225, { highway: 'traffic_signals' }),
     // Abbiegeverbot: von der Teststraße nicht links in die Einbahn
@@ -236,7 +238,8 @@ test('Poller auf der Straße sperren sie für Autos (Reihe quer über die Fahrba
   const pw = L('edge').filter((e) => e.name === 'Pollerweg');
   assert.ok(pw.length >= 1 && pw.every((e) => e.blocked));
   assert.ok(![...buildLaneGraph(city).lanes].some((l) => l.edge.name === 'Pollerweg'), 'kein KI-Verkehr durch den Modalfilter');
-  const row = L('barrier').filter((b) => Math.abs(b.y - L('barrier')[0].y) < 100);
+  const [px, py] = geoToPx(built.index.meta, 52.4935, 13.4285);
+  const row = L('barrier').filter((b) => Math.abs(b.x - px) < 30 && Math.abs(b.y - py) < 100); // die Reihe am Pollerweg
   assert.ok(row.length >= 3, `${row.length} Poller`);
   const xs = row.map((b) => b.y).sort((a, b) => a - b);
   for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] >= 17, 'Abstand ≥ 1,7 m: Fußgänger passen durch, Autos (2 m) nicht');
@@ -362,4 +365,16 @@ test('Zäune: Öffnung, wo ein Weg sie kreuzt (auch ohne Tor-Knoten), breit genu
   assert.ok(Math.abs(hedge[0].pts[0] - hedge[0].pts[hedge[0].pts.length - 2]) > 7 * S, 'in voller Länge');
   // gezeichnet wird der Zaun genau so (mit Lücke)
   assert.equal(L('fence').filter((f) => Math.abs(f.pts[1] - cy) < 20).length, 2);
+});
+
+test('Pollerreihe als Linie wird zu einzelnen Pollern (umfahrbar), nicht zur Wand', () => {
+  const S = city.scale, meta = built.index.meta;
+  const [ax, ay] = geoToPx(meta, 52.4943, 13.4240), [bx] = geoToPx(meta, 52.4943, 13.4250);
+  const posts = L('barrier').filter((b) => Math.abs(b.y - ay) < 5 && b.x >= ax - 5 && b.x <= bx + 5).sort((a, b) => a.x - b.x);
+  const len = (bx - ax) / S;
+  assert.ok(posts.length >= Math.floor(len / 1.6), `${posts.length} Poller auf ${len.toFixed(0)} m`);
+  for (let i = 1; i < posts.length; i++) assert.ok(posts[i].x - posts[i - 1].x < 1.8 * S, 'Lücken kleiner als ein Auto');
+  const wall = L('wall').filter((w) => Math.abs(w.pts[1] - ay) < 5 && Math.abs(w.pts[0] - ax) < (bx - ax) + 5);
+  assert.equal(wall.length, 0, 'keine feste Wand');
+  assert.equal(L('fence').filter((f) => f.kind === 3 && Math.abs(f.pts[1] - ay) < 5).length, 0, 'keine gezeichnete Linie');
 });

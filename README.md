@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.32.1** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.33.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -45,7 +45,8 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   (Zebrastreifen: die KI hält für Fußgänger, Passanten queren bevorzugt dort), 1 336 Abbiegeverbote, mehrspurige
   Hauptstraßen (rechts abbiegen von der rechten, links von der linken Spur). Der Spieler darf bei Rot fahren.
 - **Zugänge:** 4 676 Tordurchfahrten in Hinterhöfe (Hauswand dort offen), Poller und Modalfilter (auch Diagonalsperren)
-  sperren Straßen für den KI-Verkehr, Fußgänger kommen durch, und mit Schwung fährt man sie um (sie bleiben liegen);
+  sperren Straßen für den KI-Verkehr, Fußgänger kommen durch, und mit Schwung fährt man sie um (sie bleiben liegen) –
+  auch ganze Pollerreihen, die in OSM als Linie eingetragen sind (einzelne Poller höchstens 1,5 m auseinander);
   rund 47 000 Zäune, Mauern und Hecken, an Toren und überall, wo ein Weg sie kreuzt, 4,4 m breit offen – eingezäunte
   Flächen wie das Tempelhofer Feld erreicht man auch mit dem Auto; 41 000 Hauseingänge als Türen.
 - **Brücken:** Geländer nur am äußeren Rand der Brücke (nie auf einer Fahrbahn, nicht über der Straße darunter),
@@ -216,7 +217,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 398 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 403 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -402,7 +403,7 @@ etwa 70 km/h durch eine der sichtbaren **Pfützen** fährt (gut die Hälfte lieg
 Spritzwasser). **Sturmböen** versetzen Autos quer, auf Brücken stärker, leichte Autos mehr als Transporter. Der
 **KI-Verkehr** fährt bei schlechtem Wetter langsamer, bremst sanfter und hält mehr Abstand. Als **Zugführer** bremst
 man auf nassen oder vereisten Schienen schlechter (im Tunnel ist es trocken), die Zwangsbremsung hält trotzdem vor
-jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee, Sturm, Nässe.
+jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee, Sturm, Nässe. Im **Schnee** hinterlassen alle Autos Reifenspuren; sie verblassen nach einigen Minuten, bei Schneefall schneller.
 
 ## Befehlszeile und Statistik
 
@@ -434,7 +435,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 398 automatischen Tests grün, darunter:
+- Alle 403 automatischen Tests grün, darunter:
+  - 0.33.0: Pollerreihen (OSM-Linien) werden zu einzelnen umfahrbaren Pollern statt einer Wand (Lücken < 1,8 m);
+    Reifenspuren im Schnee (zwei parallele Spuren in Wagenbreite, kein Strich bei Stillstand oder Teleport, verblassen,
+    bei Schneefall schneller, nur ohne Schneedecke unsichtbar, im Bild gezeichnet); Schornsteine auf Satteldächern
+    exakt im Grundriss.
   - 0.32.0: Laufgeschwindigkeiten und Ausdauer, Passanten-Tempo, Zoom zu Fuß, Wegfindung zu Fuß um Häuser, Klick-Laufen
     (WASD bricht ab), Klick-Angriff und Umschalt-Angriff, Schema-Umschaltung im Steuerungsmenü, Maus-Zielhilfe nur mit
     Zeiger auf dem Ziel, größere Streuung im Laufen, Detailstufe nur bei nahem Zoom; eigene Straßenbahn fährt nach

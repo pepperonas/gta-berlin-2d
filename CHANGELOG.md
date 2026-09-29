@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.33.0] – 2026-09-29
+
+### Neu
+- **Alle Poller lassen sich umfahren:** Pollerreihen, die in OpenStreetMap als Linie eingetragen sind, waren bisher eine
+  feste Wand; jetzt stehen dort einzelne Poller (höchstens 1,5 m auseinander), die man mit Schwung umfährt. Fußgänger
+  kommen weiter durch, der KI-Verkehr meidet gesperrte Straßen wie bisher.
+- **Reifenspuren im Schnee:** Alle Autos ziehen zwei Spuren durch den Schnee; sie verblassen nach einigen Minuten, bei
+  Schneefall schneller.
+
+### Behoben
+- Schornsteine auf Satteldächern konnten an Einbuchtungen des Grundrisses aus dem Haus ragen.
+
 ## [0.32.1] – 2026-09-29
 
 ### Geändert
