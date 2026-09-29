@@ -54,20 +54,21 @@ test('Rechte Maustaste: tippen = ein-/aussteigen, halten = Rad auf, Maus wählt,
   const h = rb.state.hover; rb.move(0, -500); assert.equal(rb.state.hover, h);
 });
 
-test('Rad: Zeiger ist auf den Radius begrenzt – zurückziehen wechselt sofort, nicht erst nach dem ganzen Weg', () => {
+test('Rad: gewählt ist, worauf der echte Zeiger zeigt – ab der Radmitte, schon nach wenigen Punkten, auch weit draußen', () => {
   const rb = createRightButton();
   rb.press(0, 400, 400); rb.tick(1, true, 0, 6);
-  rb.move(400 + 900, 400 - 500); // weit nach rechts oben hinaus
-  assert.ok(Math.abs(Math.hypot(rb.state.vx, rb.state.vy) - WHEEL.radius) < 1e-9, 'begrenzt');
-  assert.equal(rb.state.hover, 1, 'rechts oben');
-  rb.move(400 + 900, 400 - 250); // 250 nach unten: rechts unten
-  assert.equal(rb.state.hover, 2, 'ohne Begrenzung bräuchte es hier über 500 px');
-  rb.move(400 + 900 - 400, 400 - 250 - 150); // zurück durch die Mitte nach links oben
-  assert.equal(rb.state.hover, 5);
-  // Bewegung vor dem Öffnen verschiebt den Zeiger nicht (Start in der Mitte)
+  assert.deepEqual([rb.state.cx, rb.state.cy], [400, 400], 'Rad öffnet am Zeiger');
+  rb.move(400 + 14, 400 - 9); assert.equal(rb.state.hover, 1, 'ein kleiner Ruck nach rechts oben reicht (17 Punkte)');
+  rb.move(400 + 900, 400 + 520); assert.equal(rb.state.hover, 2, 'weit draußen zählt die Richtung');
+  rb.move(400 - 60, 400 - 35); assert.equal(rb.state.hover, 5, 'direkt hinüber, ohne Umweg über die Mitte');
+  rb.move(401, 399); assert.equal(rb.state.hover, 5, 'Totzone: Wahl bleibt');
+  // place: am Bildrand hereingerückte Mitte – die Wahl richtet sich nach der neuen Mitte
+  rb.place(600, 300); assert.equal(rb.state.hover, 4, 'Zeiger liegt jetzt links unten der Mitte');
+  rb.move(600, 150); assert.equal(rb.state.hover, 0);
+  // Bewegung vor dem Öffnen: das Rad öffnet dort, wo der Zeiger dann ist; Anzeige startet bei der aktuellen Waffe
   const r2 = createRightButton();
   r2.press(0, 100, 100); r2.move(400, 100); r2.tick(1, true, 3, 6);
-  assert.deepEqual([r2.state.vx, r2.state.vy, r2.state.hover], [0, 0, 3]);
+  assert.deepEqual([r2.state.cx, r2.state.cy, r2.state.hover], [400, 100, 3]);
   r2.move(400, 100 - 60); assert.equal(r2.state.hover, 0, 'ab dem Öffnen gezählt');
 });
 
@@ -165,8 +166,13 @@ test('Waffenrad im HUD: ein Segment je Waffe mit Symbol, das gezeigte hervorgeho
   texts.length = 0; hud.counts = {}; hud.drawWeaponWheel(p, 3, { vx: 40, vy: -30, age: 1 });
   assert.ok(texts.includes(`5/${WEAPONS[3].mag}`), 'Munition am Segment');
   for (let i = 1; i <= WEAPONS.length; i++) assert.ok(texts.includes(String(i)), `Taste ${i}`);
-  assert.ok(hud.counts.wheelPointer, 'Zeiger gezeichnet');
+  assert.ok(!hud.counts.wheelPointer, 'Maus: kein Ersatzzeiger – der echte Mauszeiger zeigt');
   assert.ok(texts.some((t) => t.includes('Esc bricht ab')));
+  hud.drawWeaponWheel(p, 3, { age: 1, cx: 400, cy: 300 });
+  assert.deepEqual([hud.layout.wheel.cx, hud.layout.wheel.cy], [400, 300], 'Maus: Rad am Zeiger');
+  hud.counts = {}; hud.drawWeaponWheel(p, 3, { vx: 40, vy: -30, age: 1, pad: true });
+  assert.ok(hud.counts.wheelPointer, 'Controller: Stickrichtung gezeichnet');
+  assert.deepEqual([hud.layout.wheel.cx, hud.layout.wheel.cy], [hud.vw / 2, hud.vh / 2], 'Controller: Bildmitte');
   texts.length = 0; hud.counts = {}; hud.drawWeaponWheel(p, 3, { age: 0, pad: true });
   assert.ok(!hud.counts.wheelPointer, 'ohne Ausschlag kein Zeiger');
   assert.ok(texts.some((t) => t.includes('LB loslassen')) && !texts.includes('1'), 'Controller: eigener Hinweis, keine Zifferntasten');

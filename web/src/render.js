@@ -321,6 +321,34 @@ function drawCrosshair(ctx, pl) {
   ctx.stroke();
 }
 
+// Diablo-Schema: Rückmeldung zum Klick. hover (main.js, combat.js clickIntent) = was unter dem Zeiger liegt: Person rot
+// umkreist (Klick greift an), Auto gelb umrandet (Klick steigt ein). Dazu das laufende Klickziel: Wegziel als
+// pulsierender Ring am Boden, angegriffene Person mit festem rotem Ring, angesteuertes Auto umrandet.
+const MARK = { attack: '255,77,61', enter: '255,211,61', force: '255,211,61', move: '255,211,61' };
+function markObj(ctx, o, rgb, alpha, width) {
+  ctx.strokeStyle = `rgba(${rgb},${alpha})`; ctx.lineWidth = width;
+  if (o.hw !== undefined) { // Auto: gedrehtes Rechteck mit etwas Luft
+    ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.angle);
+    const w = o.hw + 5, h = o.hh + 5;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w, -h, 2 * w, 2 * h, 6) : ctx.rect(-w, -h, 2 * w, 2 * h); ctx.stroke();
+    ctx.restore();
+  } else { ctx.beginPath(); ctx.arc(o.x, o.y, 11, 0, Math.PI * 2); ctx.stroke(); }
+}
+function drawClickMarks(ctx, world, hover, t) {
+  const c = world.player.click;
+  ctx.save();
+  if (hover?.obj && hover.obj !== c?.target && hover.obj !== c?.enter) markObj(ctx, hover.obj, MARK[hover.kind] ?? MARK.move, 0.75, 2);
+  if (c?.target) markObj(ctx, c.target, MARK.attack, 0.95, 3);
+  else if (c?.enter) markObj(ctx, c.enter, MARK.enter, 0.95, 3);
+  else if (c?.path?.length) {
+    const q = c.path[c.path.length - 1], k = (t * 1.6) % 1;
+    ctx.strokeStyle = `rgba(${MARK.move},${(0.9 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(q.x, q.y, 4 + 10 * k, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = `rgba(${MARK.move},0.8)`; ctx.beginPath(); ctx.arc(q.x, q.y, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 const SIGNAL_RGB = { red: '255,60,48', yellow: '255,204,0', green: '52,199,89' };
 const SHOP_GLOW = new Set(['mall', 'supermarket', 'shop', 'food', 'drink', 'cafe', 'hotel', 'ubahn', 'sbahn']);
 
@@ -836,7 +864,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255,255,230,0.9)'; ctx.beginPath(); ctx.arc(2, 0, 2.5 * k, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
-    if (overlayMarkers && !pl.inCar && !pl.dead) drawCrosshair(ctx, pl);
+    if (overlayMarkers && !pl.inCar && !pl.dead) { drawClickMarks(ctx, world, this.hover, t); if (this.crosshair !== false) drawCrosshair(ctx, pl); } // Diablo: nur mit Strg (main.js)
     // 9a) Regen und Nebel (vor der Lichtkarte: nachts werden sie mit dunkel)
     this.stats.debris = wx ? drawStormDebris(ctx, v, wx, t, gust) : 0;
     this.stats.drops = wx ? drawRainLayers(ctx, v, wx, t, s, gust) : 0;

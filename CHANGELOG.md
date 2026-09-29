@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.35.0] – 2026-09-29
+
+### Geändert
+- **Diablo-Steuerung überarbeitet:** Der Mauszeiger zeigt vorher, was ein Klick tut – Pfeil (hinlaufen), rotes
+  Fadenkreuz über Personen (angreifen), Auto-Symbol über Autos (hinlaufen und einsteigen). Das Ziel unter dem Zeiger
+  wird umkreist bzw. umrandet, das Laufziel am Boden markiert.
+- **Weniger ungewollte Schüsse:** Ein Klick auf ein Auto schießt nicht mehr, sondern steigt ein (angreifen nur mit
+  Strg + Klick). Was ein Klick bedeutet, entscheidet der Moment des Drückens: Wer auf den Boden klickt und hält, läuft
+  dem Zeiger nach und greift nichts an, was er dabei überstreicht; ein Angriff bleibt bei der angeklickten Person und
+  springt danach nicht auf die nächste über. Das Fadenkreuz vor der Figur erscheint nur noch beim Strg-Angriff.
+- **Waffenrad mit der Maus:** öffnet direkt am Mauszeiger; gewählt ist die Waffe, auf die der Zeiger zeigt (ein kleiner
+  Ruck reicht, weit draußen zählt die Richtung), statt einer aufsummierten Mausbewegung. Linksklick ins Rad nimmt die
+  Waffe sofort. Am Bildrand rückt das Rad so weit herein, dass es ganz sichtbar ist.
+
 ## [0.34.1] – 2026-09-29
 
 ### Geändert

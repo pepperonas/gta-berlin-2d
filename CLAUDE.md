@@ -50,8 +50,8 @@ change in `web/`.
 - **Input pipeline (`input.js`):** keyboard + Web Gamepad API + host readings are merged into one raw state, then
   `InputState.frame()` derives the abstract actions. Short key presses are latched until the next sim step.
   Weapon wheel: `weaponwheel.js createRightButton` (pure state machine, two instances in `main.js`: right mouse button
-  and gamepad LB). Tap → `tap` (mouse: `enterExit`, LB: previous weapon), hold → wheel; mouse movement accumulates
-  from the wheel centre, clamped to the radius (`move`), stick via `aim`, `nudge` (mouse wheel), `choose` (digit keys),
+  and gamepad LB). Tap → `tap` (mouse: `enterExit`, LB: previous weapon), hold → wheel; the mouse wheel opens at the
+  cursor (`place`), the real cursor's direction from its centre selects (`move`, absolute), stick via `aim`, `nudge` (mouse wheel), `choose` (digit keys),
   `cancel` (Esc/B), `sync(held)` resolves a missed release. The right button uses `mousedown`/`mouseup` (pointer events
   don't report a second button on the same pointer, e.g. while firing). `easeTimeScale` fades the slow-motion; the aim
   point is frozen while the wheel is open and after closing until the mouse moves (`aimLock`).
@@ -207,7 +207,7 @@ change in `web/`.
   `gta-controls`, toggled with ←/→ on the controls screen). Diablo input fields `clickWorld/clickPressed/clickHeld/
   clickForce/walkSlow` (see `idle.js`, set by `main.js applyPointer`); `world.js clickControl` turns them into the
   normal inputs before `updatePlayerOnFoot` (path via pure `footpath.js findFootPath`, A* on 8 px cells; attack via
-  `combat.js pickTarget`; WASD cancels; Shift = sprint, Ctrl = `clickForce`, right-button tap = kick, hold = wheel). Speeds `PLAYER.walk/jog/sprint` + `STAMINA`; foot zoom `FOOT_ZOOM`/
+  `combat.js clickIntent` = 'attack' (ped) / 'enter' (intact car → walk there, `tryEnter(w, car)`) / 'move' / 'force' (Ctrl), decided only at press: held ground clicks follow the cursor and never attack, held attacks stay on the clicked ped; WASD cancels; Shift = sprint, Ctrl = `clickForce`, right-button tap = kick, hold = wheel). `main.js` shows the intent as cursor (`cursor.js` 'arrow'/'attack'/'enter'/'target') and `renderer.hover` ring (`render.js drawClickMarks`, also the walk target); the in-world crosshair only with Ctrl (`renderer.crosshair`). Mouse weapon wheel opens at the cursor (`rightBtn.place(wheelCenter())`, clamped on screen) and selects by the real cursor's direction from its centre (`move(x, y)` absolute, dead zone `WHEEL.dead`); left click inside picks. Speeds `PLAYER.walk/jog/sprint` + `STAMINA`; foot zoom `FOOT_ZOOM`/
   `setFootZoom` (`w.footZoom`, localStorage `gta-foot-zoom`); render detail level (`DETAIL_ZOOM`, `stats.detail`) only
   at quality high. Mouse aim snaps only via `pickTarget` under the cursor, spread × `spreadFactor(p)`; gamepad keeps
   `aimAssist`. Trams give up yielding after `TRAM_PATIENCE` (20 s) against a strictly persisting obstacle.

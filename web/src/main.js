@@ -13,7 +13,7 @@ import { thunderBetween } from './weather.js';
 import { createRightButton, WHEEL, easeTimeScale } from './weaponwheel.js';
 import { consoleKey, openConsole } from './console.js';
 import { openStatsStore } from './statsdb.js';
-import { WEAPONS } from './combat.js';
+import { WEAPONS, clickIntent } from './combat.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -170,9 +170,17 @@ let aimLock = null;
 const wheelResult = (r, btn = rightBtn) => {
   if (r.tap) { if (btn === padBtn) pointer.prevWeapon = true; else if (btn === rightBtn) { if (diabloOnFoot()) pointer.kick = true; else pointer.enterExit = true; } }
   if (r.pick !== undefined) { pointer.slot = r.pick + 1; sound.play('weapon'); }
+  if (r.opened && btn === rightBtn) btn.place(...wheelCenter()); // Rad am Zeiger, ganz im Bild
   if (r.opened) { sound.play('ui-move'); aimLock = pointer.vx >= 0 ? { vx: pointer.vx, vy: pointer.vy, at: null } : null; pointer.fire = false; }
   if (r.closed) { if (aimLock) aimLock.at = { vx: pointer.vx, vy: pointer.vy }; if (r.cancelled) sound.play('ui-back'); }
 };
+// Mitte des Maus-Waffenrads: am Zeiger, so weit hereingerückt, dass Ring und Hinweis ganz sichtbar sind
+function wheelCenter() {
+  const R = WHEEL.radius + 14, vw = hud.vw || 1280, vh = hud.vh || 720;
+  const fit = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
+  if (pointer.vx < 0) return [vw / 2, vh / 2];
+  return [fit(pointer.vx, R, vw - R), fit(pointer.vy, R, vh - R - 50)];
+}
 // Mausziel als Weltpunkt (oder null, wenn die Maus nicht zielt); vx/vy = Zeigerstelle im HUD
 function currentAim(vx = pointer.vx, vy = pointer.vy) {
   const cam = game.world?.camera, s = (game.worldScale ?? 1) * (cam?.zoom ?? 1);
@@ -207,7 +215,8 @@ canvas.addEventListener('mousedown', (e) => {
 });
 addEventListener('mouseup', (e) => { if (e.button === 2) wheelResult(rightBtn.release(performance.now() / 1000)); }); // auch außerhalb der Leinwand
 canvas.addEventListener('pointerdown', (e) => {
-  if (!hud.s || e.button !== 0 || rightBtn.open) return;
+  if (!hud.s || e.button !== 0) return;
+  if (rightBtn.open) { wheelResult(rightBtn.choose(rightBtn.state.hover)); return; } // Klick ins Rad nimmt die gezeigte Waffe
   const [vx, vy] = toHud(e);
   const h = hitAt(vx, vy);
   if (!h) { // im Spiel zu Fuß: linke Maustaste feuert (Klassisch) bzw. läuft/greift an (Diablo)
@@ -281,7 +290,15 @@ function applyPointer(inp) {
 // Zeiger im Stil des Spiels; beim Fahren/Laufen verschwindet er, wenn die Maus 2 s ruht.
 function updateCursor() {
   const playing = game.screen === 'playing' && !game.showBigMap && !game.teleport && !game.resultMenu;
-  const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, aiming: playing && playingOnFoot(), idle: (performance.now() - pointer.moved) / 1000 });
+  // Diablo zu Fuß: was ein Klick jetzt täte (Zeiger und Ring ums Ziel zeigen es vorher)
+  let intent = null;
+  if (playing && diabloOnFoot() && !openWheel() && pointer.vx >= 0) {
+    const at = currentAim();
+    if (at) intent = clickIntent(game.world, at.x, at.y, keys.has('ControlLeft') || keys.has('ControlRight'));
+  }
+  renderer.hover = intent?.obj ? intent : null;
+  renderer.crosshair = !(playing && diabloOnFoot()) || intent?.kind === 'force'; // Diablo: Fadenkreuz vor der Figur nur beim Strg-Angriff
+  const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, aiming: playing && playingOnFoot(), idle: (performance.now() - pointer.moved) / 1000, intent: intent?.kind, wheel: !!openWheel() });
   if (kind !== pointer.cursor) { pointer.cursor = kind; canvas.style.cursor = cursorCss(kind); }
 }
 
@@ -403,7 +420,7 @@ function draw() {
       if (game.showBigMap) hud.drawBigMap(game.world); else hud.mapView = null;
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
       const wh = openWheel();
-      if (wh) hud.drawWeaponWheel(game.world.player, wh.state.hover, { vx: wh.state.vx, vy: wh.state.vy, age: performance.now() / 1000 - wh.state.openedAt, pad: wh === padBtn });
+      if (wh) hud.drawWeaponWheel(game.world.player, wh.state.hover, { vx: wh.state.vx, vy: wh.state.vy, age: performance.now() / 1000 - wh.state.openedAt, pad: wh === padBtn, ...(wh === rightBtn && wh.state.cx !== null ? { cx: wh.state.cx, cy: wh.state.cy } : {}) });
       hud.drawConsole(game.console, performance.now() / 1000);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);

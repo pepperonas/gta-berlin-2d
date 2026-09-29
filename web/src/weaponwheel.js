@@ -1,13 +1,14 @@
 // Rechte Maustaste und Waffenrad (rein, ohne DOM – main.js füttert Zeitpunkte und Mausposition, hud.js zeichnet).
 //  – kurz tippen: in ein Auto ein- bzw. aussteigen (wie F / Y);
-//  – gedrückt halten (zu Fuß): das Waffenrad öffnet sich, die Richtung der Maus ab der Stelle des Drucks wählt ein
-//    Segment, Loslassen nimmt die Waffe. In der Mitte (Totzone) bleibt die zuletzt gezeigte Wahl – wer nur kurz die Maus
-//    zurückzieht, verliert sie nicht. Solange das Rad offen ist, läuft das Spiel langsamer (WHEEL.slow).
+//  – gedrückt halten (zu Fuß): das Waffenrad öffnet sich genau am Mauszeiger (am Bildrand so weit hereingerückt, dass es
+//    ganz sichtbar ist). Gewählt ist, worauf der Zeiger zeigt – schon ein kleiner Ruck in Richtung eines Felds reicht,
+//    und alles jenseits des Rings zählt ebenfalls. Loslassen oder Linksklick nimmt die Waffe. In der Mitte (Totzone)
+//    bleibt die zuletzt gezeigte Wahl. Solange das Rad offen ist, läuft das Spiel langsamer (WHEEL.slow).
 //  Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt.
 
 export const WHEEL = {
   hold: 0.22,    // s bis das Rad aufgeht (kürzer = Tippen)
-  dead: 18,      // px (HUD-Einheiten) Totzone um den Druckpunkt
+  dead: 14,      // px (HUD-Einheiten) Totzone um die Mitte des Rads
   slow: 0.3,     // Spieltempo bei offenem Rad
   radius: 190,   // Außenradius (HUD-Einheiten)
   inner: 72,     // Innenradius
@@ -31,36 +32,36 @@ export function slotDir(i, n) {
 
 // Zustandsautomat einer Rad-Taste (rechte Maustaste oder LB am Controller).
 // Rückgaben der Methoden: { tap? (kurz getippt), pick? (Index), opened?, closed? }
-//  – Maus: move(x, y) mit Bildschirmpunkten; die Bewegung wird als Zeiger ab der Mitte des Rads aufsummiert und auf den
-//    Radius begrenzt – wer weit hinausgezogen hat, wechselt beim Zurückziehen sofort, statt erst den ganzen Weg zurück.
+//  – Maus: move(x, y) mit dem echten Zeiger (HUD-Punkte); gewählt ist das Feld in seiner Richtung ab der Radmitte.
+//    place(cx, cy) legt die Mitte fest (main.js: an den Zeiger, im Bild gehalten); ohne place zählt die Druckstelle.
 //  – Controller: aim(x, y) mit dem Stick (-1…1), Totzone WHEEL.stickDead; losgelassener Stick behält die Wahl.
 //  – nudge(±1): Mausrad dreht die Wahl weiter; choose(i): Zifferntaste wählt und schließt; cancel(): ohne Wahl zu.
 //  – sync(held): ist die Taste laut Gerät nicht mehr gedrückt (Loslassen außerhalb des Fensters, verlorenes Ereignis),
 //    wird wie beim Loslassen entschieden – so bleibt das Rad nie hängen.
 export function createRightButton(opts = {}) {
   const cfg = { ...WHEEL, ...opts };
-  const st = { down: false, t0: 0, x0: 0, y0: 0, lx: 0, ly: 0, vx: 0, vy: 0, open: false, hover: -1, n: 0, openedAt: 0 };
+  const st = { down: false, t0: 0, x0: 0, y0: 0, lx: 0, ly: 0, vx: 0, vy: 0, open: false, hover: -1, n: 0, openedAt: 0, cx: null, cy: null };
   const hoverFrom = (dx, dy, dead) => { const i = wheelSlot(dx, dy, st.n, dead); if (i >= 0) st.hover = i; };
   return {
     state: st,
     get open() { return st.open; },
     get down() { return st.down; },
-    press(t, x = 0, y = 0) { Object.assign(st, { down: true, t0: t, x0: x, y0: y, lx: x, ly: y, vx: 0, vy: 0, open: false, hover: -1 }); return {}; },
+    press(t, x = 0, y = 0) { Object.assign(st, { down: true, t0: t, x0: x, y0: y, lx: x, ly: y, vx: 0, vy: 0, open: false, hover: -1, cx: null, cy: null }); return {}; },
     // jeden Frame: canOpen = zu Fuß im Spiel; current = gewählte Waffe (Startwert der Anzeige), n = Anzahl Waffen
     tick(t, canOpen, current, n) {
       if (st.open && !canOpen) { st.open = false; st.down = false; return { closed: true }; } // eingestiegen, K. o. …
       if (st.down && !st.open && canOpen && t - st.t0 >= cfg.hold - 1e-9) {
-        Object.assign(st, { open: true, hover: current, n, vx: 0, vy: 0, openedAt: t });
+        Object.assign(st, { open: true, hover: current, n, vx: 0, vy: 0, openedAt: t, cx: st.lx, cy: st.ly });
         return { opened: true };
       }
       return {};
     },
+    // Mitte des offenen Rads (HUD-Punkte); der Zeiger zählt ab hier
+    place(cx, cy) { if (st.open) { st.cx = cx; st.cy = cy; this.move(st.lx, st.ly); } return {}; },
     move(x, y) {
-      const dx = x - st.lx, dy = y - st.ly; st.lx = x; st.ly = y;
+      st.lx = x; st.ly = y;
       if (!st.open) return {};
-      st.vx += dx; st.vy += dy;
-      const d = Math.hypot(st.vx, st.vy), max = cfg.radius;
-      if (d > max) { st.vx *= max / d; st.vy *= max / d; }
+      st.vx = x - st.cx; st.vy = y - st.cy;
       hoverFrom(st.vx, st.vy, cfg.dead);
       return {};
     },

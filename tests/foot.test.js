@@ -122,6 +122,69 @@ test('Klick auf eine Person: hinlaufen bis in Reichweite, dann angreifen; Shift-
   assert.ok(s2 >= 1 && Math.abs(w2.player.x - x) < 0.5, 'steht und schießt');
 });
 
+test('Klick auf ein Auto: hinlaufen und einsteigen, nie darauf schießen; Strg-Klick schießt doch', async () => {
+  const { createCar } = await import('../web/src/car.js');
+  const { WEAPONS, clickIntent } = await import('../web/src/combat.js');
+  const PISTOL = WEAPONS.findIndex((q) => q.id === 'pistol');
+  const place = (w) => { const car = createCar({ x: P0.x + Math.cos(ang) * 250, y: P0.y + Math.sin(ang) * 250, angle: ang, role: 'curb' }); w.cars.push(car); return car; };
+  const w = foot(); w.player.weapon = PISTOL;
+  const car = place(w);
+  assert.equal(clickIntent(w, car.x, car.y).kind, 'enter');
+  assert.equal(clickIntent(w, car.x, car.y, true).kind, 'force');
+  updateWorld(w, { ...idle(), ...click({ x: car.x, y: car.y }) }, 1 / 60);
+  let shots = 0;
+  for (let i = 0; i < 60 * 12 && !w.player.inCar; i++) { updateWorld(w, idle(), 1 / 60); shots += w.events.filter((e) => e.type === 'shot').length; }
+  assert.equal(shots, 0, 'kein Schuss aufs Auto');
+  assert.equal(w.player.inCar, car.id, 'eingestiegen');
+  // gehalten ändert nichts daran
+  const w1 = foot(); w1.player.weapon = PISTOL; const c1 = place(w1); let s1 = 0;
+  for (let i = 0; i < 60 * 3; i++) { updateWorld(w1, { ...idle(), ...click({ x: c1.x, y: c1.y }, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s1 += w1.events.filter((e) => e.type === 'shot').length; }
+  assert.equal(s1, 0, 'auch gehalten kein Schuss');
+  // Wrack: nur hinlaufen
+  const w3 = foot(); const c3 = place(w3); c3.wrecked = true;
+  assert.equal(clickIntent(w3, c3.x, c3.y).kind, 'move');
+  // Strg-Klick aufs Auto: am Platz schießen
+  const w2 = foot(); w2.player.weapon = PISTOL; const c2 = place(w2); let s2 = 0;
+  for (let i = 0; i < 30; i++) { updateWorld(w2, { ...idle(), ...click({ x: c2.x, y: c2.y }, { clickForce: true, clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s2 += w2.events.filter((e) => e.type === 'shot').length; }
+  assert.ok(s2 >= 1 && !w2.player.inCar, 'Strg: geschossen, nicht eingestiegen');
+});
+
+test('Klick gehalten: wer auf den Boden geklickt hat, läuft nur – überstrichene Personen und Autos werden nicht angegriffen', async () => {
+  const { createPed, nearestSpot } = await import('../web/src/pedestrians.js');
+  const { createCar } = await import('../web/src/car.js');
+  const { WEAPONS } = await import('../web/src/combat.js');
+  const w = foot(); w.player.weapon = WEAPONS.findIndex((q) => q.id === 'pistol');
+  const ped = createPed(city, nearestSpot(city, P0.x, P0.y), w.rng);
+  ped.x = P0.x + Math.cos(ang) * 200; ped.y = P0.y + Math.sin(ang) * 200; ped.speed = 0; w.peds.push(ped);
+  w.cars.push(createCar({ x: P0.x + Math.cos(ang) * 320, y: P0.y + Math.sin(ang) * 320, angle: ang, role: 'curb' }));
+  const ground = { x: P0.x + Math.cos(ang + 1.2) * 150, y: P0.y + Math.sin(ang + 1.2) * 150 };
+  let shots = 0; const x0 = w.player.x, y0 = w.player.y;
+  // Druck auf leeren Boden, dann wandert der Zeiger (gehalten) über die Person und das Auto hinaus
+  for (let i = 0; i < 60 * 4; i++) {
+    const f = Math.min(1, i / 120), a = ang + 1.2 * (1 - f), r = 150 + f * 300;
+    const at = i === 0 ? ground : { x: P0.x + Math.cos(a) * r, y: P0.y + Math.sin(a) * r };
+    updateWorld(w, { ...idle(), ...click(at, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60);
+    shots += w.events.filter((e) => e.type === 'shot' || e.type === 'swing').length;
+  }
+  assert.equal(shots, 0, 'kein Angriff beim Laufen');
+  assert.ok(!w.player.inCar, 'nicht eingestiegen');
+  assert.ok(Math.hypot(w.player.x - x0, w.player.y - y0) > 60, 'dem Zeiger nachgelaufen');
+});
+
+test('Angriff per Klick: bleibt bei der angeklickten Person und springt nach ihr nicht auf die nächste über', async () => {
+  const { createPed, nearestSpot } = await import('../web/src/pedestrians.js');
+  const { WEAPONS } = await import('../web/src/combat.js');
+  const w = foot(); w.player.weapon = WEAPONS.findIndex((q) => q.id === 'pistol');
+  const mk = (d, side) => { const q = createPed(city, nearestSpot(city, P0.x, P0.y), w.rng); q.x = P0.x + Math.cos(ang) * d - Math.sin(ang) * side; q.y = P0.y + Math.sin(ang) * d + Math.cos(ang) * side; q.speed = 0; w.peds.push(q); return q; };
+  const a = mk(150, 0), b = mk(150, 25);
+  a.hp = 1;
+  // gehalten; sobald A liegt, rutscht der Zeiger auf B (früher griff die Figur dann B an)
+  for (let i = 0; i < 60 * 3; i++) { const o = a.state === 'dead' ? b : a; updateWorld(w, { ...idle(), ...click({ x: o.x, y: o.y }, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60); }
+  assert.equal(a.state, 'dead', 'angeklickte Person getroffen');
+  assert.notEqual(b.state, 'dead', 'die daneben bleibt verschont');
+  assert.ok((b.hp ?? 1) > 0);
+});
+
 test('Steuerschema: Standard Diablo, im Steuerungsbildschirm mit ←/→ umschaltbar und gespeichert; Tabelle zeigt die Belegung', async () => {
   const { createGame, updateGame } = await import('../web/src/game.js');
   const { memoryStorage } = await import('../web/src/save.js');

@@ -252,7 +252,7 @@ export class Hud {
   // Name und Munition. hover = Index des gezeigten Segments.
   // opt: { vx, vy (Zeiger ab der Mitte, HUD-Einheiten), age (s seit dem Öffnen), pad (Controller) }
   drawWeaponWheel(p, hover, opt = {}) {
-    const c = this.ctx, cx = this.vw / 2, cy = this.vh / 2, n = WEAPONS.length;
+    const c = this.ctx, cx = opt.cx ?? this.vw / 2, cy = opt.cy ?? this.vh / 2, n = WEAPONS.length; // Maus: am Zeiger
     const R = WHEEL.radius, r0 = WHEEL.inner, gap = 0.035, step = 2 * Math.PI / n;
     // Einblenden: kurz wachsen und aufhellen (ohne Bewegungswunsch sofort)
     const u = Math.min(1, Math.max(0, (opt.age ?? 1) / (WHEEL.ease * 1.4))), e = 1 - (1 - u) ** 3;
@@ -281,7 +281,7 @@ export class Hud {
     c.beginPath(); c.arc(cx, cy, r0 - 8, 0, Math.PI * 2); c.fillStyle = 'rgba(12,14,19,0.9)'; c.fill();
     // Zeiger: wohin die Maus/der Stick gerade zeigt (auf den Innenkreis begrenzt)
     const vl = Math.hypot(opt.vx ?? 0, opt.vy ?? 0);
-    if (vl > 2) {
+    if (opt.pad && vl > 2) { // Maus: der echte Zeiger zeigt selbst
       const L = Math.min(r0 - 12, vl * (r0 - 12) / WHEEL.radius * 1.6), ux = opt.vx / vl, uy = opt.vy / vl;
       c.strokeStyle = 'rgba(255,211,61,0.55)'; c.lineWidth = 3; c.lineCap = 'round';
       c.beginPath(); c.moveTo(cx + ux * 8, cy + uy * 8); c.lineTo(cx + ux * L, cy + uy * L); c.stroke();
@@ -292,8 +292,9 @@ export class Hud {
     this.text(wp.melee ? 'Nahkampf' : `${p.mag?.[k] ?? wp.mag} / ${wp.mag}`, cx, cy + 20, { size: 15, weight: 700, align: 'center', color: '#ddd' });
     c.restore();
     // Bedienhinweis unter dem Rad
-    const hint = opt.pad ? 'Rechter Stick wählt · LB loslassen nimmt die Waffe · B bricht ab' : 'Maus zeigt · Loslassen nimmt die Waffe · Mausrad oder 1–6 · Esc bricht ab';
-    this.text(hint, cx, cy + R + 44, { size: 14, weight: 600, align: 'center', color: 'rgba(255,255,255,0.75)' });
+    const hint = opt.pad ? 'Rechter Stick wählt · LB loslassen nimmt die Waffe · B bricht ab' : 'Auf die Waffe zeigen · Loslassen oder Klick nimmt sie · Mausrad oder 1–6 · Esc bricht ab';
+    const hx = Math.max(Math.min(cx, this.vw - 380), Math.min(380, this.vw / 2)); // Hinweis bleibt ganz im Bild
+    this.text(hint, hx, Math.min(cy + R + 44, this.vh - 12), { size: 14, weight: 600, align: 'center', color: 'rgba(255,255,255,0.75)' });
     this.layout = { ...(this.layout ?? {}), wheel: { cx, cy, R, r0, hover } };
   }
 
@@ -758,11 +759,11 @@ export class Hud {
     this.text(`Zu Fuß am PC:  ‹ ${d ? 'Diablo (Klick)' : 'Klassisch (WASD)'} ›   ← / → wechselt`, vw / 2, 146, { size: 18, align: 'center', weight: 700, color: '#ddd' });
     const rows = [
       ['Laufen / Lenken', 'Linker Stick', d ? 'Linksklick (Boden) · WASD' : 'WASD / Pfeile'],
-      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Ziel) · Strg · rechte Maus tippen' : 'linke Maus · V'],
+      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Person) · Strg + Klick · rechte Maus tippen' : 'linke Maus · V'],
       ['Sprinten · langsam gehen', 'A halten · Stick halb', 'Umschalt · Alt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
-      ['Einsteigen / Aussteigen', 'Y', d ? 'F' : 'F / rechte Maus tippen'],
+      ['Einsteigen / Aussteigen', 'Y', d ? 'Linksklick (Auto) · F' : 'F / rechte Maus tippen'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
       ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],

@@ -143,6 +143,19 @@ export function pickTarget(w, x, y) {
   return null;
 }
 
+// Was ein Linksklick zu Fuß bedeutet (Diablo-Schema), festgelegt beim Drücken und beim Halten beibehalten:
+//   'attack' – Person unter dem Zeiger: hinlaufen bis in Reichweite, angreifen
+//   'enter'  – heiles Auto unter dem Zeiger: hinlaufen und einsteigen (nie darauf schießen)
+//   'move'   – Boden oder Wrack: hinlaufen
+//   'force'  – mit Strg: am Platz angreifen, wohin gezeigt wird (auch Autos); obj = was unter dem Zeiger ist
+export function clickIntent(w, x, y, force = false) {
+  const t = pickTarget(w, x, y);
+  if (force) return { kind: 'force', obj: t?.obj ?? null };
+  if (!t) return { kind: 'move', obj: null };
+  if (w.cars.includes(t.obj)) return t.obj.wrecked ? { kind: 'move', obj: null } : { kind: 'enter', obj: t.obj };
+  return { kind: 'attack', obj: t.obj };
+}
+
 // Streuung nach Tempo der Figur (p.moveSpeed, px/s): Stand ruhiger, joggen und sprinten deutlich unruhiger
 export function spreadFactor(p) {
   const v = p.moveSpeed ?? 0;

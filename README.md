@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.34.1** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.35.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -170,9 +170,15 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 
 Zu Fuß am PC gibt es zwei Schemata; gewählt wird im Menü „Steuerung“ mit ← / → (gespeichert):
 
-- **Diablo (Standard):** linke Maustaste auf den Boden läuft dorthin (halten = folgen, Wegfindung um Häuser und
-  Hindernisse), auf eine Person oder ein Auto greift an (läuft erst in Reichweite), Strg greift auf der Stelle an,
-  rechte Maustaste tippen tritt, rechte Maustaste halten öffnet das Waffenrad, Mausrad zoomt (1,5–2,6), Umschalt
+- **Diablo (Standard):** Was ein Linksklick tut, zeigt der Mauszeiger vorher: **Pfeil** = auf den Boden, dorthin
+  laufen (Wegfindung um Häuser und Hindernisse; ein Ring markiert das Ziel); **rotes Fadenkreuz** = auf eine Person,
+  hinlaufen bis in Reichweite und angreifen (sie wird rot umkreist); **Auto-Symbol** = auf ein Auto, hinlaufen und
+  einsteigen (es wird gelb umrandet) – auf Autos wird per Klick nie geschossen. Was der Klick bedeutet, entscheidet
+  der Moment des Drückens: gehalten läuft man nach einem Bodenklick dem Zeiger nach, ohne anzugreifen, was man dabei
+  überstreicht, und ein Angriff bleibt bei der angeklickten Person, bis sie liegt. **Strg + Klick** greift auf der
+  Stelle an, wohin gezeigt wird (auch Autos; dann erscheint das Fadenkreuz vor der Figur). Rechte Maustaste tippen
+  tritt, halten öffnet das **Waffenrad direkt am Mauszeiger**: gewählt ist die Waffe, auf die der Zeiger zeigt (ein
+  kleiner Ruck in ihre Richtung reicht), Loslassen oder Linksklick nimmt sie. Mausrad zoomt (1,5–2,6), Umschalt
   sprintet, Alt geht langsam. WASD läuft weiterhin und bricht einen Klick ab. Im Auto gilt die normale Steuerung.
 - **Klassisch:** wie in der Tabelle unten (WASD laufen, Maus zielen, linke Maustaste schießen, rechte Maustaste
   Waffenrad/Einsteigen).
@@ -217,7 +223,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 416 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 419 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -473,7 +479,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 416 automatischen Tests grün, darunter:
+- Alle 419 automatischen Tests grün, darunter:
+  - 0.35.0: Diablo-Klick auf ein geparktes Auto läuft hin und steigt ein, ohne einen Schuss (auch gehalten), Wrack =
+    nur hinlaufen, Strg-Klick schießt aufs Auto; gehaltener Bodenklick, dessen Zeiger über eine Person und ein Auto
+    wandert, greift nie an und läuft dem Zeiger nach; gehaltener Angriff bleibt bei der angeklickten Person und geht
+    nicht auf die daneben über. Waffenrad: öffnet am Zeiger, wählt nach der Richtung des echten Zeigers ab der
+    Radmitte (17 Punkte reichen, weit draußen zählt die Richtung), hereingerückte Mitte am Bildrand, Klick ins Rad
+    nimmt die Waffe; Zeiger je Absicht (Pfeil/rotes Fadenkreuz/Auto). Im Browser mit echter Maus geprüft: Rad per
+    kleinem Ruck und per Klick, Rahmen ums Auto unter dem Zeiger, Klick aufs Auto steigt ein.
   - 0.34.1: gostumblr-Antwort im echten Format (`/api/v1/bars/busyness` + Wochenschnitt, Sonntag zuerst) ergibt je
     Bar ein Stundenprofil in Berliner Zeit (Sommer-/Winterzeit), Beliebtheit skaliert, echte 24-h-Messungen haben
     Vorrang; ohne Wochenschnitt nur gemessene Stunden, sonst typischer Verlauf. Gegen einen nachgebauten gostumblr-Server

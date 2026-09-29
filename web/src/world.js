@@ -16,7 +16,7 @@ import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
 import { findFootPath } from './footpath.js';
-import { initCombat, updatePlayerCombat, pickTarget, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
+import { initCombat, updatePlayerCombat, clickIntent, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
@@ -410,10 +410,11 @@ function spotFree(w, x, y, r, ignoreCar, lvl = 0) {
   return w.cars.every((c) => c === ignoreCar || !circleVsObb(x, y, r, c));
 }
 
-function tryEnter(w) {
+// only: genau dieses Auto (Klick-Steuerung), sonst das nächste in Reichweite
+function tryEnter(w, only = null) {
   const p = w.player;
   let best = null, bd = PLAYER.enterDist;
-  for (const c of w.cars) {
+  for (const c of only ? [only] : w.cars) {
     if (c.wrecked) continue;
     const d = Math.hypot(c.x - p.x, c.y - p.y);
     if (d < bd) { bd = d; best = c; }
@@ -485,34 +486,54 @@ function updateLevels(w) {
 // Boden = hinlaufen (Weg um Hindernisse, footpath.js; gehalten = dem Zeiger folgen), Klick auf eine Person/ein Auto =
 // bis in Reichweite laufen und angreifen, Shift-Klick = stehen bleiben und zum Zeiger angreifen. Übersetzt das in die
 // gewohnten Eingaben (moveX/moveY, fire, aimWorld); WASD bricht einen Klick ab.
+// Diablo-Schema zu Fuß: was der Klick bedeutet, entscheidet allein der Moment des Drückens (combat.js clickIntent).
+// Gehalten bleibt es dabei: wer auf den Boden geklickt hat, läuft dem Zeiger nach und greift nie an, was er dabei
+// überstreicht; wer eine Person angeklickt hat, greift genau sie an, bis sie liegt (kein Weiterspringen auf die nächste);
+// ein angeklicktes Auto wird angesteuert und bestiegen. Nur Strg greift auf der Stelle an – auch Autos.
 function clickControl(w, input, dt) {
   const p = w.player;
   if (Math.hypot(input.moveX, input.moveY) > 0.05) { p.click = null; return input; }
   const at = input.clickWorld;
-  if (at && (input.clickPressed || (input.clickHeld && (p.clickT = (p.clickT ?? 0) - dt) <= 0))) {
-    p.clickT = 0.15; // gehalten: Ziel alle 0,15 s neu
-    const t = input.clickForce ? null : pickTarget(w, at.x, at.y);
-    if (input.clickForce) p.click = { force: true, x: at.x, y: at.y };
-    else if (t) p.click = { target: t.obj };
-    else if (!p.click?.target || input.clickPressed) {
-      const path = findFootPath(w, p, at, p.lvl ?? 0);
-      p.click = path && path.length > 1 ? { path, i: 1 } : null;
-    }
-  }
+  const walk = (to) => { const path = findFootPath(w, p, to, p.lvl ?? 0); return path && path.length > 1 ? { path, i: 1 } : null; };
+  if (at && input.clickPressed) {
+    const it = clickIntent(w, at.x, at.y, !!input.clickForce);
+    p.clickT = 0.15;
+    if (it.kind === 'force') p.click = { force: true, x: at.x, y: at.y, obj: it.obj };
+    else if (it.kind === 'attack') p.click = { target: it.obj };
+    else if (it.kind === 'enter') p.click = { enter: it.obj };
+    else { const c = walk(at); p.click = c && { ...c, follow: true }; }
+  } else if (at && input.clickHeld && p.click?.follow && (p.clickT = (p.clickT ?? 0) - dt) <= 0) {
+    p.clickT = 0.15; // gehalten: dem Zeiger nachlaufen (Weg alle 0,15 s neu)
+    const c = walk(at);
+    if (c) p.click = { ...c, follow: true };
+  } else if (at && input.clickHeld && p.click?.force && !p.click.obj) { p.click.x = at.x; p.click.y = at.y; }
   const c = p.click;
   if (!c) return input;
   const out = { ...input };
   if (c.force) {
     if (!input.clickHeld && !input.clickPressed) { p.click = null; return input; }
-    return Object.assign(out, { aimWorld: { x: c.x, y: c.y }, fire: true, firePressed: !!input.clickPressed || (p.cool ?? 0) <= 0 });
+    const o = c.obj && c.obj.state !== 'dead' && !c.obj.wrecked ? c.obj : null;
+    return Object.assign(out, { aimWorld: o ? { x: o.x, y: o.y } : { x: c.x, y: c.y }, fire: true, firePressed: !!input.clickPressed || (p.cool ?? 0) <= 0 });
+  }
+  if (c.enter) {
+    const car = c.enter;
+    if (car.wrecked || !w.cars.includes(car) || car.id === p.inCar) { p.click = null; return input; }
+    const dx = car.x - p.x, dy = car.y - p.y, d = Math.hypot(dx, dy);
+    if (d < PLAYER.enterDist - 2) { p.click = null; tryEnter(w, car); return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false }); }
+    // Weg zum Auto (um Häuser herum), neu, wenn es weggefahren ist
+    if (!c.path || Math.hypot(car.x - c.tx, car.y - c.ty) > 30) { const wk = walk(car); c.path = wk?.path ?? null; c.i = 1; c.tx = car.x; c.ty = car.y; }
+    let q = c.path?.[c.i];
+    while (q && Math.hypot(q.x - p.x, q.y - p.y) < 5) q = c.path[++c.i];
+    const gx = q ? q.x : car.x, gy = q ? q.y : car.y, gd = Math.hypot(gx - p.x, gy - p.y) || 1;
+    return Object.assign(out, { moveX: (gx - p.x) / gd, moveY: (gy - p.y) / gd, fire: false, firePressed: false });
   }
   if (c.target) {
-    const o = c.target, alive = o.state !== 'dead' && !o.wrecked && (w.peds.includes(o) || w.cars.includes(o));
+    const o = c.target, alive = o.state !== 'dead' && !o.wrecked && w.peds.includes(o);
     if (!alive) { p.click = null; return input; }
     const wp = WEAPONS[p.weapon ?? 0], dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy);
     const reach = wp.melee ? (wp.range ?? 30) + 6 : (wp.range ?? 400) * 0.85;
     if (d > reach) return Object.assign(out, { moveX: dx / d, moveY: dy / d });
-    // in Reichweite: angreifen (gehalten: wiederholt, sonst ein Angriff)
+    // in Reichweite: ein Klick = ein Angriff; gehalten: weiter, bis die Person liegt
     const ready = (p.cool ?? 0) <= 0;
     if (!input.clickHeld && c.done && ready) { p.click = null; return input; }
     if (ready) c.done = true;
@@ -701,7 +722,7 @@ export function updateWorld(w, input, dt) {
     else applyDriverInput(pc, input);
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); updatePlayerOnFoot(w, input, dt); }
+  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) updatePlayerOnFoot(w, input, dt); }
   if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
