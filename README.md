@@ -405,7 +405,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 339 automatischen Tests grün, darunter:
+- Alle 342 automatischen Tests grün, darunter:
   - Nahverkehr: eigene Taste fürs Mitfahren (G/Steuerkreuz unten, nicht S/Pfeil); einsteigen in Reichweite eines
     Wagens auch in Fahrt, aussteigen neben dem Wagen (nie in Wand, Baum, Poller oder Auto), Abspringen mit Sturz und ab
     40 km/h Schaden, unter Tage nur am Bahnsteig mit Ausgang an der Straße; verschwindet das Fahrzeug, Teleport, K. o.

@@ -24,6 +24,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 ### Behoben
 - Parkende Autos standen auf Straßenbahngleisen (die Gleise kennt nur der Fahrplan, nicht die Karte) und hielten
   Straßenbahnen dauerhaft auf.
+- Ein Test zum Nachladen fehlgeschlagener Kacheln schlug im vollen Testlauf gelegentlich fehl (er hing an der echten
+  Uhr); die Wiederholpause der Karte hat jetzt eine einsetzbare Uhr.
 
 ### Regeln
 - Einsteigen nur auf gleicher Ebene: in einen Zug auf dem Viadukt (U1) von der Straße nur, während er im Bahnhof hält;
