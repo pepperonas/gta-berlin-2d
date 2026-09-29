@@ -25,6 +25,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Parkende Autos standen auf Straßenbahngleisen (die Gleise kennt nur der Fahrplan, nicht die Karte) und hielten
   Straßenbahnen dauerhaft auf.
 
+### Regeln
+- Einsteigen nur auf gleicher Ebene: in einen Zug auf dem Viadukt (U1) von der Straße nur, während er im Bahnhof hält;
+  von der Hochbahn aussteigen nur am Bahnhof, Ausgang an der Straße.
+
 ### Bekannt
 - Wo der Linienweg einer Straßenbahn in der Gegenspur liegt (z. B. M10 an der Herzbergstraße), können sie und ein
   entgegenkommender Bus aufeinander warten.

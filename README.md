@@ -363,11 +363,11 @@ dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). 
 
 Busse, Straßenbahnen, S- und U-Bahnen fahren nach dem echten VBB-Fahrplan. **Mitfahren:** neben einem Wagen **G**
 (Steuerkreuz unten) – auch in Fahrt (ab 25 km/h aufspringen); **G** noch einmal steigt aus, schnell gefahren ist das
-Abspringen mit Sturz (ab 40 km/h mit Schaden). Unter Tage geht das nur am Bahnsteig, man kommt am Straßenausgang des
-Bahnhofs heraus. Oben mittig zeigt eine Leiste Linie, Ziel und nächsten Halt.
+Abspringen mit Sturz (ab 40 km/h mit Schaden). Unter Tage und auf der Hochbahn geht das nur am Bahnhof, man kommt am
+Straßenausgang heraus; in einen Zug auf dem Viadukt steigt man von der Straße nur, während er im Bahnhof hält. Oben mittig zeigt eine Leiste Linie, Ziel und nächsten Halt.
 
 **Selbst fahren:** vorn am Führerstand einer Straßenbahn, S- oder U-Bahn **Y/F** – der Zug verlässt den Fahrplan und
-gehört dem Spieler (Höchsttempo 60/70/100 km/h). Gas und Bremse wie im Auto, Notbremse Leertaste/B. An einer
+gehört dem Spieler (Höchsttempo 60/70/100 km/h); einen stehengelassenen eigenen Zug übernimmt man am Führerstand wieder. Gas und Bremse wie im Auto, Notbremse Leertaste/B. An einer
 Haltestelle im Stand öffnet **E/A** die Türen (sie schließen nach 20 s selbst); ein sanfter, genauer Halt bringt bis zu
 10 € Trinkgeld. Vor einem Zug auf derselben Strecke und vor Hindernissen auf dem Straßenbahngleis bremst der Zug von
 selbst; Fahrplanzüge dahinter warten. Am Endhalt wendet **E/A** auf die Gegenrichtung, wo es eine gibt. Unter Tage wird
@@ -405,7 +405,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 333 automatischen Tests grün, darunter:
+- Alle 339 automatischen Tests grün, darunter:
   - Nahverkehr: eigene Taste fürs Mitfahren (G/Steuerkreuz unten, nicht S/Pfeil); einsteigen in Reichweite eines
     Wagens auch in Fahrt, aussteigen neben dem Wagen (nie in Wand, Baum, Poller oder Auto), Abspringen mit Sturz und ab
     40 km/h Schaden, unter Tage nur am Bahnsteig mit Ausgang an der Straße; verschwindet das Fahrzeug, Teleport, K. o.
@@ -413,7 +413,9 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
     Tunnel aus Linienweg ohne sichtbares Gleis (eine querende Hochbahn zählt nicht, nicht geladene Kachel = oben);
     Zugphysik je Modus (Höchsttempo, Bremsweg, Zwangsbremsung folgt der Bremskurve, Trinkgeld nach Genauigkeit und
     Sanftheit); Zug übernehmen nur am Führerstand, fahren, Türen nur im Stand an der Haltestelle, Trinkgeld beim
-    sauberen Halt, Türen schließen selbst, Abstand zum Zug voraus, Fahrplanzug dahinter wartet, Wenden am Endhalt,
+    sauberen Halt, Türen schließen selbst, Abstand zum Zug voraus, Fahrplanzug dahinter wartet, Wenden am Endhalt über
+    die Taste (auch wo der Endhalt im Fahrplan doppelt steht), eigenen Zug wieder übernehmen, Auftrag neu starten holt
+    aus dem Zug, Hochbahn nur im Bahnhof ein-/aussteigen,
     eigene Straßenbahn hält vor einem Auto auf dem Gleis ohne es zu schieben; kein Stellplatz auf einem
     Straßenbahngleis (auch wenn der Fahrplan erst nach den Stellplätzen geladen wird); Tunnelansicht mit Röhre, einem
     Bahnsteig je Richtung entlang der Kurve, Namen einmal und zuletzt, eigener Zug am Bahnsteig; Leiste für Fahrgast

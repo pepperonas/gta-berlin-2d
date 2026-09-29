@@ -147,3 +147,19 @@ test('Den eigenen, stehengelassenen Zug wieder übernehmen', () => {
   assert.equal(w.player.ride?.kind, 'driver', 'wieder am Führerstand');
   assert.equal(w.playerTrain, t, 'derselbe Zug');
 });
+
+test('Zugführer auf der Hochbahn: aussteigen nur am Bahnhof, nicht zwischen zwei Bahnhöfen auf dem Viadukt', async () => {
+  const { railAt } = await import('../web/src/tunnel.js');
+  const p = pat('U1', 'ubahn'), i = p.stopNames.findIndex((n) => n.includes('Kottbusser Tor')), w = atFrontOf(p, i);
+  press(w, { enterExit: true });
+  const t = w.playerTrain;
+  assert.ok(t, 'übernommen');
+  while (t.s < p.stops[i] + 700) press(w, { throttle: 1 });
+  for (let k = 0; k < 60 * 20 && t.v > 0; k++) press(w, { brake: 1 });
+  assert.equal(t.v, 0); assert.equal(t.atStop, null, 'zwischen zwei Bahnhöfen');
+  const f = trainCars(p, t.s)[0];
+  assert.ok((railAt(city, f.x, f.y)?.lvl ?? 0) >= 1, 'auf dem Viadukt');
+  press(w, { enterExit: true });
+  assert.equal(w.player.ride?.kind, 'driver', 'bleibt im Führerstand');
+  assert.match(w.notice?.text ?? '', /Bahnhof/);
+});
