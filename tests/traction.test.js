@@ -96,8 +96,10 @@ function puddleRun(fps, kmh) {
 test('Aquaplaning in einer echten Pfütze: nur über 70 km/h, ein Ereignis, gleich bei 30 und 60 fps', () => {
   const slow = puddleRun(60, 50), fast = puddleRun(60, 90), fast30 = puddleRun(30, 90);
   assert.equal(slow.events.length, 0, 'langsam: kein Aquaplaning');
-  assert.equal(fast.events.length, 1, 'schnell: genau ein Ereignis');
-  assert.equal(fast30.events.length, 1, '30 fps: ebenso');
+  // nur diese Pfütze zählt (eine Sekunde bei 90 km/h reicht bis zur nächsten Pfütze derselben Straße)
+  const here = (r) => r.events.filter((e) => Math.hypot(e.x - r.pd.x, e.y - r.pd.y) < r.pd.rx + 60).length;
+  assert.equal(here(fast), 1, 'schnell: genau ein Ereignis an dieser Pfütze');
+  assert.equal(here(fast30), 1, '30 fps: ebenso');
   assert.ok(fast.events[0].player, 'Spielerauto markiert');
   assert.equal(puddleRun(60, 90).car.angle.toFixed(6), fast.car.angle.toFixed(6), 'deterministisch');
 });
