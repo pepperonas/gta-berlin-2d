@@ -152,7 +152,12 @@ change in `web/`.
   Weather values are `{cloud, rain ≤1.6, fog ≤1.7, snow, storm, thunder}` (11 kinds, day types normal/unsettled/winter).
   Gusts (`gustAt`), lightning (`strikeInSlot/strikesAt/flashAt`) and thunder arrival (`thunderBetween`, half-open
   intervals) are pure functions of seed and `w.time`. Snow cover `w.snow` is sim state like `w.wet` (car grip, save).
-  Snow/rain/debris/fog banks are drawn from hashes + time (no particle lists); road slush goes through an offscreen layer.
+  Snow/rain/debris/fog banks are drawn from hashes + time (no particle lists); road slush and the wet-road film go through
+  an offscreen layer (`Renderer.overlayLayer(fn, alpha)`, so overlaps don't darken junctions). Cloud shadows, ground fog,
+  rain curtains and snowstorm sheets are tileable noise patterns (`wetfx.js noisePattern`, per context, scrolled/scaled
+  via `scrolled()` = `pattern.setTransform`; `null` without canvas image data → old fallbacks). Ground fog
+  (`drawGroundFog`) and wet ground (`drawWetGround`) are drawn before the depth-sorted objects, so roofs stay above
+  them; `rainRipples` = impact rings, `drawPuddles` = rim + sky gradient + rain rings.
 - **Weather on the road:** `weather.js temperatureAt` (pure) + `w.ice` (`stepIce`, saved; `w.forceTemp` via console
   `temp`) → `traction.js roadCondition/tractionOf` (grip factors, floor = ice value; covered spots dry, bridges ×1.5
   ice; puddles = `edgePuddles`), written per step to `car.traction` by `world.js applyWeather` (also `car.aqua`

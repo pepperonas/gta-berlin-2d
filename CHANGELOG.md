@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.36.0] – 2026-09-29
+
+### Geändert
+- **Realistischere Wetterdarstellung:**
+  - Regen: Tropfen mit hellem Kopf und blassem Schweif, Aufschlagringe am Boden, Regenringe in den Pfützen,
+    Regenwände aus Rauschen, die mit dem Wind ziehen (statt gerader Bänder).
+  - Nässe: Asphalt deutlich dunkler mit mattem Himmelsglanz, auch Gehwege und Höfe dunkler; Pfützen mit nassem Rand
+    und Himmelsspiegelung, die zur Mitte heller wird.
+  - Wolkenschatten: ausgefranste Wolkenformen verschiedener Größe statt runder Flecken, mehr Wolken = mehr Schatten.
+  - Nebel: Bodennebel auf Straßen und Höfen mit ziehenden Schwaden, die Dächer ragen heraus; darüber leichterer Dunst.
+  - Schnee: nahe Flocken weich und unscharf; im Schneesturm fegen Schneeschleier quer durchs Bild.
+
+### Behoben
+- Bei Regen lagen dunkle Kreise auf den Kreuzungen (die Nässe wurde dort doppelt aufgetragen).
+
 ## [0.35.0] – 2026-09-29
 
 ### Geändert

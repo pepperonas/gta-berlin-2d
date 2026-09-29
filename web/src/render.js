@@ -16,7 +16,7 @@ import { PARK, SURFACE } from './citycodes.js';
 import { lightAt } from './daylight.js';
 import { weatherLight, hasUmbrella, gustAt, strikesAt } from './weather.js';
 import { createTrails, recordTrails, visibleTrails } from './snowtracks.js';
-import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn, drawSnowGround, snowPattern, snowRoadPaths, roadSnowAlpha, drawSnowfall, drawFogBanks, drawLightning, drawSkyFlash, drawStormDebris, drawSpray } from './wetfx.js';
+import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, drawNeon, neonText, neonColor, neonOn, drawSnowGround, snowPattern, snowRoadPaths, roadSnowAlpha, drawSnowfall, drawFogBanks, drawLightning, drawSkyFlash, drawStormDebris, drawSpray, drawWetGround, drawGroundFog } from './wetfx.js';
 import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
 import { transitVisible } from './transitlive.js';
@@ -635,8 +635,9 @@ export class Renderer {
     areas.sort((a, b) => a.kind - b.kind);
     for (const a of areas) if (a.kind !== AREA_KIND.bridge) { ctx.fillStyle = tex(AREA_TEXTURE[a.kind], AREA_COLOR[a.kind]); ctx.fill(pathOf(a), 'evenodd'); }
 
-    // 1b) Schneedecke auf Gehwegen, Höfen und Grün (Wasser, Straßen und Häuser kommen darüber)
+    // 1b) Schneedecke auf Gehwegen, Höfen und Grün (Wasser, Straßen und Häuser kommen darüber); sonst bei Nässe dunkler
     this.stats.snowCover = drawSnowGround(ctx, v, snowD);
+    this.stats.wetGround = drawWetGround(ctx, v, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)));
 
     // 2) Wasser mit Wellen und Kaikante
     for (const wa of water) {
@@ -736,7 +737,7 @@ export class Renderer {
       if (this.quality === 'high') this.drawDecals(E, city);
       this.drawStreetMarkings(E, city);
       if (lvl === 0) this.drawCrossings(crossings);
-      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L);
+      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L, { layer: (fn, a) => this.overlayLayer(fn, a), t, rain: wx?.rain ?? 0 });
       if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
       if (lvl === 0) this.drawSnowTrails(world, v, snowD);
       // Straßenbahngleise in der Fahrbahn: am Boden der ganze Linienweg, oben nur die Stücke auf der Brücke
@@ -780,6 +781,9 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(st.x + Math.cos(st.seed) * st.r * 0.6, st.y + Math.sin(st.seed) * st.r * 0.6, st.r * 0.6, 0, Math.PI * 2); ctx.fill();
     }
+
+    // 5c) Bodennebel: über Straßen und Höfen, unter Autos, Menschen und Dächern (die ragen heraus)
+    this.stats.groundFog = wx ? drawGroundFog(ctx, v, wx, t) : false;
 
     // 6) Missionsmarker am Boden
     if (overlayMarkers) this.drawZones(world);
@@ -1343,6 +1347,22 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.strokeStyle = sp; ctx.lineWidth = 18;
     for (const p of P) ctx.stroke(pathOf(p));
+  }
+
+  // Deckend in eine bildschirmgroße Ebene zeichnen (fn(g) mit Weltkoordinaten) und einmal mit alpha auftragen – so
+  // summieren sich Überlappungen nicht. false, wenn es keine Zeichenfläche gibt (dann zeichnet der Aufrufer direkt).
+  overlayLayer(fn, alpha) {
+    const ctx = this.ctx, tf = this._tf;
+    if (!tf) return false;
+    const [W, H] = this._wh ?? [1280, 720];
+    if (!this._overlay || this._overlay.width !== W || this._overlay.height !== H) this._overlay = makeCanvas(W, H);
+    const g = this._overlay?.getContext?.('2d');
+    if (!g) return false;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
+    g.setTransform(tf[0], 0, 0, tf[0], tf[1], tf[2]);
+    fn(g);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = alpha; ctx.drawImage(this._overlay, 0, 0); ctx.restore();
+    return true;
   }
 
   // Schnee auf Fahrbahnen: grauweißer Matsch, festgefahrene dunkle Reifenspuren je Fahrstreifen, Schneewälle am Rand.

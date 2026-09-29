@@ -55,8 +55,15 @@ export function drawCloudShadows(ctx, v, wx, t, sunStrength) {
   const closed = Math.max(0, Math.min(1, (0.97 - wx.cloud) / 0.4));
   const alpha = 0.55 * sunStrength * Math.min(1, wx.cloud * 1.4) * (1 - Math.min(1, wx.rain) * 0.6) * closed * (1 - Math.min(1, wx.snow ?? 0));
   if (alpha < 0.02) return 0;
-  const spr = cloudBlob();
   const list = cloudShadows(v, wx, t);
+  // Wolkenformen aus fraktalem Rauschen (ausgefranst, verschieden groß), ziehen mit dem Wind; Kreise nur ohne Canvas
+  const pat = cloudPattern(ctx, wx.cloud);
+  if (pat) {
+    ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = scrolled(pat, CLOUD_SCALE, wx.wind.x * t, wx.wind.y * t);
+    ctx.fillRect(v.x, v.y, v.w, v.h); ctx.restore();
+    return list.length;
+  }
+  const spr = cloudBlob();
   ctx.save(); ctx.globalAlpha = alpha;
   for (const c of list) {
     if (spr) ctx.drawImage(spr, c.x - c.r, c.y - c.r, c.r * 2, c.r * 2);
@@ -121,21 +128,95 @@ export function edgePuddles(city, e) {
   return out;
 }
 
-export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L) {
+// Nässe auf der Fahrbahn. layer(fn) (render.js): zeichnet deckend in eine eigene Ebene und trägt sie einmal auf – sonst
+// dunkeln Überlappungen (Kreuzungsscheiben über den Straßen) zu Kreisen nach. Ohne layer direkt (Tests, Fallback).
+export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L, { layer = null, t = 0, rain = 0 } = {}) {
   if (wet < 0.02) return 0;
-  ctx.save();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = `rgba(12,20,34,${0.24 * wet})`;
-  for (const e of edges) if (!e.bridge && e.cls <= 10) { ctx.lineWidth = e.w; ctx.stroke(pathOf(e)); }
-  ctx.fillStyle = `rgba(12,20,34,${0.24 * wet})`;
-  for (const j of junctions) if (!j.bridge) { ctx.beginPath(); ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2); ctx.fill(); }
-  // Pfützen spiegeln den Himmel: tags hell-graublau, nachts fast schwarz (die Lichter spiegeln sich über die Lichtkarte)
+  const paint = (g, col) => {
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = col; g.fillStyle = col;
+    for (const e of edges) if (!e.bridge && e.cls <= 10) { g.lineWidth = e.w; g.stroke(pathOf(e)); }
+    for (const j of junctions) if (!j.bridge) { g.beginPath(); g.arc(j.x, j.y, j.r, 0, Math.PI * 2); g.fill(); }
+  };
+  // nasser Asphalt: deutlich dunkler und leicht bläulich (Wasserfilm), tags mit mattem Himmelsglanz
+  if (!layer || !layer((g) => paint(g, '#0b121d'), 0.34 * wet)) { ctx.save(); paint(ctx, `rgba(12,20,34,${0.24 * wet})`); ctx.restore(); }
   const day = 1 - L.dark;
-  ctx.fillStyle = `rgba(${Math.round(60 + 110 * day)},${Math.round(70 + 120 * day)},${Math.round(90 + 125 * day)},${0.55 * wet})`;
-  let n = 0;
-  for (const e of edges) for (const p of edgePuddles(city, e)) { ctx.beginPath(); ctx.ellipse(p.x, p.y, p.rx * wet, p.ry * wet, p.a, 0, Math.PI * 2); ctx.fill(); n++; }
+  if (layer && day > 0.2) layer((g) => paint(g, '#8fa2bb'), 0.05 * wet * day);
+  return drawPuddles(ctx, edges, city, wet, L, t, rain);
+}
+
+// Pfützen: dunkler, nasser Rand, darin der Himmel gespiegelt (tags hell-graublau, zur Mitte heller; nachts fast
+// schwarz – Lichter spiegeln sich über die Lichtkarte); bei Regen Ringe, die sich ausbreiten
+export function drawPuddles(ctx, edges, city, wet, L, t = 0, rain = 0) {
+  const day = 1 - L.dark, list = [];
+  for (const e of edges) for (const p of edgePuddles(city, e)) list.push(p);
+  if (!list.length) return 0;
+  ctx.save();
+  ctx.fillStyle = `rgba(8,12,18,${0.35 * wet})`;
+  ctx.beginPath();
+  for (const p of list) { ctx.moveTo(p.x + p.rx * wet * 1.15, p.y); ctx.ellipse(p.x, p.y, p.rx * wet * 1.15, p.ry * wet * 1.2, p.a, 0, Math.PI * 2); }
+  ctx.fill();
+  const sky = (k, a) => `rgba(${Math.round(55 + 115 * day * k)},${Math.round(64 + 124 * day * k)},${Math.round(82 + 130 * day * k)},${a})`;
+  for (const p of list) {
+    const rx = p.rx * wet, ry = p.ry * wet;
+    if (ctx.createRadialGradient && rx > 2) {
+      const gr = ctx.createRadialGradient(p.x - rx * 0.2, p.y - ry * 0.3, 0, p.x, p.y, rx);
+      gr.addColorStop(0, sky(1.08, 0.7 * wet)); gr.addColorStop(0.7, sky(0.9, 0.62 * wet)); gr.addColorStop(1, sky(0.65, 0.5 * wet));
+      ctx.fillStyle = gr;
+    } else ctx.fillStyle = sky(1, 0.55 * wet);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, p.a, 0, Math.PI * 2); ctx.fill();
+  }
+  // Regenringe in den Pfützen: je Pfütze einige Ringe mit eigener Phase (aus der Lage), wachsen und verblassen
+  if (rain > 0.05) {
+    ctx.lineWidth = 0.7;
+    const per = Math.min(4, 1 + Math.round(rain * 2.5));
+    for (const p of list) for (let k = 0; k < per; k++) {
+      const life = 0.7 + h(p.x, p.y, k) * 0.5, ph = (t / life + h(p.y, p.x, k)) % 1, cyc = Math.floor(t / life + h(p.y, p.x, k));
+      const u = h(p.x, k, cyc) * 2 - 1, v2 = h(p.y, k, cyc) * 2 - 1;
+      if (u * u + v2 * v2 > 0.7) continue;
+      const c = Math.cos(p.a), s2 = Math.sin(p.a), ox = u * p.rx * wet * 0.8, oy = v2 * p.ry * wet * 0.8;
+      const x = p.x + ox * c - oy * s2, y = p.y + ox * s2 + oy * c, r = 0.6 + ph * 4.5;
+      ctx.strokeStyle = `rgba(225,232,242,${(0.55 * (1 - ph) * Math.min(1, rain)).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
   ctx.restore();
-  return n;
+  return list.length;
+}
+
+// Nasser Boden abseits der Straßen (Gehwege, Höfe, Grün): etwas dunkler – vor Straßen und Häusern gezeichnet
+export function drawWetGround(ctx, v, wet) {
+  if (wet < 0.03) return false;
+  ctx.fillStyle = `rgba(16,22,32,${(0.16 * wet).toFixed(3)})`; ctx.fillRect(v.x - 5, v.y - 5, v.w + 10, v.h + 10);
+  return true;
+}
+
+// Bodennebel: liegt auf Straßen und Höfen, bevor Autos, Menschen und Häuser gezeichnet werden – die Dächer ragen so
+// heraus (sie sind dem Blick näher). Schwaden aus Rauschen ziehen langsam mit dem Wind.
+export function drawGroundFog(ctx, v, wx, t) {
+  const fog = wx.fog ?? 0;
+  if (fog < 0.03) return false;
+  const k = Math.min(1, fog), dense = clamp01((fog - 1) / 0.7);
+  ctx.save();
+  ctx.fillStyle = `rgba(210,215,220,${(0.28 * k + 0.2 * dense).toFixed(3)})`; ctx.fillRect(v.x, v.y, v.w, v.h);
+  const pat = fogPattern(ctx);
+  if (pat) {
+    ctx.globalAlpha = 0.45 * k + 0.3 * dense;
+    ctx.fillStyle = scrolled(pat, 7, wx.wind.x * t * 0.4, wx.wind.y * t * 0.4); ctx.fillRect(v.x, v.y, v.w, v.h);
+    ctx.globalAlpha = 0.3 * k;
+    ctx.fillStyle = scrolled(pat, 3.1, -wx.wind.y * t * 0.25 + 900, wx.wind.x * t * 0.25 + 400); ctx.fillRect(v.x, v.y, v.w, v.h);
+  }
+  ctx.restore();
+  return true;
+}
+
+// Aufschlagringe des Regens am Boden (wachsen und verblassen), im ersten Moment ein Spritzer (crown)
+export function rainRipples(v, wx, t, count) {
+  const n = Math.round(count * Math.min(1.6, wx.rain ?? 0)), out = [];
+  for (let i = 0; i < n; i++) {
+    const life = 0.35 + h(i, 61) * 0.3, ph = (t / life + h(i, 62)) % 1, cyc = Math.floor(t / life + h(i, 62));
+    out.push({ x: v.x + h(i, cyc, 63) * v.w, y: v.y + h(i, cyc, 64) * v.h, r: 0.8 + ph * (3 + h(i, 65) * 3), a: 1 - ph, crown: ph < 0.18 });
+  }
+  return out;
 }
 
 // --- Nebel: Dunst über allem, um die Bildmitte etwas lichter ------------------------------------------------------
@@ -143,7 +224,7 @@ export function drawFog(ctx, v, wx) {
   if (wx.fog < 0.03) return false;
   const cx = v.x + v.w / 2, cy = v.y + v.h / 2, R = Math.hypot(v.w, v.h) / 2;
   const dense = Math.max(0, Math.min(1, (wx.fog - 1) / 0.7)); // dichter Nebel: kaum 50 m Sicht, Mitte kaum lichter
-  const a = Math.min(0.92, 0.62 * Math.min(1, wx.fog) + 0.3 * dense);
+  const a = Math.min(0.85, 0.42 * Math.min(1, wx.fog) + 0.33 * dense); // Rest der Trübung liegt als Bodennebel darunter
   if (ctx.createRadialGradient) {
     const gr = ctx.createRadialGradient(cx, cy, R * (0.12 - 0.08 * dense), cx, cy, R * (1 - 0.35 * dense));
     gr.addColorStop(0, `rgba(214,218,222,${a * (0.35 + 0.3 * dense)})`); gr.addColorStop(0.6, `rgba(214,218,222,${a * 0.85})`); gr.addColorStop(1, `rgba(214,218,222,${a})`);
@@ -215,6 +296,48 @@ export function snowNoise(px, py, N) {
   for (let o = 0; o < 3; o++) { s += amp * tileNoise(px / N * per, py / N * per, per, o + 1); norm += amp; amp *= 0.5; per *= 2; }
   return s / norm;
 }
+
+// --- Rauschmuster (kachelbar, je Zeichenfläche einmal erzeugt): Wolkenschatten, Nebel, Regenschleier ----------------
+const NOISE_N = 256, noisePats = new WeakMap();
+const smooth = (u) => { const x = clamp01(u); return x * x * (3 - 2 * x); };
+// build(n, x, y) → [r, g, b, a] (0…255) für das Rauschen n an der Stelle (x, y); null ohne Canvas
+function noisePattern(ctx, key, build) {
+  let per = noisePats.get(ctx);
+  if (!per) noisePats.set(ctx, per = new Map());
+  if (per.has(key)) return per.get(key);
+  let pat = null;
+  const c = makeC(NOISE_N, NOISE_N), g = c?.getContext('2d');
+  if (g?.createImageData && ctx.createPattern) {
+    const img = g.createImageData(NOISE_N, NOISE_N), d = img?.data;
+    if (!d) { per.set(key, null); return null; } // Test-Attrappe ohne Bilddaten
+    for (let y = 0; y < NOISE_N; y++) for (let x = 0; x < NOISE_N; x++) {
+      const px = build(snowNoise(x, y, NOISE_N), x, y), i = (y * NOISE_N + x) * 4;
+      d[i] = px[0]; d[i + 1] = px[1]; d[i + 2] = px[2]; d[i + 3] = px[3];
+    }
+    g.putImageData(img, 0, 0);
+    pat = ctx.createPattern(c, 'repeat');
+  }
+  per.set(key, pat);
+  return pat;
+}
+// Muster in Weltkoordinaten verschieben (Wind) und vergrößern (eine Kachel = 256 × scale px)
+function scrolled(pat, scale, ox, oy, sy = scale, rot = 0) {
+  try { pat.setTransform?.(new DOMMatrix().translate(ox, oy).rotate(rot * 180 / Math.PI).scale(scale, sy)); } catch { /* ohne DOMMatrix: unverschoben */ }
+  return pat;
+}
+const CLOUD_SCALE = 24; // eine Kachel ≈ 6 km: einzelne Wolken 300 m – 1,5 km
+// Wolkenschatten je Bewölkungsstufe: Rauschen über einer Schwelle, die mit der Bewölkung sinkt, weicher Rand
+function cloudPattern(ctx, cloud) {
+  const k = Math.max(1, Math.min(8, Math.round(cloud * 8)));
+  return noisePattern(ctx, 'cloud' + k, (n) => {
+    const edge = 0.74 - k / 8 * 0.36, a = smooth((n - edge) / 0.12);
+    return [18, 26, 42, Math.round(a * 150)];
+  });
+}
+// Nebel: weiche, ungleichmäßige Schwaden (hell, halbtransparent)
+const fogPattern = (ctx) => noisePattern(ctx, 'fog', (n) => [214, 219, 224, Math.round(smooth((n - 0.25) / 0.6) * 255)]);
+// Regenschleier: Streifen dichteren Regens (wird entlang der Fallrichtung gestreckt)
+const rainPattern = (ctx) => noisePattern(ctx, 'rain', (n) => [190, 202, 218, Math.round(smooth((n - 0.45) / 0.35) * 255)]);
 
 // Deckkraft der Schneedecke an einer Rauschstelle n (0…1) bei Schneehöhe depth: dünn = Flecken (nur in den Senken,
 // wo der Wind den Schnee hintreibt), tief = geschlossen
@@ -293,6 +416,17 @@ export function snowFlakes(v, wx, t, count, gust = 1) {
   return out;
 }
 
+let flakeSpr = null;
+function flakeSprite() {
+  if (flakeSpr !== null) return flakeSpr;
+  flakeSpr = false;
+  const c = makeC(32, 32), g = c?.getContext('2d');
+  if (!g?.createRadialGradient) return flakeSpr;
+  const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(250,252,255,0.85)'); gr.addColorStop(1, 'rgba(240,245,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  return (flakeSpr = c);
+}
 export function drawSnowfall(ctx, v, wx, t, scale, gust = 1) {
   const snow = wx.snow ?? 0;
   if (snow < 0.03) return 0;
@@ -300,7 +434,14 @@ export function drawSnowfall(ctx, v, wx, t, scale, gust = 1) {
   const storm = wx.storm ?? 0;
   ctx.save();
   const wl = Math.hypot(wx.wind.x, wx.wind.y) || 1, sx = wx.wind.x / wl, sy = wx.wind.y / wl;
+  // fern und mittel: kleine Punkte; nah: weiche, leicht unscharfe Flocken (dem Blick nah, also größer und verwischt)
+  const soft = flakeSprite();
   for (let layer = 0; layer < 3; layer++) {
+    if (layer === 2 && soft) {
+      for (const f of flakes) if (f.layer === 2 && f.a > 0.05) { ctx.globalAlpha = f.a; const r = f.r * 2.2; ctx.drawImage(soft, f.x - r, f.y - r, 2 * r, 2 * r); }
+      ctx.globalAlpha = 1;
+      continue;
+    }
     ctx.fillStyle = layer === 2 ? 'rgba(250,252,255,0.9)' : layer === 1 ? 'rgba(244,247,252,0.75)' : 'rgba(236,241,250,0.55)';
     ctx.beginPath();
     for (const f of flakes) if (f.layer === layer && f.a > 0.05) { ctx.moveTo(f.x + f.r, f.y); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); }
@@ -312,8 +453,15 @@ export function drawSnowfall(ctx, v, wx, t, scale, gust = 1) {
     for (const f of flakes) if (f.layer === 2) { ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - sx * len, f.y - sy * len); }
     ctx.stroke();
   }
-  // Dunst aus Schnee: weißlich, bei Sturm dichter (Sicht nimmt ab)
+  // Dunst aus Schnee: weißlich, bei Sturm dichter (Sicht nimmt ab); im Sturm fegen Schneeschleier quer durchs Bild
   ctx.fillStyle = `rgba(222,228,238,${0.1 * snow + 0.18 * storm * snow})`; ctx.fillRect(v.x, v.y, v.w, v.h);
+  const pat = storm > 0.2 ? fogPattern(ctx) : null;
+  if (pat) {
+    const sp = (180 + 380 * storm) * gust;
+    ctx.globalAlpha = Math.min(0.55, 0.4 * storm * snow);
+    ctx.fillStyle = scrolled(pat, 3, sx * sp * t, sy * sp * t, 8, Math.atan2(sy, sx)); ctx.fillRect(v.x, v.y, v.w, v.h);
+    ctx.globalAlpha = 1;
+  }
   ctx.restore();
   return flakes.length;
 }
@@ -325,31 +473,39 @@ export function drawRainLayers(ctx, v, wx, t, scale, gust = 1) {
   const drops = rainDrops(v, wx, t, 420, gust);
   const heavy = clamp01(rain - 1);
   ctx.save();
+  // Aufschläge am Boden zuerst (die Tropfen fallen darüber): Ringe, im ersten Moment eine kleine Krone
+  const rip = rainRipples(v, wx, t, 260);
+  ctx.lineWidth = 0.6 / scale; ctx.strokeStyle = 'rgba(215,225,240,0.24)';
+  ctx.beginPath();
+  for (const r of rip) if (r.a > 0.35) { ctx.moveTo(r.x + r.r, r.y); ctx.ellipse(r.x, r.y, r.r, r.r * 0.75, 0, 0, Math.PI * 2); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(215,225,240,0.1)'; ctx.beginPath();
+  for (const r of rip) if (r.a <= 0.35) { ctx.moveTo(r.x + r.r, r.y); ctx.ellipse(r.x, r.y, r.r, r.r * 0.75, 0, 0, Math.PI * 2); }
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(232,240,250,0.35)'; ctx.beginPath(); // im ersten Moment ein heller Tupfer (Spritzer)
+  for (const r of rip) if (r.crown) { ctx.moveTo(r.x + 0.9, r.y); ctx.arc(r.x, r.y, 0.9, 0, Math.PI * 2); }
+  ctx.fill();
+  // Tropfen: blasser, langer Schweif (Bewegungsunschärfe) und kurzer heller Kopf; nah = dicker und heller
   for (let layer = 0; layer < 3; layer++) {
-    ctx.strokeStyle = ['rgba(180,195,215,0.35)', 'rgba(200,213,232,0.5)', 'rgba(222,232,246,0.7)'][layer];
-    ctx.lineWidth = [0.8, 1.2, 1.7][layer] / scale;
+    ctx.strokeStyle = ['rgba(170,186,208,0.18)', 'rgba(190,205,226,0.26)', 'rgba(210,222,240,0.34)'][layer];
+    ctx.lineWidth = [0.7, 1.0, 1.5][layer] / scale;
     ctx.beginPath();
     for (const d of drops) if (d.layer === layer) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.tx * d.len, d.y - d.ty * d.len); }
     ctx.stroke();
+    ctx.strokeStyle = ['rgba(200,212,230,0.42)', 'rgba(220,230,244,0.6)', 'rgba(238,244,252,0.8)'][layer];
+    ctx.lineWidth = [0.9, 1.3, 1.9][layer] / scale;
+    ctx.beginPath();
+    for (const d of drops) if (d.layer === layer) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.tx * d.len * 0.3, d.y - d.ty * d.len * 0.3); }
+    ctx.stroke();
   }
-  ctx.strokeStyle = 'rgba(220,230,245,0.5)'; ctx.lineWidth = 0.8 / scale;
-  ctx.beginPath();
-  for (const d of drops) if (d.splash) { const r = 2.5 + (d.layer + 1) * 1.2; ctx.moveTo(d.x + r, d.y); ctx.ellipse(d.x, d.y, r, r * 0.5, 0, 0, Math.PI * 2); }
-  ctx.stroke();
-  // Regenschleier: kühler, grauer; Starkregen nimmt Sicht (Gischt), in Böen wandern hellere Regenwände durchs Bild
+  // Regenschleier: kühler, grauer; Starkregen nimmt Sicht (Gischt); dichtere Regenwände ziehen mit dem Wind durchs Bild
   ctx.fillStyle = `rgba(70,85,105,${0.12 * Math.min(1, rain) + 0.14 * heavy})`; ctx.fillRect(v.x, v.y, v.w, v.h);
-  if (heavy > 0.05 || (wx.storm ?? 0) > 0.3) {
-    const wl = Math.hypot(wx.wind.x, wx.wind.y) || 1, ux = wx.wind.x / wl, uy = wx.wind.y / wl, band = 900;
-    const off = ((t * (160 + 260 * (wx.storm ?? 0)) * gust) % band + band) % band;
-    ctx.fillStyle = `rgba(185,198,215,${0.07 * heavy + 0.05 * (wx.storm ?? 0)})`;
-    const cx = v.x + v.w / 2, cy = v.y + v.h / 2, R = Math.hypot(v.w, v.h);
-    for (let k = -3; k <= 3; k++) {
-      const s = k * band + off - band / 2, px = cx + ux * s, py = cy + uy * s;
-      ctx.beginPath();
-      ctx.moveTo(px - uy * R, py + ux * R); ctx.lineTo(px + uy * R, py - ux * R);
-      ctx.lineTo(px + uy * R + ux * 260, py - ux * R + uy * 260); ctx.lineTo(px - uy * R + ux * 260, py + ux * R + uy * 260);
-      ctx.fill();
-    }
+  const pat = rainPattern(ctx), storm = wx.storm ?? 0;
+  if (pat && (rain > 0.5 || storm > 0.2)) {
+    const wl = Math.hypot(wx.wind.x, wx.wind.y) || 1, sp = (140 + 320 * storm) * gust;
+    ctx.globalAlpha = Math.min(0.5, 0.1 * Math.min(1, rain) + 0.22 * heavy + 0.14 * storm);
+    ctx.fillStyle = scrolled(pat, 4, wx.wind.x / wl * sp * t, wx.wind.y / wl * sp * t + t * 60, 12, Math.atan2(wx.wind.y, wx.wind.x)); // Wände quer zum Wind
+    ctx.fillRect(v.x, v.y, v.w, v.h);
   }
   ctx.restore();
   return drops.length;

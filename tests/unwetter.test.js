@@ -231,3 +231,25 @@ test('Spielstand: Glätte wird gespeichert; alter Spielstand ohne Glätte lädt 
   const w3 = createWorld({ city }); w3.ice = 0.4; applySave(w3, validateSave(old) ?? old);
   assert.equal(w3.ice, 0, 'alter Spielstand: keine Glätte');
 });
+
+test('Darstellung 0.36: Aufschlagringe wachsen und verblassen, nasse Fahrbahn einmal als Ebene, Bodennebel nur bei Nebel', async () => {
+  const { rainRipples, drawWetRoads, drawGroundFog, drawWetGround, edgePuddles } = await import('../web/src/wetfx.js');
+  const v = { x: 0, y: 0, w: 1500, h: 900 }, wx = weatherAt(1, 1, 0, 'rain');
+  assert.equal(rainRipples(v, { ...wx, rain: 0 }, 1, 200).length, 0);
+  assert.ok(rainRipples(v, { ...wx, rain: 1.5 }, 1, 200).length > rainRipples(v, { ...wx, rain: 0.5 }, 1, 200).length * 2, 'Starkregen: mehr Aufschläge');
+  const rip = rainRipples(v, { ...wx, rain: 1 }, 2.3, 200);
+  assert.ok(rip.every((r) => r.r > 0 && r.a >= 0 && r.a <= 1 && Number.isFinite(r.x + r.y)));
+  const young = rip.filter((r) => r.crown), old = rip.filter((r) => r.a < 0.3);
+  assert.ok(young.length && old.length && Math.max(...young.map((r) => r.r)) < Math.min(...old.map((r) => r.r)) + 3, 'junge Ringe klein, alte groß');
+  // Nässe: mit Ebene wird die Fahrbahn nicht Stück für Stück übermalt (sonst dunkle Kreise an Kreuzungen)
+  const calls = [], ctx = new Proxy({ createRadialGradient: () => ({ addColorStop() {} }) }, { get: (o, k) => (k in o ? o[k] : (...a) => calls.push(k)), set: (o, k, x) => { o[k] = x; return true; } });
+  const edges = city.list('edge').filter((e) => !e.bridge && e.cls <= 8).slice(0, 40), J = city.junctions?.slice?.(0, 20) ?? [];
+  let layered = 0;
+  const n = drawWetRoads(ctx, edges, J, () => ({}), city, 1, { dark: 0 }, { layer: (fn, a) => { layered++; assert.ok(a > 0 && a < 1); fn(ctx); return true; }, t: 1, rain: 1 });
+  assert.ok(layered >= 1, 'Nässe als Ebene');
+  assert.equal(n, edges.reduce((s, e) => s + edgePuddles(city, e).length, 0), 'alle Pfützen gezählt');
+  assert.equal(drawGroundFog(ctx, v, { ...wx, fog: 0 }, 1), false);
+  assert.equal(drawGroundFog(ctx, v, weatherAt(1, 1, 0, 'densefog'), 1), true);
+  assert.equal(drawWetGround(ctx, v, 0), false);
+  assert.equal(drawWetGround(ctx, v, 1), true);
+});

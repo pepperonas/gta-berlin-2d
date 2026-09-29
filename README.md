@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.35.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.36.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -95,9 +95,11 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Leih-Roller stehen am Gehweg. Tauben fliegen auf, Enten schwimmen weg. Man hört Stadt, Verkehr, Vögel, Kneipen,
   Wasser, Hochbahn, Sirenen und zur vollen Stunde die Kirchenglocke.
 - **Wetter und Nachtlichter:** Sonne, Wolken, Regen und Morgennebel wechseln im Drei-Stunden-Takt (für dieselbe Welt
-  immer gleich; `?wetter=regen` legt es fest). Wolkenschatten ziehen über die Stadt; bei Regen wird der Asphalt nass und
-  glänzt, Pfützen spiegeln Himmel und Lichter, Leute tragen Schirme, weniger sind draußen, Autos rutschen mehr. Nebel
-  legt sich über alles. Fassaden sind auf der Sonnenseite heller. Nachts leuchten Neonschilder vor Bars, Clubs, Spätis
+  immer gleich; `?wetter=regen` legt es fest). Ausgefranste Wolkenschatten ziehen mit dem Wind über die Stadt; bei
+  Regen werden Asphalt und Gehwege nass und dunkel, Pfützen mit nassem Rand spiegeln Himmel und Lichter, Tropfen
+  ziehen mit Schweif, am Boden und in den Pfützen breiten sich Aufschlagringe aus, Regenwände ziehen mit dem Wind
+  durchs Bild; Leute tragen Schirme, weniger sind draußen, Autos rutschen mehr. Nebel liegt als Bodennebel auf Straßen
+  und Höfen, aus dem die Dächer herausragen, darüber zieht Dunst. Fassaden sind auf der Sonnenseite heller. Nachts leuchten Neonschilder vor Bars, Clubs, Spätis
   und Imbissen.
 - **Unwetter und Schnee:** Starkregen mit Gischtschleier und Regenwänden, Sturm (Bäume biegen sich in den Böen, Laub
   und Papier fegen übers Bild, der Regen treibt schräg, der Wind heult), Gewitter (Blitzstrahl mit Verästelungen,
@@ -223,7 +225,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 419 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 420 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -479,7 +481,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 419 automatischen Tests grün, darunter:
+- Alle 420 automatischen Tests grün, darunter:
+  - 0.36.0: Wetterdarstellung – Aufschlagringe (mehr bei Starkregen, junge klein, alte groß und blass), Nässe auf der
+    Fahrbahn als eine Ebene (keine dunklen Kreise an Kreuzungen), alle Pfützen gezählt, Bodennebel nur bei Nebel, nasser
+    Gehweg nur bei Nässe; alle elf Wetterbilder zeichnen ohne ungültige Koordinaten. Im Browser (Chromium) jede
+    Wetterlage bei Tag und Regen bei Nacht angesehen, Wolkenschatten decken bei „wolkig“ rund ein Drittel der Fläche.
   - 0.35.0: Diablo-Klick auf ein geparktes Auto läuft hin und steigt ein, ohne einen Schuss (auch gehalten), Wrack =
     nur hinlaufen, Strg-Klick schießt aufs Auto; gehaltener Bodenklick, dessen Zeiger über eine Person und ein Auto
     wandert, greift nie an und läuft dem Zeiger nach; gehaltener Angriff bleibt bei der angeklickten Person und geht
