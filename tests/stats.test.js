@@ -237,3 +237,10 @@ test('Nahverkehr: Mitfahrten, Strecke im Nahverkehr und als Zugführer, bediente
   assert.equal(s.stopsServed, 1); assert.equal(s.tipsEarned, 7);
   assert.equal(s.moneyEarned, 0, 'Trinkgeld zählt nicht noch einmal als verdientes Geld');
 });
+
+test('Statistik: Aquaplaning nur mit dem Spielerauto', () => {
+  const w = fakeWorld(), tr = createTracker(), S = sets();
+  trackStep(S, tr, w, [], 0);
+  trackStep(S, tr, w, [{ type: 'aquaplane', player: true }, { type: 'aquaplane', player: false }], 0);
+  assert.equal(S[0].aquaplanes, 1);
+});

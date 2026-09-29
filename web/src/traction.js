@@ -84,3 +84,17 @@ export function gustPush(world, car, lvl = 0) {
 
 // Gierimpuls beim Aufschwimmen: Richtung und Stärke aus dem Pfützen-Hash (±AQUA.yaw rad/s)
 export const aquaYaw = (p) => (hash01(Math.round(p.x) * 73856 + Math.round(p.y) * 19349) * 2 - 1) * AQUA.yaw;
+
+// Warnschild im HUD für das Fahrzeug des Spielers (Auto oder geführter Zug); zu Fuß und als Fahrgast keins
+export function roadWarning(world) {
+  const p = world.player, car = p.inCar ? world.cars.find((c) => c.id === p.inCar) : null;
+  if (!car && p.ride?.kind !== 'driver') return null;
+  if (car?.aqua > 0) return 'Aquaplaning!';
+  const at = car ?? p, lvl = at.lvl ?? 0, c = roadCondition(world, at.x, at.y, lvl);
+  if (c.ice > 0.2) return 'Glätte';
+  if (c.snow > 0.2) return 'Schnee';
+  const g = car ? gustPush(world, car, lvl) : null;
+  if (g && Math.hypot(g.ax, g.ay) > GUST.warn) return 'Sturm';
+  if (c.wet > 0.3) return 'Nässe';
+  return null;
+}

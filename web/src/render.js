@@ -467,6 +467,10 @@ export class Renderer {
         for (const [x1, y1] of e.traces) this.tracers.push({ x0: e.x, y0: e.y, x1, y1, life: 0.07, max: 0.07 });
         this.flashes.push({ x: e.x, y: e.y, a: e.a, life: 0.06, big: e.weapon === 'shotgun' });
       }
+      if (e.type === 'aquaplane') for (let i = 0; i < 14; i++) { // Spritzwasser beim Aufschwimmen
+        const a = (i / 14) * Math.PI * 2, v = 40 + Math.random() * 50;
+        this.particles.push({ kind: 'spray', x: e.x, y: e.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.5, max: 0.5, r: 2 });
+      }
       if (e.type === 'impact') for (let i = 0; i < (e.metal ? 5 : 3); i++) {
         const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 90;
         this.particles.push({ kind: e.metal ? 'spark' : 'dust', x: e.x, y: e.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.25, max: 0.25, r: 2 });
@@ -514,6 +518,10 @@ export class Renderer {
           (this._lastSkid ??= {})[key] = { x, y };
         }
       } else if (this._lastSkid) { delete this._lastSkid[`${c.id}-1`]; delete this._lastSkid[`${c.id}1`]; }
+      if (c.spin && Math.random() < 0.5) { // durchdrehende Räder: Spritzer bzw. Schnee statt Staub
+        const snowy = (world.snow ?? 0) > 0.2 || (world.ice ?? 0) > 0.2;
+        this.particles.push({ kind: snowy ? 'snowdust' : 'spray', x: c.x - Math.cos(c.angle) * c.hw * 0.8, y: c.y - Math.sin(c.angle) * c.hw * 0.8, vx: -Math.cos(c.angle) * 40, vy: -Math.sin(c.angle) * 40, life: 0.4, max: 0.4, r: 2 });
+      }
       if ((c.health < 35 || c.wrecked) && Math.random() < (c.wrecked ? 0.35 : 0.15)) {
         this.particles.push({ kind: 'smoke', x: c.x + Math.cos(c.angle) * c.hw * 0.7, y: c.y + Math.sin(c.angle) * c.hw * 0.7, vx: (Math.random() - 0.5) * 10, vy: -18, life: 1.4, max: 1.4, r: 4 });
       }
@@ -801,6 +809,8 @@ export class Renderer {
       if (p.kind === 'spark') { ctx.fillStyle = `rgba(255,${180 + (a * 75) | 0},60,${a})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
       else if (p.kind === 'blood') { ctx.fillStyle = `rgba(150,10,12,${Math.min(1, a * 1.5)})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
       else if (p.kind === 'dust') { ctx.fillStyle = `rgba(200,195,185,${a * 0.8})`; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); }
+      else if (p.kind === 'spray') { ctx.fillStyle = `rgba(200,220,240,${a * 0.8})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
+      else if (p.kind === 'snowdust') { ctx.fillStyle = `rgba(250,250,255,${a * 0.9})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
       else { ctx.fillStyle = `rgba(70,70,70,${a * 0.45})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
     }
     // Leuchtspuren und Mündungsfeuer

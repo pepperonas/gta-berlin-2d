@@ -179,6 +179,7 @@ export const SYNTH = {
   reloaded: (s) => s.tone(1800, 0.04, { gain: 0.07 }),
   weapon: (s) => s.tone(1100, 0.04, { type: 'triangle', gain: 0.07 }),
   // Türgong der Bahn: zwei Töne, beim Öffnen aufwärts, beim Schließen abwärts
+  splash: (s) => { s.burst(0.35, { freq: 700, gain: 0.3 }); s.burst(0.18, { freq: 2200, gain: 0.12, type: 'bandpass' }); },
   'gong-open': (s) => { s.tone(659, 0.35, { type: 'sine', gain: 0.1 }); s.tone(880, 0.45, { type: 'sine', gain: 0.1, at: 0.28 }); },
   'gong-close': (s) => { s.tone(880, 0.3, { type: 'sine', gain: 0.1 }); s.tone(659, 0.4, { type: 'sine', gain: 0.1, at: 0.24 }); },
 };
@@ -190,7 +191,7 @@ const EVENT_SOUND = {
   bump: 'hit', knock: 'impact', thud: 'thud', impact: 'impact', reload: 'reload', reloaded: 'reloaded', weapon: 'weapon', 'player-hurt': 'punch',
   wasted: 'mission-fail', respawn: 'pickup',
   // Nahverkehr: Ein-/Aussteigen (Auf-/Abspringen rumst), Führerstand, Türgong, Trinkgeld, Zug voraus
-  'train-take': 'door', 'doors-open': 'gong-open', 'doors-close': 'gong-close', tip: 'pickup', 'train-blocked': 'tram-bell',
+  'train-take': 'door', 'doors-open': 'gong-open', 'doors-close': 'gong-close', tip: 'pickup', 'train-blocked': 'tram-bell', aquaplane: 'splash',
 };
 export function soundFor(e) {
   if (e.type === 'shot') return e.weapon ?? null;

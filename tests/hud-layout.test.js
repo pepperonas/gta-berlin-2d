@@ -138,3 +138,22 @@ test('Fahrgast-/Fahrerleiste: im Bild, ohne NaN, überlappt das Auftragsfeld nic
     }
   }
 });
+
+test('Temperatur neben der Uhr; Warnschild im Bild, überlappt Tacho, Minikarte und Auftrag nicht', async () => {
+  const { createWorld } = await import('../web/src/world.js');
+  const g = createGame({ storage: memoryStorage(), city }); g.screen = 'playing'; g.hintT = 99; g.worldScale = 1.8;
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); g.world = w;
+  w.mission.state = 'toPickup'; w.mission.timer = 100;
+  const car = w.cars.find((c) => c.id === w.playerCarId); w.player.inCar = car.id; car.driver = 'player';
+  car.x = city.places.playerCar.x; car.y = city.places.playerCar.y;
+  w.temp = -3.4; w.wet = 1; w.ice = 1;
+  for (const [W, H] of SIZES) {
+    const texts = [], ctx = fakeCtx(); ctx.fillText = (t) => texts.push(String(t));
+    const hud = new Hud(ctx); hud.begin(W, H); hud.drawGameplay(w, g);
+    assert.ok(texts.some((t) => /-3 °C/.test(t)), `${W}×${H}: Temperatur`);
+    assert.ok(texts.includes('Glätte'), `${W}×${H}: Warnschild`);
+    const L = hud.layout;
+    assert.ok(inside(L.roadWarn, hud.vw, hud.vh), `${W}×${H}: Warnschild im Bild`);
+    for (const k of ['car', 'minimap', 'mission']) assert.ok(!overlap(L.roadWarn, L[k]), `${W}×${H}: überlappt ${k}`);
+  }
+});

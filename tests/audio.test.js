@@ -73,3 +73,9 @@ test('Töne im Nahverkehr: Ein-/Aussteigen, Auf-/Abspringen, Türgong, Trinkgeld
   for (const type of ['board', 'alight', 'train-take', 'doors-open', 'doors-close', 'tip', 'train-blocked', 'crash', 'bump', 'knock', 'wasted', 'respawn'])
     assert.ok(SYNTH[soundFor({ type })], `${type} → ${soundFor({ type })}: Klang fehlt`);
 });
+
+test('Aquaplaning platscht', async () => {
+  const { soundFor, SYNTH } = await import('../web/src/audio.js');
+  assert.equal(soundFor({ type: 'aquaplane' }), 'splash');
+  assert.ok(SYNTH.splash);
+});

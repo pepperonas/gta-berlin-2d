@@ -10,7 +10,7 @@ export const STAT_SECTIONS = [
   ['Unterwegs', [
     ['kmTotal', 'Strecke gesamt', 'km'], ['kmCar', 'davon im Auto', 'km'], ['kmFoot', 'davon zu Fuß', 'km'],
     ['topKmh', 'Höchstgeschwindigkeit', 'kmh'], ['timePlayed', 'Spielzeit', 'time'], ['timeCar', 'Zeit im Auto', 'time'],
-    ['bridges', 'Brücken befahren', 'n'], ['teleports', 'Teleports', 'n'],
+    ['bridges', 'Brücken befahren', 'n'], ['aquaplanes', 'Aquaplaning', 'n'], ['teleports', 'Teleports', 'n'],
   ]],
   ['Verkehr', [
     ['pedsRunOver', 'Menschen überfahren', 'n'], ['cyclistsHit', 'Radfahrer umgefahren', 'n'], ['crashes', 'Unfälle', 'n'],
@@ -108,6 +108,7 @@ export function trackStep(sets, tr, world, events, dt) {
       case 'train-take': add(sets, 'trainsTaken'); break;
       case 'doors-open': add(sets, 'stopsServed'); break;
       case 'tip': add(sets, 'tipsEarned', e.amount ?? 0); break;
+      case 'aquaplane': if (e.player) add(sets, 'aquaplanes'); break;
       case 'cheat': add(sets, 'cheats'); break;
     }
   }

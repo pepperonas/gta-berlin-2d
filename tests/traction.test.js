@@ -132,3 +132,18 @@ test('Böen in der Welt: Pkw versetzt 0,5–1 m, auf der Brücke mehr, geparkte 
   for (const p of parked) assert.ok(Math.hypot(p.c.x - p.x, p.c.y - p.y) < 0.01, 'geparktes Auto bewegt sich nicht');
 });
 const gustPushProbe = (w, t) => { w.time = t; const p = gustPush(w, Object.assign(createCar({ x: 0, y: 0 }), { vx: 140, vy: 0 }), 0); return p ? Math.hypot(p.ax, p.ay) : 0; };
+
+test('Warnschild: Vorrang Aquaplaning > Glätte > Schnee > Sturm > Nässe; zu Fuß keins', async () => {
+  const { roadWarning } = await import('../web/src/traction.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  car.x = city.places.playerCar.x; car.y = city.places.playerCar.y; car.lvl = 0; // nicht überdacht
+  w.player.inCar = null;
+  w.wet = 1; assert.equal(roadWarning(w), null, 'zu Fuß: nichts');
+  w.player.inCar = car.id; car.driver = 'player';
+  w.wet = 0; w.snow = 0; w.ice = 0; w.weather = weatherAt(1, 0, 600, 'clear'); assert.equal(roadWarning(w), null);
+  w.wet = 1; assert.equal(roadWarning(w), 'Nässe');
+  w.snow = 0.5; assert.equal(roadWarning(w), 'Schnee');
+  w.ice = 0.5; assert.equal(roadWarning(w), 'Glätte');
+  car.aqua = 0.2; assert.equal(roadWarning(w), 'Aquaplaning!');
+});

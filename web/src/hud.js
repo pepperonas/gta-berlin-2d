@@ -20,6 +20,7 @@ import { VERSION } from './version.js';
 import { missionObjective, BRIEFING } from './mission.js';
 import { playerCar, speedOf } from './world.js';
 import { vehicleState } from './ride.js';
+import { roadWarning } from './traction.js';
 
 const MINI_AREA = { [AREA_KIND.rail]: '#4a4640', [AREA_KIND.allotments]: '#35602c', [AREA_KIND.cemetery]: '#2f5a2a', [AREA_KIND.grass]: '#2f5a2a', [AREA_KIND.pitch]: '#2f5a2a', [AREA_KIND.sand]: '#6b6040', [AREA_KIND.wood]: '#284d22', [AREA_KIND.bridge]: '#4a4540' };
 const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus: 'Bushaltestelle', mall: 'Einkaufszentrum',
@@ -354,7 +355,7 @@ export class Hud {
     const mw = this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
     const night = world.clock >= 1230 || world.clock < SUNRISE;
     const wx = world.weather, icon = wx && wx.kind !== 'clear' && (wx.cloud > 0.3 || wx.fog > 0.3) ? WX_ICON[wx.kind] : night ? '☾' : '☀';
-    this.text(`${icon} ${dayName(world.day ?? 4)} ${formatClock(world.clock)}`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
+    this.text(`${icon} ${dayName(world.day ?? 4)} ${formatClock(world.clock)} · ${Math.round(world.temp ?? 0) || 0} °C`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
     // Geschäft/Lokal/Haltestelle in unmittelbarer Nähe
     const here = playerCar(world) ?? world.player;
     const poi = nearestPoi(world.city, here.x, here.y, car ? 120 : 180);
@@ -405,6 +406,18 @@ export class Hud {
     }
 
     // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte
+    // Warnschild (Wetter an der Stelle): über dem Tacho, als Zugführer unter der Fahrerleiste
+    const warn = roadWarning(world);
+    if (warn) {
+      const L = this.layout ?? {}, w = 250, h = 30;
+      const x = car ? vw - m.x - w : (L.rideBar ? L.rideBar.x + L.rideBar.w - w : vw - m.x - w);
+      const y = car ? vh - m.y - 106 - h - 10 : (L.rideBar ? L.rideBar.y + L.rideBar.h + 8 : m.y);
+      const blink = warn === 'Aquaplaning!' && Math.floor(world.time * 6) % 2 === 0;
+      this.layout = { ...L, roadWarn: { x, y, w, h } };
+      c.fillStyle = blink ? 'rgba(255,80,60,0.85)' : 'rgba(255,190,40,0.85)'; rr(c, x, y, w, h, 8); c.fill();
+      this.text('⚠', x + 14, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
+      this.text(warn, x + 38, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
+    }
     if (!car && !world.player.ride) this.drawWeaponPanel(world.player); // im Zug keine Waffe
     this.drawHurt(world.player);
 
