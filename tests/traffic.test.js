@@ -362,7 +362,7 @@ test('Angefahrene Fußgänger stehen wieder auf (sonst wartet der Verkehr ewig v
   assert.notEqual(ped.state, 'down', 'nach 5 s wieder auf den Beinen');
 });
 
-test('Glätte: KI fährt langsamer und hält an Rot mit Abstand, ohne aufzufahren', async () => {
+test('Glätte: KI-Schlange hält an Rot mit Abstand, ohne aufzufahren', async () => {
   const { signalState } = await import('../web/src/signals.js');
   const { placeOnLane } = await import('../web/src/traffic.js');
   const { createCar } = await import('../web/src/car.js');
@@ -389,7 +389,6 @@ test('Glätte: KI fährt langsamer und hält an Rot mit Abstand, ohne aufzufahre
     return { cars, crashes, overlap, top };
   };
   const dry = run(false), ice = run(true);
-  assert.ok(ice.top < dry.top * 0.85, `Glätte langsamer (${ice.top.toFixed(0)} vs ${dry.top.toFixed(0)} px/s)`);
   assert.ok(ice.cars.every((c) => Math.hypot(c.vx, c.vy) < 5), 'alle stehen an Rot');
   assert.equal(ice.crashes, 0, 'niemand fährt auf'); assert.equal(ice.overlap, 0, 'keine Berührung');
 });
@@ -408,4 +407,49 @@ test('Glätte: 3 min an einer engen Stelle – niemand steht über 90 s, kaum Zu
   }
   assert.ok(worst < 90, `ein Auto stand ${worst} s am Stück`);
   assert.ok(crashes < 15, `${crashes} Zusammenstöße in 3 min`);
+});
+
+test('Glätte: freie Strecke – die KI fährt langsamer (Zieltempo), nicht nur wegen des schwächeren Anfahrens', async () => {
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const lane = [...g.lanes].find((l) => !city.signals.has(l.to) && l.len > 1400 && l.edge.cls <= 5 && !l.edge.bridge && l.next.length);
+  const top = (icy) => {
+    const w = createWorld({ city, cars: 0, pedestrians: 0 });
+    if (icy) { w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast'; }
+    const c = createCar({ x: 0, y: 0 }); c.driver = 'npc'; placeOnLane(c, city, lane, 50, w.rng); w.cars.push(c);
+    let best = 0;
+    for (let i = 0; i < 9 * 60; i++) { w.camera.x = c.x; w.camera.y = c.y; updateWorld(w, idle(), 1 / 60); if (i > 5 * 60) best = Math.max(best, Math.hypot(c.vx, c.vy)); }
+    return best;
+  };
+  const dry = top(false), ice = top(true);
+  assert.ok(ice < dry * 0.82, `Glätte ${ice.toFixed(0)} vs trocken ${dry.toFixed(0)} px/s`);
+});
+
+test('Glätte: vor Rot bremst die KI sanfter (passend zur Haftung) und steht trotzdem vor der Linie', async () => {
+  const { signalState } = await import('../web/src/signals.js');
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const { laneDir } = await import('../web/src/roadgraph.js');
+  const lane = [...g.lanes].find((l) => city.signals.has(l.to) && l.len > 900 && l.edge.cls <= 5 && l.next.length && !l.edge.bridge);
+  const [ux, uy] = laneDir(lane, true), heading = Math.atan2(uy, ux);
+  const approach = (icy) => {
+    const w = createWorld({ city, cars: 0, pedestrians: 0 });
+    if (icy) { w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast'; }
+    let t0 = 0.5; while (!(signalState(city, lane.to, heading, t0) === 'red' && signalState(city, lane.to, heading, t0 - 0.5) !== 'red')) t0 += 0.5;
+    w.time = t0;
+    const c = createCar({ x: 0, y: 0 }); c.driver = 'npc'; placeOnLane(c, city, lane, lane.len - 800, w.rng); w.cars.push(c);
+    // mittlere Verzögerung der Bremsphase: Tempo bei Bremsbeginn ÷ Zeit bis zum Stand
+    let v0 = null, t0b = 0, tStop = null;
+    for (let i = 0; i < 25 * 60 && signalState(city, lane.to, heading, w.time) === 'red'; i++) {
+      w.camera.x = c.x; w.camera.y = c.y; updateWorld(w, idle(), 1 / 60);
+      const v = Math.hypot(c.vx, c.vy);
+      if (v0 === null && c.ai.light === 'red' && c.controls.brake > 0) { v0 = v; t0b = w.time; }
+      if (v0 !== null && tStop === null && v < 5) tStop = w.time;
+    }
+    return { decel: v0 / Math.max(1e-6, tStop - t0b), stopped: Math.hypot(c.vx, c.vy) < 5, dist: c.ai.lightDist };
+  };
+  const dry = approach(false), ice = approach(true);
+  assert.ok(dry.stopped && ice.stopped, 'beide stehen an Rot');
+  assert.ok(ice.dist > 0, `vor der Linie (${ice.dist?.toFixed(0)} px)`);
+  assert.ok(ice.decel < dry.decel * 0.6, `Glätte bremst mit ${ice.decel.toFixed(0)}, trocken mit ${dry.decel.toFixed(0)} px/s²`);
 });
