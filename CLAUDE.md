@@ -23,7 +23,12 @@ npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries +
 npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
 npm run map:transit                    # data/raw/gtfs.zip (VBB GTFS, fetch with map:fetch -- --gtfs) → web/data/berlin/transit.json (~20 s)
 npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
+node tools/check-bridges.mjs           # drives every bridge carriageway both ways on the right lane, reports blocks/wrong levels (~30 s)
+node tools/check-bridges.mjs 52.4965 13.4585 1500   # only bridges within 1500 m of a point
 ```
+
+Design specs and implementation plans for larger features live in `docs/superpowers/specs/` and `docs/superpowers/plans/`
+(dated file names). Read the matching spec/plan before continuing a feature that has one.
 
 `web/data/berlin/` (index.json, overview.json, ~2 900 tiles, 138 MB) is committed; only rebuild it when the data or `data/places.json` (mission spots) should change.
 The build fails loudly if a mission spot lands in a building, outside the area, or unconnected by road.
