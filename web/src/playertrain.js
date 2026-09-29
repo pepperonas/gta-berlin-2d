@@ -7,7 +7,7 @@ import { TRAIN_DRIVE } from './config.js';
 import { hash01 } from './map.js';
 import { RIDE, vehicleState, alightSpot, stationExit, elevated } from './ride.js';
 import { obstacleAt } from './transitlive.js';
-import { roadCondition, adhesionOf } from './traction.js';
+import { roadCondition, adhesionOf, spotLevel } from './traction.js';
 import { undergroundAtS, railAt } from './tunnel.js';
 
 const trainLen = (mode) => { const k = TRAIN[mode]; return k.cars * k.carL + (k.cars - 1) * k.gap; };
@@ -68,7 +68,7 @@ export function trainAhead(w, t) {
 export function trainAdhesion(w, t) {
   const p = w.city.transit.patterns[t.pid];
   if (undergroundAtS(w.city, p, t.s)) return 1;
-  const h = pointOn(p, t.s), lvl = p.mode === 'tram' ? 0 : railAt(w.city, h.x, h.y)?.lvl ?? 0;
+  const h = pointOn(p, t.s), lvl = spotLevel(w, p.mode, h.x, h.y);
   return adhesionOf(roadCondition(w, h.x, h.y, lvl));
 }
 

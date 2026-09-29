@@ -191,3 +191,18 @@ test('Eigener Zug auf nassen Schienen: längerer Bremsweg in der Welt', () => {
   const dry = brake(0), wet = brake(1);
   assert.ok(wet > dry * 1.2, `nass ${wet.toFixed(0)} px, trocken ${dry.toFixed(0)} px`);
 });
+
+test('Straßenbahn auf einer Straßenbrücke: die Brücke ist kein Dach über ihr selbst', async () => {
+  const { trainAdhesion } = await import('../web/src/playertrain.js');
+  const { nearestEdge } = await import('../web/src/map.js');
+  const w = atFrontOf(pat('M10', 'tram'), 3);
+  let p = null, s = null;
+  for (const q of tr.patterns) {
+    if (q.name !== 'M10' || q.mode !== 'tram') continue;
+    for (let x = 0; x < q.shape.len && s === null; x += 20) { const c = pointOn(q, x), e = nearestEdge(city, c.x, c.y, 25, (k) => k.bridge && (k.lvl ?? 0) >= 1); if (e && e.d < 6) { p = q; s = x; } }
+    if (s !== null) break;
+  }
+  assert.ok(s !== null, 'M10 fährt über eine Straßenbrücke');
+  w.wet = 1; w.ice = 0;
+  assert.equal(trainAdhesion(w, { pid: p.id, s }), 0.75, 'nass auf der Brücke');
+});

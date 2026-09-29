@@ -27,7 +27,7 @@ test('Straßenzustand: Weltwerte, Brücke glatter, überdacht (Durchfahrt, unter
   const road = city.list('edge').find((e) => !e.bridge && !e.passage && (e.lvl ?? 0) === 0 && e.cls <= 6 && e.len > 200);
   const r = roadCondition(w, mid(road).x, mid(road).y, 0);
   assert.equal(r.wet, 1); assert.equal(r.snow, 0.4); assert.equal(r.ice, 0.5); assert.equal(r.covered, false);
-  const bridge = city.list('edge').find((e) => e.bridge && (e.lvl ?? 0) >= 1 && e.len > 60);
+  const bridge = city.list('edge').find((e) => e.bridge && (e.lvl ?? 0) >= 1 && e.len > 400); // Mitte weit weg von den Anschlüssen
   const b = mid(bridge);
   assert.equal(roadCondition(w, b.x, b.y, bridge.lvl).ice, 0.75, 'Brücke ×1,5');
   const under = roadCondition(w, b.x, b.y, 0);
@@ -146,4 +146,40 @@ test('Warnschild: Vorrang Aquaplaning > Glätte > Schnee > Sturm > Nässe; zu Fu
   w.snow = 0.5; assert.equal(roadWarning(w), 'Schnee');
   w.ice = 0.5; assert.equal(roadWarning(w), 'Glätte');
   car.aqua = 0.2; assert.equal(roadWarning(w), 'Aquaplaning!');
+});
+
+test('Überdacht nur, was wirklich darüber liegt: vor einem Brückenanfang ist die Straße nass, nicht trocken', () => {
+  const w = world(); w.wet = 1; w.ice = 1;
+  let checked = 0, wrong = 0;
+  for (const b of city.list('edge')) {
+    if (!b.bridge || (b.lvl ?? 0) < 1) continue;
+    for (const g of city.list('edge')) {
+      if (g.bridge || (g.lvl ?? 0) !== 0 || g.junction) continue;
+      const shared = [g.a, g.b].find((n) => n === b.a || n === b.b);
+      if (shared === undefined) continue;
+      // 3 m vor dem gemeinsamen Knoten auf der Bodenstraße
+      const atA = shared === g.a, p = g.pts, n = p.length;
+      const [x0, y0, x1, y1] = atA ? [p[0], p[1], p[2], p[3]] : [p[n - 2], p[n - 1], p[n - 4], p[n - 3]];
+      const L = Math.hypot(x1 - x0, y1 - y0); if (L < 40) continue;
+      const x = x0 + (x1 - x0) / L * 30, y = y0 + (y1 - y0) / L * 30;
+      checked++; if (roadCondition(w, x, y, 0).covered) wrong++;
+      if (checked >= 60) break;
+    }
+    if (checked >= 60) break;
+  }
+  assert.ok(checked >= 20, `${checked} Brückenanfänge geprüft`);
+  assert.equal(wrong, 0, `${wrong} von ${checked} Stellen vor einer Brücke fälschlich überdacht`);
+});
+
+test('Warnschild als Zugführer: im Tunnel keins (Schienen trocken wie in trainAdhesion), oben nach Wetter', async () => {
+  const { roadWarning } = await import('../web/src/traction.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  const road = city.list('edge').find((e) => !e.bridge && !e.passage && (e.lvl ?? 0) === 0 && e.cls <= 6 && e.len > 200);
+  const k = (road.pts.length >> 1) & ~1;
+  w.player.x = road.pts[k]; w.player.y = road.pts[k + 1]; w.player.inCar = null;
+  w.wet = 1; w.snow = 0; w.ice = 0; w.weather = weatherAt(1, 0, 600, 'rain');
+  w.player.ride = { kind: 'driver', mode: 'tram', underground: false };
+  assert.equal(roadWarning(w), 'Nässe');
+  w.player.ride = { kind: 'driver', mode: 'ubahn', underground: true };
+  assert.equal(roadWarning(w), null, 'im Tunnel');
 });

@@ -6,7 +6,8 @@
 import { edgePuddles } from './wetfx.js';
 import { gustAt } from './weather.js';
 import { segDist2 } from './geom.js';
-import { hash01 } from './map.js';
+import { hash01, nearestEdge } from './map.js';
+import { railAt } from './tunnel.js';
 
 export const TRACTION = {
   wet: { brake: 0.77, accel: 0.85, lat: 0.82, steer: 0.95 },
@@ -24,18 +25,26 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v ?? 0));
 // Zwischen 1 (trocken) und dem Tabellenwert f nach Stärke mischen; die Ränder exakt (trocken = genau 1)
 const mix = (amt, f) => { const a = clamp01(amt); return a === 0 ? 1 : a === 1 ? f : 1 - (1 - f) * a; };
 
-// Nächste Fahrbahn derselben Ebene unter (x, y) und ob etwas darüber liegt (höhere Ebene oder Durchfahrt)
+// Nächste Fahrbahn derselben Ebene unter (x, y) und ob etwas darüber liegt: eine höhere Fahrbahn, die wirklich darüber
+// hinweggeht, oder eine Durchfahrt durch ein Haus
+const over = [], nodes = new Set();
 function under(world, x, y, lvl) {
   let covered = false, near = null, nd = Infinity;
+  over.length = 0; nodes.clear();
   for (const s of world.city.edgeSegs.query({ x: x - 40, y: y - 40, w: 80, h: 80 }, q)) {
     const e = s.e;
     if (e.junction) continue;
+    const el = e.lvl ?? 0;
+    if (el === lvl) { nodes.add(e.a); nodes.add(e.b); } // Anschlüsse der eigenen Ebene ringsum
     const d2 = segDist2(x, y, s.ax, s.ay, s.bx, s.by), half = e.w / 2;
     if (d2 > half * half) continue;
-    const el = e.lvl ?? 0;
-    if (el > lvl || (e.passage && el === lvl)) covered = true;
+    if (el > lvl) over.push(e);
+    if (e.passage && el === lvl) covered = true;
     if (el === lvl && d2 < nd) { nd = d2; near = e; }
   }
+  // eine höhere Fahrbahn, die hier an die eigene Ebene anschließt, ist ein Brückenanfang (auch die Gegenfahrbahn einer
+  // zweibahnigen Brücke), kein Dach; eine Überführung hat ihre Anschlüsse weit weg
+  for (const e of over) if (!nodes.has(e.a) && !nodes.has(e.b)) { covered = true; break; }
   return { covered, near };
 }
 
@@ -85,12 +94,19 @@ export function gustPush(world, car, lvl = 0) {
 // Gierimpuls beim Aufschwimmen: Richtung und Stärke aus dem Pfützen-Hash (±AQUA.yaw rad/s)
 export const aquaYaw = (p) => (hash01(Math.round(p.x) * 73856 + Math.round(p.y) * 19349) * 2 - 1) * AQUA.yaw;
 
+// Ebene an der Spitze eines Zugs: Straßenbahn = Ebene der Fahrbahn darunter (Brücken!), S-/U-Bahn = Ebene des Gleises
+export function spotLevel(world, mode, x, y) {
+  if (mode === 'tram') return nearestEdge(world.city, x, y, 25)?.e.lvl ?? 0;
+  return railAt(world.city, x, y)?.lvl ?? 0;
+}
+
 // Warnschild im HUD für das Fahrzeug des Spielers (Auto oder geführter Zug); zu Fuß und als Fahrgast keins
 export function roadWarning(world) {
   const p = world.player, car = p.inCar ? world.cars.find((c) => c.id === p.inCar) : null;
   if (!car && p.ride?.kind !== 'driver') return null;
   if (car?.aqua > 0) return 'Aquaplaning!';
-  const at = car ?? p, lvl = at.lvl ?? 0, c = roadCondition(world, at.x, at.y, lvl);
+  if (!car && p.ride.underground) return null; // im Tunnel trocken (wie trainAdhesion)
+  const at = car ?? p, lvl = car ? car.lvl ?? 0 : spotLevel(world, p.ride.mode, p.x, p.y), c = roadCondition(world, at.x, at.y, lvl);
   if (c.ice > 0.2) return 'Glätte';
   if (c.snow > 0.2) return 'Schnee';
   const g = car ? gustPush(world, car, lvl) : null;
