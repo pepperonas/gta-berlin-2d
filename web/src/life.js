@@ -9,6 +9,7 @@ import { hash01, nearestEdge, inBuilding, onRoad } from './map.js';
 import { pointInRings } from './geom.js';
 import { AREA_KIND, FURN_KIND } from './citycodes.js';
 import { peopleLevel, nightlife, isWeekend } from './rhythm.js';
+import { feedBarFor, barLevel } from './nightlife.js';
 
 export const LIFE = { radius: 1500, viewHalfX: 760, viewHalfY: 470, despawn: 1900, every: 0.5, maxHangers: 70 };
 export const ACTS = ['wait', 'smoke', 'queue', 'drink', 'sit', 'chat', 'browse', 'music', 'lie'];
@@ -16,8 +17,16 @@ export const ACTS = ['wait', 'smoke', 'queue', 'drink', 'sit', 'chat', 'browse',
 const h = (...n) => hash01(n.reduce((a, b) => a * 31 + Math.round(b), 7));
 const inHours = (m, from, to) => (from <= to ? m >= from && m < to : m >= from || m < to);
 
+// Bar aus dem Auslastungs-Feed (nightlife.js): je voller, desto mehr Leute rauchen davor, Clubs haben Schlange
+function feedActivity(q, bar, minutes, day) {
+  const lvl = barLevel(q.kind || 'bar', bar, minutes, day), r = h(q.x, q.y, Math.floor(minutes / 60), day);
+  if (lvl < 0.08) return null;
+  return q.kind === 'nightclub' ? { act: 'queue', n: Math.round(3 + lvl * 12 + r * 3) } : { act: 'smoke', n: Math.round(1 + lvl * 5 + r) };
+}
+
 // Was an einem POI gerade los ist: { act, n } oder null
-export function activityFor(q, minutes, day) {
+export function activityFor(q, minutes, day, bar = null) {
+  if (bar && q.cat === 'drink') return feedActivity(q, bar, minutes, day);
   const m = ((minutes % 1440) + 1440) % 1440, hr = Math.floor(m / 60), r = h(q.x, q.y, hr, day);
   const people = peopleLevel(m, day), night = nightlife(m, day);
   switch (q.cat) {
@@ -85,10 +94,17 @@ export function lifeSpots(city, cx, cy, minutes, day, radius = LIFE.radius) {
   const out = [], box = { x: cx - radius, y: cy - radius, w: 2 * radius, h: 2 * radius };
   const hr = Math.floor((((minutes % 1440) + 1440) % 1440) / 60);
   for (const q of city.poiHash.query(box, [])) {
-    const a = activityFor(q, minutes, day);
+    const a = activityFor(q, minutes, day, q.cat === 'drink' ? feedBarFor(city, q) : null);
     if (!a || a.n <= 0) continue;
     const f = frontOf(city, q);
     if (f) arrange(f, Math.min(a.n, a.act === 'queue' ? 16 : 6), a.act, h(q.x, q.y), out, `p${q.x},${q.y}`);
+  }
+  // Bars aus dem Feed, die OSM nicht kennt: Raucher direkt an ihrer Koordinate
+  for (const b of city.bars?.list ?? []) {
+    if (b.x === null || b.osm || Math.abs(b.x - cx) > radius || Math.abs(b.y - cy) > radius) continue;
+    const q = b._q ?? (b._q = { x: b.x, y: b.y, name: b.name, cat: 'drink', kind: 'bar' });
+    const a = feedActivity(q, b, minutes, day), f = a && frontOf(city, q);
+    if (f) arrange(f, Math.min(a.n, 6), a.act, h(q.x, q.y), out, `f${q.x},${q.y}`);
   }
   // Der Späti aus dem Auftrag: tagsüber ein, zwei Leute davor, abends Stammgäste mit Flasche
   const sp = city.places?.giver;

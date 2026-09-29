@@ -174,6 +174,15 @@ export const COMMANDS = [
       if (q === undefined) return { ok: false, msg: 'qualitaet hoch|niedrig|auto' };
       ctx.game.debug.quality = q; return `Qualität ${v}`;
     } },
+  { name: 'bars', aliases: ['nachtleben'], help: 'Bar-Auslastung (Feed-URL setzen, neu laden, aus)', args: [{ name: 'URL|neu|aus', optional: true, values: () => [{ label: 'neu', hint: 'Feed neu laden' }, { label: 'aus', hint: 'nur OSM-Lokale' }] }],
+    run(ctx, [v]) {
+      const B = ctx.city?.bars;
+      if (!v) return B ? `${B.list.length} Bars im Feed, ${B.list.filter((b) => b.osm).length} auf der Karte zugeordnet` : 'Kein Bar-Feed – bars <URL>';
+      if (!ctx.bars) return { ok: false, msg: 'Nur im Browser' };
+      const con = ctx.game.console, note = (text, ok) => con.log.push({ text, ok, t: (globalThis.performance?.now() ?? 0) / 1000 });
+      ctx.bars(v === 'neu' ? undefined : v).then((m) => note(m, true), (err) => note(`Bar-Feed: ${err.message}`, false));
+      return v === 'aus' ? 'Bar-Feed aus' : 'Lade Bar-Feed …';
+    } },
   { name: 'stats', aliases: ['statistik'], help: 'Statistik anzeigen', args: [],
     run(ctx) { ctx.game.returnTo = 'playing'; ctx.game.screen = 'stats'; ctx.game.console.open = false; return 'Statistik'; } },
 ];

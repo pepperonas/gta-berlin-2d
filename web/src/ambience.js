@@ -5,6 +5,8 @@ import { gustAt } from './weather.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { sirenHigh } from './fleet.js';
 import { positionAt, pointOn } from './transit.js';
+import { nightlifeAt } from './nightlife.js';
+import { frontOf } from './life.js';
 
 export const AMB = { hear: 1200, siren: 3000, bells: 1800, hochbahnHear: 450, trainEvery: 150, trainLen: 14 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -58,6 +60,9 @@ export function ambienceAt(world) {
     if (d < AMB.siren) sirens.push({ d, gain: (1 - d / AMB.siren) ** 2, high: sirenHigh(world.time + c.id * 0.37) });
   }
   sirens.sort((a, b) => a.d - b.d);
+  // Nachtleben: Stimmengewirr und gedämpfte Musik vor Bars, Kneipen und Clubs (nightlife.js, mit Auslastungs-Feed)
+  const nl = nightlifeAt(city, cam.x, cam.y, world.clock ?? 0, world.day ?? 0, { front: (q) => frontOf(city, q), now: Date.now() / 1000, weather: world.weather });
+  const inCar = world.player?.inCar != null;
   const night = wrap(world.clock) < 360 || wrap(world.clock) > 1260;
   // Schnee schluckt den Stadtlärm (Schneedecke und fallender Schnee dämpfen), Sturm heult in Böen
   const wx = world.weather, hush = 1 - 0.45 * clamp01(world.snow ?? 0) - 0.2 * clamp01(wx?.snow ?? 0);
@@ -67,7 +72,16 @@ export function ambienceAt(world) {
     wind: clamp01((wx?.storm ?? 0) * gustAt(wx, world.time) * 0.8 + 0.15 * (wx?.snow ?? 0) * (wx?.storm ?? 0)),
     birds: clamp01(Math.min(1, green) * birdLevel(world.clock) * (1 - Math.min(1, (world.weather?.rain ?? 0) + (world.weather?.storm ?? 0) + (world.weather?.snow ?? 0)))), // bei Regen, Sturm, Schnee schweigen die Vögel
     rain: Math.min(1.6, world.weather?.rain ?? 0), // bis 1,6 bei Starkregen
-    bar: clamp01(bar),
+    bar: clamp01(Math.max(bar, nl.crowd)),
+    music: nl.music * hush,
+    barPan: nl.pan,
+    nightFeed: nl.feed,
+    // Dämpfung von außen: im Auto (Karosserie) und bei Schneedecke (schluckt die Höhen)
+    muffle: clamp01((inCar ? 0.65 : 0) + 0.35 * clamp01(world.snow ?? 0)),
+    inCar,
+    gust: (wx?.storm ?? 0) > 0 ? clamp01((gustAt(wx, world.time) - 0.2) / 1.6) : 0,
+    storm: clamp01(wx?.storm ?? 0),
+    snowfall: clamp01(wx?.snow ?? 0),
     water: water * (0.4 + (night ? 0.2 : 0)),
     rumble: clamp01(rumble),
     sirens,

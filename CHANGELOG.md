@@ -4,6 +4,29 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.34.0] – 2026-09-29
+
+### Neu
+- **Nachtleben hörbar:** Vor Bars, Kneipen, Biergärten und Clubs hört man abends Stimmengewirr, Lachen, Gläserklirren
+  und gedämpften Bass – je nach Uhrzeit und Wochentag (Freitag-/Samstagnacht am meisten, Clubs erst ab 23 Uhr), aus
+  der Richtung des Lokals; bei Regen und Schnee gehen die Leute rein und es wird draußen leiser.
+- **Bar-Auslastung vom eigenen Server (gostumblr):** Das Spiel liest einen Auslastungs-Feed (Wochenprofil je Stunde
+  und/oder aktuelle Auslastung). Vor den dort genannten Bars ist das Nachtleben am deutlichsten, mit mehr Rauchern auf
+  dem Gehweg und Schlangen vor Clubs; auch Bars, die OpenStreetMap nicht kennt, sind an ihrer Koordinate zu hören.
+  Quelle: `?bars=URL`, Befehl `bars URL`, `BARS_URL=… npm start` (Dev-Server reicht den Feed durch) oder der
+  Schnappschuss `npm run bars:fetch`. Ohne Feed klingt das Nachtleben nach den OSM-Lokalen.
+- **Realistischer Fahrzeugklang:** Motor mit Drehzahl und Gängen je Fahrzeugart (Benziner, Diesel mit Nageln, Lkw und
+  Bus tief), Zündfrequenz, Auspuff im Takt, Schaltpausen; Reifen rollen, rumpeln auf Kopfsteinpflaster, zischen auf
+  nasser Straße, knirschen im Schnee, quietschen beim Rutschen (auf Schnee und Nässe rauscht es nur); Fahrtwind.
+- **Fremde Autos einzeln hörbar:** die vier nächsten mit Richtung und Dopplereffekt beim Vorbeifahren.
+- **Wetter klingt echter:** einzelne Regentropfen, Regen trommelt aufs Autodach, Wind pfeift in Böen, Schnee dämpft
+  die Höhen; im Auto klingt alles draußen dumpf.
+- **Schritte:** zu Fuß hört man jeden Schritt – knirschend im Schnee, platschend bei Nässe, dumpf im Gras.
+
+### Geändert
+- Umgefahrene Poller scheppern metallisch, Hupe zweistimmig, Unfälle mit Blechknautschen und Glassplittern.
+- Ein Kompressor vor dem Ausgang verhindert Übersteuern, wenn viel zugleich klingt.
+
 ## [0.33.0] – 2026-09-29
 
 ### Neu

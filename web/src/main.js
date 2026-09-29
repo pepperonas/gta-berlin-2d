@@ -2,7 +2,7 @@
 import { DT } from './config.js';
 import { createGame, updateGame, setCity, requestTeleport, confirmTeleport, applyStoredStats } from './game.js';
 import { openCity } from './map.js';
-import { createWorld, updateWorld, playerCar, speedOf, resetPopulation, setFootZoom } from './world.js';
+import { createWorld, updateWorld, playerCar, resetPopulation, setFootZoom } from './world.js';
 import { parseClock } from './daylight.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
@@ -18,6 +18,9 @@ import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
 import { cursorCss, cursorKind } from './cursor.js';
+import { stepEngine, tireState, carVoices, stepsBetween, footstepKind } from './soundscape.js';
+import { parseBarFeed, attachBars, NIGHT } from './nightlife.js';
+import { geoToPx } from './projection.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -72,7 +75,26 @@ getJson('data/berlin/index.json').then((index) => {
   getJson('data/berlin/overview.json').then((ov) => { city.overview = ov; hud.overview = null; }).catch((err) => console.error(err));
   // Fahrplan (VBB): ohne ihn läuft das Spiel einfach ohne Busse und Bahnen
   getJson('data/berlin/transit.json').then((tj) => { city.transit = prepareTransit(tj); city.attribution += ` · ${tj.attribution}`; }).catch((err) => console.warn('Fahrplan nicht geladen:', err.message));
+  loadBars(city).catch(() => {}); // ohne Feed: Nachtleben nach den OSM-Lokalen
 }).catch((err) => { game.loadError = String(err.message ?? err); console.error(err); });
+
+// Nachtleben: Bar-Auslastung (gostumblr) vom eigenen Server. Quelle: ?bars=URL (wird gemerkt), Konsole „bars URL“,
+// sonst der Schnappschuss data/bars.json (npm run bars:fetch). Ohne Feed klingt das Nachtleben nach den OSM-Lokalen.
+const barsParam = new URLSearchParams(location.search).get('bars');
+if (barsParam) try { storage.setItem('gta-bars-url', barsParam); } catch { /* nur für diese Sitzung */ }
+let barsTimer = null;
+function barsUrl() { return barsParam ?? storage.getItem('gta-bars-url') ?? 'data/bars.json'; }
+function loadBars(city, url = barsUrl()) {
+  clearTimeout(barsTimer);
+  const toPx = geoToPx(city.meta);
+  return fetch(url, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then((j) => {
+      const b = attachBars(city, parseBarFeed(j), toPx);
+      barsTimer = setTimeout(() => loadBars(city).catch(() => {}), NIGHT.refresh * 1000); // Live-Werte auffrischen
+      return `${b.list.length} Bars aus ${url}`;
+    })
+    .catch((err) => { if (url !== 'data/bars.json') console.warn(`Bar-Feed ${url} nicht ladbar:`, err.message); throw err; });
+}
 
 // Statistik in IndexedDB: beim Start laden (über alle Spiele + Stand des gespeicherten Spiels), alle 5 s und beim
 // Verlassen der Seite speichern
@@ -95,7 +117,11 @@ let manifest = {};
 fetch('assets/manifest.json').then((r) => r.json()).then(async (m) => { manifest = m; sound.setManifest(m); await loadSprites(m); }).catch(() => {});
 
 // Befehlszeile (console.js): Enter öffnet sie im Spiel; solange sie offen ist, gehen alle Tasten nur an sie
-const consoleCtx = () => ({ game, world: game.world, city: game.city ?? game.world?.city });
+const consoleCtx = () => ({ game, world: game.world, city: game.city ?? game.world?.city, bars: (url) => {
+  if (url === 'aus') { clearTimeout(barsTimer); try { storage.removeItem('gta-bars-url'); } catch { /* egal */ } if (game.city) game.city.bars = null; return Promise.resolve('Bar-Feed aus'); }
+  if (url) try { storage.setItem('gta-bars-url', url); } catch { /* nur für diese Sitzung */ }
+  return game.city ? loadBars(game.city, url ?? barsUrl()) : Promise.reject(new Error('Karte lädt noch'));
+} });
 const consoleAllowed = () => game.screen === 'playing' && game.world && !game.showBigMap && !game.teleport && !game.resultMenu && !game.world.player.dead;
 addEventListener('keydown', (e) => {
   input.lastDevice = 'keyboard'; sound.unlock();
@@ -388,10 +414,23 @@ function draw() {
   hud.toast(game.toast);
   updateCursor();
   const car = game.world && game.screen === 'playing' ? playerCar(game.world) : null;
-  sound.setEngine(!!car && !car.wrecked, car ? Math.min(1, speedOf(car) / 330) : 0, car ? car.controls.throttle : 0);
+  const now = performance.now();
+  // Eigenes Fahrzeug: Drehzahl mit Gängen, Reifen, Fahrtwind, Regen aufs Dach (soundscape.js)
+  const fdt = Math.min(0.1, (now - (sndT ?? now)) / 1000); sndT = now;
+  if (car && car.id !== engCar) { engSt = {}; engCar = car.id; }
+  if (car) stepEngine(engSt, car, fdt);
+  sound.setVehicle(!!car && !car.wrecked, car ? engSt : null, car ? tireState(game.world, car) : null, { inCar: !!car, rain: game.world?.weather?.rain ?? 0 });
+  // Schritte zu Fuß (Schnee knirscht, Nässe platscht)
+  const pl = game.world?.player;
+  if (pl && !car && game.screen === 'playing' && !pl.ride && !pl.dead) {
+    const n = stepSeen === null ? 0 : stepsBetween(stepSeen, pl.step, pl.moveSpeed ?? 0);
+    if (n > 0) sound.footstep(footstepKind(game.world, pl.x, pl.y), Math.min(1.3, 0.55 + (pl.moveSpeed ?? 0) / 60));
+    stepSeen = pl.step;
+  } else stepSeen = null;
   // Umgebungsklang: Mischung viermal je Sekunde neu, Glocke beim Überschreiten der vollen Stunde
   const w = game.world, live = w && (game.screen === 'playing' || game.screen === 'title');
-  const now = performance.now();
+  // Fremde Fahrzeuge in der Nähe: 20-mal je Sekunde (Vorbeifahrt mit Doppler)
+  if (live && sound.ready && now - voiceT > 50) { voiceT = now; sound.setVoices(carVoices(w, { x: w.camera.x, y: w.camera.y, vx: car?.vx ?? 0, vy: car?.vy ?? 0 }, 4, 500, car?.id ?? null)); }
   if (live && sound.ready && now - ambT > 250) {
     ambT = now;
     sound.setAmbience(ambienceAt(w));
@@ -401,9 +440,9 @@ function draw() {
     const n = prevClock === null ? 0 : bellStrikes(w, prevClock);
     if (n && game.screen === 'playing') sound.bells(n);
     prevClock = w.clock;
-  } else if (!live && sound.ready && now - ambT > 250) { ambT = now; sound.setAmbience({ hum: 0, traffic: 0, birds: 0, bar: 0, water: 0, rumble: 0, rain: 0, sirens: [] }); }
+  } else if (!live && sound.ready && now - ambT > 250) { ambT = now; sound.setAmbience({ hum: 0, traffic: 0, birds: 0, bar: 0, water: 0, rumble: 0, rain: 0, sirens: [] }); sound.setVoices([]); }
 }
-let ambT = 0, prevClock = null, thunderT = null;
+let ambT = 0, prevClock = null, thunderT = null, sndT = null, voiceT = 0, engSt = {}, engCar = null, stepSeen = null;
 
 function playEvent(e) {
   const name = soundFor(e);

@@ -15,7 +15,7 @@ Node ≥ 20, no `npm install` needed.
 
 ```bash
 npm start                              # dev server http://localhost:8080 (PORT=9000 npm start); file:// won't work (ES modules)
-npm test                               # node --test tests/
+npm test                               # node --test tests/*.test.js
 node --test tests/mission.test.js      # single file
 node --test --test-name-pattern="Menü" tests/   # single test by name
 node tools/prepare-xbox.mjs            # copy web/ → xbox/GtaBerlin/Web/ and generate package logos (PNG, no libs)
@@ -23,6 +23,7 @@ npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries +
 npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
 npm run map:transit                    # data/raw/gtfs.zip (VBB GTFS, fetch with map:fetch -- --gtfs) → web/data/berlin/transit.json (~20 s)
 npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
+BARS_URL=https://… npm run bars:fetch  # bar occupancy feed (gostumblr, own VPS) → web/data/bars.json snapshot; BARS_URL=… npm start proxies it live
 node tools/check-bridges.mjs           # drives every bridge carriageway both ways on the right lane, reports blocks/wrong levels (~30 s)
 node tools/check-bridges.mjs 52.4965 13.4585 1500   # only bridges within 1500 m of a point
 ```
@@ -160,6 +161,20 @@ change in `web/`.
   factors. Missing `car.traction` = dry (and dry + no storm skips the lookup: `car.traction = DRY`). `under()` counts a
   higher edge as a roof only if it doesn't connect to the own level nearby (bridge approaches aren't covered); viaducts
   (rails of higher level, not at their ends) cover too. HUD: temperature next to the clock, `roadWarning` sign.
+- **Sound:** `audio.js` only synthesizes; the mix is pure: `ambience.js ambienceAt` (layers + `bar`/`music`/`barPan`,
+  `muffle` = in car/snow cover, `gust`), `soundscape.js` (`stepEngine`: rpm/gears per `ENGINES[kind]`, firing freq;
+  `tireState`: roll/cobble/wet/snow/skid/slide/wind; `carVoices`: nearest AI cars with pan + Doppler `rate`;
+  `stepsBetween`/`footstepKind` from `player.step`). Graph: everything outside goes through `outside` → `muffleF`
+  (lowpass), the own vehicle bus goes straight to `master` → compressor. All loop layers register in `sound.loops`
+  (tests check they start silent). `main.js` keeps the engine state per player car and updates voices at 20 Hz.
+- **Nightlife:** `nightlife.js` (pure): `typicalLevel(kind, min, day)` per OSM drink kind (bar/pub/biergarten/
+  nightclub), `parseBarFeed` (tolerant: list or `{bars}`/GeoJSON, `populartimes`/`week` 7×24 Mon-first, current 0..1 or
+  %), `attachBars(city, feed, toPx)` → `city.bars` (`gen`, `byName`), `feedBarFor(city, q)` (name match nearby, cached
+  on the POI per `gen`), `barLevel`, `nightlifeAt` (crowd/music/pan/sources; feed bars without OSM POI sound at their
+  coordinate). `life.js` scales smokers/club queues by `barLevel` only for feed bars (so tests without a feed are
+  unchanged). Feed source in `main.js`: `?bars=` (localStorage `gta-bars-url`), console `bars`, else `data/bars.json`
+  (served live by `tools/serve.mjs` when `BARS_URL` is set). `web/src/projection.js` holds the map projection
+  (`geoToPx(meta)`), re-exported by `tools/osm/geo.mjs`.
 - **Snow tracks:** `snowtracks.js` (pure, presentation only): `render.js drawSnowTrails` records rear-wheel segments of
   all `world.cars` per frame into a ring buffer (world time, reset per world), fades them (`trailAlpha`: age, snowfall).
   Note that `npm run map:build` wipes `web/data/berlin/` — rerun `npm run map:transit` afterwards.
