@@ -7,6 +7,7 @@ import { forwardSpeed } from './car.js';
 import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane, laneDir } from './roadgraph.js';
 import { signalState } from './signals.js';
 import { pointAlong } from './geom.js';
+import { DRY } from './traction.js';
 
 const LOOKAHEAD = 420; // so viel Route (px) hält die KI im Voraus
 const GAP_PX = 57;     // Halteabstand Mitte zu Mitte: Autolänge 42 px + 1,5 m
@@ -316,13 +317,15 @@ export function driveAi(car, world, dt) {
   const look = clamp(Math.abs(vf) * 0.35, 36, 90);
   let aimX = px, aimY = py, acc = 0, found = false;
   let target = (ai.cap[ai.i] ?? 100) * ai.cruiseK;
+  const tr = car.traction ?? DRY, kb = tr.brake; // Wetter (traction.js): langsamer, früher bremsen, mehr Abstand
+  target *= 0.6 + 0.4 * kb;
   let x0 = px, y0 = py;
   for (let k = ai.i + 1; k < r.length / 2; k++) {
     const x1 = r[2 * k], y1 = r[2 * k + 1], L = Math.hypot(x1 - x0, y1 - y0);
     if (!found && acc + L >= look) { const u = (look - acc) / (L || 1); aimX = x0 + (x1 - x0) * u; aimY = y0 + (y1 - y0) * u; found = true; }
     acc += L;
     const cap = ai.cap[k];
-    if (acc < 220 && cap < target) target = Math.min(target, Math.sqrt(cap * cap + 2 * 260 * Math.max(0, acc - 20)));
+    if (acc < 220 && cap < target) target = Math.min(target, Math.sqrt(cap * cap + 2 * 260 * kb * Math.max(0, acc - 20)));
     x0 = x1; y0 = y1;
     if (acc > 240 && found) break;
   }
@@ -338,7 +341,7 @@ export function driveAi(car, world, dt) {
 
   const diff = wrapAngle(Math.atan2(dy, dx) - car.angle);
   ctl.steer = clamp(diff * 2.4, -1, 1);
-  if (Math.abs(diff) > 0.6) target = Math.min(target, 55);
+  if (Math.abs(diff) > 0.6) target = Math.min(target, 55 * tr.lat);
 
   // Ampel: bei Rot (und bei Gelb, wenn noch Bremsweg bleibt) an der Haltelinie halten
   // Haltelinie erst verwerfen, wenn das Auto sie wirklich überfahren hat (vorzeichenbehafteter Abstand in Fahrtrichtung)
@@ -350,16 +353,16 @@ export function driveAi(car, world, dt) {
     if (st.k > ai.i + 1) { dist = Math.hypot(r[2 * (ai.i + 1)] - car.x, r[2 * (ai.i + 1) + 1] - car.y); for (let k = ai.i + 1; k < st.k && dist < 400; k++) dist += Math.hypot(r[2 * k + 2] - r[2 * k], r[2 * k + 3] - r[2 * k + 1]); }
     if (dist < 400) {
       const light = signalState(city, st.v, st.heading, world.time);
-      const brakeDist = vf * vf / (2 * 300);
+      const brakeDist = vf * vf / (2 * 300 * kb);
       // Blaulicht mit Sondersignal fährt über Rot, aber langsam in die Kreuzung
       if (ai.urgent) { if (light !== 'green' && dist < 60) target = Math.min(target, 70); }
-      else if (light === 'red' || (light === 'yellow' && dist > brakeDist + 10)) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, dist - 15))); // Bremsweg v²/2a mit a ≈ 0,9 m/s² (Regler bremst träge)
+      else if (light === 'red' || (light === 'yellow' && dist > brakeDist + 10)) target = Math.min(target, Math.sqrt(2 * 90 * kb * Math.max(0, dist - 15))); // Bremsweg v²/2a mit a ≈ 0,9 m/s² (Regler bremst träge)
       ai.light = light; ai.lightDist = dist;
     }
   }
   // Zebrastreifen: vor wartenden oder querenden Fußgängern halten
   const zc = zebraAhead(car, world);
-  if (zc < 200) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, zc - 30)));
+  if (zc < 200) target = Math.min(target, Math.sqrt(2 * 90 * kb * Math.max(0, zc - 30)));
 
   const { dCar, dOther, playerBlock, blocker, pedBlock } = obstacleAhead(car, world);
   const d = Math.min(dOther, dCar);
@@ -368,14 +371,14 @@ export function driveAi(car, world, dt) {
   const gate = entryGate(car, world, d > 70 && vf > -2, dt);
   ai.blink = blinkFor(ai, car);
   // Halt deutlich vor dem Linienpunkt: 10 px davor schaltet die Route schon auf „in der Kreuzung“ weiter
-  if (gate < Infinity) target = Math.min(target, Math.sqrt(2 * 90 * Math.max(0, gate - GATE_STOP)));
+  if (gate < Infinity) target = Math.min(target, Math.sqrt(2 * 90 * kb * Math.max(0, gate - GATE_STOP)));
   releaseClaims(car, world, Math.abs(vf) < 5 ? (ai.stillT = (ai.stillT ?? 0) + dt) : (ai.stillT = 0));
   // Selbstheilung: wer auf einer Engstelle fährt, hält sie auch (egal über welchen Weg er hineinkam)
   const here = ai.segs[currentSeg(ai)];
   if (here?.lane.narrow && !ai.claims.some((cl) => cl.kind === 'n' && cl.edge === narrowKey(city, here.lane.edge))) claimNarrow(world, car, here.lane, here);
   if (vf > 40) ai.headOn = 0; // fährt wieder frei
   // Abstand halten: Mitte zu Mitte eine Autolänge (42 px) + 1,5 m Lücke; darunter stehen bleiben
-  if (d < 125) target = Math.min(target, Math.max(0, (d - GAP_PX) * 2.2));
+  if (d < 125 / kb) target = Math.min(target, Math.max(0, (d - GAP_PX) * 2.2 * kb)); // Stillstandsabstand bleibt, in Fahrt wächst er mit 1/kb
   // Arbeitshalt (Paket, Mülltonnen, Einsatzort): stehen bleiben, der Verkehr dahinter wartet
   if (ai.hold > 0) { ai.hold -= dt; target = 0; }
 

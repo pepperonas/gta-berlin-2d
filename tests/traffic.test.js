@@ -361,3 +361,51 @@ test('Angefahrene Fußgänger stehen wieder auf (sonst wartet der Verkehr ewig v
   for (let i = 0; i < 5 * 60; i++) updatePed(ped, w, 1 / 60);
   assert.notEqual(ped.state, 'down', 'nach 5 s wieder auf den Beinen');
 });
+
+test('Glätte: KI fährt langsamer und hält an Rot mit Abstand, ohne aufzufahren', async () => {
+  const { signalState } = await import('../web/src/signals.js');
+  const { placeOnLane } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const { laneDir } = await import('../web/src/roadgraph.js');
+  const { obbVsObb } = await import('../web/src/collision.js');
+  const lane = [...g.lanes].find((l) => city.signals.has(l.to) && l.len > 900 && l.edge.cls <= 5 && l.next.length && !l.edge.bridge);
+  const [ux, uy] = laneDir(lane, true), heading = Math.atan2(uy, ux);
+  const run = (icy) => {
+    const w = createWorld({ city, cars: 0, pedestrians: 0 });
+    if (icy) { w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast'; }
+    let t0 = 0.5; while (!(signalState(city, lane.to, heading, t0) === 'red' && signalState(city, lane.to, heading, t0 - 0.5) !== 'red')) t0 += 0.5;
+    w.time = t0;
+    const cars = [0, 1, 2].map((k) => { const c = createCar({ x: 0, y: 0 }); c.driver = 'npc'; placeOnLane(c, city, lane, lane.len - 650 - k * 80, w.rng); w.cars.push(c); return c; });
+    w.camera.x = cars[1].x; w.camera.y = cars[1].y;
+    let crashes = 0, overlap = 0, top = 0;
+    // bis die Ampel wieder grün wird (Rotphase ≈ 25 s) – danach fahren sie zu Recht los
+    for (let i = 0; i < 30 * 60 && signalState(city, lane.to, heading, w.time) === 'red'; i++) {
+      updateWorld(w, idle(), 1 / 60);
+      w.camera.x = cars[1].x; w.camera.y = cars[1].y;
+      crashes += w.events.filter((e) => e.type === 'crash').length;
+      for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) if (obbVsObb(cars[a], cars[b])) overlap++;
+      if (i < 8 * 60) top = Math.max(top, Math.hypot(cars[0].vx, cars[0].vy));
+    }
+    return { cars, crashes, overlap, top };
+  };
+  const dry = run(false), ice = run(true);
+  assert.ok(ice.top < dry.top * 0.85, `Glätte langsamer (${ice.top.toFixed(0)} vs ${dry.top.toFixed(0)} px/s)`);
+  assert.ok(ice.cars.every((c) => Math.hypot(c.vx, c.vy) < 5), 'alle stehen an Rot');
+  assert.equal(ice.crashes, 0, 'niemand fährt auf'); assert.equal(ice.overlap, 0, 'keine Berührung');
+});
+
+test('Glätte: 3 min an einer engen Stelle – niemand steht über 90 s, kaum Zusammenstöße', async () => {
+  const { speedOf } = await import('../web/src/car.js');
+  const p = city.places.giver, w = createWorld({ city, seed: 5 });
+  w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast';
+  w.camera.x = p.x; w.camera.y = p.y;
+  const still = new Map(); let crashes = 0, worst = 0;
+  for (let i = 0; i < 180 * 60; i++) {
+    updateWorld(w, idle(), 1 / 60); w.camera.x = p.x; w.camera.y = p.y;
+    crashes += w.events.filter((e) => e.type === 'crash').length;
+    if (i % 30) continue;
+    for (const c of w.cars) { if (c.driver !== 'npc') continue; const t = speedOf(c) < 5 ? (still.get(c.id) ?? 0) + 0.5 : 0; still.set(c.id, t); worst = Math.max(worst, t); }
+  }
+  assert.ok(worst < 90, `ein Auto stand ${worst} s am Stück`);
+  assert.ok(crashes < 15, `${crashes} Zusammenstöße in 3 min`);
+});
