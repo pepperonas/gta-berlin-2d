@@ -250,3 +250,23 @@ test('Einen zweiten Zug übernehmen: der erste fährt als Fahrplanzug weiter, st
   const back = w.transit.tracked.get(p.id).veh.find((v) => !v.gone && Math.abs(positionAt(p, v.tau).s - (s0 - 1000)) < 60);
   assert.ok(back, 'der erste Zug steht als Fahrplanzug an seiner Stelle');
 });
+
+test('Straßenbahn hat Vorrang: mit echtem Verkehr (Gegenspur an der M10) kommt der eigene Zug in 120 s zum nächsten Halt', () => {
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  const t = w.playerTrain, target = p.stops[4];
+  for (let i = 0; i < 60 * 120 && !(t.v === 0 && Math.abs(t.s - target) < 60); i++) {
+    const rest = target - t.s, want = Math.sqrt(Math.max(0, 2 * 10 * Math.max(0, rest - 10)));
+    press(w, t.v > want ? { brake: Math.min(1, (t.v - want) / 20 + 0.3) } : { throttle: rest > 20 ? 0.6 : 0 });
+  }
+  assert.ok(Math.abs(t.s - target) < 60, `steht am Halt (${(t.s - target).toFixed(0)} px)`);
+});
+
+test('Straßenbahn hat Vorrang: eine Fahrplanbahn kommt an derselben Stelle durch', () => {
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3), s = w.transit.tracked.get(p.id);
+  const v = s.veh.find((x) => x.key === 'mine');
+  // Spieler aus dem Weg (atFrontOf stellt ihn vor die Spitze – dort wartet die Bahn zu Recht); Kamera fährt mit der Bahn
+  const at = pointOn(p, positionAt(p, v.tau).s); w.player.x = at.x - Math.sin(at.angle) * 150; w.player.y = at.y + Math.cos(at.angle) * 150;
+  for (let i = 0; i < 60 * 120 && positionAt(p, v.tau).s < p.stops[4]; i++) { const h = pointOn(p, positionAt(p, v.tau).s); updateWorld(w, idle(), 1 / 60); w.camera.x = h.x; w.camera.y = h.y; }
+  assert.ok(positionAt(p, v.tau).s >= p.stops[4] - 5, `Fahrplanbahn bei ${(positionAt(p, v.tau).s - p.stops[4]).toFixed(0)} px vor dem Halt`);
+});

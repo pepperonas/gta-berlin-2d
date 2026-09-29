@@ -11,6 +11,7 @@ import { DRY } from './traction.js';
 
 const LOOKAHEAD = 420; // so viel Route (px) hält die KI im Voraus
 const GAP_PX = 57;     // Halteabstand Mitte zu Mitte: Autolänge 42 px + 1,5 m
+const TRAM_YIELD = 160; // px: so nah vor einer entgegenkommenden Straßenbahn setzt ein Auto zurück
 
 // Kurventempo aus dem Abbiegewinkel: geradeaus unbegrenzt, rechtwinklig ~ 55 px/s.
 function turnSpeed(angle) {
@@ -269,6 +270,22 @@ export function obstacleAhead(car, world) {
   return { dCar, dOther, playerBlock, blocker, pedBlock };
 }
 
+// Abstand (Stoßstange zu Stoßstange, px) zu einem Straßenbahnwagen, der frontal vor dem Auto steht oder entgegenkommt:
+// vor dem Auto, entgegengesetzte Richtung, seitlich überlappend. Geradlinig statt entlang der Route – die hilft beim
+// Zurücksetzen nicht (sonst pendelt das Auto vor und zurück).
+export function tramHeadOn(car, world) {
+  const c = Math.cos(car.angle), s = Math.sin(car.angle);
+  let best = Infinity;
+  for (const o of world.railObs ?? []) {
+    if (Math.cos(o.angle - car.angle) > -0.5) continue;
+    const rx = o.x - car.x, ry = o.y - car.y, along = rx * c + ry * s, side = Math.abs(-rx * s + ry * c);
+    // seitlich so weit, wie die Bahn selbst ein Auto als Hindernis zählt (transitlive.js obstacleAt: 24 + 0,4 · halbe Länge)
+    if (along <= 0 || side > 24 + 0.4 * car.hw + 4) continue;
+    best = Math.min(best, Math.max(0, along - o.hw - car.hw));
+  }
+  return best;
+}
+
 // Weg der nächsten ~120 px ab der Fahrzeugmitte entlang der Route (null ohne Route).
 function aheadPath(car) {
   const ai = car.ai, r = ai?.route;
@@ -365,6 +382,12 @@ export function driveAi(car, world, dt) {
   if (zc < 200) target = Math.min(target, Math.sqrt(2 * 90 * kb * Math.max(0, zc - 30)));
 
   const { dCar, dOther, playerBlock, blocker, pedBlock } = obstacleAhead(car, world);
+  const railHead = tramHeadOn(car, world);
+  // Die Straßenbahn hat Vorrang: kommt sie frontal im eigenen Weg entgegen (ihr Linienweg liegt stellenweise in der
+  // Gegenspur), setzt das Auto zurück, solange sie nah ist – sonst warteten beide ewig aufeinander. Wer direkt hinter
+  // einem so zurücksetzenden Auto steht, setzt mit zurück (sonst führe der Vordermann auf).
+  ai.tramYield = railHead < TRAM_YIELD || (blocker?.ai?.tramYield && blocker.ai.reverseT > 0 && dCar < 80);
+  if (ai.tramYield) ai.reverseT = Math.max(ai.reverseT, 0.3);
   const d = Math.min(dOther, dCar);
   // Vorfahrt an der nächsten Kreuzung: erst einfahren, wenn sie frei ist und dahinter Platz ist (sonst an der Linie warten).
   // Reserviert wird nur, wer auch losfahren kann (niemand steht direkt davor).
