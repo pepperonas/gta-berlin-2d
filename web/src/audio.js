@@ -151,7 +151,7 @@ export class Sound {
   }
 }
 
-const SYNTH = {
+export const SYNTH = {
   crash: (s, k) => { s.burst(0.35 + k * 0.3, { freq: 600 + k * 1800, gain: 0.25 + k * 0.4 }); s.tone(90, 0.25, { type: 'sine', gain: 0.25 * k, slide: -50 }); },
   hit: (s) => { s.burst(0.12, { freq: 400, gain: 0.3 }); s.tone(160, 0.12, { type: 'sine', gain: 0.2, slide: -80 }); },
   horn: (s) => { s.tone(392, 0.45, { gain: 0.08 }); s.tone(494, 0.45, { gain: 0.08 }); },
@@ -178,4 +178,23 @@ const SYNTH = {
   reload: (s) => { s.tone(1400, 0.04, { gain: 0.06 }); s.tone(900, 0.05, { gain: 0.06, at: 0.12 }); },
   reloaded: (s) => s.tone(1800, 0.04, { gain: 0.07 }),
   weapon: (s) => s.tone(1100, 0.04, { type: 'triangle', gain: 0.07 }),
+  // Türgong der Bahn: zwei Töne, beim Öffnen aufwärts, beim Schließen abwärts
+  'gong-open': (s) => { s.tone(659, 0.35, { type: 'sine', gain: 0.1 }); s.tone(880, 0.45, { type: 'sine', gain: 0.1, at: 0.28 }); },
+  'gong-close': (s) => { s.tone(880, 0.3, { type: 'sine', gain: 0.1 }); s.tone(659, 0.4, { type: 'sine', gain: 0.1, at: 0.24 }); },
 };
+
+// Welches Spielereignis welchen Klang auslöst (null = keiner); main.js spielt ihn ab
+const EVENT_SOUND = {
+  'tram-bell': 'tram-bell', crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick',
+  pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack',
+  bump: 'hit', knock: 'impact', thud: 'thud', impact: 'impact', reload: 'reload', reloaded: 'reloaded', weapon: 'weapon', 'player-hurt': 'punch',
+  wasted: 'mission-fail', respawn: 'pickup',
+  // Nahverkehr: Ein-/Aussteigen (Auf-/Abspringen rumst), Führerstand, Türgong, Trinkgeld, Zug voraus
+  'train-take': 'door', 'doors-open': 'gong-open', 'doors-close': 'gong-close', tip: 'pickup', 'train-blocked': 'tram-bell',
+};
+export function soundFor(e) {
+  if (e.type === 'shot') return e.weapon ?? null;
+  if (e.type === 'swing') return e.hit ? 'punch' : 'swing';
+  if (e.type === 'board' || e.type === 'alight') return e.hop ? 'hit' : 'door';
+  return EVENT_SOUND[e.type] ?? null;
+}

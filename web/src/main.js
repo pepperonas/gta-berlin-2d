@@ -7,7 +7,7 @@ import { parseClock } from './daylight.js';
 import { InputState, readKeys, readPad, fromHostReading, merge } from './input.js';
 import { Renderer } from './render.js';
 import { Hud, BASE } from './hud.js';
-import { Sound } from './audio.js';
+import { Sound, soundFor } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
 import { thunderBetween } from './weather.js';
 import { createRightButton, WHEEL, easeTimeScale } from './weaponwheel.js';
@@ -384,14 +384,11 @@ function draw() {
 let ambT = 0, prevClock = null, thunderT = null;
 
 function playEvent(e) {
-  const map = { 'tram-bell': 'tram-bell', crash: 'crash', hit: 'hit', horn: 'horn', door: 'door', ui: 'ui', 'ui-move': 'ui-move', 'ui-back': 'ui-back', tick: 'tick', pickup: 'pickup', 'mission-start': 'mission-start', 'mission-success': 'mission-success', 'mission-fail': 'mission-fail', carjack: 'carjack', bump: 'hit', knock: 'impact' };
-  if (e.type === 'shot') map.shot = e.weapon;
-  if (e.type === 'swing') map.swing = e.hit ? 'punch' : 'swing';
-  Object.assign(map, { thud: 'thud', impact: 'impact', reload: 'reload', reloaded: 'reloaded', weapon: 'weapon', 'player-hurt': 'punch', wasted: 'mission-fail', respawn: 'pickup' });
-  if (!map[e.type]) return;
+  const name = soundFor(e);
+  if (!name) return;
   if (e.type === 'horn' && e.npc) { if (game.world && Math.hypot(e.x - game.world.camera.x, e.y - game.world.camera.y) < 500) sound.play('horn', 0.5); return; }
   if (e.x !== undefined && game.world && Math.hypot(e.x - game.world.camera.x, e.y - game.world.camera.y) > 700) return;
-  sound.play(map[e.type], e.strength ?? 1);
+  sound.play(name, e.strength ?? 1);
 }
 
 function memoryFallback() {

@@ -198,19 +198,21 @@ export class Hud {
     this.text(`${Math.round(fps)} fps · ${ms.toFixed(1)} ms · ${quality === 'high' ? 'hoch' : 'niedrig'}`, this.vw / 2, y + 21, { size: 14, weight: 700, align: 'center', color: fps >= 50 ? '#8f8' : fps >= 30 ? YELLOW : '#f88', shadow: false });
   }
 
-  // Statistik: vier Abschnitte in zwei Spalten, je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
+  // Statistik: Abschnitte in drei Spalten (Unterwegs + Verkehr | Kampf + Aufträge | Nahverkehr), je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
   // (Schüsse/Schläge, Treffer, Quote, Tote). inGame: Spielwelt dahinter.
   drawStats(stats, inGame) {
     this.fillScreen(inGame ? 'rgba(5,6,10,0.82)' : 'rgba(5,6,10,0.94)');
     this.inFrame(() => {
       const c = this.ctx, vw = this.vw, g = stats.game, t = stats.total;
       this.text('STATISTIK', vw / 2, 58, { size: 36, align: 'center', weight: 900, color: YELLOW });
-      const cols = [[STAT_SECTIONS[0], STAT_SECTIONS[1]], [STAT_SECTIONS[2], STAT_SECTIONS[3]]], colW = 520, x0 = vw / 2 - colW - 20;
+      const sec = (name) => STAT_SECTIONS.find(([n]) => n === name);
+      const cols = [[sec('Unterwegs'), sec('Verkehr')], [sec('Kampf'), sec('Aufträge')], [sec('Nahverkehr')]];
+      const colW = 370, gap = 20, x0 = vw / 2 - (cols.length * colW + (cols.length - 1) * gap) / 2, vOff = 112;
       let rows = 0, bottom = 0;
       cols.forEach((secs, ci) => {
-        const x = x0 + ci * (colW + 40);
+        const x = x0 + ci * (colW + gap);
         let y = 96;
-        this.text('dieses Spiel', x + colW - 150, y, { size: 13, align: 'right', color: '#999', weight: 700 });
+        this.text('dieses Spiel', x + colW - vOff, y, { size: 13, align: 'right', color: '#999', weight: 700 });
         this.text('insgesamt', x + colW - 8, y, { size: 13, align: 'right', color: '#999', weight: 700 });
         for (const [title, list] of secs) {
           y += 28; this.text(title.toUpperCase(), x, y, { size: 15, weight: 800, color: YELLOW });
@@ -218,7 +220,7 @@ export class Hud {
             y += 22;
             if (rows++ % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.04)'; c.fillRect(x - 6, y - 16, colW + 12, 22); }
             this.text(label, x, y, { size: 15, weight: 500, shadow: false });
-            this.text(formatStat(g[k] ?? 0, fmt), x + colW - 150, y, { size: 15, weight: 700, align: 'right', shadow: false });
+            this.text(formatStat(g[k] ?? 0, fmt), x + colW - vOff, y, { size: 15, weight: 700, align: 'right', shadow: false });
             this.text(formatStat(t[k] ?? 0, fmt), x + colW - 8, y, { size: 15, weight: 700, align: 'right', color: '#ccc', shadow: false });
           }
         }
