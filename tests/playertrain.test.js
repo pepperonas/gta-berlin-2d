@@ -192,17 +192,20 @@ test('Eigener Zug auf nassen Schienen: längerer Bremsweg in der Welt', () => {
   assert.ok(wet > dry * 1.2, `nass ${wet.toFixed(0)} px, trocken ${dry.toFixed(0)} px`);
 });
 
-test('Straßenbahn auf einer Straßenbrücke: die Brücke ist kein Dach über ihr selbst', async () => {
+test('Straßenbahn auf einer Straßenbrücke: die Zugspitze liegt auf der Ebene der Brücke, nicht darunter; nass bleibt nass', async () => {
   const { trainAdhesion } = await import('../web/src/playertrain.js');
+  const { spotLevel } = await import('../web/src/traction.js');
   const { nearestEdge } = await import('../web/src/map.js');
   const w = atFrontOf(pat('M10', 'tram'), 3);
-  let p = null, s = null;
+  let p = null, s = null, lvl = 0;
   for (const q of tr.patterns) {
     if (q.name !== 'M10' || q.mode !== 'tram') continue;
-    for (let x = 0; x < q.shape.len && s === null; x += 20) { const c = pointOn(q, x), e = nearestEdge(city, c.x, c.y, 25, (k) => k.bridge && (k.lvl ?? 0) >= 1); if (e && e.d < 6) { p = q; s = x; } }
+    for (let x = 0; x < q.shape.len && s === null; x += 20) { const c = pointOn(q, x), e = nearestEdge(city, c.x, c.y, 25); if (e && e.e.bridge && (e.e.lvl ?? 0) >= 1 && e.d < 6) { p = q; s = x; lvl = e.e.lvl; } }
     if (s !== null) break;
   }
   assert.ok(s !== null, 'M10 fährt über eine Straßenbrücke');
+  const h = pointOn(p, s);
+  assert.equal(spotLevel(w, 'tram', h.x, h.y), lvl, 'Ebene der Brücke');
   w.wet = 1; w.ice = 0;
   assert.equal(trainAdhesion(w, { pid: p.id, s }), 0.75, 'nass auf der Brücke');
 });
