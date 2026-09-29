@@ -8,6 +8,7 @@ export const brakeDistance = (v, a) => (v * v) / (2 * a);
 export function createDrive(mode, v = 0) { return { mode, v, doors: 'closed', doorT: 0, decel: [], stopped: v <= 0 }; }
 
 export function stepDrive(d, input, dt) {
+  if (dt <= 0) return d; // kein Zeitschritt: nichts zu integrieren (sonst Division durch 0 im Bremsprotokoll)
   const k = TRAIN_DRIVE[d.mode], v0 = d.v;
   let a;
   if (d.doors !== 'closed') { d.v = 0; d.doorT += dt; return d; }
@@ -24,7 +25,10 @@ export function stepDrive(d, input, dt) {
     if (lim <= 1) v = 0;
   }
   d.v = v;
-  const decel = Math.max(0, (v0 - v) / dt);
+  // Auf physikalisch Erreichbares gedeckelt: der schließende „lim<=1 → v=0"-Frame kann in einem Schritt einen
+  // Rest-v auf 0 zwingen, was rechnerisch weit über der Notbremsverzögerung läge – ohne Deckel würde maxDecel()
+  // das für 8 s als harte Bremsung werten, obwohl der Zug sauber im Rahmen der Notbremsung ausgerollt ist.
+  const decel = Math.min(k.emergency, Math.max(0, (v0 - v) / dt));
   d.decel.push([dt, decel]);
   let tsum = 0; for (let i = d.decel.length - 1; i >= 0; i--) { tsum += d.decel[i][0]; if (tsum > 8) { d.decel.splice(0, i); break; } }
   d.stopped = v < TRAIN_DRIVE.stillV;
