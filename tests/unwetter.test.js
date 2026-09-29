@@ -5,6 +5,7 @@ import { realCity } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 import { createWorld, updateWorld, resetPopulation } from '../web/src/world.js';
 import { createCar, stepCar } from '../web/src/car.js';
+import { tractionOf } from '../web/src/traction.js';
 import {
   weatherAt, blockKind, dayType, stepSnow, SNOW, weatherLight, gustAt, strikeInSlot, strikesAt, flashAt, thunderBetween,
   STRIKE, PARAMS, WEATHER_KINDS, peopleFactor, bikeFactor,
@@ -146,7 +147,7 @@ test('Welt: Schnee fällt und bleibt liegen, Autos rutschen auf Schnee, Spielsta
   assert.equal(w2.snow, s.snow);
   assert.equal(validateSave({ ...s, snow: 7 }).snow, null, 'ungültige Schneehöhe verworfen');
   const slide = (snow) => {
-    const c = createCar({ x: 0, y: 0 }); c.snow = snow;
+    const c = createCar({ x: 0, y: 0 }); c.traction = tractionOf({ snow });
     c.vx = 250; c.vy = 150;
     for (let i = 0; i < 12; i++) stepCar(c, 1 / 60, null);
     return Math.abs(-c.vx * Math.sin(c.angle) + c.vy * Math.cos(c.angle));

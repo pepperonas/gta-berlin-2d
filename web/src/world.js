@@ -25,6 +25,7 @@ import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor, temperatureAt, stepIce } from './weather.js';
+import { roadCondition, tractionOf, puddleAt, gustPush, aquaYaw, AQUA } from './traction.js';
 import { updateTransit } from './transitlive.js';
 import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
@@ -578,6 +579,25 @@ function updateRide(w) {
   r.speed = st.speed; r.underground = st.underground;
 }
 
+// Wetter am Auto: Haftung (car.traction), Aufschwimmen in einer Pfütze (car.aqua, einmal je Pfütze) und Böen
+function applyWeather(w, c, dt) {
+  const lvl = c.lvl ?? 0;
+  c.traction = tractionOf(roadCondition(w, c.x, c.y, lvl));
+  const vf = c.vx * Math.cos(c.angle) + c.vy * Math.sin(c.angle);
+  let p = null;
+  if (vf > AQUA.speed) {
+    const ca = Math.cos(c.angle), sa = Math.sin(c.angle), fx = c.hw * 0.7, fy = c.hh * 0.8;
+    for (const s of [-1, 1]) { p = puddleAt(w, c.x + ca * fx - sa * fy * s, c.y + sa * fx + ca * fy * s, lvl); if (p) break; }
+  }
+  if (p && p !== c._aquaP && !(c.aqua > 0)) {
+    c.aqua = AQUA.time; c.angVel += aquaYaw(p);
+    w.events.push({ type: 'aquaplane', x: c.x, y: c.y, carId: c.id, player: c.id === w.player.inCar });
+  }
+  if (p) c._aquaP = p; else if (!(c.aqua > 0)) c._aquaP = null;
+  const g = gustPush(w, c, lvl);
+  if (g) { c.vx += g.ax * dt; c.vy += g.ay * dt; }
+}
+
 // Ein fester Simulationsschritt. input: siehe input.js (abstrakte Aktionen).
 export function updateWorld(w, input, dt) {
   w.events.length = 0;
@@ -631,7 +651,7 @@ export function updateWorld(w, input, dt) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
     // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
     if (c.role === 'curb' && c.driver === null && !c.wrecked && Math.abs(c.vx) + Math.abs(c.vy) < 2 && Math.abs(c.angVel) < 0.01) { c.vx = c.vy = c.angVel = 0; continue; }
-    c.wet = w.wet; c.snow = w.snow;
+    applyWeather(w, c, dt);
     stepCar(c, dt, w.city);
     collideCarWorld(c, w, w.events);
   }

@@ -68,3 +68,36 @@ test('Auto-Auto-Stoß: beide getrennt, Impuls übertragen', () => {
   assert.ok(b.vx > 50 && a.vx < 150);
   assert.ok(b.x - a.x >= 41.9);
 });
+
+import { tractionOf, TRACTION, AQUA } from '../web/src/traction.js';
+
+const brakeDist = (traction) => {
+  const c = createCar({ x: 0, y: 0 }); c.traction = traction; c.vx = 50 / 0.36; c.vy = 0; c.angle = 0;
+  c.controls.brake = 1;
+  let x0 = c.x; for (let i = 0; i < 600 && Math.hypot(c.vx, c.vy) > 1; i++) stepCar(c, 1 / 60, null);
+  return c.x - x0;
+};
+
+test('Bremsweg aus 50 km/h: trocken : nass : Schnee : Glätte ≈ 1 : 1,3 : 2 : 3', () => {
+  const d0 = brakeDist(undefined), dw = brakeDist(tractionOf({ wet: 1 })), ds = brakeDist(tractionOf({ snow: 1 })), di = brakeDist(tractionOf({ ice: 1 }));
+  assert.ok(Math.abs(dw / d0 - 1.3) < 0.15, `nass ${(dw / d0).toFixed(2)}`);
+  assert.ok(Math.abs(ds / d0 - 2) < 0.25, `Schnee ${(ds / d0).toFixed(2)}`);
+  assert.ok(Math.abs(di / d0 - 3) < 0.4, `Glätte ${(di / d0).toFixed(2)}`);
+  assert.equal(brakeDist({ brake: 1, accel: 1, lat: 1, steer: 1 }), d0, 'trocken = ohne Wetter');
+});
+
+test('Anfahren auf Glätte begrenzt und als Durchdrehen markiert; Lenkung schwächer', () => {
+  const run = (traction) => { const c = createCar({ x: 0, y: 0 }); c.traction = traction; c.controls.throttle = 1; for (let i = 0; i < 60; i++) stepCar(c, 1 / 60, null); return c; };
+  const dry = run(undefined), ice = run(tractionOf({ ice: 1 }));
+  assert.ok(Math.hypot(ice.vx, ice.vy) < Math.hypot(dry.vx, dry.vy) * 0.5, 'langsamer');
+  assert.equal(ice.spin, 1); assert.equal(dry.spin ?? 0, 0);
+  const turn = (traction) => { const c = createCar({ x: 0, y: 0 }); c.traction = traction; c.vx = 150; c.controls.steer = 1; c.controls.throttle = 0.3; for (let i = 0; i < 30; i++) stepCar(c, 1 / 60, null); return Math.abs(c.angle); };
+  assert.ok(turn(tractionOf({ ice: 1 })) < turn(undefined), 'lenkt weniger ein');
+});
+
+test('Aquaplaning: Seitenhalt und Lenkung fast weg, solange car.aqua läuft', () => {
+  const slide = (aqua) => { const c = createCar({ x: 0, y: 0 }); c.vx = 250; c.vy = 150; c.aqua = aqua; for (let i = 0; i < 12; i++) stepCar(c, 1 / 60, null); return Math.abs(-c.vx * Math.sin(c.angle) + c.vy * Math.cos(c.angle)); };
+  assert.ok(slide(AQUA.time) > slide(0) * 3, `${slide(AQUA.time)} vs ${slide(0)}`);
+  const c = createCar({ x: 0, y: 0 }); c.aqua = 0.1; stepCar(c, 1 / 60, null);
+  assert.ok(Math.abs(c.aqua - (0.1 - 1 / 60)) < 1e-9, 'läuft ab');
+});

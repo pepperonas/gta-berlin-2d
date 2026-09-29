@@ -4,6 +4,7 @@ import { clamp, sign } from './math.js';
 import { obbVsRect, obbVsObb, circleVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { T, surfaceAt } from './map.js';
 import { sizeOf } from './fleet.js';
+import { DRY, AQUA } from './traction.js';
 
 let nextId = 1;
 export const CAR_COLORS = ['#c0392b', '#2e86de', '#f1c40f', '#27ae60', '#ecf0f1', '#8e44ad', '#34495e', '#e67e22', '#16a085', '#7f8c8d'];
@@ -41,28 +42,32 @@ export function stepCar(car, dt, city) {
   let c = Math.cos(car.angle), s = Math.sin(car.angle);
   let vf = car.vx * c + car.vy * s;
   let vr = -car.vx * s + car.vy * c;
+  // Wetter (traction.js, von world.js je Schritt gesetzt; fehlt = trocken), beim Aquaplaning fast kein Halt
+  const tr = car.traction ?? DRY, aq = (car.aqua ?? 0) > 0;
+  const kBrake = tr.brake * (aq ? AQUA.brake : 1), kLat = tr.lat * (aq ? AQUA.lat : 1), kSteer = tr.steer * (aq ? AQUA.steer : 1);
+  car.spin = 0;
 
   const pw = car.power ?? 1, top = CAR.maxSpeed * surf.top * (0.55 + 0.45 * pw);
   if (ctl.throttle > 0 && vf < top) {
     const t = vf > 0 ? 1 - (vf / top) * 0.55 : 1.4; // aus dem Rückwärtsrollen kräftiger
-    vf += CAR.accel * pw * ctl.throttle * t * dt;
+    vf += CAR.accel * pw * ctl.throttle * t * tr.accel * dt;
+    car.spin = ctl.throttle > 0.8 && tr.accel < 0.7 && vf < 150 ? 1 : 0; // Räder drehen durch (nur Darstellung)
   }
   if (ctl.brake > 0) {
-    if (vf > 5) vf = Math.max(0, vf - CAR.brake * ctl.brake * dt);
+    if (vf > 5) vf = Math.max(0, vf - CAR.brake * ctl.brake * kBrake * dt);
     else if (vf > -CAR.maxReverse) vf -= CAR.accel * 0.6 * ctl.brake * dt;
   }
-  if (ctl.handbrake) vf -= sign(vf) * Math.min(Math.abs(vf), CAR.handbrake * dt);
+  if (ctl.handbrake) vf -= sign(vf) * Math.min(Math.abs(vf), CAR.handbrake * kBrake * dt);
   vf -= vf * CAR.drag * surf.drag * dt;
   if (ctl.throttle === 0 && ctl.brake === 0 && Math.abs(vf) < 4) vf = 0;
 
-  // nasse Fahrbahn: 18 % weniger Seitenhalt, Schneedecke bis 45 % (Wetter aus world.js: car.wet, car.snow)
-  const grip = (ctl.handbrake ? CAR.handbrakeGrip : CAR.grip * surf.grip) * (1 - 0.18 * (car.wet ?? 0)) * (1 - 0.45 * (car.snow ?? 0));
+  const grip = (ctl.handbrake ? CAR.handbrakeGrip : CAR.grip * surf.grip) * kLat;
   car.skid = Math.abs(vr) > 70 ? Math.min(1, Math.abs(vr) / 200) : 0;
   vr *= Math.exp(-grip * dt);
 
   const av = Math.abs(vf);
   const speedFactor = clamp(av / 80, 0, 1) * (1 - 0.45 * clamp(av / CAR.maxSpeed, 0, 1));
-  const target = ctl.steer * CAR.steerRate * speedFactor * sign(vf) * (ctl.handbrake ? 1.35 : 1);
+  const target = ctl.steer * CAR.steerRate * speedFactor * sign(vf) * (ctl.handbrake ? 1.35 : 1) * kSteer;
   car.angVel += (target - car.angVel) * Math.min(1, 12 * dt);
   car.angle += car.angVel * dt;
 
@@ -71,6 +76,7 @@ export function stepCar(car, dt, city) {
   car.vy = vf * s + vr * c;
   car.x += car.vx * dt;
   car.y += car.vy * dt;
+  if (car.aqua > 0) car.aqua = Math.max(0, car.aqua - dt);
 }
 
 function applyImpact(car, nx, ny, events) {

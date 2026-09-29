@@ -73,3 +73,62 @@ test('Schienenhaftung: trocken 1, nass 0,75, Frost 0,6, nie darunter', () => {
   assert.equal(adhesionOf({ wet: 1, snow: 0, ice: 0 }), TRACTION.rail.wet);
   assert.equal(adhesionOf({ wet: 1, snow: 1, ice: 1 }), TRACTION.rail.ice);
 });
+
+import { stepCar } from '../web/src/car.js';
+import { updateWorld } from '../web/src/world.js';
+import { idle } from './helpers/bot.js';
+import { AQUA } from '../web/src/traction.js';
+
+function puddleRun(fps, kmh) {
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle'; w.wet = 1; w.forceWeather = 'rain';
+  const e = city.list('edge').find((x) => !x.bridge && (x.lvl ?? 0) === 0 && x.cls <= 6 && edgePuddles(city, x).length && edgePuddles(city, x)[0].rx > 12);
+  const pd = edgePuddles(city, e)[0];
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  w.player.inCar = car.id; car.driver = 'player';
+  const v = kmh / 0.36; car.angle = pd.a; car.x = pd.x - Math.cos(pd.a) * v * 0.3; car.y = pd.y - Math.sin(pd.a) * v * 0.3; car.lvl = 0;
+  car.vx = Math.cos(pd.a) * v; car.vy = Math.sin(pd.a) * v; car.angVel = 0;
+  w.camera.x = car.x; w.camera.y = car.y;
+  const events = [];
+  for (let i = 0; i < fps; i++) { updateWorld(w, { ...idle(), throttle: 1 }, 1 / fps); events.push(...w.events.filter((x) => x.type === 'aquaplane')); if (car.aqua > 0) car.sawAqua = true; }
+  return { events, car };
+}
+
+test('Aquaplaning in einer echten Pfütze: nur über 70 km/h, ein Ereignis, gleich bei 30 und 60 fps', () => {
+  const slow = puddleRun(60, 50), fast = puddleRun(60, 90), fast30 = puddleRun(30, 90);
+  assert.equal(slow.events.length, 0, 'langsam: kein Aquaplaning');
+  assert.equal(fast.events.length, 1, 'schnell: genau ein Ereignis');
+  assert.equal(fast30.events.length, 1, '30 fps: ebenso');
+  assert.ok(fast.events[0].player, 'Spielerauto markiert');
+  assert.equal(puddleRun(60, 90).car.angle.toFixed(6), fast.car.angle.toFixed(6), 'deterministisch');
+});
+
+test('Böen in der Welt: Pkw versetzt 0,5–1 m, auf der Brücke mehr, geparkte Autos bewegen sich nie', () => {
+  const offset = (lvl) => {
+    const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle'; w.forceWeather = 'storm';
+    w.weather = weatherAt(w.seed, 0, 600, 'storm');
+    // Wind quer zur Fahrtrichtung: Auto fährt senkrecht zum Wind
+    const a = Math.atan2(w.weather.wind.y, w.weather.wind.x) + Math.PI / 2;
+    // stärkste Böe der ersten 10 min suchen, dort 3 s messen
+    let best = 0, bt = 0; for (let t = 0; t < 600; t += 0.1) { const g = gustPushProbe(w, t); if (g > best) { best = g; bt = t; } }
+    const c = createCar({ x: 0, y: 0 }); c.angle = a; c.vx = Math.cos(a) * 139; c.vy = Math.sin(a) * 139; c.lvl = lvl; c.driver = 'player';
+    let side = 0;
+    for (let t = bt - 1.5; t < bt + 1.5; t += 1 / 60) {
+      w.time = t;
+      const push = gustPush(w, c, lvl);
+      if (push) { c.vx += push.ax / 60; c.vy += push.ay / 60; }
+      c.controls.throttle = 0.35; stepCar(c, 1 / 60, null);
+    }
+    side = Math.abs(-c.x * Math.sin(a) + c.y * Math.cos(a));
+    return side / 10; // m
+  };
+  const ground = offset(0), onBridge = offset(1);
+  assert.ok(ground >= 0.5 && ground <= 1, `Versatz ${ground.toFixed(2)} m`);
+  assert.ok(onBridge > ground * 1.4 && onBridge <= 2, `Brücke ${onBridge.toFixed(2)} m`);
+  const w = createWorld({ city }); w.mission.state = 'idle'; w.forceWeather = 'storm';
+  for (let i = 0; i < 60; i++) updateWorld(w, idle(), 1 / 60);
+  const parked = w.cars.filter((c) => c.role === 'curb' && c.driver === null).slice(0, 10).map((c) => ({ c, x: c.x, y: c.y }));
+  assert.ok(parked.length > 3, 'geparkte Autos im Bild');
+  for (let i = 0; i < 20 * 60; i++) updateWorld(w, idle(), 1 / 60);
+  for (const p of parked) assert.ok(Math.hypot(p.c.x - p.x, p.c.y - p.y) < 0.01, 'geparktes Auto bewegt sich nicht');
+});
+const gustPushProbe = (w, t) => { w.time = t; const p = gustPush(w, Object.assign(createCar({ x: 0, y: 0 }), { vx: 140, vy: 0 }), 0); return p ? Math.hypot(p.ax, p.ay) : 0; };

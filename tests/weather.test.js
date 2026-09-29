@@ -5,6 +5,7 @@ import { realCity } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 import { createWorld, updateWorld, resetPopulation } from '../web/src/world.js';
 import { createCar, stepCar } from '../web/src/car.js';
+import { tractionOf } from '../web/src/traction.js';
 import { weatherAt, blockKind, stepWet, weatherLight, hasUmbrella, peopleFactor, WET } from '../web/src/weather.js';
 import { lightAt } from '../web/src/daylight.js';
 import { edgePuddles, cloudShadows, rainDrops, neonText, neonOn } from '../web/src/wetfx.js';
@@ -83,7 +84,7 @@ test('Welt: Wetter nur mit Tagesrhythmus, Tagnummer läuft und steht im Spielsta
 test('Nasse Fahrbahn: ein Auto rutscht in der Kurve weiter', () => {
   const slide = (wet) => {
     // Auto fährt geradeaus und bekommt einen Stoß zur Seite: wie viel Querfahrt bleibt nach 0,2 s?
-    const c = createCar({ x: 0, y: 0 }); c.wet = wet;
+    const c = createCar({ x: 0, y: 0 }); c.traction = tractionOf({ wet });
     c.vx = 250; c.vy = 150;
     for (let i = 0; i < 12; i++) stepCar(c, 1 / 60, null);
     return Math.abs(-c.vx * Math.sin(c.angle) + c.vy * Math.cos(c.angle));
