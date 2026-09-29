@@ -313,3 +313,21 @@ test('Zielen mit der Maus: kein Einrasten neben dem Ziel, Mitte nur mit dem Zeig
   assert.ok(rate(80, 0.7) > 0.85, `Stand 8 m: ${rate(80, 0.7)}`);
   assert.ok(rate(250, 2.5) < 0.5, `Sprint 25 m: ${rate(250, 2.5)}`);
 });
+
+test('Streuung in der Welt: Schüsse im Joggen streuen breiter als im Stand', () => {
+  const spreadOf = (move) => {
+    const { w, p, ang } = arena();
+    equip(w, 'pistol');
+    const tx = p.x + Math.cos(ang) * 200, ty = p.y + Math.sin(ang) * 200, angs = [];
+    for (let i = 0; i < 60 && angs.length < 30; i++) {
+      step(w, { ...aimAt(p, tx, ty), fire: true, firePressed: true, moveX: move ? -Math.sin(ang) : 0, moveY: move ? Math.cos(ang) : 0 });
+      for (const e of w.events) if (e.type === 'shot') for (const [x, y] of e.traces) angs.push(Math.atan2(y - e.y, x - e.x) - Math.atan2(ty - e.y, tx - e.x));
+      step(w, { ...aimAt(p, tx, ty) }, 16);
+      if (p.mag[p.weapon] <= 1) { p.mag[p.weapon] = 12; }
+    }
+    const m = angs.reduce((a, b) => a + b, 0) / angs.length;
+    return Math.sqrt(angs.reduce((a, b) => a + (b - m) ** 2, 0) / angs.length);
+  };
+  const still = spreadOf(false), jog = spreadOf(true);
+  assert.ok(jog > still * 1.6, `joggen ${jog.toFixed(4)} vs Stand ${still.toFixed(4)}`);
+});
