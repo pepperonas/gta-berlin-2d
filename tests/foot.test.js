@@ -43,3 +43,18 @@ test('Ausdauer: Sprint leert sie in ~12 s, dann nur joggen; erholt sich nach ein
 test('Passanten realistisch: gehen ~1,3 m/s, rennen 4,5 m/s', () => {
   assert.equal(PED.walk, 13); assert.equal(PED.run, 45);
 });
+
+test('Zoom zu Fuß: Standard 2,0, einstellbar 1,5–2,6; im Auto unverändert', async () => {
+  const { setFootZoom, FOOT_ZOOM_RANGE } = await import('../web/src/world.js');
+  assert.equal(FOOT_ZOOM, 2); assert.deepEqual(FOOT_ZOOM_RANGE, [1.5, 2.6]);
+  const w = foot();
+  for (let i = 0; i < 600; i++) updateCamera(w, 1 / 60);
+  assert.ok(Math.abs(w.camera.zoom - 2) < 0.01, `Standard ${w.camera.zoom}`);
+  setFootZoom(w, 9); assert.equal(w.footZoom, 2.6);
+  setFootZoom(w, 0.1); assert.equal(w.footZoom, 1.5);
+  for (let i = 0; i < 600; i++) updateCamera(w, 1 / 60);
+  assert.ok(Math.abs(w.camera.zoom - 1.5) < 0.01, 'eingestellter Zoom');
+  const car = w.cars.find((c) => c.id === w.playerCarId); w.player.inCar = car.id; car.driver = 'player';
+  for (let i = 0; i < 600; i++) updateCamera(w, 1 / 60);
+  assert.ok(w.camera.zoom <= 1.01, `im Auto wie bisher (${w.camera.zoom})`);
+});

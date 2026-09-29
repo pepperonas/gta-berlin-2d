@@ -814,11 +814,13 @@ function missionCtx(w, input) {
   return { places: w.city.places, player: w.player, cars: w.cars, timeLimit: w.city.timeLimit, input };
 }
 
-export const FOOT_ZOOM = 1.3;
+// Zu Fuß näher dran (Details, Nahkampf, Zielen); am PC mit dem Mausrad einstellbar (main.js → setFootZoom)
+export const FOOT_ZOOM = 2, FOOT_ZOOM_RANGE = [1.5, 2.6];
+export function setFootZoom(w, z) { w.footZoom = clamp(z, FOOT_ZOOM_RANGE[0], FOOT_ZOOM_RANGE[1]); return w.footZoom; }
 
 export function updateCamera(w, dt) {
   const cam = w.camera, p = w.player, car = playerCar(w);
-  let tx = p.x, ty = p.y, zoom = FOOT_ZOOM; // zu Fuß näher dran (Nahkampf, Zielen)
+  let tx = p.x, ty = p.y, zoom = w.footZoom ?? FOOT_ZOOM;
   if (car) {
     tx = car.x + car.vx * 0.45; ty = car.y + car.vy * 0.45;
     zoom = 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28;
