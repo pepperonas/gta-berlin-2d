@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.36.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.37.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -172,10 +172,13 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 
 Zu Fuß am PC gibt es zwei Schemata; gewählt wird im Menü „Steuerung“ mit ← / → (gespeichert):
 
-- **Diablo (Standard):** Was ein Linksklick tut, zeigt der Mauszeiger vorher: **Pfeil** = auf den Boden, dorthin
-  laufen (Wegfindung um Häuser und Hindernisse; ein Ring markiert das Ziel); **rotes Fadenkreuz** = auf eine Person,
-  hinlaufen bis in Reichweite und angreifen (sie wird rot umkreist); **Auto-Symbol** = auf ein Auto, hinlaufen und
-  einsteigen (es wird gelb umrandet) – auf Autos wird per Klick nie geschossen. Was der Klick bedeutet, entscheidet
+- **Diablo (Standard):** Linksklick auf den Boden läuft dorthin (Wegfindung um Häuser und Hindernisse; ein kurzer
+  Ring bestätigt den Klick, sonst läuft keine Animation). Nur wenn ein Klick mehr als laufen täte und der Zeiger kurz
+  darauf ruht, zeigt er es: **rotes Fadenkreuz** über einer Person (hinlaufen bis in Reichweite, angreifen; sie wird
+  rot umkreist), **Auto-Symbol** über einem Auto direkt neben der Figur (einsteigen; gelb umrandet). Ein Klick auf ein
+  **entferntes Auto läuft nur hin** und bleibt daneben stehen – eingestiegen wird mit einem weiteren Klick, per
+  **Doppelklick** gleich aus der Ferne oder mit F; an der Tür hält die Figur kurz an. Auf Autos wird per Klick nie
+  geschossen. Was der Klick bedeutet, entscheidet
   der Moment des Drückens: gehalten läuft man nach einem Bodenklick dem Zeiger nach, ohne anzugreifen, was man dabei
   überstreicht, und ein Angriff bleibt bei der angeklickten Person, bis sie liegt. **Strg + Klick** greift auf der
   Stelle an, wohin gezeigt wird (auch Autos; dann erscheint das Fadenkreuz vor der Figur). Rechte Maustaste tippen
@@ -225,7 +228,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 420 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 421 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -454,7 +457,19 @@ und localhost:5173) – über den Dev-Server ist das nicht nötig. Das Spiel lä
 
 **Enter** öffnet im Spiel eine Befehlszeile (die Welt steht still, solange sie offen ist). Beim Tippen erscheinen
 Vorschläge – Befehle, erlaubte Werte, bei `tp` alle Orte Berlins (Bezirke, Ortsteile, Bahnhöfe, Kieze, Straßen) –, der
-erste steht grau hinter dem Getippten und kommt mit **Tab** oder **→** in die Zeile. `hilfe` listet alles.
+erste steht grau hinter dem Getippten und kommt mit **Tab**, **→** oder per Mausklick in die Zeile. `hilfe` listet alles.
+
+Sie arbeitet wie eine Befehlspalette:
+- **Ohne Befehlswort:** `22:30`, `nacht`, `regen`, `schneesturm` oder ein Ort wie `alexanderplatz` genügen.
+- **Tippfehler** werden verziehen (`wetter schneestrum`, `tp kotbusser tor`). Bei einem vertippten Befehl kommt ein
+  Hinweis „meintest du …“.
+- **Enter** führt aus. Ist die Eingabe unvollständig (`wetter gewit`), nimmt Enter den besten Vorschlag.
+- Nach Erfolg **schließt** sich die Zeile, die Meldung bleibt kurz stehen; **Umschalt+Enter** lässt sie offen. Bei
+  Fehlern bleibt sie mit Hinweis offen.
+- Über der Eingabe steht, wie der gerade getippte Befehl aufgebaut ist. Beim Öffnen stehen die **zuletzt benutzten**
+  Befehle oben (anklicken führt sie aus).
+- **Esc** leert zuerst die Zeile, beim zweiten Mal schließt es; **Strg/Alt+Rücktaste** löscht ein Wort; **↑/↓** blättern
+  im Verlauf bzw. in den Vorschlägen.
 
 | Befehl | Wirkung |
 |---|---|
@@ -481,7 +496,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 420 automatischen Tests grün, darunter:
+- Alle 421 automatischen Tests grün, darunter:
+  - 0.37.0: Klick auf ein entferntes Auto läuft nur hin (steht danach am Auto, nicht drin, kein Schuss), Klick
+    daneben steigt nach dem Halt an der Tür ein (≥ 0,35 s), Doppelklick aus der Ferne steigt ein. Befehlszeile:
+    Uhrzeit/Wetter/Ort ohne Befehlswort, „schnee“ allein = Wetter, mit Wert = Schneedecke, vertippter Befehl gibt
+    „meintest du“ statt Teleport, Tippfehler in Werten und Orten gefunden, Enter nimmt bei unvollständiger Eingabe den
+    besten Vorschlag, schließt nach Erfolg (Umschalt: offen), bleibt bei Fehler offen, Esc leert zuerst, Wort löschen,
+    zuletzt benutzte Befehle oben, Hilfezeile. Im Browser mit echter Maus: Einsteigen per Klick am Auto mit Halt an der
+    Tür, `regen` ohne Befehlswort.
   - 0.36.0: Wetterdarstellung – Aufschlagringe (mehr bei Starkregen, junge klein, alte groß und blass), Nässe auf der
     Fahrbahn als eine Ebene (keine dunklen Kreise an Kreuzungen), alle Pfützen gezählt, Bodennebel nur bei Nebel, nasser
     Gehweg nur bei Nässe; alle elf Wetterbilder zeichnen ohne ungültige Koordinaten. Im Browser (Chromium) jede

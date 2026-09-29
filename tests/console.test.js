@@ -54,22 +54,26 @@ test('Vorschläge: Befehle, Werte und Orte mit grauer Ergänzung', () => {
   assert.deepEqual(suggest('blabla x', ctx).items, [], 'unbekannter Befehl: keine Werte');
 });
 
-test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und bleibt offen, Verlauf, Esc schließt', () => {
+test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und schließt (Umschalt: offen), Verlauf, Esc leert/schließt', () => {
   const g = newGame(), ctx = ctxOf(g), con = createConsole();
   openConsole(con, ctx);
   assert.ok(con.open && con.sugg.items.length);
   type(con, 'wet', ctx);
   assert.equal(consoleKey(con, 'Tab', ctx), 'edit');
   assert.equal(con.text, 'wetter ', 'Befehl ergänzt, Leerzeichen für das Argument');
+  assert.match(con.sugg.help, /^wetter <wetter> – Wetter festlegen/, 'Hilfezeile zum Befehl');
   type(con, 'sch', ctx);
   assert.equal(consoleKey(con, 'ArrowDown', ctx), 'nav'); assert.equal(con.sel, 0);
   consoleKey(con, 'ArrowDown', ctx); assert.equal(con.sel, 1);
-  assert.equal(consoleKey(con, 'Enter', ctx, 5), 'run');
+  assert.equal(consoleKey(con, 'Enter', ctx, 5, { shift: true }), 'run');
   assert.equal(g.world.forceWeather, 'heavysnow', 'gewählter Vorschlag ausgeführt');
-  assert.ok(con.open, 'bleibt offen'); assert.equal(con.text, '');
+  assert.ok(con.open, 'Umschalt+Enter: bleibt offen'); assert.equal(con.text, '');
   assert.deepEqual(con.log.map((l) => l.text), ['> wetter schneesturm', 'Wetter: Schneesturm']);
   type(con, 'zeit 7', ctx); consoleKey(con, 'Enter', ctx);
   assert.equal(g.world.clock, 420);
+  assert.equal(con.open, false, 'Enter: erledigt → zu');
+  openConsole(con, ctx);
+  assert.deepEqual(con.sugg.items.slice(0, 2).map((i) => [i.label, i.hint]), [['zeit 7', 'zuletzt'], ['wetter schneesturm', 'zuletzt']], 'zuletzt benutzt oben');
   consoleKey(con, 'ArrowUp', ctx); assert.equal(con.text, 'zeit 7', 'Verlauf zurück');
   consoleKey(con, 'ArrowUp', ctx); assert.equal(con.text, 'wetter schneesturm');
   consoleKey(con, 'ArrowDown', ctx); assert.equal(con.text, 'zeit 7', '↓ blättert im Verlauf vor');
@@ -79,8 +83,45 @@ test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und bleibt 
   consoleKey(con, 'Enter', ctx);
   assert.equal(con.open, false, 'leere Zeile schließt');
   openConsole(con, ctx); type(con, 'x', ctx);
+  assert.equal(consoleKey(con, 'Escape', ctx), 'edit', 'Esc leert zuerst'); assert.equal(con.text, ''); assert.ok(con.open);
   assert.equal(consoleKey(con, 'Escape', ctx), 'close'); assert.equal(con.open, false);
   assert.equal(consoleKey(con, 'F5', ctx), null, 'andere Tasten tun nichts');
+  openConsole(con, ctx); type(con, 'tp kottbusser tor', ctx);
+  consoleKey(con, 'DeleteWord', ctx); assert.equal(con.text, 'tp kottbusser ', 'Strg+Rücktaste löscht ein Wort');
+  // Fehler: Zeile bleibt offen mit Hinweis
+  con.text = ''; type(con, 'zeit 25', ctx); consoleKey(con, 'Enter', ctx);
+  assert.ok(con.open, 'Fehler: bleibt offen'); assert.equal(con.log.at(-1).ok, false);
+});
+
+test('Wie eine Befehlspalette: ohne Befehlswort, Tippfehler, Enter nimmt den besten Vorschlag, Klick übernimmt', async () => {
+  const { consoleAccept, smartLine, editDistance } = await import('../web/src/console.js');
+  const g = newGame(), w = g.world, ctx = ctxOf(g);
+  assert.equal(editDistance('schneestrum', 'schneesturm'), 2);
+  assert.equal(smartLine('22:30', ctx), 'zeit 22:30');
+  assert.equal(smartLine('nacht', ctx), 'zeit nacht');
+  assert.equal(smartLine('regen', ctx), 'wetter regen');
+  assert.equal(smartLine('kottbusser tor', ctx), 'tp Kottbusser Tor');
+  assert.equal(smartLine('xyzxyz', ctx), null);
+  assert.ok(execute('22:30', ctx).ok); assert.equal(w.clock, 22 * 60 + 30);
+  assert.ok(execute('regen', ctx).ok); assert.equal(w.forceWeather, 'rain');
+  assert.ok(execute('schnee', ctx).ok, '„schnee“ allein: Wetter'); assert.equal(w.forceWeather, 'snow');
+  assert.ok(execute('schnee 0.3', ctx).ok); assert.equal(w.snow, 0.3, 'mit Wert: Schneedecke');
+  const r = execute('wetr', ctx); assert.equal(r.ok, false); assert.match(r.msg, /meintest du „wetter“/, 'vertippter Befehl: Hinweis, kein Teleport');
+  // Tippfehler in Werten und Orten werden gefunden
+  assert.equal(suggest('wetter schneestrum', ctx).items[0].label, 'schneesturm');
+  assert.equal(suggest('tp kotbusser tor', ctx).items[0].label, 'Kottbusser Tor');
+  // Vorschläge ohne Befehlswort: Uhrzeit, Wetter, Orte
+  const sm = suggest('nebel', ctx).items;
+  assert.ok(sm.some((i) => i.insert === 'wetter nebel' && i.full), 'Wetter vorgeschlagen');
+  assert.ok(suggest('alexanderpl', ctx).items.some((i) => i.insert.startsWith('tp Alexanderplatz')), 'Ort vorgeschlagen');
+  assert.equal(suggest('21:15', ctx).items[0]?.insert, 'zeit 21:15');
+  // Enter mit unvollständigem Wert: bester Vorschlag
+  const con = createConsole(); openConsole(con, ctx);
+  type(con, 'wetter gewit', ctx); consoleKey(con, 'Enter', ctx);
+  assert.equal(w.forceWeather, 'thunder'); assert.equal(con.hist.at(-1), 'wetter gewitter', 'Verlauf mit der vollständigen Zeile');
+  // Klick auf einen Vorschlag übernimmt ihn
+  openConsole(con, ctx); type(con, 'wet', ctx);
+  assert.ok(consoleAccept(con, 0, ctx)); assert.equal(con.text, 'wetter ');
 });
 
 test('Befehle ändern die Welt; Fehler mit Hinweis statt Wirkung', () => {

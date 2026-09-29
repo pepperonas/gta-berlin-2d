@@ -1,7 +1,10 @@
 // Befehlszeile im Spiel (rein, ohne DOM): Enter öffnet sie (main.js), die Welt steht solange still (game.js).
 // Befehle setzen Uhrzeit, Wetter, Dichte, teleportieren, schummeln oder schalten Debug-Ansichten. Autovervollständigung:
 // Befehlsnamen, feste Werte je Argument und Orte (Straßen, Bahnhöfe, Ortsteile, Kieze, Bezirke) mit Vorschlagsliste;
-// Tab/→ übernimmt, ↑/↓ wählt (ohne Vorschläge: Verlauf), Enter führt aus, Esc schließt.
+// Tab/→ übernimmt, ↑/↓ wählt (ohne Vorschläge: Verlauf), Enter führt aus, Esc leert bzw. schließt.
+// Wie eine Befehlspalette: Tippfehler werden verziehen, ohne Befehlswort versteht die Zeile Uhrzeit („22:30“, „nacht“),
+// Wetter („regen“) und Orte („alexanderplatz“); ist die Eingabe unvollständig, nimmt Enter den besten Vorschlag; nach
+// Erfolg schließt sie (Umschalt+Enter lässt sie offen), bei Fehlern bleibt sie mit Hinweis offen.
 import { WEATHER_KINDS, WX_LABEL, temperatureAt } from './weather.js';
 import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
@@ -59,14 +62,37 @@ export function placeIndex(city) {
   return out;
 }
 
-// Treffer bewerten: Anfang des Namens < Anfang eines Worts < irgendwo; dann Art (Bezirk vor Straße), dann kürzer
+// Tippfehler-Abstand (Levenshtein, früh abgebrochen ab max + 1)
+export function editDistance(a, b, max = 2) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]; let best = i;
+    for (let j = 1; j <= b.length; j++) { cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); best = Math.min(best, cur[j]); }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Tippfehler verzeihen: das Getippte ähnelt dem Anfang des Namens oder eines Worts darin (ab 4 Zeichen, 1 Fehler; ab 7: 2)
+function fuzzyHit(k, q) {
+  if (q.length < 4) return false;
+  const max = q.length >= 7 ? 2 : 1;
+  for (const w of [k, ...k.split(/[ -]/).filter(Boolean)]) {
+    for (const L of [q.length - 1, q.length, q.length + 1]) if (L > 0 && L <= w.length && editDistance(q, w.slice(0, L), max) <= max) return true;
+  }
+  return false;
+}
+
+// Treffer bewerten: Anfang des Namens < Anfang eines Worts < irgendwo < mit Tippfehler; dann Art (Bezirk vor Straße),
+// dann kürzer
 export function rankMatches(items, query, key = (i) => i.key ?? norm(i.name ?? i)) {
   const q = norm(query).trim();
   const out = [];
   items.forEach((it, i) => {
     const k = key(it);
     let s;
-    if (!q) s = 0; else if (k.startsWith(q)) s = 0; else if (k.includes(' ' + q) || k.includes('-' + q)) s = 1; else if (k.includes(q)) s = 2; else return;
+    if (!q) s = 0; else if (k.startsWith(q)) s = 0; else if (k.includes(' ' + q) || k.includes('-' + q)) s = 1; else if (k.includes(q)) s = 2; else if (fuzzyHit(k, q)) s = 3; else return;
     // ohne Eingabe: Reihenfolge der Liste (Art zuerst); mit Eingabe: kürzere Namen zuerst
     out.push({ it, s: s * 100 + (it.rank ?? 0) * 10 + (q ? Math.min(9, k.length / 6) : 0), i });
   });
@@ -203,7 +229,30 @@ export function tokenize(text) {
   return out;
 }
 
-// Vorschläge für die Stelle am Zeilenende: { items: [{ label, hint, insert }], from, query, ghost, cmd, argi }
+// Ohne Befehlswort: was die Zeile meint – Uhrzeit, Wetter oder Ort. Liefert die Befehlszeile dafür oder null.
+export function smartLine(line, ctx) {
+  const t = line.trim(), k = norm(t);
+  if (!t) return null;
+  if (clockArg(t) !== null || TIME_WORDS[k]) return `zeit ${t}`;
+  if (WX_NAMES[k] || WX_ALIAS[k]) return `wetter ${t}`;
+  if (ctx?.city && k.length >= 3) {
+    const hit = rankMatches(placeIndex(ctx.city), t)[0];
+    if (hit && hit.key.includes(k)) return `tp ${hit.name}`; // ohne Befehlswort nur sichere Treffer (kein Tippfehler-Raten)
+  }
+  return null;
+}
+// Vorschläge dazu (für die erste Stelle), höchstens n
+function smartItems(query, ctx, n) {
+  const q = norm(query).trim(), out = [];
+  if (!q) return out;
+  const m = clockArg(query) ?? clockArg(TIME_WORDS[q] ?? '');
+  if (m !== null) out.push({ label: `Uhrzeit ${formatClock(m)}`, hint: 'zeit', insert: `zeit ${query.trim()}`, full: true });
+  for (const [w, kind] of Object.entries(WX_NAMES)) if (w.startsWith(q) || (q.length >= 4 && fuzzyHit(w, q))) out.push({ label: w, hint: `Wetter: ${WX_LABEL[kind]}`, insert: `wetter ${w}`, full: true });
+  if (ctx?.city && q.length >= 3) for (const p of rankMatches(placeIndex(ctx.city), query).slice(0, 4)) out.push({ label: p.name, hint: `tp · ${p.kind}`, insert: `tp ${p.name}`, full: true });
+  return out.slice(0, n);
+}
+
+// Vorschläge für die Stelle am Zeilenende: { items: [{ label, hint, insert, full? }], from, query, ghost, cmd, argi, help }
 export function suggest(text, ctx) {
   const toks = tokenize(text), trailing = /\s$/.test(text) || !text;
   const argi = trailing ? toks.length : toks.length - 1; // welches Wort gerade getippt wird (0 = Befehl)
@@ -217,6 +266,8 @@ export function suggest(text, ctx) {
     // Alias nur zeigen, wenn nichts Eigenes passt
     const own = items.filter((i) => !i.hint.startsWith('→'));
     if (own.length) items = own;
+    // dazu, was die Zeile ohne Befehlswort bedeuten kann (Uhrzeit, Wetter, Ort) – hinter echten Befehlen
+    if (query.length >= 2) items = [...items.slice(0, 3), ...smartItems(query, ctx, CONSOLE.maxSuggestions), ...items.slice(3)];
   } else if (cmd) {
     spec = cmd.args?.[argi - 1] ?? cmd.args?.find((a) => a.rest) ?? null;
     if (spec?.rest) { // Rest der Zeile ist das Argument (Ortsnamen mit Leerzeichen)
@@ -228,8 +279,11 @@ export function suggest(text, ctx) {
   }
   items = items.slice(0, CONSOLE.maxSuggestions);
   const first = items[0];
-  const ghost = first && query && norm(first.insert).startsWith(norm(query)) ? first.insert.slice(query.length) : '';
-  return { items, from, query, ghost, cmd, argi, spec };
+  const ghost = first && query && !first.full && norm(first.insert).startsWith(norm(query)) ? first.insert.slice(query.length) : '';
+  // Hilfezeile: Aufbau und Zweck des Befehls, den man gerade tippt (oder des obersten Vorschlags)
+  const hc = cmd ?? (argi === 0 && first && !first.full ? findCommand(first.insert) : null);
+  const help = hc ? `${usage(hc)} – ${hc.help}` : argi === 0 && first?.full ? `Enter: ${first.insert}` : '';
+  return { items, from, query, ghost, cmd, argi, spec, help };
 }
 
 // Befehl ausführen: { ok, msg, cmd }
@@ -238,14 +292,24 @@ export function execute(line, ctx) {
   if (!toks.length) return { ok: true, msg: '' };
   const cmd = findCommand(toks[0].t);
   if (!cmd) {
-    const near = rankMatches(COMMANDS.map((c) => ({ key: c.name, name: c.name })), toks[0].t.slice(0, 2))[0];
+    // ohne Befehlswort: Uhrzeit, Wetter oder Ort – außer es ist ein vertippter Befehl („wetr“)
+    const typed = norm(toks[0].t), cmdTypo = toks.length === 1 && COMMANDS.some((c) => editDistance(typed, c.name, 1) <= 1);
+    const smart = cmdTypo ? null : smartLine(line, ctx);
+    if (smart && findCommand(tokenize(smart)[0].t)) return execute(smart, ctx);
+    const typo = rankMatches(COMMANDS.map((c) => ({ key: c.name, name: c.name })), toks[0].t).find((c) => editDistance(norm(toks[0].t), c.key, 2) <= 2);
+    const near = typo ?? rankMatches(COMMANDS.map((c) => ({ key: c.name, name: c.name })), toks[0].t.slice(0, 2))[0];
     return { ok: false, msg: `Unbekannter Befehl „${toks[0].t}“${near ? ` – meintest du „${near.name}“?` : ''} (hilfe)` };
   }
   const restArg = cmd.args?.findIndex((a) => a.rest) ?? -1;
   const restText = restArg >= 0 ? line.slice(toks[restArg + 1]?.start ?? line.length).trim().replace(/^"|"$/g, '') : '';
   const args = restArg >= 0 ? [...toks.slice(1, restArg + 1).map((t) => t.t), ...(restText ? [restText] : [])] : toks.slice(1).map((t) => t.t);
   const missing = (cmd.args ?? []).findIndex((a, i) => !a.optional && !args[i]);
-  if (missing >= 0) return { ok: false, msg: `Fehlt: ${usage(cmd)}`, cmd };
+  if (missing >= 0) {
+    // „schnee“ allein meint eher das Wetter als die Schneedecke ohne Wert
+    const smart = toks.length === 1 ? smartLine(line, ctx) : null;
+    if (smart && !smart.startsWith(cmd.name + ' ') && !smart.startsWith('tp ')) return execute(smart, ctx);
+    return { ok: false, msg: `Fehlt: ${usage(cmd)}`, cmd };
+  }
   if (!ctx.world && cmd.name !== 'hilfe') return { ok: false, msg: 'Nur im Spiel', cmd };
   const r = cmd.run(ctx, args);
   const res = typeof r === 'string' ? { ok: true, msg: r } : r;
@@ -255,19 +319,36 @@ export function execute(line, ctx) {
 
 export function createConsole() { return { open: false, text: '', sel: -1, hist: [], hi: -1, log: [], sugg: null }; }
 
-// Taste verarbeiten (key wie KeyboardEvent.key). Liefert, was passiert ist: 'close' | 'run' | 'edit' | 'nav' | null
-export function consoleKey(con, key, ctx, now = 0) {
-  const refresh = () => { con.sugg = suggest(con.text, ctx); if (con.sel >= con.sugg.items.length) con.sel = -1; };
-  const accept = (i) => {
-    const s = con.sugg ?? suggest(con.text, ctx), it = s.items[i];
-    if (!it) return false;
+// Leere Zeile: zuletzt benutzte Befehle zuerst (je einmal, neueste oben), dann die Befehle
+function withRecent(con, sugg) {
+  if (con.text || !con.hist.length) return sugg;
+  const recent = [...new Set([...con.hist].reverse())].slice(0, 3).map((l) => ({ label: l, hint: 'zuletzt', insert: l, full: true }));
+  return { ...sugg, items: [...recent, ...sugg.items].slice(0, CONSOLE.maxSuggestions), ghost: '' };
+}
+
+// Vorschlag i übernehmen (Tab, →, Mausklick); true, wenn es einen gab
+export function consoleAccept(con, i, ctx) {
+  const s = con.sugg ?? suggest(con.text, ctx), it = s.items[i];
+  if (!it) return false;
+  if (it.full) con.text = it.insert;
+  else {
     const rest = !!s.spec?.rest;
     const more = s.cmd ? !rest && (s.cmd.args?.length ?? 0) > s.argi : (findCommand(it.insert)?.args?.length ?? 0) > 0;
     con.text = con.text.slice(0, s.from) + (it.insert.includes(' ') && !rest ? `"${it.insert}"` : it.insert) + (more ? ' ' : '');
-    con.sel = -1; refresh(); return true;
-  };
+  }
+  con.sel = -1; con.sugg = withRecent(con, suggest(con.text, ctx));
+  return true;
+}
+
+// Taste verarbeiten (key wie KeyboardEvent.key). Liefert, was passiert ist: 'close' | 'run' | 'edit' | 'nav' | null
+// mods: { shift } – Umschalt+Enter lässt die Zeile nach Erfolg offen; Taste 'DeleteWord' (Strg/Alt+Rücktaste) löscht ein Wort
+export function consoleKey(con, key, ctx, now = 0, mods = {}) {
+  const refresh = () => { con.sugg = withRecent(con, suggest(con.text, ctx)); if (con.sel >= con.sugg.items.length) con.sel = -1; };
+  const accept = (i) => consoleAccept(con, i, ctx);
   switch (key) {
-    case 'Escape': con.open = false; con.sel = -1; return 'close';
+    case 'Escape':
+      if (con.text) { con.text = ''; con.sel = -1; con.hi = -1; refresh(); return 'edit'; } // erst leeren, dann schließen
+      con.open = false; con.sel = -1; return 'close';
     case 'Tab': case 'ArrowRight': if (!accept(con.sel >= 0 ? con.sel : 0)) return null; return 'edit';
     case 'ArrowDown': case 'ArrowUp': {
       const n = con.sugg?.items.length ?? 0, d = key === 'ArrowDown' ? 1 : -1;
@@ -279,23 +360,32 @@ export function consoleKey(con, key, ctx, now = 0) {
     }
     case 'Enter': {
       if (con.sel >= 0) accept(con.sel);
-      const line = con.text.trim();
+      let line = con.text.trim();
       if (!line) { con.open = false; return 'close'; }
-      const r = execute(line, ctx);
+      let r = execute(line, ctx);
+      // unvollständig oder vertippt: mit dem besten Vorschlag noch einmal (nur wenn der dann klappt)
+      if (!r.ok) {
+        const s = suggest(con.text, ctx), it = s.items[0];
+        if (it) {
+          const alt = (it.full ? it.insert : con.text.slice(0, s.from) + (it.insert.includes(' ') && !s.spec?.rest ? `"${it.insert}"` : it.insert)).trim();
+          if (alt !== line) { const r2 = execute(alt, ctx); if (r2.ok) { r = r2; line = alt; } }
+        }
+      }
       con.log.push({ text: `> ${line}`, ok: true, t: now }, ...(r.msg ? [{ text: r.msg, ok: r.ok, t: now }] : []));
       con.log.splice(0, Math.max(0, con.log.length - CONSOLE.maxLog));
       if (con.hist[con.hist.length - 1] !== line) con.hist.push(line);
       con.hist.splice(0, Math.max(0, con.hist.length - CONSOLE.history));
-      con.hi = -1; con.text = ''; con.sel = -1;
-      if (r.ok) con.open = ctx.game?.screen === 'stats' ? false : con.open; // bleibt offen für den nächsten Befehl
+      con.hi = -1; con.sel = -1;
+      if (r.ok) { con.text = ''; if (ctx.game?.screen === 'stats' || !mods.shift) con.open = false; } // erledigt: zu (Umschalt: offen)
       refresh();
       return 'run';
     }
-    case 'Backspace': con.text = con.text.slice(0, -1); con.sel = -1; refresh(); return 'edit';
+    case 'Backspace': con.text = con.text.slice(0, -1); con.sel = -1; con.hi = -1; refresh(); return 'edit';
+    case 'DeleteWord': con.text = con.text.replace(/\S*\s*$/, ''); con.sel = -1; con.hi = -1; refresh(); return 'edit';
     default:
       if (key.length === 1) { con.text += key; con.sel = -1; con.hi = -1; refresh(); return 'edit'; }
       return null;
   }
 }
 
-export function openConsole(con, ctx) { con.open = true; con.text = ''; con.sel = -1; con.hi = -1; con.sugg = suggest('', ctx); }
+export function openConsole(con, ctx) { con.open = true; con.text = ''; con.sel = -1; con.hi = -1; con.sugg = withRecent(con, suggest('', ctx)); }

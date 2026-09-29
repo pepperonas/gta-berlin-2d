@@ -122,30 +122,46 @@ test('Klick auf eine Person: hinlaufen bis in Reichweite, dann angreifen; Shift-
   assert.ok(s2 >= 1 && Math.abs(w2.player.x - x) < 0.5, 'steht und schießt');
 });
 
-test('Klick auf ein Auto: hinlaufen und einsteigen, nie darauf schießen; Strg-Klick schießt doch', async () => {
+test('Klick auf ein Auto: weit weg nur hinlaufen, daneben (oder Doppelklick) nach kurzem Halt an der Tür einsteigen, nie schießen', async () => {
   const { createCar } = await import('../web/src/car.js');
-  const { WEAPONS, clickIntent } = await import('../web/src/combat.js');
+  const { WEAPONS, clickIntent, CLICK } = await import('../web/src/combat.js');
   const PISTOL = WEAPONS.findIndex((q) => q.id === 'pistol');
   const place = (w) => { const car = createCar({ x: P0.x + Math.cos(ang) * 250, y: P0.y + Math.sin(ang) * 250, angle: ang, role: 'curb' }); w.cars.push(car); return car; };
+  const shots = (w) => w.events.filter((e) => e.type === 'shot').length;
   const w = foot(); w.player.weapon = PISTOL;
   const car = place(w);
-  assert.equal(clickIntent(w, car.x, car.y).kind, 'enter');
+  assert.equal(clickIntent(w, car.x, car.y).kind, 'approach', 'weit weg: nur hinlaufen');
+  assert.equal(clickIntent(w, car.x, car.y, false, { double: true }).kind, 'enter', 'Doppelklick: einsteigen');
   assert.equal(clickIntent(w, car.x, car.y, true).kind, 'force');
+  // einfacher Klick: hinlaufen, daneben stehen bleiben, nicht einsteigen
   updateWorld(w, { ...idle(), ...click({ x: car.x, y: car.y }) }, 1 / 60);
-  let shots = 0;
-  for (let i = 0; i < 60 * 12 && !w.player.inCar; i++) { updateWorld(w, idle(), 1 / 60); shots += w.events.filter((e) => e.type === 'shot').length; }
-  assert.equal(shots, 0, 'kein Schuss aufs Auto');
+  let s = 0;
+  for (let i = 0; i < 60 * 12 && w.player.click; i++) { updateWorld(w, idle(), 1 / 60); s += shots(w); }
+  assert.equal(s, 0, 'kein Schuss aufs Auto');
+  assert.equal(w.player.inCar, null, 'nicht eingestiegen');
+  assert.ok(Math.hypot(car.x - w.player.x, car.y - w.player.y) < PLAYER.enterDist, 'steht am Auto');
+  // jetzt daneben: Klick steigt ein – aber erst nach einem Moment an der Tür
+  assert.equal(clickIntent(w, car.x, car.y).kind, 'enter');
+  updateWorld(w, { ...idle(), ...click({ x: car.x, y: car.y }) }, 1 / 60);
+  let t = 0;
+  while (!w.player.inCar && t < 3) { updateWorld(w, idle(), 1 / 60); t += 1 / 60; }
   assert.equal(w.player.inCar, car.id, 'eingestiegen');
+  assert.ok(t >= CLICK.door - 0.05, `kurzer Halt an der Tür (${t.toFixed(2)} s)`);
+  // Doppelklick aus der Ferne: hinlaufen und einsteigen
+  const w4 = foot(); const c4 = place(w4);
+  updateWorld(w4, { ...idle(), ...click({ x: c4.x, y: c4.y }, { clickDouble: true }) }, 1 / 60);
+  for (let i = 0; i < 60 * 12 && !w4.player.inCar; i++) updateWorld(w4, idle(), 1 / 60);
+  assert.equal(w4.player.inCar, c4.id, 'Doppelklick: eingestiegen');
   // gehalten ändert nichts daran
   const w1 = foot(); w1.player.weapon = PISTOL; const c1 = place(w1); let s1 = 0;
-  for (let i = 0; i < 60 * 3; i++) { updateWorld(w1, { ...idle(), ...click({ x: c1.x, y: c1.y }, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s1 += w1.events.filter((e) => e.type === 'shot').length; }
+  for (let i = 0; i < 60 * 3; i++) { updateWorld(w1, { ...idle(), ...click({ x: c1.x, y: c1.y }, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s1 += shots(w1); }
   assert.equal(s1, 0, 'auch gehalten kein Schuss');
   // Wrack: nur hinlaufen
   const w3 = foot(); const c3 = place(w3); c3.wrecked = true;
   assert.equal(clickIntent(w3, c3.x, c3.y).kind, 'move');
   // Strg-Klick aufs Auto: am Platz schießen
   const w2 = foot(); w2.player.weapon = PISTOL; const c2 = place(w2); let s2 = 0;
-  for (let i = 0; i < 30; i++) { updateWorld(w2, { ...idle(), ...click({ x: c2.x, y: c2.y }, { clickForce: true, clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s2 += w2.events.filter((e) => e.type === 'shot').length; }
+  for (let i = 0; i < 30; i++) { updateWorld(w2, { ...idle(), ...click({ x: c2.x, y: c2.y }, { clickForce: true, clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s2 += shots(w2); }
   assert.ok(s2 >= 1 && !w2.player.inCar, 'Strg: geschossen, nicht eingestiegen');
 });
 

@@ -11,9 +11,9 @@ import { Sound, soundFor } from './audio.js';
 import { ambienceAt, bellStrikes } from './ambience.js';
 import { thunderBetween } from './weather.js';
 import { createRightButton, WHEEL, easeTimeScale } from './weaponwheel.js';
-import { consoleKey, openConsole } from './console.js';
+import { consoleKey, openConsole, consoleAccept } from './console.js';
 import { openStatsStore } from './statsdb.js';
-import { WEAPONS, clickIntent } from './combat.js';
+import { WEAPONS, clickIntent, CLICK } from './combat.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -127,7 +127,8 @@ addEventListener('keydown', (e) => {
   input.lastDevice = 'keyboard'; sound.unlock();
   if (game.console.open) {
     e.preventDefault();
-    const r = consoleKey(game.console, e.key, consoleCtx(), performance.now() / 1000);
+    const key = e.key === 'Backspace' && (e.ctrlKey || e.altKey) ? 'DeleteWord' : e.key;
+    const r = consoleKey(game.console, key, consoleCtx(), performance.now() / 1000, { shift: e.shiftKey });
     if (r === 'run') sound.play('ui'); else if (r === 'close') sound.play('ui-back'); else if (r === 'nav') sound.play('ui-move');
     return;
   }
@@ -157,7 +158,7 @@ addEventListener('pointerdown', () => sound.unlock());
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
 const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
 const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0, enterExit: false, slot: 0, prevWeapon: false,
-  lmb: false, lmbPressed: false, kick: false }; // lmb/kick: Diablo-Schema zu Fuß (Klick = laufen/angreifen, rechts = Tritt)
+  lmb: false, lmbPressed: false, lmbDouble: false, lastPress: null, kick: false }; // lmb/kick: Diablo-Schema zu Fuß (Klick = laufen/angreifen, rechts = Tritt)
 // Rechte Maustaste: tippen = ein-/aussteigen, halten = Waffenrad (weaponwheel.js); das Kontextmenü des Browsers bleibt aus
 // Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt (padBtn).
 // Diablo-Schema zu Fuß: rechte Maus tippen = Tritt (statt Einsteigen), halten = Waffenrad wie gehabt
@@ -204,6 +205,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (d) { d.moved += Math.hypot(vx - d.vx, vy - d.vy); hud.panBigMap(vx - d.vx, vy - d.vy); d.vx = vx; d.vy = vy; return; }
   const h = hitAt(vx, vy);
   if (h?.kind === 'menu') pointer.hover = h;
+  if (h?.kind === 'sugg' && game.console.open) game.console.sel = h.i; // Zeigen wählt einen Vorschlag
 });
 canvas.addEventListener('pointerleave', () => { pointer.vx = pointer.vy = -1; });
 // Rechte Taste über mousedown/mouseup: Zeigerereignisse melden eine zweite Taste auf demselben Zeiger nicht als
@@ -220,7 +222,16 @@ canvas.addEventListener('pointerdown', (e) => {
   const [vx, vy] = toHud(e);
   const h = hitAt(vx, vy);
   if (!h) { // im Spiel zu Fuß: linke Maustaste feuert (Klassisch) bzw. läuft/greift an (Diablo)
-    if (diabloOnFoot()) { pointer.lmb = true; pointer.lmbPressed = true; }
+    if (diabloOnFoot()) {
+      // Doppelklick: zweiter Druck kurz danach an fast derselben Stelle (steigt in ein entferntes Auto)
+      const now = performance.now() / 1000, last = pointer.lastPress;
+      pointer.lmbDouble = !!last && now - last.t < CLICK.double && Math.hypot(vx - last.vx, vy - last.vy) < 14;
+      pointer.lastPress = pointer.lmbDouble ? null : { t: now, vx, vy };
+      pointer.lmb = true; pointer.lmbPressed = true;
+      // Klick-Rückmeldung wie in Diablo: ein kurzer Ring, wo man hingeklickt hat (nur beim Laufen, einmal, keine Dauerschleife)
+      const at = currentAim(vx, vy), it = at && clickIntent(game.world, at.x, at.y, keys.has('ControlLeft') || keys.has('ControlRight'), { double: pointer.lmbDouble });
+      if (it && (it.kind === 'move' || it.kind === 'approach')) renderer.clickFx = { x: at.x, y: at.y, t0: performance.now() };
+    }
     else if (playingOnFoot()) { pointer.fire = true; pointer.firePressed = true; }
     return;
   }
@@ -228,6 +239,11 @@ canvas.addEventListener('pointerdown', (e) => {
   else if (h.kind === 'map') { pointer.drag = { vx, vy, moved: 0 }; canvas.setPointerCapture(e.pointerId); }
   else if (h.kind === 'menu') pointer.pick = h;
   else if (h.kind === 'key') pointer.key = h.key;
+  else if (h.kind === 'sugg' && game.console.open) { // Klick: übernehmen; ein fertiger Befehl (zuletzt, Ort, Wetter) läuft gleich
+    const con = game.console, it = con.sugg?.items[h.i];
+    if (it?.full) { con.sel = h.i; consoleKey(con, 'Enter', consoleCtx(), performance.now() / 1000); sound.play('ui'); }
+    else if (consoleAccept(con, h.i, consoleCtx())) sound.play('ui-move');
+  }
 });
 canvas.addEventListener('pointerup', (e) => {
   if (e.button === 2) return; // über mouseup
@@ -270,7 +286,7 @@ function applyPointer(inp) {
       // Diablo: Klick = laufen/angreifen (die Simulation entscheidet, world.js clickControl), Strg (+ Klick) = am Platz
       // angreifen, Umschalt = sprinten (wie klassisch), rechte Maus tippen = Tritt, halten = Waffenrad
       const at = aimLock ? currentAim(aimLock.vx, aimLock.vy) : currentAim();
-      inp.clickWorld = at; inp.clickHeld = pointer.lmb; inp.clickPressed = pointer.lmbPressed;
+      inp.clickWorld = at; inp.clickHeld = pointer.lmb; inp.clickPressed = pointer.lmbPressed; inp.clickDouble = pointer.lmbPressed && pointer.lmbDouble;
       inp.clickForce = keys.has('ControlLeft') || keys.has('ControlRight');
       if (pointer.kick) { inp.kick = true; pointer.kick = false; }
       if (at) inp.aimWorld = at;
@@ -288,15 +304,24 @@ function applyPointer(inp) {
 }
 
 // Zeiger im Stil des Spiels; beim Fahren/Laufen verschwindet er, wenn die Maus 2 s ruht.
+const HOVER = { cursor: 90, ring: 160 }; // ms Verweilen, bis Zeiger bzw. Umriss wechseln
+let hoverObj = null, hoverKind, hoverSince = 0;
 function updateCursor() {
   const playing = game.screen === 'playing' && !game.showBigMap && !game.teleport && !game.resultMenu;
-  // Diablo zu Fuß: was ein Klick jetzt täte (Zeiger und Ring ums Ziel zeigen es vorher)
+  // Diablo zu Fuß: was ein Klick jetzt täte. Nur wenn er mehr als laufen täte (angreifen, einsteigen, Strg) und der
+  // Zeiger kurz darauf ruht, wechselt der Zeiger und das Ziel bekommt einen ruhigen Umriss – kein Flackern beim
+  // Überstreichen geparkter Autos, nichts, solange man mit gedrückter Taste läuft.
   let intent = null;
-  if (playing && diabloOnFoot() && !openWheel() && pointer.vx >= 0) {
+  if (playing && diabloOnFoot() && !openWheel() && pointer.vx >= 0 && !pointer.lmb) {
     const at = currentAim();
     if (at) intent = clickIntent(game.world, at.x, at.y, keys.has('ControlLeft') || keys.has('ControlRight'));
+    if (intent?.kind === 'approach') intent = { kind: 'move', obj: null }; // entferntes Auto: Klick läuft nur hin
   }
-  renderer.hover = intent?.obj ? intent : null;
+  const nowMs = performance.now();
+  if ((intent?.obj ?? null) !== hoverObj || intent?.kind !== hoverKind) { hoverObj = intent?.obj ?? null; hoverKind = intent?.kind; hoverSince = nowMs; }
+  const dwell = nowMs - hoverSince;
+  renderer.hover = intent?.obj && dwell >= HOVER.ring ? intent : null;
+  if (intent && intent.kind !== 'move' && intent.kind !== 'force' && dwell < HOVER.cursor) intent = { kind: 'move', obj: null };
   renderer.crosshair = !(playing && diabloOnFoot()) || intent?.kind === 'force'; // Diablo: Fadenkreuz vor der Figur nur beim Strg-Angriff
   const kind = cursorKind({ hit: pointer.vx >= 0 ? hitAt(pointer.vx, pointer.vy) : null, dragging: !!pointer.drag, playing, aiming: playing && playingOnFoot(), idle: (performance.now() - pointer.moved) / 1000, intent: intent?.kind, wheel: !!openWheel() });
   if (kind !== pointer.cursor) { pointer.cursor = kind; canvas.style.cursor = cursorCss(kind); }

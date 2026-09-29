@@ -169,7 +169,9 @@ export class Hud {
       const typed = this.text(con.text, tx, y + 27, { size: fs, weight: 600, shadow: false });
       if (con.sugg?.ghost && con.sel < 0) this.text(con.sugg.ghost, tx + typed, y + 27, { size: fs, weight: 600, color: 'rgba(255,255,255,0.35)', shadow: false });
       if (Math.floor(now * 2) % 2 === 0) { c.fillStyle = YELLOW; c.fillRect(tx + typed + 1, y + 10, 2, 22); }
-      if (!con.text) this.text('Befehl eingeben – Tab ergänzt, ↑↓ wählt, Enter führt aus, Esc schließt', tx + 8, y + 27, { size: 14, weight: 500, color: 'rgba(255,255,255,0.4)', shadow: false });
+      if (!con.text) this.text('Befehl, Uhrzeit, Wetter oder Ort – Tab ergänzt, Enter führt aus, Esc schließt', tx + 8, y + 27, { size: 14, weight: 500, color: 'rgba(255,255,255,0.4)', shadow: false });
+      // Hilfezeile: Aufbau und Zweck des Befehls, den man gerade tippt
+      if (con.sugg?.help && con.text) { y -= 26; this.text(con.sugg.help, x + 8, y + 18, { size: 14, weight: 600, color: 'rgba(255,211,61,0.85)' }); this.counts = this.counts ?? {}; this.counts.consoleHelp = con.sugg.help; }
       const items = con.sugg?.items ?? [];
       if (items.length) {
         const rh = 28, h = items.length * rh + 12;
@@ -178,7 +180,8 @@ export class Hud {
         items.forEach((it, i) => {
           const yy = y + 6 + i * rh;
           if (i === con.sel || (con.sel < 0 && i === 0)) { c.fillStyle = i === con.sel ? 'rgba(255,211,61,0.25)' : 'rgba(255,255,255,0.06)'; rr(c, x + 6, yy, w - 12, rh - 2, 6); c.fill(); }
-          this.text(it.label, x + 18, yy + 19, { size: 16, weight: i === con.sel ? 800 : 600, color: i === con.sel ? YELLOW : '#fff', shadow: false });
+          this.addHit({ kind: 'sugg', i, x: x + 6, y: yy, w: w - 12, h: rh - 2 }); // anklickbar
+          this.text(it.label, x + 18, yy + 19, { size: 16, weight: i === con.sel ? 800 : 600, color: i === con.sel ? YELLOW : it.hint === 'zuletzt' ? '#cfd8e6' : '#fff', shadow: false });
           if (it.hint) this.text(it.hint, x + w - 16, yy + 19, { size: 13, weight: 500, align: 'right', color: '#aaa', shadow: false });
         });
         this.counts = this.counts ?? {}; this.counts.suggestions = items.length;
@@ -436,7 +439,7 @@ export class Hud {
     }
     if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = 'Y: Aussteigen';
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
-    if (hint) this.prompt(hint, vw / 2, hintY);
+    if (hint && !g.console?.open) this.prompt(hint, vw / 2, hintY); // offene Befehlszeile verdeckt sonst den Hinweis
     if (mission.load > 0 && mission.state === 'toPickup') {
       const w = 300, x = vw / 2 - w / 2, y = vh - m.y - 92;
       c.fillStyle = 'rgba(0,0,0,0.6)'; rr(c, x, y, w, 14, 7); c.fill();

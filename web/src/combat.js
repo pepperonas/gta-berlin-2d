@@ -145,14 +145,23 @@ export function pickTarget(w, x, y) {
 
 // Was ein Linksklick zu Fuß bedeutet (Diablo-Schema), festgelegt beim Drücken und beim Halten beibehalten:
 //   'attack' – Person unter dem Zeiger: hinlaufen bis in Reichweite, angreifen
-//   'enter'  – heiles Auto unter dem Zeiger: hinlaufen und einsteigen (nie darauf schießen)
-//   'move'   – Boden oder Wrack: hinlaufen
-//   'force'  – mit Strg: am Platz angreifen, wohin gezeigt wird (auch Autos); obj = was unter dem Zeiger ist
-export function clickIntent(w, x, y, force = false) {
+//   'enter'    – heiles Auto, neben dem man steht (oder Doppelklick): hin, kurz an der Tür, einsteigen
+//   'approach' – heiles Auto weiter weg: nur hinlaufen und daneben stehen bleiben (einsteigen erst mit dem nächsten Klick,
+//                Doppelklick oder F) – ein Klick in Richtung Straße steigt so nie aus Versehen in ein geparktes Auto
+//   'move'     – Boden oder Wrack: hinlaufen
+//   'force'    – mit Strg: am Platz angreifen, wohin gezeigt wird (auch Autos); obj = was unter dem Zeiger ist
+// Auf Autos wird per Klick nie geschossen. opts.double: Doppelklick.
+export const CLICK = { nearCar: 30, door: 0.35, double: 0.35 }; // px über PLAYER.enterDist hinaus; s an der Tür; s Doppelklick
+export function clickIntent(w, x, y, force = false, opts = {}) {
   const t = pickTarget(w, x, y);
   if (force) return { kind: 'force', obj: t?.obj ?? null };
   if (!t) return { kind: 'move', obj: null };
-  if (w.cars.includes(t.obj)) return t.obj.wrecked ? { kind: 'move', obj: null } : { kind: 'enter', obj: t.obj };
+  if (w.cars.includes(t.obj)) {
+    const car = t.obj, p = w.player;
+    if (car.wrecked) return { kind: 'move', obj: null };
+    const near = Math.hypot(car.x - p.x, car.y - p.y) <= PLAYER.enterDist + CLICK.nearCar;
+    return { kind: near || opts.double ? 'enter' : 'approach', obj: car };
+  }
   return { kind: 'attack', obj: t.obj };
 }
 

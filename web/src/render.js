@@ -321,10 +321,11 @@ function drawCrosshair(ctx, pl) {
   ctx.stroke();
 }
 
-// Diablo-Schema: Rückmeldung zum Klick. hover (main.js, combat.js clickIntent) = was unter dem Zeiger liegt: Person rot
-// umkreist (Klick greift an), Auto gelb umrandet (Klick steigt ein). Dazu das laufende Klickziel: Wegziel als
-// pulsierender Ring am Boden, angegriffene Person mit festem rotem Ring, angesteuertes Auto umrandet.
+// Diablo-Schema: Rückmeldung zum Klick. hover (main.js, nach kurzem Verweilen) = was ein Klick jetzt täte: Person rot
+// umkreist (angreifen), Auto daneben gelb umrandet (einsteigen) – ruhig, ohne Animation. Die angegriffene Person und das
+// angesteuerte Auto behalten ihren Umriss. clickFx: einmaliger Ring am Klickziel (schrumpft in 0,4 s, dann weg).
 const MARK = { attack: '255,77,61', enter: '255,211,61', force: '255,211,61', move: '255,211,61' };
+export const CLICK_FX = 0.4; // s
 function markObj(ctx, o, rgb, alpha, width) {
   ctx.strokeStyle = `rgba(${rgb},${alpha})`; ctx.lineWidth = width;
   if (o.hw !== undefined) { // Auto: gedrehtes Rechteck mit etwas Luft
@@ -334,17 +335,17 @@ function markObj(ctx, o, rgb, alpha, width) {
     ctx.restore();
   } else { ctx.beginPath(); ctx.arc(o.x, o.y, 11, 0, Math.PI * 2); ctx.stroke(); }
 }
-function drawClickMarks(ctx, world, hover, t) {
+function drawClickMarks(ctx, world, hover, fx, nowMs) {
   const c = world.player.click;
   ctx.save();
-  if (hover?.obj && hover.obj !== c?.target && hover.obj !== c?.enter) markObj(ctx, hover.obj, MARK[hover.kind] ?? MARK.move, 0.75, 2);
-  if (c?.target) markObj(ctx, c.target, MARK.attack, 0.95, 3);
-  else if (c?.enter) markObj(ctx, c.enter, MARK.enter, 0.95, 3);
-  else if (c?.path?.length) {
-    const q = c.path[c.path.length - 1], k = (t * 1.6) % 1;
-    ctx.strokeStyle = `rgba(${MARK.move},${(0.9 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(q.x, q.y, 4 + 10 * k, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = `rgba(${MARK.move},0.8)`; ctx.beginPath(); ctx.arc(q.x, q.y, 2.5, 0, Math.PI * 2); ctx.fill();
+  if (hover?.obj && hover.obj !== c?.target && hover.obj !== c?.enter) markObj(ctx, hover.obj, MARK[hover.kind] ?? MARK.move, 0.6, 1.5);
+  if (c?.target) markObj(ctx, c.target, MARK.attack, 0.85, 2);
+  else if (c?.enter) markObj(ctx, c.enter, MARK.enter, 0.7, 2);
+  const age = fx ? (nowMs - fx.t0) / 1000 : Infinity;
+  if (age < CLICK_FX) {
+    const k = age / CLICK_FX;
+    ctx.strokeStyle = `rgba(${MARK.move},${(0.85 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(fx.x, fx.y, 14 - 10 * k, (14 - 10 * k) * 0.75, 0, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.restore();
 }
@@ -868,7 +869,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255,255,230,0.9)'; ctx.beginPath(); ctx.arc(2, 0, 2.5 * k, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
-    if (overlayMarkers && !pl.inCar && !pl.dead) { drawClickMarks(ctx, world, this.hover, t); if (this.crosshair !== false) drawCrosshair(ctx, pl); } // Diablo: nur mit Strg (main.js)
+    if (overlayMarkers && !pl.inCar && !pl.dead) { drawClickMarks(ctx, world, this.hover, this.clickFx, performance.now()); if (this.crosshair !== false) drawCrosshair(ctx, pl); } // Diablo: nur mit Strg (main.js)
     // 9a) Regen und Nebel (vor der Lichtkarte: nachts werden sie mit dunkel)
     this.stats.debris = wx ? drawStormDebris(ctx, v, wx, t, gust) : 0;
     this.stats.drops = wx ? drawRainLayers(ctx, v, wx, t, s, gust) : 0;

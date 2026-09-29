@@ -16,7 +16,7 @@ import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
 import { findFootPath } from './footpath.js';
-import { initCombat, updatePlayerCombat, clickIntent, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
+import { initCombat, updatePlayerCombat, clickIntent, CLICK, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
@@ -410,8 +410,8 @@ function spotFree(w, x, y, r, ignoreCar, lvl = 0) {
   return w.cars.every((c) => c === ignoreCar || !circleVsObb(x, y, r, c));
 }
 
-// only: genau dieses Auto (Klick-Steuerung), sonst das nächste in Reichweite
-function tryEnter(w, only = null) {
+// only: genau dieses Auto (Klick-Steuerung), sonst das nächste in Reichweite; quiet: Türgeräusch kam schon
+function tryEnter(w, only = null, { quiet = false } = {}) {
   const p = w.player;
   let best = null, bd = PLAYER.enterDist;
   for (const c of only ? [only] : w.cars) {
@@ -430,7 +430,7 @@ function tryEnter(w, only = null) {
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
   p.inCar = best.id;
   if (best.role !== 'player' && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id;
-  w.events.push({ type: 'door', x: best.x, y: best.y });
+  if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
   return true;
 }
 
@@ -489,18 +489,19 @@ function updateLevels(w) {
 // Diablo-Schema zu Fuß: was der Klick bedeutet, entscheidet allein der Moment des Drückens (combat.js clickIntent).
 // Gehalten bleibt es dabei: wer auf den Boden geklickt hat, läuft dem Zeiger nach und greift nie an, was er dabei
 // überstreicht; wer eine Person angeklickt hat, greift genau sie an, bis sie liegt (kein Weiterspringen auf die nächste);
-// ein angeklicktes Auto wird angesteuert und bestiegen. Nur Strg greift auf der Stelle an – auch Autos.
+// ein Auto weiter weg wird nur angesteuert (daneben stehen bleiben), eines direkt daneben (oder per Doppelklick) nach
+// einem kurzen Moment an der Tür bestiegen. Nur Strg greift auf der Stelle an – auch Autos.
 function clickControl(w, input, dt) {
   const p = w.player;
   if (Math.hypot(input.moveX, input.moveY) > 0.05) { p.click = null; return input; }
   const at = input.clickWorld;
   const walk = (to) => { const path = findFootPath(w, p, to, p.lvl ?? 0); return path && path.length > 1 ? { path, i: 1 } : null; };
   if (at && input.clickPressed) {
-    const it = clickIntent(w, at.x, at.y, !!input.clickForce);
+    const it = clickIntent(w, at.x, at.y, !!input.clickForce, { double: !!input.clickDouble });
     p.clickT = 0.15;
     if (it.kind === 'force') p.click = { force: true, x: at.x, y: at.y, obj: it.obj };
     else if (it.kind === 'attack') p.click = { target: it.obj };
-    else if (it.kind === 'enter') p.click = { enter: it.obj };
+    else if (it.kind === 'enter' || it.kind === 'approach') p.click = { enter: it.obj, approach: it.kind === 'approach' };
     else { const c = walk(at); p.click = c && { ...c, follow: true }; }
   } else if (at && input.clickHeld && p.click?.follow && (p.clickT = (p.clickT ?? 0) - dt) <= 0) {
     p.clickT = 0.15; // gehalten: dem Zeiger nachlaufen (Weg alle 0,15 s neu)
@@ -519,7 +520,13 @@ function clickControl(w, input, dt) {
     const car = c.enter;
     if (car.wrecked || !w.cars.includes(car) || car.id === p.inCar) { p.click = null; return input; }
     const dx = car.x - p.x, dy = car.y - p.y, d = Math.hypot(dx, dy);
-    if (d < PLAYER.enterDist - 2) { p.click = null; tryEnter(w, car); return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false }); }
+    if (d < PLAYER.enterDist - 2) {
+      if (c.approach) { p.click = null; p.angle = Math.atan2(dy, dx); return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false }); } // angekommen
+      // an der Tür: kurz stehen bleiben (Tür auf), dann einsteigen
+      if (c.doorT === undefined) { c.doorT = CLICK.door; p.angle = Math.atan2(dy, dx); w.events.push({ type: 'door', x: car.x, y: car.y }); }
+      if ((c.doorT -= dt) <= 0) { p.click = null; tryEnter(w, car, { quiet: true }); }
+      return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false });
+    }
     // Weg zum Auto (um Häuser herum), neu, wenn es weggefahren ist
     if (!c.path || Math.hypot(car.x - c.tx, car.y - c.ty) > 30) { const wk = walk(car); c.path = wk?.path ?? null; c.i = 1; c.tx = car.x; c.ty = car.y; }
     let q = c.path?.[c.i];

@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.37.0] – 2026-09-29
+
+### Geändert
+- **Ruhigere Maussteuerung (Diablo):** Kein pulsierender Ring mehr am Laufziel, nur ein kurzer Ring beim Klick. Zeiger
+  und Umriss wechseln nur noch, wenn ein Klick mehr als laufen täte (Person angreifen, Auto daneben einsteigen), und
+  erst, wenn der Zeiger kurz darauf ruht – kein Flackern mehr beim Überstreichen geparkter Autos.
+- **Einsteigen mit der Maus:** Ein Klick auf ein entferntes Auto läuft nur hin; eingestiegen wird mit einem weiteren
+  Klick, per Doppelklick oder F. An der Tür hält die Figur kurz an (Tür geht auf), statt sofort im Auto zu sitzen.
+- **Befehlszeile wie eine Befehlspalette:** Uhrzeit, Wetter und Orte ohne Befehlswort (`22:30`, `regen`,
+  `alexanderplatz`), Tippfehler werden verziehen, Enter nimmt bei unvollständiger Eingabe den besten Vorschlag, nach
+  Erfolg schließt sie (Umschalt+Enter lässt sie offen), Hilfezeile zum getippten Befehl, zuletzt benutzte Befehle
+  oben, Vorschläge per Maus wählbar, Esc leert zuerst, Strg/Alt+Rücktaste löscht ein Wort.
+
+### Behoben
+- Der Hinweis „Einsteigen“ lag über der offenen Befehlszeile.
+
 ## [0.36.0] – 2026-09-29
 
 ### Geändert
