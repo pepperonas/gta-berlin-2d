@@ -37,6 +37,19 @@ function paintSidewalk(g, rnd, size) {
   speckle(g, rnd, size, 380, ['rgba(255,255,255,0.09)', 'rgba(0,0,0,0.08)', 'rgba(60,50,40,0.06)'], 0.25, 0.75);
 }
 
+// Berliner Gehweg (Detailstufe zu Fuß): große Granitplatten in der Mitte, Mosaikpflaster zu beiden Seiten
+function paintGranite(g, rnd, size) {
+  g.fillStyle = '#b3b0a8'; g.fillRect(0, 0, size, size);
+  const n = 2, s = size / n;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const v = Math.round((rnd() - 0.5) * 16); g.fillStyle = `rgb(${179 + v},${176 + v},${168 + v})`; g.fillRect(i * s + 0.6, j * s + 0.6, s - 1.2, s - 1.2); }
+  speckle(g, rnd, size, 220, ['rgba(255,255,255,0.12)', 'rgba(0,0,0,0.1)'], 0.2, 0.6);
+}
+function paintMosaic(g, rnd, size) {
+  g.fillStyle = '#6e6c67'; g.fillRect(0, 0, size, size);
+  const s = size / 8;
+  for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { const v = Math.round((rnd() - 0.5) * 30); g.fillStyle = `rgb(${128 + v},${125 + v},${118 + v})`; g.fillRect(i * s + 0.35 + rnd() * 0.3, j * s + 0.35 + rnd() * 0.3, s - 0.8, s - 0.8); }
+}
+
 function paintAsphalt(g, rnd, size) {
   g.fillStyle = '#3b3e43'; g.fillRect(0, 0, size, size);
   speckle(g, rnd, size, 420, ['rgba(255,255,255,0.05)', 'rgba(0,0,0,0.12)', 'rgba(255,255,255,0.03)'], 0.25, 0.7);
@@ -95,6 +108,8 @@ function paintGravel(g, rnd, size) {
 // kind → [Kachelgröße (px), Seed, Maler]
 const DEFS = {
   sidewalk: [64, 11, paintSidewalk],
+  granite: [60, 23, paintGranite],
+  mosaic: [16, 24, paintMosaic],
   asphalt: [64, 12, paintAsphalt],
   cobble: [24, 13, paintCobble],
   grass: [96, 14, paintGrass('#5d9340', '#67a049', '#4f8237')],

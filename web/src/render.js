@@ -36,6 +36,7 @@ import { WEAPONS } from './combat.js';
 import { benchAngle } from './life.js';
 import { FURN_KIND } from './citycodes.js';
 
+const DETAIL_ZOOM = 1.7, CURB_GRANITE = '#cfccc3'; // Detailstufe zu Fuß: ab diesem Zoom, heller Granit-Bordstein
 const AREA_COLOR = {
   [AREA_KIND.rail]: '#7b756c', [AREA_KIND.plaza]: '#8e8b85', [AREA_KIND.allotments]: '#6c9851',
   [AREA_KIND.cemetery]: '#5b8a47', [AREA_KIND.grass]: '#5d9340', [AREA_KIND.pitch]: '#4d8c3c',
@@ -654,6 +655,10 @@ export class Renderer {
     const tramShapes = new Set();
     if (city.transit) for (const p of patternsNear(city.transit, v.x + v.w / 2, v.y + v.h / 2, Math.max(v.w, v.h) / 2 + 100)) if (p.mode === 'tram') tramShapes.add(p.shape);
     this.stats.tramShapes = tramShapes.size;
+    // Detailstufe zu Fuß (nah herangezoomt, hohe Qualität): Berliner Gehweg, Granit-Bordsteine, Baumscheiben
+    const detail = this.quality === 'high' && (cam.zoom ?? 1) >= DETAIL_ZOOM;
+    this.stats.detail = { sidewalks: 0, curbs: 0, treePits: 0 };
+    if (detail) this.drawTreePits(trees, city);
     this.stats.tracks = 0; this.stats.bridgeFills = 0; this.stats.puddles = 0;
     for (let li = 0; li < levels.length; li++) {
       const lvl = levels[li], up = lvl >= 1;
@@ -667,13 +672,14 @@ export class Renderer {
         if (snowD > 0.02) { const sp = snowPattern(ctx, snowD); if (sp) { ctx.fillStyle = sp; ctx.fill(pathOf(a), 'evenodd'); } }
       }
       if (!up) {
+        if (detail) this.drawBerlinSidewalks(E);
         // Wege, ebenerdige Gleise, dann Straßen: erst Bordstein, dann Asphalt; kleine Straßen zuerst
         ctx.strokeStyle = '#b9ab8e'; ctx.lineWidth = 18;
         for (const p of P) ctx.stroke(pathOf(p));
         this.snowOnPaths(P, snowD);
         this.drawTracks(rails.filter((r) => !r.bridge && lv(r) === lvl), false);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        for (const e of E) if (e.cls <= 10) { ctx.strokeStyle = CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); }
+        for (const e of E) if (e.cls <= 10) { ctx.strokeStyle = detail ? CURB_GRANITE : CURB; ctx.lineWidth = e.w + 5; ctx.stroke(pathOf(e)); if (detail) this.stats.detail.curbs++; }
         for (const e of E) if (e.cls <= 8) { ctx.strokeStyle = GUTTER; ctx.lineWidth = e.w + 1.4; ctx.stroke(pathOf(e)); }
         for (const j of J) { ctx.fillStyle = CURB; disc(j, j.r + 2.5); ctx.fillStyle = GUTTER; disc(j, j.r + 0.7); }
         for (const j of J) { ctx.fillStyle = j.cobble ? cobble : asphalt; disc(j, j.r); }
@@ -1168,6 +1174,31 @@ export class Renderer {
         ctx.fillStyle = '#e6c35a'; for (let k = 0; k < 4; k++) ctx.fillRect(-2 + (k % 2) * 2.5, -4 + k * 2.3, 1.4, 1.4);
         ctx.restore();
       }
+    }
+  }
+
+  // Berliner Gehweg entlang der Straßen: von außen nach innen gemalt (Mosaik, Granitband, Mosaik am Bordstein);
+  // Straße und Häuser kommen danach darüber, verdeckte Teile stören also nicht
+  drawBerlinSidewalks(edges) {
+    const ctx = this.ctx, mosaic = texture(ctx, 'mosaic') ?? '#7a7873', granite = texture(ctx, 'granite') ?? '#b3b0a8';
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    const list = edges.filter((e) => e.cls <= 8 && !e.bridge);
+    for (const e of list) { ctx.strokeStyle = mosaic; ctx.lineWidth = e.w + 70; ctx.stroke(pathOf(e)); }
+    for (const e of list) { ctx.strokeStyle = granite; ctx.lineWidth = e.w + 46; ctx.stroke(pathOf(e)); }
+    for (const e of list) { ctx.strokeStyle = mosaic; ctx.lineWidth = e.w + 16; ctx.stroke(pathOf(e)); }
+    ctx.lineCap = 'round';
+    this.stats.detail.sidewalks += list.length;
+  }
+
+  // Baumscheiben: offene Erde mit Granitrand um Straßenbäume (nicht im Grünen – dort nur nahe einer Straße)
+  drawTreePits(trees, city) {
+    const ctx = this.ctx;
+    for (const t of trees) {
+      const e = nearestEdge(city, t.x, t.y, 60);
+      if (!e || e.d > e.e.w / 2 + 50) continue;
+      ctx.fillStyle = '#9a968c'; ctx.fillRect(t.x - 9, t.y - 9, 18, 18);
+      ctx.fillStyle = '#4a3d2e'; ctx.fillRect(t.x - 7, t.y - 7, 14, 14);
+      this.stats.detail.treePits++;
     }
   }
 

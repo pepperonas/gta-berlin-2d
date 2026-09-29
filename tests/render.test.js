@@ -266,3 +266,19 @@ test('Tunnelansicht: der eigene Zug steht am Bahnhof neben einem Bahnsteig', asy
   const beside = r.platformAt.map((q) => { const dx = mid.x - q.x, dy = mid.y - q.y; return { along: Math.abs(dx * Math.cos(q.a) + dy * Math.sin(q.a)), lat: Math.abs(-dx * Math.sin(q.a) + dy * Math.cos(q.a)) }; });
   assert.ok(beside.some((b) => b.lat < 40 && b.along < half), JSON.stringify(beside.map((b) => [Math.round(b.along), Math.round(b.lat)])));
 });
+
+test('Detailstufe zu Fuß: Berliner Gehweg, Bordsteine, Baumscheiben nur bei nahem Zoom und hoher Qualität', async () => {
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
+  globalThis.OffscreenCanvas ??= class { getContext() { return new Proxy({}, { get: () => () => {} }); } };
+  const { Renderer } = await import('../web/src/render.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const w = createWorld({ city: realCity(), cars: 0, pedestrians: 0 });
+  w.camera.x = w.city.places.giver.x; w.camera.y = w.city.places.giver.y;
+  const r = new Renderer(recordingContext().ctx);
+  const at = (zoom, quality) => { w.camera.zoom = zoom; r.quality = quality; r.draw(w, 1280, 720, 1.2); return r.stats.detail; };
+  const near = at(2, 'high');
+  assert.ok(near.sidewalks > 0 && near.curbs > 0, JSON.stringify(near));
+  assert.ok(near.treePits >= 0);
+  assert.equal(at(1.3, 'high').sidewalks, 0, 'weiter weg: keine Detailstufe');
+  assert.equal(at(2, 'low').sidewalks, 0, 'niedrige Qualität: keine Detailstufe');
+});
