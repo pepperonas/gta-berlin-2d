@@ -393,20 +393,24 @@ test('Glätte: KI-Schlange hält an Rot mit Abstand, ohne aufzufahren', async ()
   assert.equal(ice.crashes, 0, 'niemand fährt auf'); assert.equal(ice.overlap, 0, 'keine Berührung');
 });
 
-test('Glätte: 3 min an einer engen Stelle – niemand steht über 90 s, kaum Zusammenstöße', async () => {
+test('Glätte und Schnee: 3 min an einer engen Stelle – niemand steht über 90 s, keine Zusammenstöße', async () => {
   const { speedOf } = await import('../web/src/car.js');
-  const p = city.places.giver, w = createWorld({ city, seed: 5 });
-  w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast';
-  w.camera.x = p.x; w.camera.y = p.y;
-  const still = new Map(); let crashes = 0, worst = 0;
-  for (let i = 0; i < 180 * 60; i++) {
-    updateWorld(w, idle(), 1 / 60); w.camera.x = p.x; w.camera.y = p.y;
-    crashes += w.events.filter((e) => e.type === 'crash').length;
-    if (i % 30) continue;
-    for (const c of w.cars) { if (c.driver !== 'npc') continue; const t = speedOf(c) < 5 ? (still.get(c.id) ?? 0) + 0.5 : 0; still.set(c.id, t); worst = Math.max(worst, t); }
+  const p = city.places.giver;
+  for (const kind of ['ice', 'snow']) {
+    const w = createWorld({ city, seed: 5 });
+    if (kind === 'ice') { w.wet = 1; w.ice = 1; w.forceTemp = -5; w.forceWeather = 'overcast'; }
+    else { w.snow = 1; w.forceTemp = -3; w.forceWeather = 'snow'; }
+    w.camera.x = p.x; w.camera.y = p.y;
+    const still = new Map(); let crashes = 0, worst = 0;
+    for (let i = 0; i < 180 * 60; i++) {
+      updateWorld(w, idle(), 1 / 60); w.camera.x = p.x; w.camera.y = p.y;
+      crashes += w.events.filter((e) => e.type === 'crash').length;
+      if (i % 30) continue;
+      for (const c of w.cars) { if (c.driver !== 'npc') continue; const t = speedOf(c) < 5 ? (still.get(c.id) ?? 0) + 0.5 : 0; still.set(c.id, t); worst = Math.max(worst, t); }
+    }
+    assert.ok(worst < 90, `${kind}: ein Auto stand ${worst} s am Stück`);
+    assert.equal(crashes, 0, `${kind}: ${crashes} Zusammenstöße in 3 min`);
   }
-  assert.ok(worst < 90, `ein Auto stand ${worst} s am Stück`);
-  assert.ok(crashes < 15, `${crashes} Zusammenstöße in 3 min`);
 });
 
 test('Glätte: freie Strecke – die KI fährt langsamer (Zieltempo), nicht nur wegen des schwächeren Anfahrens', async () => {
