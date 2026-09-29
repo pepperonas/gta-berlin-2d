@@ -747,25 +747,27 @@ export class Hud {
     if (ok) this.text('Fortschritt wird automatisch gespeichert.', vw / 2, 470, { size: 15, align: 'center', color: '#aaa', weight: 500 });
   }
 
-  drawControls() {
+  drawControls(g) {
     this.fillScreen('rgba(5,6,10,0.9)');
-    this.inFrame(() => this.controlsContent());
+    this.inFrame(() => this.controlsContent(g?.settings?.controls ?? 'diablo'));
   }
 
-  controlsContent() {
-    const c = this.ctx, vw = this.vw;
+  controlsContent(scheme = 'diablo') {
+    const c = this.ctx, vw = this.vw, d = scheme === 'diablo';
     this.text('STEUERUNG', vw / 2, 110, { size: 44, align: 'center', weight: 900, color: YELLOW });
+    this.text(`Zu Fuß am PC:  ‹ ${d ? 'Diablo (Klick)' : 'Klassisch (WASD)'} ›   ← / → wechselt`, vw / 2, 146, { size: 18, align: 'center', weight: 700, color: '#ddd' });
     const rows = [
-      ['Laufen / Lenken', 'Linker Stick', 'WASD / Pfeile'],
-      ['Sprinten (zu Fuß)', 'A halten / Stick voll', 'Umschalt'],
+      ['Laufen / Lenken', 'Linker Stick', d ? 'Linksklick (Boden) · WASD' : 'WASD / Pfeile'],
+      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Ziel) · Rechtsklick' : 'linke Maus · V'],
+      ['Sprinten · langsam gehen', 'A halten · Stick halb', d ? 'Leertaste · Alt' : 'Umschalt · Alt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
-      ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
+      ['Einsteigen / Aussteigen', 'Y', d ? 'F' : 'F / rechte Maus tippen'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
-      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
+      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', d ? 'Tab halten · 1–6 · Q' : 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
-      ['Hupe', 'X', 'H'],
+      ['Zoom (zu Fuß) · Hupe', '– · X', d ? 'Mausrad · H' : '– · H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],
       ['Pause', 'Menü-Taste', 'Esc / P'],
       ['Menüs · Stadtplan', 'Steuerkreuz, A / B', 'Maus: zeigen + klicken'],
@@ -773,8 +775,8 @@ export class Hud {
     const x0 = vw / 2 - 460;
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
     this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
-    // Reihenhöhe 34 (statt 40): 13 Zeilen enden bei y=618/Band bis 630 – Luft zur Fußzeile bleibt (Fuß-Klickfläche beginnt bei 654).
-    const rowH = 34;
+    // Reihenhöhe 31: 14 Zeilen enden bei y=613 – Luft zur Fußzeile bleibt (Fuß-Klickfläche beginnt bei 654).
+    const rowH = 31;
     rows.forEach(([a, b, k], i) => {
       const y = 210 + i * rowH;
       if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - (rowH - 12), 920, rowH); }

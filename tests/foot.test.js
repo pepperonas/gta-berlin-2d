@@ -121,3 +121,25 @@ test('Klick auf eine Person: hinlaufen bis in Reichweite, dann angreifen; Shift-
   for (let i = 0; i < 20; i++) { updateWorld(w2, { ...idle(), ...click(at, { clickForce: true, clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s2 += w2.events.filter((e) => e.type === 'shot').length; }
   assert.ok(s2 >= 1 && Math.abs(w2.player.x - x) < 0.5, 'steht und schießt');
 });
+
+test('Steuerschema: Standard Diablo, im Steuerungsbildschirm mit ←/→ umschaltbar und gespeichert; Tabelle zeigt die Belegung', async () => {
+  const { createGame, updateGame } = await import('../web/src/game.js');
+  const { memoryStorage } = await import('../web/src/save.js');
+  const { Hud } = await import('../web/src/hud.js');
+  const storage = memoryStorage();
+  const g = createGame({ storage, city });
+  assert.equal(g.settings.controls, 'diablo');
+  g.screen = 'controls';
+  updateGame(g, { ...idle(), menuRight: true }, 1 / 60);
+  assert.equal(g.settings.controls, 'classic');
+  assert.equal(storage.getItem('gta-controls'), 'classic');
+  assert.equal(createGame({ storage, city }).settings.controls, 'classic', 'gemerkt');
+  updateGame(g, { ...idle(), menuLeft: true }, 1 / 60);
+  assert.equal(g.settings.controls, 'diablo');
+  const texts = [], noop = () => {};
+  const ctx = new Proxy({ measureText: (t) => ({ width: String(t).length * 11 }), createLinearGradient: () => ({ addColorStop: noop }), fillText: (t) => texts.push(String(t)) }, { get: (o, k) => (k in o ? o[k] : noop), set: (o, k, v) => { o[k] = v; return true; } });
+  const hud = new Hud(ctx); hud.begin(1280, 720); hud.drawControls(g);
+  assert.ok(texts.some((t) => /Diablo/.test(t)), 'Schema angezeigt');
+  assert.ok(texts.some((t) => /Linksklick/.test(t)), 'Klick-Belegung');
+  assert.ok(texts.some((t) => /Tab halten/.test(t)), 'Waffenrad auf Tab');
+});

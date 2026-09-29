@@ -32,6 +32,8 @@ export function menuInput(menu, input) {
 // city: dekodierte Karte; im Browser kommt sie asynchron nach (setCity), bis dahin zeigt der Titel „Lade Stadt …“.
 export function createGame({ storage, canQuit = false, seed = 1989, city = null } = {}) {
   const g = { screen: 'title', world: null, storage, canQuit, seed, city, toast: null, returnTo: 'title', events: [], quitRequested: false, showBigMap: false, teleport: null,
+    // Steuerschema zu Fuß am PC: 'diablo' (Klick, Standard) oder 'classic' (WASD + Maus zielt), im Browser gemerkt
+    settings: { controls: storage?.getItem?.('gta-controls') === 'classic' ? 'classic' : 'diablo' },
     console: createConsole(), debug: { fps: false, levels: false, silhouettes: true, quality: null },
     // Statistik: dieses Spiel und über alle Spiele (main.js lädt/speichert sie in IndexedDB); savedGame = Stand des
     // gespeicherten Spiels (für „Fortsetzen“), statQueue = Ereignisse außerhalb der Simulation (Teleport, Cheats)
@@ -156,6 +158,11 @@ export function updateGame(g, input, dt) {
       break;
     }
     case 'controls': case 'stats':
+      if (g.screen === 'controls' && (input.menuLeft || input.menuRight)) {
+        g.settings.controls = g.settings.controls === 'diablo' ? 'classic' : 'diablo';
+        try { g.storage?.setItem?.('gta-controls', g.settings.controls); } catch { /* ohne Speicher: nur für diese Sitzung */ }
+        ev.push({ type: 'ui-move' });
+      }
       if (input.back || input.confirm || (g.screen === 'stats' && input.pause)) { g.screen = g.returnTo; ev.push({ type: 'ui-back' }); }
       break;
     case 'paused': {
