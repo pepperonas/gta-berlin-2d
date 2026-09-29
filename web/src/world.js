@@ -589,12 +589,11 @@ function applyWeather(w, c, dt) {
     const ca = Math.cos(c.angle), sa = Math.sin(c.angle), fx = c.hw * 0.7, fy = c.hh * 0.8;
     for (const s of [-1, 1]) { p = puddleAt(w, c.x + ca * fx - sa * fy * s, c.y + sa * fx + ca * fy * s, lvl); if (p) break; }
   }
-  // einmal je Pfütze: das Gieren kann das Auto nach Ablauf von AQUA.time noch in derselben Pfütze halten
-  if (p && p !== c._aquaP && !(c.aqua > 0)) {
+  // nicht erneut, solange es noch schwimmt (eine Pfütze ist durchfahren, bevor AQUA.time abläuft)
+  if (p && !(c.aqua > 0)) {
     c.aqua = AQUA.time; c.aquaYaw = aquaYaw(p); // Gieren, solange es schwimmt (car.js)
     w.events.push({ type: 'aquaplane', x: c.x, y: c.y, carId: c.id, player: c.id === w.player.inCar });
   }
-  if (p) c._aquaP = p; else if (!(c.aqua > 0)) c._aquaP = null;
   const g = gustPush(w, c, lvl);
   if (g) { c.vx += g.ax * dt; c.vy += g.ay * dt; }
 }
