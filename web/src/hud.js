@@ -758,13 +758,13 @@ export class Hud {
     this.text(`Zu Fuß am PC:  ‹ ${d ? 'Diablo (Klick)' : 'Klassisch (WASD)'} ›   ← / → wechselt`, vw / 2, 146, { size: 18, align: 'center', weight: 700, color: '#ddd' });
     const rows = [
       ['Laufen / Lenken', 'Linker Stick', d ? 'Linksklick (Boden) · WASD' : 'WASD / Pfeile'],
-      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Ziel) · Rechtsklick' : 'linke Maus · V'],
-      ['Sprinten · langsam gehen', 'A halten · Stick halb', d ? 'Leertaste · Alt' : 'Umschalt · Alt'],
+      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Ziel) · Strg · rechte Maus tippen' : 'linke Maus · V'],
+      ['Sprinten · langsam gehen', 'A halten · Stick halb', 'Umschalt · Alt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', d ? 'F' : 'F / rechte Maus tippen'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
-      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', d ? 'Tab halten · 1–6 · Q' : 'rechte Maus halten'],
+      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
       ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Zoom (zu Fuß) · Hupe', '– · X', d ? 'Mausrad · H' : '– · H'],

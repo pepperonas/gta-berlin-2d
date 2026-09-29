@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.32.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.32.1** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -170,8 +170,8 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 Zu Fuß am PC gibt es zwei Schemata; gewählt wird im Menü „Steuerung“ mit ← / → (gespeichert):
 
 - **Diablo (Standard):** linke Maustaste auf den Boden läuft dorthin (halten = folgen, Wegfindung um Häuser und
-  Hindernisse), auf eine Person oder ein Auto greift an (läuft erst in Reichweite), Umschalt + linke Maustaste greift
-  auf der Stelle an, rechte Maustaste tritt, Tab halten öffnet das Waffenrad, Mausrad zoomt (1,5–2,6), Leertaste
+  Hindernisse), auf eine Person oder ein Auto greift an (läuft erst in Reichweite), Strg greift auf der Stelle an,
+  rechte Maustaste tippen tritt, rechte Maustaste halten öffnet das Waffenrad, Mausrad zoomt (1,5–2,6), Umschalt
   sprintet, Alt geht langsam. WASD läuft weiterhin und bricht einen Klick ab. Im Auto gilt die normale Steuerung.
 - **Klassisch:** wie in der Tabelle unten (WASD laufen, Maus zielen, linke Maustaste schießen, rechte Maustaste
   Waffenrad/Einsteigen).

@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.32.1] – 2026-09-29
+
+### Geändert
+- Diablo-Steuerung: Umschalt sprintet (statt Leertaste), rechte Maustaste halten öffnet das Waffenrad (statt Tab),
+  rechte Maustaste tippen tritt; am Platz angreifen jetzt mit Strg (statt Umschalt + Klick).
+
 ## [0.32.0] – 2026-09-29
 
 ### Neu

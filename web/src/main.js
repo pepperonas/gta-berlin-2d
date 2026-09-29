@@ -116,12 +116,11 @@ addEventListener('keydown', (e) => {
     const d = /^Digit([1-9])$/.exec(e.code);
     if (d) { wheelResult(wheel.choose(+d[1] - 1)); return; }
   }
-  if (e.code === 'Tab' && !e.repeat && diabloOnFoot()) wheelResult(tabBtn.press(performance.now() / 1000, pointer.vx, pointer.vy), tabBtn); // Waffenrad halten
   keys.add(e.code); latched.add(e.code);
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'AltLeft', 'AltRight'].includes(e.code)) e.preventDefault();
 });
-addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'Tab') wheelResult(tabBtn.release(performance.now() / 1000), tabBtn); });
-addEventListener('blur', () => { keys.clear(); wheelResult(rightBtn.cancel()); wheelResult(padBtn.cancel()); wheelResult(tabBtn.cancel(), tabBtn); pointer.lmb = false; }); // kein hängendes Rad nach Fensterwechsel
+addEventListener('keyup', (e) => { keys.delete(e.code); });
+addEventListener('blur', () => { keys.clear(); wheelResult(rightBtn.cancel()); wheelResult(padBtn.cancel()); pointer.lmb = false; }); // kein hängendes Rad nach Fensterwechsel
 document.addEventListener('visibilitychange', () => { if (document.hidden) { wheelResult(rightBtn.cancel()); wheelResult(padBtn.cancel()); } });
 addEventListener('pointerdown', () => sound.unlock());
 
@@ -135,15 +134,15 @@ const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: nul
   lmb: false, lmbPressed: false, kick: false }; // lmb/kick: Diablo-Schema zu Fuß (Klick = laufen/angreifen, rechts = Tritt)
 // Rechte Maustaste: tippen = ein-/aussteigen, halten = Waffenrad (weaponwheel.js); das Kontextmenü des Browsers bleibt aus
 // Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt (padBtn).
-// Diablo-Schema zu Fuß: Tab halten = Waffenrad (tabBtn; Tippen tut nichts), rechte Maus = Tritt
-const rightBtn = createRightButton(), padBtn = createRightButton(), tabBtn = createRightButton();
-const openWheel = () => (rightBtn.open ? rightBtn : padBtn.open ? padBtn : tabBtn.open ? tabBtn : null);
+// Diablo-Schema zu Fuß: rechte Maus tippen = Tritt (statt Einsteigen), halten = Waffenrad wie gehabt
+const rightBtn = createRightButton(), padBtn = createRightButton();
+const openWheel = () => (rightBtn.open ? rightBtn : padBtn.open ? padBtn : null);
 addEventListener('contextmenu', (e) => e.preventDefault());
 // Zielpunkt beim Öffnen merken: nach der Wahl zielt die Figur weiter dorthin, bis die Maus wieder bewegt wird –
 // sonst risse sie herum, weil der Zeiger beim Auswählen weitergewandert ist
 let aimLock = null;
 const wheelResult = (r, btn = rightBtn) => {
-  if (r.tap) { if (btn === padBtn) pointer.prevWeapon = true; else if (btn === rightBtn) pointer.enterExit = true; }
+  if (r.tap) { if (btn === padBtn) pointer.prevWeapon = true; else if (btn === rightBtn) { if (diabloOnFoot()) pointer.kick = true; else pointer.enterExit = true; } }
   if (r.pick !== undefined) { pointer.slot = r.pick + 1; sound.play('weapon'); }
   if (r.opened) { sound.play('ui-move'); aimLock = pointer.vx >= 0 ? { vx: pointer.vx, vy: pointer.vy, at: null } : null; pointer.fire = false; }
   if (r.closed) { if (aimLock) aimLock.at = { vx: pointer.vx, vy: pointer.vy }; if (r.cancelled) sound.play('ui-back'); }
@@ -163,8 +162,8 @@ canvas.addEventListener('pointermove', (e) => {
   const [vx, vy] = toHud(e);
   pointer.vx = vx; pointer.vy = vy; pointer.moved = performance.now();
   wheelResult(rightBtn.sync(performance.now() / 1000, (e.buttons & 2) !== 0)); // Loslassen verpasst → jetzt entscheiden
-  rightBtn.move(vx, vy); tabBtn.move(vx, vy);
-  if (rightBtn.open || tabBtn.open) return; // Waffenrad: die Bewegung wählt
+  rightBtn.move(vx, vy);
+  if (rightBtn.open) return; // Waffenrad: die Bewegung wählt
   if (aimLock?.at && Math.hypot(vx - aimLock.at.vx, vy - aimLock.at.vy) > 12) aimLock = null; // wieder frei zielen
   input.lastDevice = 'keyboard';
   const d = pointer.drag;
@@ -177,7 +176,6 @@ canvas.addEventListener('pointerleave', () => { pointer.vx = pointer.vy = -1; })
 // pointerdown/pointerup – wer beim Schießen (links gedrückt) rechts drückt, bekam sonst kein Rad und kein Loslassen.
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 2 || !hud.s || game.screen !== 'playing' || !game.world || game.showBigMap || game.teleport || game.resultMenu || game.console.open) return;
-  if (diabloOnFoot()) { pointer.kick = true; return; } // Diablo: rechts = Tritt
   const [vx, vy] = toHud(e);
   rightBtn.press(performance.now() / 1000, vx, vy);
 });
@@ -234,12 +232,11 @@ function applyPointer(inp) {
     inp.walkSlow = keys.has('AltLeft') || keys.has('AltRight');
     if (game.world.footZoom === undefined) { const z = +(localStorage.getItem?.('gta-foot-zoom') ?? NaN); if (z > 0) setFootZoom(game.world, z); }
     if (game.settings.controls === 'diablo') {
-      // Diablo: Klick = laufen/angreifen (die Simulation entscheidet, world.js clickControl), Shift = am Platz angreifen,
-      // Leertaste = sprinten (Umschalt ist hier der Angriffs-Modifikator), rechts = Tritt
+      // Diablo: Klick = laufen/angreifen (die Simulation entscheidet, world.js clickControl), Strg (+ Klick) = am Platz
+      // angreifen, Umschalt = sprinten (wie klassisch), rechte Maus tippen = Tritt, halten = Waffenrad
       const at = aimLock ? currentAim(aimLock.vx, aimLock.vy) : currentAim();
       inp.clickWorld = at; inp.clickHeld = pointer.lmb; inp.clickPressed = pointer.lmbPressed;
-      inp.clickForce = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      inp.sprint = keys.has('Space') || inp.sprint && input.lastDevice !== 'keyboard';
+      inp.clickForce = keys.has('ControlLeft') || keys.has('ControlRight');
       if (pointer.kick) { inp.kick = true; pointer.kick = false; }
       if (at) inp.aimWorld = at;
     }

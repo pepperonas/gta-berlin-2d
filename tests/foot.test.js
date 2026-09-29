@@ -141,5 +141,7 @@ test('Steuerschema: Standard Diablo, im Steuerungsbildschirm mit ←/→ umschal
   const hud = new Hud(ctx); hud.begin(1280, 720); hud.drawControls(g);
   assert.ok(texts.some((t) => /Diablo/.test(t)), 'Schema angezeigt');
   assert.ok(texts.some((t) => /Linksklick/.test(t)), 'Klick-Belegung');
-  assert.ok(texts.some((t) => /Tab halten/.test(t)), 'Waffenrad auf Tab');
+  assert.ok(texts.some((t) => /rechte Maus halten/.test(t)) && !texts.some((t) => /Tab halten/.test(t)), 'Waffenrad auf rechter Maus');
+  assert.ok(texts.some((t) => /^Umschalt · Alt$/.test(t)), 'Sprint auf Umschalt');
+  assert.ok(texts.some((t) => /rechte Maus tippen/.test(t)), 'Tritt auf rechte Maus tippen');
 });

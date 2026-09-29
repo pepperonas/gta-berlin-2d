@@ -186,7 +186,7 @@ change in `web/`.
   `gta-controls`, toggled with ←/→ on the controls screen). Diablo input fields `clickWorld/clickPressed/clickHeld/
   clickForce/walkSlow` (see `idle.js`, set by `main.js applyPointer`); `world.js clickControl` turns them into the
   normal inputs before `updatePlayerOnFoot` (path via pure `footpath.js findFootPath`, A* on 8 px cells; attack via
-  `combat.js pickTarget`; WASD cancels). Speeds `PLAYER.walk/jog/sprint` + `STAMINA`; foot zoom `FOOT_ZOOM`/
+  `combat.js pickTarget`; WASD cancels; Shift = sprint, Ctrl = `clickForce`, right-button tap = kick, hold = wheel). Speeds `PLAYER.walk/jog/sprint` + `STAMINA`; foot zoom `FOOT_ZOOM`/
   `setFootZoom` (`w.footZoom`, localStorage `gta-foot-zoom`); render detail level (`DETAIL_ZOOM`, `stats.detail`) only
   at quality high. Mouse aim snaps only via `pickTarget` under the cursor, spread × `spreadFactor(p)`; gamepad keeps
   `aimAssist`. Trams give up yielding after `TRAM_PATIENCE` (20 s) against a strictly persisting obstacle.
