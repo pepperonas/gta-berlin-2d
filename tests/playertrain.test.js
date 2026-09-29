@@ -163,3 +163,15 @@ test('Zugführer auf der Hochbahn: aussteigen nur am Bahnhof, nicht zwischen zwe
   assert.equal(w.player.ride?.kind, 'driver', 'bleibt im Führerstand');
   assert.match(w.notice?.text ?? '', /Bahnhof/);
 });
+
+test('Haftung des eigenen Zugs: oberirdisch nass/Frost geringer, im Tunnel immer 1', async () => {
+  const { trainAdhesion } = await import('../web/src/playertrain.js');
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  w.wet = 0; w.ice = 0; assert.equal(trainAdhesion(w, w.playerTrain), 1);
+  w.wet = 1; assert.equal(trainAdhesion(w, w.playerTrain), 0.75);
+  w.ice = 1; assert.equal(trainAdhesion(w, w.playerTrain), 0.6);
+  const u8 = tr.patterns.filter((q) => q.name === 'U8' && q.mode === 'ubahn').sort((a, b) => b.stops.length - a.stops.length)[0];
+  const i = u8.stopNames.findIndex((n) => n.includes('Kottbusser Tor'));
+  assert.equal(trainAdhesion(w, { pid: u8.id, s: u8.stops[i] }), 1, 'unter Tage trocken');
+});

@@ -9,18 +9,18 @@ export function createDrive(mode, v = 0) { return { mode, v, doors: 'closed', do
 
 export function stepDrive(d, input, dt) {
   if (dt <= 0) return d; // kein Zeitschritt: nichts zu integrieren (sonst Division durch 0 im Bremsprotokoll)
-  const k = TRAIN_DRIVE[d.mode], v0 = d.v;
+  const k = TRAIN_DRIVE[d.mode], v0 = d.v, adh = input.adhesion ?? 1; // Schienenhaftung (Wetter, traction.js)
   let a;
   if (d.doors !== 'closed') { d.v = 0; d.doorT += dt; return d; }
-  if (input.emergency) a = -k.emergency;
-  else if (input.brake > 0) a = -k.brake * input.brake;
-  else if (input.throttle > 0) a = k.acc * input.throttle * (d.v < k.vmax * 0.4 ? 1 : Math.max(0, (k.vmax - d.v) / (k.vmax * 0.6)));
+  if (input.emergency) a = -k.emergency * adh;
+  else if (input.brake > 0) a = -k.brake * input.brake * adh;
+  else if (input.throttle > 0) a = k.acc * adh * input.throttle * (d.v < k.vmax * 0.4 ? 1 : Math.max(0, (k.vmax - d.v) / (k.vmax * 0.6)));
   else a = -TRAIN_DRIVE.roll;
   let v = Math.max(0, Math.min(k.vmax, d.v + a * dt));
   // Zwangsbremsung: nie weiter als limit (Hindernis voraus, Endhalt)
   const lim = input.limit ?? Infinity;
   if (lim < Infinity) {
-    const vAllowed = Math.sqrt(Math.max(0, 2 * k.emergency * Math.max(0, lim - v * dt)));
+    const vAllowed = Math.sqrt(Math.max(0, 2 * k.emergency * adh * Math.max(0, lim - v * dt)));
     if (v > vAllowed) v = Math.max(0, Math.min(v, vAllowed));
     if (lim <= 1) v = 0;
   }
@@ -28,7 +28,7 @@ export function stepDrive(d, input, dt) {
   // Auf physikalisch Erreichbares gedeckelt: der schließende „lim<=1 → v=0"-Frame kann in einem Schritt einen
   // Rest-v auf 0 zwingen, was rechnerisch weit über der Notbremsverzögerung läge – ohne Deckel würde maxDecel()
   // das für 8 s als harte Bremsung werten, obwohl der Zug sauber im Rahmen der Notbremsung ausgerollt ist.
-  const decel = Math.min(k.emergency, Math.max(0, (v0 - v) / dt));
+  const decel = Math.min(k.emergency * adh, Math.max(0, (v0 - v) / dt));
   d.decel.push([dt, decel]);
   let tsum = 0; for (let i = d.decel.length - 1; i >= 0; i--) { tsum += d.decel[i][0]; if (tsum > 8) { d.decel.splice(0, i); break; } }
   d.stopped = v < TRAIN_DRIVE.stillV;

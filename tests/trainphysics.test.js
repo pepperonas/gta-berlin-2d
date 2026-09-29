@@ -83,3 +83,20 @@ test('stepDrive: dt ≤ 0 ist folgenlos', () => {
   assert.equal(JSON.stringify(d), snap, 'dt<0 ändert nichts');
   assert.ok(d.decel.every(([, x]) => Number.isFinite(x)), 'kein NaN/Infinity im Bremsprotokoll');
 });
+
+test('Haftung: nasse Schienen verlängern den Bremsweg, Zwangsbremsung bleibt unter der verringerten Kurve', () => {
+  const stop = (adhesion) => { const d = createDrive('sbahn', 100 / 0.36); let s = 0; for (let i = 0; i < 60 * 60 && d.v > 0; i++) { stepDrive(d, { brake: 1, limit: Infinity, adhesion }, 1 / 60); s += d.v / 60; } return s; };
+  assert.ok(Math.abs(stop(0.75) / stop(1) - 1 / 0.75) < 0.05, `nass ${(stop(0.75) / stop(1)).toFixed(2)}`);
+  assert.equal(stop(undefined), stop(1), 'ohne Angabe wie trocken');
+  const k = TRAIN_DRIVE.sbahn, adh = 0.6, dist = brakeDistance(k.vmax, k.emergency * adh) + 300, d = createDrive('sbahn', k.vmax);
+  let s = 0;
+  for (let i = 0; i < 60 * 90 && (d.v > 0 || i < 5); i++) {
+    const lim = dist - s; stepDrive(d, { throttle: 1, limit: lim, adhesion: adh }, 1 / 60);
+    const vAllowed = Math.sqrt(Math.max(0, 2 * k.emergency * adh * Math.max(0, lim - d.v / 60)));
+    assert.ok(d.v <= vAllowed + 0.5, `v ${d.v.toFixed(1)} über ${vAllowed.toFixed(1)}`);
+    s += d.v / 60;
+  }
+  assert.equal(d.v, 0); assert.ok(s <= dist, 'hält vor dem Hindernis');
+  const acc = (adhesion) => { const q = createDrive('ubahn', 0); for (let i = 0; i < 120; i++) stepDrive(q, { throttle: 1, limit: Infinity, adhesion }, 1 / 60); return q.v; };
+  assert.ok(acc(0.6) < acc(1) * 0.7, 'Räder drehen durch: weniger Zugkraft');
+});

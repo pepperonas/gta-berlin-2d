@@ -7,6 +7,8 @@ import { TRAIN_DRIVE } from './config.js';
 import { hash01 } from './map.js';
 import { RIDE, vehicleState, alightSpot, stationExit, elevated } from './ride.js';
 import { obstacleAt } from './transitlive.js';
+import { roadCondition, adhesionOf } from './traction.js';
+import { undergroundAtS, railAt } from './tunnel.js';
 
 const trainLen = (mode) => { const k = TRAIN[mode]; return k.cars * k.carL + (k.cars - 1) * k.gap; };
 const SAFE = 80; // px Abstand zum Zug voraus
@@ -62,6 +64,14 @@ export function trainAhead(w, t) {
   return free;
 }
 
+// Schienenhaftung an der Zugspitze: oberirdisch aus dem Wetter (traction.js), im Tunnel immer trocken
+export function trainAdhesion(w, t) {
+  const p = w.city.transit.patterns[t.pid];
+  if (undergroundAtS(w.city, p, t.s)) return 1;
+  const h = pointOn(p, t.s), lvl = p.mode === 'tram' ? 0 : railAt(w.city, h.x, h.y)?.lvl ?? 0;
+  return adhesionOf(roadCondition(w, h.x, h.y, lvl));
+}
+
 export function updatePlayerTrain(w, input, dt) {
   const t = w.playerTrain;
   if (!t) return;
@@ -69,7 +79,8 @@ export function updatePlayerTrain(w, input, dt) {
   const endFree = Math.max(0, p.stops[p.stops.length - 1] - t.s);
   const aheadFree = trainAhead(w, t);
   const limit = Math.min(endFree, aheadFree, p.mode === 'tram' ? tramFree(w, p, t.s) : Infinity);
-  const inp = driving ? { throttle: input.throttle, brake: input.brake, emergency: !!input.handbrake, limit } : { brake: 1, limit };
+  const adhesion = trainAdhesion(w, t);
+  const inp = driving ? { throttle: input.throttle, brake: input.brake, emergency: !!input.handbrake, limit, adhesion } : { brake: 1, limit, adhesion };
   const wasBlocked = t.blocked;
   stepDrive(t.drive, inp, dt);
   t.blocked = aheadFree < 400 && t.drive.v < 5;
