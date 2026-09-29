@@ -226,3 +226,43 @@ test('Fahrgast: der Spieler wird nicht als Person gezeichnet (er sitzt im Wagen)
   const movers2 = r.collectMovers(w, { x: w.player.x - 800, y: w.player.y - 450, w: 1600, h: 900 }, null, { sun: null, dark: 0 }, 0, [], null);
   assert.equal(movers2.filter((m) => m.o === w.player).length, 1, 'zu Fuß wieder gezeichnet');
 });
+
+test('Tunnelansicht: jeder Bahnhof einmal beschriftet, ein Bahnsteig je Fahrtrichtung, ohne „(Berlin)“', async () => {
+  const { drawTunnels } = await import('../web/src/tunnelview.js');
+  const { w, at } = await u8RideWorld();
+  const { ctx } = recordingContext();
+  const labels = [];
+  ctx.fillText = (s) => labels.push(String(s));
+  const r = drawTunnels(ctx, w, { x: at.x - 800, y: at.y - 450, w: 1600, h: 900 }, 0, 1);
+  assert.ok(labels.length >= 1, 'Bahnhof beschriftet');
+  assert.equal(new Set(labels).size, labels.length, `doppelt: ${labels.join(' | ')}`);
+  // je Fahrtrichtung ein Bahnsteig (Hin- und Rückrichtung liegen in eigenen Röhren), Linienvarianten zusammengefasst
+  assert.ok(r.platforms >= labels.length && r.platforms <= 2 * labels.length, `${r.platforms} Bahnsteige für ${labels.length} Bahnhöfe`);
+  assert.ok(labels.every((s) => !s.includes('(')), labels.join(' | '));
+});
+
+test('Tunnelansicht: Bahnhofsnamen kommen zuletzt (keine Röhre oder kein Zug darüber)', async () => {
+  const { drawTunnels } = await import('../web/src/tunnelview.js');
+  const { w, at } = await u8RideWorld();
+  const { ctx } = recordingContext();
+  const ops = [];
+  ctx.fillText = () => ops.push('text');
+  ctx.stroke = () => ops.push('stroke');
+  ctx.fillRect = () => ops.push('rect');
+  drawTunnels(ctx, w, { x: at.x - 800, y: at.y - 450, w: 1600, h: 900 }, 0, 1);
+  const firstText = ops.indexOf('text'), lastOther = Math.max(ops.lastIndexOf('stroke'), ops.lastIndexOf('rect'));
+  assert.ok(firstText > lastOther, `Name bei ${firstText}, danach noch gezeichnet bis ${lastOther}`);
+});
+
+test('Tunnelansicht: der eigene Zug steht am Bahnhof neben einem Bahnsteig', async () => {
+  const { drawTunnels } = await import('../web/src/tunnelview.js');
+  const { vehicleState } = await import('../web/src/ride.js');
+  const { w, at } = await u8RideWorld();
+  const st = vehicleState(w, w.player.ride.ref), mid = st.cars[Math.floor(st.cars.length / 2)];
+  const r = drawTunnels(recordingContext().ctx, w, { x: at.x - 800, y: at.y - 450, w: 1600, h: 900 }, 0, 1);
+  // Bahnsteig-Mittelpunkte meldet drawTunnels mit: ein Bahnsteig, dessen Achse der mittlere Wagen quer auf < 40 px
+  // trifft und der ihn längs abdeckt (halbe Zuglänge), steht neben dem Zug
+  const half = (st.cars.length * st.cars[0].L) / 2;
+  const beside = r.platformAt.map((q) => { const dx = mid.x - q.x, dy = mid.y - q.y; return { along: Math.abs(dx * Math.cos(q.a) + dy * Math.sin(q.a)), lat: Math.abs(-dx * Math.sin(q.a) + dy * Math.cos(q.a)) }; });
+  assert.ok(beside.some((b) => b.lat < 40 && b.along < half), JSON.stringify(beside.map((b) => [Math.round(b.along), Math.round(b.lat)])));
+});

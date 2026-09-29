@@ -403,7 +403,7 @@ export class Hud {
     }
 
     // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte
-    if (!car) this.drawWeaponPanel(world.player);
+    if (!car && !world.player.ride) this.drawWeaponPanel(world.player); // im Zug keine Waffe
     this.drawHurt(world.player);
 
     // Richtungspfeil zum Ziel (am Bildschirmrand, wenn außer Sicht)

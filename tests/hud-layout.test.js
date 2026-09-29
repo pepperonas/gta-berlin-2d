@@ -133,6 +133,7 @@ test('Fahrgast-/Fahrerleiste: im Bild, ohne NaN, überlappt das Auftragsfeld nic
       assert.ok(texts.every((q) => !q.t.includes('NaN') && !q.t.includes('undefined') && Number.isFinite(q.x) && Number.isFinite(q.y)), `${kind}: ${JSON.stringify(texts.filter((q) => /NaN|undefined/.test(q.t) || !Number.isFinite(q.x) || !Number.isFinite(q.y)))}`);
       assert.ok(texts.some((q) => q.t === 'M10'), 'Linie');
       assert.ok(texts.some((q) => /Halt/.test(q.t)), 'nächster Halt');
+      assert.equal(L.weapon, undefined, `${kind} ${W}×${H}: kein Waffenfeld während der Fahrt`);
       if (kind === 'driver') assert.ok(texts.some((q) => /^\d+ km\/h$/.test(q.t)) && texts.some((q) => /Gas|Türen|Zug voraus/.test(q.t)), 'Tacho und Bedienhinweis');
     }
   }
