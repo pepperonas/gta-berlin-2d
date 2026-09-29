@@ -280,3 +280,36 @@ test('Im Auto und am Boden keine weiteren Treffer (kein doppeltes K. o.)', () =>
   hurtPlayer(w, 500, p.x + 5, p.y);
   assert.equal(w.events.filter((e) => e.type === 'wasted').length, 1);
 });
+
+test('Zielen mit der Maus: kein Einrasten neben dem Ziel, Mitte nur mit dem Zeiger auf dem Ziel; Streuung wächst mit dem Tempo', async () => {
+  const { spreadFactor, pickTarget, WEAPONS: W } = await import('../web/src/combat.js');
+  const { mulberry32 } = await import('../web/src/rng.js');
+  const { w, p, ang } = arena();
+  const t = pedOfKind(w, p.x + Math.cos(ang) * 150, p.y + Math.sin(ang) * 150, false);
+  const nx = -Math.sin(ang), ny = Math.cos(ang);
+  equip(w, 'pistol');
+  // Zeiger 22 px neben dem Ziel: der Schuss geht zum Zeiger
+  const beside = { x: t.x + nx * 12, y: t.y + ny * 12 }; // im alten Einrastkegel (±15 px), aber neben dem Körper
+  step(w, { ...aimAt(p, beside.x, beside.y) });
+  assert.ok(Math.abs(p.aim - Math.atan2(beside.y - p.y, beside.x - p.x)) < 1e-6, 'zum Zeiger, nicht zum Ziel');
+  assert.equal(pickTarget(w, beside.x, beside.y), null);
+  // Zeiger auf dem Ziel (am Rand des Körpers): Mitte des Ziels
+  const on = { x: t.x + nx * 5, y: t.y + ny * 5 };
+  assert.equal(pickTarget(w, on.x, on.y)?.obj, t);
+  step(w, { ...aimAt(p, on.x, on.y) });
+  assert.ok(Math.abs(p.aim - Math.atan2(t.y - p.y, t.x - p.x)) < 1e-6, 'zur Mitte des Ziels');
+  // Streuung je Gangart
+  const f = (v) => spreadFactor({ moveSpeed: v });
+  assert.equal(f(0), 0.7); assert.equal(f(15), 1); assert.equal(f(35), 1.6); assert.equal(f(70), 2.5);
+  // Trefferquote (Pistole, gleiche Streuung wie shoot): im Stand auf 8 m hoch, im Sprint auf 25 m niedrig
+  const rate = (dist, k) => {
+    const rng = mulberry32(7), tgt = pedOfKind(w, p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist, false);
+    const a0 = Math.atan2(tgt.y - p.y, tgt.x - p.x); let hits = 0;
+    for (let i = 0; i < 400; i++) { const g = Math.sqrt(-2 * Math.log(rng() || 1e-9)) * Math.cos(2 * Math.PI * rng()); if (castRay(w, p.x, p.y, a0 + g * W.find((q) => q.id === 'pistol').spread * k, dist + 40, null, p.lvl).hit?.obj === tgt) hits++; }
+    w.peds = w.peds.filter((q) => q !== tgt);
+    return hits / 400;
+  };
+  w.peds = w.peds.filter((q) => q !== t);
+  assert.ok(rate(80, 0.7) > 0.85, `Stand 8 m: ${rate(80, 0.7)}`);
+  assert.ok(rate(250, 2.5) < 0.5, `Sprint 25 m: ${rate(250, 2.5)}`);
+});

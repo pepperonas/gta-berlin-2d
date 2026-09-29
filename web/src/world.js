@@ -496,11 +496,12 @@ function updatePlayerOnFoot(w, input, dt) {
     // Stick halb = gehen, darüber joggen; Alt = gehen; Sprint mit Ausdauer
     const speed = sprinting ? PLAYER.sprint : input.walkSlow || mag <= 0.6 ? PLAYER.walk : PLAYER.jog;
     const nx = mx / (Math.hypot(mx, my) || 1), ny = my / (Math.hypot(mx, my) || 1);
-    p.x += nx * speed * dt; p.y += ny * speed * dt;
+    p.x += nx * speed * dt; p.y += ny * speed * dt; p.moveSpeed = speed; // für die Streuung (combat.js spreadFactor)
     p.angle = Math.atan2(ny, nx);
     p.move = p.angle; // Laufrichtung (Beine); p.angle kann danach das Zielen übernehmen (Oberkörper)
     p.step += speed * dt;
   }
+  if (mag <= 0.05) p.moveSpeed = 0;
   pushCircleOutOfWorld(w, p, PLAYER.radius);
   p.x = clamp(p.x, 8, w.city.width - 8); p.y = clamp(p.y, 8, w.city.height - 8);
 }

@@ -4,7 +4,7 @@
 // erste Ziel (Passant oder Auto). Nahkampf trifft in einem Bogen vor der Figur. Treffer erzeugen Ereignisse, aus denen
 // render.js Blut, Mündungsfeuer und Leuchtspuren macht und audio.js die Klänge.
 import { blocks } from './car.js';
-import { PED, CAR } from './config.js';
+import { PED, CAR, PLAYER } from './config.js';
 import { wrapAngle } from './math.js';
 
 // dmg je Treffer (bei der Schrotflinte je Schrotkugel); range in px (10 px = 1 m); cooldown s zwischen zwei Angriffen;
@@ -20,7 +20,7 @@ export const WEAPONS = [
 export const KICK = { id: 'kick', name: 'Tritt', melee: true, dmg: 24, range: 26, arc: 1.1, cooldown: 0.5, knock: 2.2 };
 export const PED_HP = 100;
 export const CAR_BULLET_FACTOR = 0.45;     // Kugelschaden auf Autos (Anteil des Treffers)
-export const ASSIST = { cone: 0.32, coneMouse: 0.1 }; // Zielhilfe: halber Kegelwinkel (rad)
+export const ASSIST = { cone: 0.32 }; // Zielhilfe am Controller: halber Kegelwinkel (rad); die Maus rastet nur auf dem Ziel ein
 export const GUNSHOT_SCARE = 420;          // so weit fliehen Passanten vor Schüssen (px)
 export const BODY_KEEP = 60;               // Tote verschwinden frühestens nach 60 s (und nur außer Sicht)
 export const PLAYER_HP = 100;
@@ -127,6 +127,28 @@ export function castRay(w, ox, oy, ang, range, shooter = null, lvl = shooter?.lv
 
 // Zielhilfe: nächstes Ziel (Passant oder Auto mit Fahrer) in einem Kegel um die Zielrichtung, freie Sichtlinie.
 // Liefert den korrigierten Winkel und das Ziel (oder den unveränderten Winkel).
+// Was liegt unter dem Mauszeiger? Lebende Person (Körper + 4 px) oder Auto (gedrehtes Rechteck + 2 px); { obj, x, y } | null
+export function pickTarget(w, x, y) {
+  let best = null, bd = Infinity;
+  for (const ped of w.peds) {
+    if (ped.state === 'dead') continue;
+    const d = Math.hypot(ped.x - x, ped.y - y);
+    if (d < PED.radius + 4 && d < bd) { bd = d; best = { obj: ped, x: ped.x, y: ped.y }; }
+  }
+  if (best) return best;
+  for (const car of w.cars) {
+    const c = Math.cos(car.angle), s = Math.sin(car.angle), dx = x - car.x, dy = y - car.y;
+    if (Math.abs(dx * c + dy * s) < car.hw + 2 && Math.abs(-dx * s + dy * c) < car.hh + 2) return { obj: car, x: car.x, y: car.y };
+  }
+  return null;
+}
+
+// Streuung nach Tempo der Figur (p.moveSpeed, px/s): Stand ruhiger, joggen und sprinten deutlich unruhiger
+export function spreadFactor(p) {
+  const v = p.moveSpeed ?? 0;
+  return v < 1 ? 0.7 : v <= PLAYER.walk + 1 ? 1 : v <= PLAYER.jog + 1 ? 1.6 : 2.5;
+}
+
 export function aimAssist(w, p, ang, range, cone = ASSIST.cone) {
   let best = null, score = Infinity;
   const consider = (obj, x, y) => {
@@ -204,11 +226,11 @@ export function strike(w, p, wp, ang) {
 }
 
 // Schuss (eine Salve; Schrotflinte fächert pellets Kugeln)
-export function shoot(w, p, wp, ang, rng) {
+export function shoot(w, p, wp, ang, rng, spreadK = 1) {
   const mx = p.x + Math.cos(ang) * 10, my = p.y + Math.sin(ang) * 10; // Mündung
   const traces = [];
   for (let k = 0; k < wp.pellets; k++) {
-    const off = wp.pellets > 1 ? (k / (wp.pellets - 1) - 0.5) * wp.spread + (rng() - 0.5) * 0.06 : gauss(rng) * wp.spread;
+    const off = wp.pellets > 1 ? (k / (wp.pellets - 1) - 0.5) * wp.spread + (rng() - 0.5) * 0.06 : gauss(rng) * wp.spread * spreadK;
     const a = ang + off, r = castRay(w, p.x, p.y, a, wp.range, null, p.lvl); // ab Körpermitte: trifft auch aus nächster Nähe
     traces.push([r.x, r.y]);
     const src = { weapon: wp.id, player: p === w.player };
@@ -263,7 +285,8 @@ export function updatePlayerCombat(w, input, dt) {
   const attacking = wp.auto || wp.melee ? !!input.fire : !!input.firePressed;
   if (aim.explicit || input.fire || input.kick) {
     const range = wp.melee ? 60 : wp.range;
-    ang = aimAssist(w, p, ang, range, aim.mouse ? ASSIST.coneMouse : ASSIST.cone).ang;
+    if (aim.mouse) { const t = input.aimWorld && pickTarget(w, input.aimWorld.x, input.aimWorld.y); if (t) ang = Math.atan2(t.y - p.y, t.x - p.x); }
+    else ang = aimAssist(w, p, ang, range).ang;
     p.angle = ang; // Figur schaut in Zielrichtung
   }
   p.aim = ang;
@@ -279,7 +302,7 @@ export function updatePlayerCombat(w, input, dt) {
   } else if (p.reloadT <= 0 && p.mag[p.weapon] > 0) {
     p.cool = wp.cooldown; p.attack = { kind: 'shot', t: 0.08, weapon: wp.id };
     p.mag[p.weapon]--;
-    shoot(w, p, wp, ang, w.rng);
+    shoot(w, p, wp, ang, w.rng, spreadFactor(p));
   }
 }
 
