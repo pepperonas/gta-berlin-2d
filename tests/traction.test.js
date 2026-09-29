@@ -90,7 +90,7 @@ function puddleRun(fps, kmh) {
   w.camera.x = car.x; w.camera.y = car.y;
   const events = [];
   for (let i = 0; i < fps; i++) { updateWorld(w, { ...idle(), throttle: 1 }, 1 / fps); events.push(...w.events.filter((x) => x.type === 'aquaplane')); if (car.aqua > 0) car.sawAqua = true; }
-  return { events, car };
+  return { events, car, pd };
 }
 
 test('Aquaplaning in einer echten Pfütze: nur über 70 km/h, ein Ereignis, gleich bei 30 und 60 fps', () => {
@@ -182,4 +182,12 @@ test('Warnschild als Zugführer: im Tunnel keins (Schienen trocken wie in trainA
   assert.equal(roadWarning(w), 'Nässe');
   w.player.ride = { kind: 'driver', mode: 'ubahn', underground: true };
   assert.equal(roadWarning(w), null, 'im Tunnel');
+});
+
+test('Aquaplaning versetzt die Fahrtrichtung spürbar (Gieren, solange das Auto schwimmt)', async () => {
+  const { aquaYaw } = await import('../web/src/traction.js');
+  const r = puddleRun(60, 90), yaw = aquaYaw(r.pd);
+  assert.ok(Math.abs(yaw) > 0.1, `Pfütze mit spürbarem Gieren (${yaw.toFixed(2)} rad/s)`);
+  const dev = Math.abs(Math.atan2(Math.sin(r.car.angle - r.pd.a), Math.cos(r.car.angle - r.pd.a)));
+  assert.ok(dev >= 0.5 * Math.abs(yaw) * AQUA.time, `Abweichung ${(dev * 180 / Math.PI).toFixed(1)}° (Soll ≥ ${(0.5 * Math.abs(yaw) * AQUA.time * 180 / Math.PI).toFixed(1)}°)`);
 });

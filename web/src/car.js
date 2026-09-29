@@ -67,7 +67,7 @@ export function stepCar(car, dt, city) {
 
   const av = Math.abs(vf);
   const speedFactor = clamp(av / 80, 0, 1) * (1 - 0.45 * clamp(av / CAR.maxSpeed, 0, 1));
-  const target = ctl.steer * CAR.steerRate * speedFactor * sign(vf) * (ctl.handbrake ? 1.35 : 1) * kSteer;
+  const target = ctl.steer * CAR.steerRate * speedFactor * sign(vf) * (ctl.handbrake ? 1.35 : 1) * kSteer + (aq ? car.aquaYaw ?? 0 : 0); // Aquaplaning: das Auto giert
   car.angVel += (target - car.angVel) * Math.min(1, 12 * dt);
   car.angle += car.angVel * dt;
 
