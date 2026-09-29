@@ -16,6 +16,7 @@ function fakeCtx() {
 globalThis.Path2D ??= class { moveTo() {} lineTo() {} closePath() {} rect() {} arc() {} addPath() {} };
 
 const city = realCity();
+import { pointOn as pointOnFor } from '../web/src/transit.js';
 const SIZES = [[1920, 1080], [1280, 720], [2560, 1080], [3440, 1440], [1512, 823], [1280, 1024], [1024, 768], [900, 900], [800, 1200], [2560, 900], [640, 360]];
 const inside = (r, vw, vh) => r.x >= -0.5 && r.y >= -0.5 && r.x + r.w <= vw + 0.5 && r.y + r.h <= vh + 0.5;
 const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -155,5 +156,42 @@ test('Temperatur neben der Uhr; Warnschild im Bild, überlappt Tacho, Minikarte 
     const L = hud.layout;
     assert.ok(inside(L.roadWarn, hud.vw, hud.vh), `${W}×${H}: Warnschild im Bild`);
     for (const k of ['car', 'minimap', 'mission']) assert.ok(!overlap(L.roadWarn, L[k]), `${W}×${H}: überlappt ${k}`);
+  }
+});
+
+test('Warnschild: verschwindet aus dem Layout mit der Warnung; Zielpfeil weicht ihm aus; als Zugführer unter der Leiste', async () => {
+  const { createWorld } = await import('../web/src/world.js');
+  const { createDrive } = await import('../web/src/trainphysics.js');
+  const g = createGame({ storage: memoryStorage(), city }); g.screen = 'playing'; g.hintT = 99; g.worldScale = 1.8;
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); g.world = w;
+  w.mission.state = 'toPickup'; w.mission.timer = 100;
+  const car = w.cars.find((c) => c.id === w.playerCarId); w.player.inCar = car.id; car.driver = 'player';
+  car.x = city.places.playerCar.x; car.y = city.places.playerCar.y; w.camera.x = car.x; w.camera.y = car.y; w.camera.zoom = 1;
+  w.wet = 1;
+  for (const [W, H] of SIZES) {
+    const hud = new Hud(fakeCtx()); hud.begin(W, H);
+    // Ziel weit rechts unten: der Pfeil landet am unteren rechten Rand, dort, wo das Schild steht
+    w.mission.state = 'toPickup'; const tgt = { x: car.x + 40000, y: car.y + 22000 };
+    const texts = [], ctx = fakeCtx(); ctx.fillText = (t, x, y) => texts.push({ t: String(t), x, y });
+    const h2 = new Hud(ctx); h2.begin(W, H); h2.drawGameplay(w, g); h2.drawTargetArrow(w, tgt, g);
+    const R = h2.layout.roadWarn, label = texts.find((q) => /^\d+ m$/.test(q.t));
+    assert.ok(R && label, `${W}×${H}: Schild und Pfeil`);
+    const inR = label.x > R.x - 30 && label.x < R.x + R.w + 30 && label.y > R.y - 10 && label.y < R.y + R.h + 16;
+    assert.ok(!inR, `${W}×${H}: Pfeil-Beschriftung (${label.x.toFixed(0)},${label.y.toFixed(0)}) im Warnschild ${JSON.stringify(R)}`);
+    w.wet = 0; hud.drawGameplay(w, g); w.wet = 1;
+    hud.drawGameplay(w, g); w.wet = 0; hud.drawGameplay(w, g); w.wet = 1;
+    assert.equal(hud.layout.roadWarn, undefined, `${W}×${H}: ohne Warnung kein Eintrag`);
+  }
+  // Zugführer: Schild unter der Fahrerleiste, überlappt weder Leiste noch Auftrag
+  const p = city.transit.patterns.find((q) => q.mode === 'tram' && q.name === 'M10');
+  w.player.inCar = null; car.driver = null;
+  w.playerTrain = { pid: p.id, s: p.stops[2] + 40, v: 12, drive: createDrive('tram', 12), nextStop: 3, served: [], atStop: null, leftT: null, passengers: 30 };
+  w.player.ride = { kind: 'driver', ref: { playerTrain: true }, mode: 'tram', car: 0, lastStop: { x: 0, y: 0, name: 'x', i: 2, pid: p.id }, since: 0, line: 'M10', dest: 'x', speed: 12, underground: false };
+  const q = pointOnFor(p, p.stops[2] + 40); w.player.x = q.x; w.player.y = q.y;
+  for (const [W, H] of SIZES) {
+    const hud = new Hud(fakeCtx()); hud.begin(W, H); hud.drawGameplay(w, g);
+    const L = hud.layout;
+    assert.ok(L.roadWarn, `${W}×${H}: Schild als Zugführer`);
+    assert.ok(inside(L.roadWarn, hud.vw, hud.vh) && !overlap(L.roadWarn, L.rideBar) && !overlap(L.roadWarn, L.mission), `${W}×${H}: Lage ${JSON.stringify(L.roadWarn)}`);
   }
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { roadCondition, tractionOf, gustPush, adhesionOf, puddleAt, TRACTION, DRY, GUST } from '../web/src/traction.js';
 import { edgePuddles } from '../web/src/wetfx.js';
 import { createWorld } from '../web/src/world.js';
+import { segDist2 } from '../web/src/geom.js';
 import { createCar } from '../web/src/car.js';
 import { weatherAt } from '../web/src/weather.js';
 import { realCity } from './helpers/city.js';
@@ -164,6 +165,9 @@ test('Überdacht nur, was wirklich darüber liegt: vor einem Brückenanfang ist 
       const [x0, y0, x1, y1] = atA ? [p[0], p[1], p[2], p[3]] : [p[n - 2], p[n - 1], p[n - 4], p[n - 3]];
       const L = Math.hypot(x1 - x0, y1 - y0); if (L < 40) continue;
       const x = x0 + (x1 - x0) / L * 30, y = y0 + (y1 - y0) / L * 30;
+      // echt überdacht: das U1-Viadukt (Ebene 2) führt an Möckern-, Großbeeren- und Mehringbrücke über die Straße
+      const underRail = city.render.query({ x: x - 20, y: y - 20, w: 40, h: 40 }, []).some((f) => f.layer === 'rail' && (f.lvl ?? 0) > 0 && f.pts.some((_, i) => i % 2 === 0 && i + 3 < f.pts.length && segDist2(x, y, f.pts[i], f.pts[i + 1], f.pts[i + 2], f.pts[i + 3]) < 15 * 15));
+      if (underRail) continue;
       checked++; if (roadCondition(w, x, y, 0).covered) wrong++;
       if (checked >= 60) break;
     }
@@ -240,4 +244,50 @@ test('Aquaplaning in der Spurmitte: eine Radspur-Pfütze reicht bei 90 km/h', as
   let aq = 0;
   for (let i = 0; i < 40; i++) { w.camera.x = car.x; w.camera.y = car.y; updateWorld(w, { ...idle(), throttle: 1 }, 1 / 60); aq += w.events.filter((x) => x.type === 'aquaplane').length; }
   assert.ok(aq >= 1, 'aufgeschwommen');
+});
+
+test('Pfützen am Rand des geladenen Gebiets: berechnet, aber nicht zwischengespeichert', () => {
+  const e = city.list('edge').find((x) => !x.bridge && (x.lvl ?? 0) === 0 && x.cls <= 6 && x.len > 200);
+  e._puddles = undefined;
+  edgePuddles({ ...city, ready: () => false }, e);
+  assert.equal(e._puddles, undefined, 'unvollständige Kacheln: kein Cache');
+  edgePuddles(city, e);
+  assert.ok(Array.isArray(e._puddles), 'vollständig: Cache');
+});
+
+test('Trocken ohne Sturm: das Auto bekommt den festen Trocken-Wert (keine Abfrage je Schritt)', () => {
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle'; w.wet = 0; w.snow = 0; w.ice = 0;
+  const car = w.cars.find((c) => c.id === w.playerCarId); car.vx = 50;
+  updateWorld(w, idle(), 1 / 60);
+  assert.equal(car.traction, DRY);
+  w.wet = 1; updateWorld(w, idle(), 1 / 60);
+  assert.notEqual(car.traction, DRY, 'nass: eigene Faktoren');
+});
+
+test('Unter einer Hochbahn (Viadukt) ist die Straße überdacht', () => {
+  const w = world(); w.wet = 1; w.ice = 1;
+  const rail = city.list('rail').find((f) => (f.lvl ?? 0) >= 1 && f.pts.length >= 4);
+  assert.ok(rail, 'Viadukt im Testgebiet');
+  const k = (rail.pts.length >> 1) & ~1, x = rail.pts[k], y = rail.pts[k + 1];
+  assert.equal(roadCondition(w, x, y, 0).covered, true, 'unter dem Viadukt');
+  assert.equal(roadCondition(w, x, y, rail.lvl).covered, false, 'auf dem Viadukt selbst nicht');
+});
+
+test('Pfütze auch unter der Fahrzeugmitte (zwischen den Vorderrädern)', () => {
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle'; w.wet = 1; w.forceWeather = 'rain';
+  let pd = null;
+  const all = city.list('edge').filter((e) => !e.bridge && (e.lvl ?? 0) === 0 && e.cls <= 8).flatMap((e) => edgePuddles(city, e));
+  pd = all.find((p) => p.ry < 6.5 && p.rx > 10 && all.every((o) => o === p || Math.hypot(o.x - p.x, o.y - p.y) > 50));
+  assert.ok(pd, 'schmale Pfütze ohne Nachbarn');
+  const car = w.cars.find((c) => c.id === w.playerCarId); w.player.inCar = car.id; car.driver = 'player';
+  const v = 90 / 0.36; car.angle = pd.a; car.x = pd.x - Math.cos(pd.a) * v * 0.3; car.y = pd.y - Math.sin(pd.a) * v * 0.3; car.lvl = 0; car.vx = Math.cos(pd.a) * v; car.vy = Math.sin(pd.a) * v; car.angVel = 0;
+  let aq = 0;
+  for (let i = 0; i < 40; i++) { w.camera.x = car.x; w.camera.y = car.y; updateWorld(w, { ...idle(), throttle: 1 }, 1 / 60); aq += w.events.filter((x) => x.type === 'aquaplane' && Math.hypot(x.x - pd.x, x.y - pd.y) < pd.rx).length; } // Mitte in genau dieser Pfütze
+  assert.ok(aq >= 1, 'aufgeschwommen');
+});
+
+test('Temperatur stimmt schon vor dem ersten Schritt', async () => {
+  const { temperatureAt } = await import('../web/src/weather.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  assert.equal(w.temp, temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather));
 });

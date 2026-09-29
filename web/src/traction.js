@@ -20,7 +20,7 @@ export const DRY = Object.freeze({ brake: 1, accel: 1, lat: 1, steer: 1 });
 export const AQUA = { speed: 70 / 0.36, time: 0.35, lat: 0.15, steer: 0.2, brake: 0.3, yaw: 0.6 };
 export const GUST = { push: 45, threshold: 0.9, bridge: 1.6, warn: 8 };
 const KEYS = ['brake', 'accel', 'lat', 'steer'];
-const q = [];
+const q = [], qr = [];
 const clamp01 = (v) => Math.min(1, Math.max(0, v ?? 0));
 // Zwischen 1 (trocken) und dem Tabellenwert f nach Stärke mischen; die Ränder exakt (trocken = genau 1)
 const mix = (amt, f) => { const a = clamp01(amt); return a === 0 ? 1 : a === 1 ? f : 1 - (1 - f) * a; };
@@ -45,6 +45,15 @@ function under(world, x, y, lvl) {
   // eine höhere Fahrbahn, die hier an die eigene Ebene anschließt, ist ein Brückenanfang (auch die Gegenfahrbahn einer
   // zweibahnigen Brücke), kein Dach; eine Überführung hat ihre Anschlüsse weit weg
   for (const e of over) if (!nodes.has(e.a) && !nodes.has(e.b)) { covered = true; break; }
+  // Hochbahn/Bahnbrücke darüber (Gleise stehen nicht in edgeSegs): Gleis höherer Ebene höchstens 1,5 m entfernt
+  if (!covered) for (const f of world.city.render.query({ x: x - 20, y: y - 20, w: 40, h: 40 }, qr)) {
+    if (f.layer !== 'rail' || (f.lvl ?? 0) <= lvl) continue;
+    const p = f.pts, n = p.length;
+    // am Anfang/Ende des Gleiszugs (Rampe, Brückenkopf) ist noch nichts darüber
+    if (Math.hypot(x - p[0], y - p[1]) < 60 || Math.hypot(x - p[n - 2], y - p[n - 1]) < 60) continue;
+    for (let i = 0; i + 3 < n; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 15 * 15) { covered = true; break; }
+    if (covered) break;
+  }
   return { covered, near };
 }
 

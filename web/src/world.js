@@ -25,7 +25,7 @@ import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor, temperatureAt, stepIce } from './weather.js';
-import { roadCondition, tractionOf, puddleAt, gustPush, aquaYaw, AQUA } from './traction.js';
+import { roadCondition, tractionOf, puddleAt, gustPush, aquaYaw, AQUA, DRY } from './traction.js';
 import { updateTransit } from './transitlive.js';
 import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
@@ -52,6 +52,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   w.cars.push(createCar({ x: pc.x, y: pc.y, angle: pc.angle, color: '#16a085', role: 'parked' }));
 
   w.carTarget = cars; w.pedTarget = pedestrians;
+  w.temp = temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather); // schon vor dem ersten Schritt richtig
   // Tagesrhythmus nur bei der Standardbevölkerung (Tests und Titel-Demo geben feste Zahlen vor)
   w.rhythm = cars === TRAFFIC.cars && pedestrians === TRAFFIC.pedestrians;
   // Wetter ebenso nur dort (sonst immer klar – feste Bilder für Tests und Titel)
@@ -582,12 +583,15 @@ function updateRide(w) {
 // Wetter am Auto: Haftung (car.traction), Aufschwimmen in einer Pfütze (car.aqua) und Böen
 function applyWeather(w, c, dt) {
   const lvl = c.lvl ?? 0;
+  // trocken und ohne Sturm: nichts zu prüfen (spart die Abfrage je Auto und Schritt)
+  if (!(w.wet > 0) && !(w.snow > 0) && !(w.ice > 0) && !(w.weather?.storm > 0)) { c.traction = DRY; return; }
   c.traction = tractionOf(roadCondition(w, c.x, c.y, lvl));
   const vf = c.vx * Math.cos(c.angle) + c.vy * Math.sin(c.angle);
   let p = null;
   if (vf > AQUA.speed) {
     const ca = Math.cos(c.angle), sa = Math.sin(c.angle), fx = c.hw * 0.7, fy = c.hh * 0.8;
-    for (const s of [-1, 1]) { p = puddleAt(w, c.x + ca * fx - sa * fy * s, c.y + sa * fx + ca * fy * s, lvl); if (p) break; }
+    p = puddleAt(w, c.x, c.y, lvl); // Mitte, dann beide Vorderräder
+    for (const s of [-1, 1]) { if (p) break; p = puddleAt(w, c.x + ca * fx - sa * fy * s, c.y + sa * fx + ca * fy * s, lvl); }
   }
   // nicht erneut, solange es noch schwimmt (eine Pfütze ist durchfahren, bevor AQUA.time abläuft)
   if (p && !(c.aqua > 0)) {

@@ -102,6 +102,8 @@ export function drawRain(ctx, v, wx, t, scale) {
 const tmp = { x: 0, y: 0, ux: 1, uy: 0 };
 export function edgePuddles(city, e) {
   if (e._puddles) return e._puddles;
+  // am Rand des geladenen Gebiets fehlen evtl. Häuser (inBuilding): dann berechnen, aber nicht merken
+  const complete = !city.ready || city.ready(e.bbox.x + e.bbox.w / 2, e.bbox.y + e.bbox.h / 2, Math.max(e.bbox.w, e.bbox.h) / 2);
   const out = [];
   if (e.cls <= 8 && !e.bridge && !e.passage && e.len > 60) { // unter Häusern (Durchfahrten, Überbauungen) regnet es nicht
     const S = city.scale, n = Math.floor(e.len / (18 * S) + h(e.id, 7));
@@ -115,7 +117,8 @@ export function edgePuddles(city, e) {
       out.push({ x: px, y: py, rx: (0.8 + h(e.id, k, 3) * 1.6) * S, ry: (0.5 + h(e.id, k, 4) * 0.7) * S, a: Math.atan2(tmp.uy, tmp.ux) });
     }
   }
-  return (e._puddles = out);
+  if (complete) e._puddles = out;
+  return out;
 }
 
 export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L) {

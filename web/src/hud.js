@@ -417,7 +417,7 @@ export class Hud {
       c.fillStyle = blink ? 'rgba(255,80,60,0.85)' : 'rgba(255,190,40,0.85)'; rr(c, x, y, w, h, 8); c.fill();
       this.text('⚠', x + 14, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
       this.text(warn, x + 38, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
-    }
+    } else if (this.layout?.roadWarn) { const { roadWarn, ...rest } = this.layout; this.layout = rest; }
     if (!car && !world.player.ride) this.drawWeaponPanel(world.player); // im Zug keine Waffe
     this.drawHurt(world.player);
 
@@ -561,7 +561,9 @@ export class Hud {
     const cx = this.vw / 2, cy = this.vh / 2;
     const a = Math.atan2(sy - cy, sx - cx);
     // Strahl von der Bildmitte bis zum Rand des freien Bereichs (zwischen oberem und unterem HUD).
-    const L = mx, R = this.vw - mx, Tp = this.m.y + 120, B = this.vh - this.m.y - 140;
+    // unten über dem Warnschild enden (steht über dem Tacho), sonst liegt die Beschriftung darin
+    const warnTop = this.layout?.roadWarn ? this.layout.roadWarn.y - 30 : Infinity;
+    const L = mx, R = this.vw - mx, Tp = this.m.y + 120, B = Math.min(this.vh - this.m.y - 140, warnTop);
     const ux = Math.cos(a), uy = Math.sin(a);
     const k = Math.min(ux > 0 ? (R - cx) / ux : ux < 0 ? (L - cx) / ux : Infinity, uy > 0 ? (B - cy) / uy : uy < 0 ? (Tp - cy) / uy : Infinity);
     const ax = cx + ux * k, ay = cy + uy * k;

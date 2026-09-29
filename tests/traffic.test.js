@@ -391,6 +391,7 @@ test('Glätte: KI-Schlange hält an Rot mit Abstand, ohne aufzufahren', async ()
   const dry = run(false), ice = run(true);
   assert.ok(ice.cars.every((c) => Math.hypot(c.vx, c.vy) < 5), 'alle stehen an Rot');
   assert.equal(ice.crashes, 0, 'niemand fährt auf'); assert.equal(ice.overlap, 0, 'keine Berührung');
+  for (let k = 1; k < 3; k++) { const [a, b] = [ice.cars[k - 1], ice.cars[k]], gap = Math.hypot(a.x - b.x, a.y - b.y) - a.hw - b.hw; assert.ok(gap > 5, `Abstand ${gap.toFixed(1)} px zwischen Auto ${k} und ${k + 1}`); }
 });
 
 test('Glätte und Schnee: 3 min an einer engen Stelle – niemand steht über 90 s, keine Zusammenstöße', async () => {
