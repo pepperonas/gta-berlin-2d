@@ -5,14 +5,15 @@ import { positionAt, pointOn, trainCars, TRAIN } from './transit.js';
 import { createDrive, stepDrive, stopInfo, tipFor, maxDecel } from './trainphysics.js';
 import { TRAIN_DRIVE } from './config.js';
 import { hash01 } from './map.js';
-import { RIDE, vehicleState, alightSpot, stationExit } from './ride.js';
+import { RIDE, vehicleState, alightSpot, stationExit, elevated } from './ride.js';
 import { obstacleAt } from './transitlive.js';
 
 const trainLen = (mode) => { const k = TRAIN[mode]; return k.cars * k.carL + (k.cars - 1) * k.gap; };
 const SAFE = 80; // px Abstand zum Zug voraus
 
 export function takeTrain(w, hit) {
-  if (!hit || hit.ref.carId !== undefined || hit.ref.playerTrain || hit.car !== 0 || hit.front > RIDE.cab) return false;
+  if (!hit || hit.ref.carId !== undefined || hit.car !== 0 || hit.front > RIDE.cab) return false;
+  if (hit.ref.playerTrain) return retakeTrain(w);
   const st = vehicleState(w, hit.ref);
   if (!st || st.mode === 'bus') return false;
   const s = w.transit.tracked.get(hit.ref.pid), v = s.veh.find((x) => x.key === hit.ref.key);
@@ -21,6 +22,17 @@ export function takeTrain(w, hit) {
   w.playerTrain = { pid: st.p.id, s: st.s, v: st.speed, drive: createDrive(st.mode, st.speed), nextStop: pos.stop, served: [], atStop: null, leftT: null, passengers: 20 + Math.floor(hash01(st.p.id * 31 + Math.floor(w.clock)) * 60) };
   w.player.ride = { kind: 'driver', ref: { playerTrain: true }, mode: st.mode, car: 0, lastStop: { ...pointOn(st.p, st.p.stops[Math.max(0, pos.stop - 1)]), name: st.p.stopNames[Math.max(0, pos.stop - 1)], i: Math.max(0, pos.stop - 1), pid: st.p.id }, since: w.time, line: st.p.name, dest: st.p.stopNames[st.p.stopNames.length - 1] };
   w.events.push({ type: 'train-take', mode: st.mode, line: st.p.name, x: w.player.x, y: w.player.y });
+  return true;
+}
+
+// Den eigenen, stehengelassenen Zug wieder übernehmen (Führerstand vorn)
+function retakeTrain(w) {
+  const t = w.playerTrain;
+  if (!t || w.player.ride) return false;
+  const p = w.city.transit.patterns[t.pid], i = t.atStop?.i ?? Math.max(0, t.nextStop - 1), q = pointOn(p, p.stops[i]);
+  w.player.ride = { kind: 'driver', ref: { playerTrain: true }, mode: p.mode, car: 0, lastStop: { x: q.x, y: q.y, name: p.stopNames[i], i, pid: p.id }, since: w.time, line: p.name, dest: p.stopNames[p.stopNames.length - 1] };
+  t.leftT = null;
+  w.events.push({ type: 'train-take', mode: p.mode, line: p.name, x: w.player.x, y: w.player.y });
   return true;
 }
 
@@ -91,8 +103,8 @@ export function updatePlayerTrain(w, input, dt) {
 export function leaveTrain(w) {
   const t = w.playerTrain, st = vehicleState(w, { playerTrain: true });
   if (!t || !st) return false;
-  if (st.underground) {
-    if (!t.atStop || t.drive.v > 0) { w.notice = { text: 'Nur am Bahnsteig', t: 1.5 }; return false; }
+  if (st.underground || elevated(w, st, st.cars[0])) { // Tunnel/Hochbahn: nur am Bahnsteig, Ausgang an der Straße
+    if (!t.atStop || t.drive.v > 0) { w.notice = { text: st.underground ? 'Nur am Bahnsteig' : 'Aussteigen nur am Bahnhof', t: 1.5 }; return false; }
     const ex = stationExit(w, st.p, t.atStop.i);
     w.player.ride = null; w.player.x = ex.x; w.player.y = ex.y; w.player.lvl = 0;
   } else {

@@ -266,3 +266,50 @@ test('Abspringen vor einem Poller: der Schwung schiebt den Spieler nicht ins Hin
     w.solids.remove(post, keys);
   }
 });
+
+// Hochbahn (U1-Viadukt, Ebene ≥ 1) von der Straße (Ebene 0): nur im Bahnhof erreichbar (Treppen gedacht), unterwegs nicht
+test('Gleiche Ebene: die U1 auf dem Viadukt ist von der Straße nur erreichbar, solange sie im Bahnhof hält', async () => {
+  const { railAt } = await import('../web/src/tunnel.js');
+  const u1 = tr.patterns.filter((p) => p.name === 'U1' && p.mode === 'ubahn').sort((a, b) => b.stops.length - a.stops.length)[0];
+  const i = u1.stopNames.findIndex((n) => n.includes('Kottbusser Tor')), at = pointOn(u1, u1.stops[i]);
+  const w = createWorld({ city }); w.mission.state = 'idle'; w.clock = 12 * 60; w.day = 1;
+  w.camera.x = at.x; w.camera.y = at.y; w.player.x = at.x; w.player.y = at.y; resetPopulation(w);
+  for (let k = 0; k < 30; k++) updateWorld(w, idle(), 1 / 60);
+  const s = w.transit.tracked.get(u1.id);
+  let tau = 0; while (!(positionAt(u1, tau).stop === i && positionAt(u1, tau).dwelling)) tau += 0.5;
+  const v = { tau, delay: 0, key: 'hoch' }; s.veh.push(v);
+  const beside = () => { const c = vehicleState(w, { pid: u1.id, key: 'hoch' }).cars[3]; w.player.x = c.x - Math.sin(c.angle) * (c.W / 2 + 10); w.player.y = c.y + Math.cos(c.angle) * (c.W / 2 + 10); w.player.lvl = 0; return c; };
+  const c = beside();
+  assert.ok((railAt(city, c.x, c.y)?.lvl ?? 0) >= 1, 'Wagen steht auf dem Viadukt');
+  assert.ok(transitNear(w, w.player.x, w.player.y, RIDE.reach).some((h) => h.ref.key === 'hoch'), 'im Bahnhof: erreichbar');
+  // unterwegs auf dem Viadukt (zwischen zwei Bahnhöfen)
+  while (positionAt(u1, v.tau).dwelling || positionAt(u1, v.tau).s < u1.stops[i] + 600) v.tau += 0.5;
+  const c2 = beside();
+  assert.ok((railAt(city, c2.x, c2.y)?.lvl ?? 0) >= 1, 'weiter auf dem Viadukt');
+  assert.equal(transitNear(w, w.player.x, w.player.y, RIDE.reach).some((h) => h.ref.key === 'hoch'), false, 'unterwegs: nicht von unten');
+});
+
+test('Von der Hochbahn aussteigen nur am Bahnhof, dann am Straßenausgang (nicht vom Viadukt fallen)', () => {
+  const u1 = tr.patterns.filter((p) => p.name === 'U1' && p.mode === 'ubahn').sort((a, b) => b.stops.length - a.stops.length)[0];
+  const i = u1.stopNames.findIndex((n) => n.includes('Kottbusser Tor')), at = pointOn(u1, u1.stops[i]);
+  const w = createWorld({ city }); w.mission.state = 'idle'; w.clock = 12 * 60; w.day = 1;
+  w.camera.x = at.x; w.camera.y = at.y; w.player.x = at.x; w.player.y = at.y; resetPopulation(w);
+  for (let k = 0; k < 30; k++) updateWorld(w, idle(), 1 / 60);
+  let tau = 0; while (!(positionAt(u1, tau).s > u1.stops[i] + 600 && !positionAt(u1, tau).dwelling)) tau += 0.5;
+  const v = { tau, delay: 0, key: 'hoch' }; w.transit.tracked.get(u1.id).veh.push(v);
+  w.player.ride = { kind: 'passenger', ref: { pid: u1.id, key: 'hoch' }, mode: 'ubahn', car: 3, lastStop: { ...at, name: 'Kottbusser Tor', i, pid: u1.id }, since: 0, line: 'U1', dest: 'x' };
+  const step = (patch = {}) => { updateWorld(w, { ...idle(), ...patch }, 1 / 60); w.camera.x = w.player.x; w.camera.y = w.player.y; };
+  step();
+  step({ ride: true });
+  assert.equal(w.player.ride?.kind, 'passenger', 'unterwegs auf dem Viadukt: sitzen bleiben');
+  assert.match(w.notice?.text ?? '', /Bahnhof|Bahnsteig/);
+  // bis zum nächsten Halt mitfahren
+  for (let k = 0; k < 60 * 180 && !vehicleState(w, w.player.ride.ref)?.dwelling; k++) step();
+  const st = vehicleState(w, w.player.ride.ref);
+  assert.ok(st?.dwelling, 'am nächsten Bahnhof');
+  const ex = stationExit(w, st.p, st.stop);
+  step({ ride: true });
+  assert.equal(w.player.ride, null, 'am Bahnhof ausgestiegen');
+  assert.ok(Math.hypot(w.player.x - ex.x, w.player.y - ex.y) < 1, 'am Straßenausgang');
+  assert.equal(w.player.lvl, 0);
+});

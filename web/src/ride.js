@@ -4,7 +4,7 @@
 import { positionAt, pointOn, trainCars, BUS } from './transit.js';
 import { circleVsObb, circleVsSegment, circleVsCircle, circleVsRect } from './collision.js';
 import { blocks } from './car.js';
-import { undergroundAtS } from './tunnel.js';
+import { undergroundAtS, railAt } from './tunnel.js';
 import { nearestPoi } from './map.js';
 import { nearestSpot, sidewalkPoint } from './pedestrians.js';
 
@@ -45,6 +45,15 @@ export function vehicleState(w, ref) {
   return { mode: p.mode, p, s: pos.s, speed: v.blockedT > 0 ? 0 : speedOfPattern(p, v.tau), cars: trainCars(p, pos.s), dwelling: pos.dwelling, stop: pos.stop, underground: undergroundAtS(w.city, p, pos.s) };
 }
 
+// Ebene eines S-/U-Bahn-Wagens oben (Viadukt/Bahndamm = Ebene des Gleises darunter); Straßenbahn und Bus fahren auf
+// der Straße, auf der auch der Spieler steht (für sie gibt es keine Gleise in der Karte)
+export function carLevel(w, st, c) {
+  if (st.mode !== 'ubahn' && st.mode !== 'sbahn') return w.player.lvl ?? 0;
+  return railAt(w.city, c.x, c.y)?.lvl ?? 0;
+}
+// Hochbahn: Wagen über dem Boden (Ebene ≥ 1) – aussteigen nur am Bahnhof, Ausgang an der Straße
+export const elevated = (w, st, c) => (st.mode === 'ubahn' || st.mode === 'sbahn') && !st.underground && carLevel(w, st, c) >= 1;
+
 // Abstand Punkt → Wagen-Rechteck (0 innen)
 function distToCar(x, y, c) {
   const dx = x - c.x, dy = y - c.y, ca = Math.cos(c.angle), sa = Math.sin(c.angle);
@@ -61,6 +70,8 @@ export function transitNear(w, x, y, r) {
     st.cars.forEach((c, i) => {
       const d = distToCar(x, y, c);
       if (d > r) return;
+      // gleiche Ebene; auf eine andere (Hochbahn von der Straße) nur, solange der Zug im Bahnhof hält (Treppen gedacht)
+      if (!st.dwelling && carLevel(w, st, c) !== (w.player.lvl ?? 0)) return;
       const f = st.cars[0], a = f.angle, fx = f.x + Math.cos(a) * f.L / 2, fy = f.y + Math.sin(a) * f.L / 2;
       out.push({ ref, mode: st.mode, dist: d, car: i, front: Math.hypot(x - fx, y - fy) });
     });

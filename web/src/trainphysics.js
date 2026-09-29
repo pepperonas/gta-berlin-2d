@@ -39,7 +39,7 @@ export const maxDecel = (d) => d.decel.reduce((m, [, x]) => Math.max(m, x), 0);
 
 export function stopInfo(p, s) {
   let best = null;
-  p.stops.forEach((st, i) => { const dist = s - st; if (Math.abs(dist) <= TRAIN_DRIVE.stopZone && (!best || Math.abs(dist) < Math.abs(best.dist))) best = { i, dist }; });
+  p.stops.forEach((st, i) => { const dist = s - st; if (Math.abs(dist) <= TRAIN_DRIVE.stopZone && (!best || Math.abs(dist) <= Math.abs(best.dist))) best = { i, dist }; }); // Gleichstand: der spätere (doppelter Endhalt im Fahrplan)
   return best;
 }
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { takeTrain, trainAhead, turnAround } from '../web/src/playertrain.js';
 import { transitNear, vehicleState, RIDE } from '../web/src/ride.js';
-import { positionAt, pointOn } from '../web/src/transit.js';
+import { positionAt, pointOn, trainCars } from '../web/src/transit.js';
 import { createWorld, updateWorld, resetPopulation } from '../web/src/world.js';
 import { realCity, realTransit } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
@@ -106,4 +106,44 @@ test('Eigene Straßenbahn hält vor einem Auto auf dem Gleis', async () => {
   const head = pointOn(p, t.s);
   assert.ok(Math.hypot(head.x - car.x, head.y - car.y) > 30, `Spitze ${Math.hypot(head.x - car.x, head.y - car.y).toFixed(0)} px vor dem Auto`);
   assert.equal(t.v, 0);
+});
+
+test('Wenden über die Taste am Endhalt der M10 (Endhalt steht im Fahrplan doppelt)', () => {
+  const p = pat('M10', 'tram'), n = p.stops.length, w = atFrontOf(p, n - 2);
+  w.trafficScale = 0;
+  const drive = (patch) => { w.cars.length = 0; press(w, patch); };
+  drive({ enterExit: true });
+  const t = w.playerTrain;
+  for (let i = 0; i < 60 * 180 && !(t.v === 0 && t.s >= p.stops[n - 1] - 30); i++) drive({ throttle: 1 });
+  assert.ok(t.v === 0 && Math.abs(t.s - p.stops[n - 1]) < 30, 'steht am Endhalt');
+  drive({ action: true }); assert.equal(t.drive.doors, 'open');
+  drive({ action: true }); assert.equal(t.drive.doors, 'closed');
+  const pid = t.pid;
+  drive({ action: true });
+  assert.notEqual(w.playerTrain.pid, pid, 'E/A am Endhalt wendet');
+});
+
+test('Auftrag neu starten während der Fahrt als Zugführer: zu Fuß am Start, nicht mehr im Zug', async () => {
+  const { restartMission } = await import('../web/src/world.js');
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  assert.equal(w.player.ride?.kind, 'driver');
+  restartMission(w);
+  press(w);
+  assert.equal(w.player.ride, null);
+  const sp = w.city.places.playerSpawn;
+  assert.ok(Math.hypot(w.player.x - sp.x, w.player.y - sp.y) < 60, 'am Startpunkt');
+});
+
+test('Den eigenen, stehengelassenen Zug wieder übernehmen', () => {
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  const t = w.playerTrain;
+  press(w, { enterExit: true });
+  assert.equal(w.player.ride, null, 'ausgestiegen');
+  const f = trainCars(p, t.s)[0];
+  w.player.x = f.x + Math.cos(f.angle) * (f.L / 2 + 10); w.player.y = f.y + Math.sin(f.angle) * (f.L / 2 + 10);
+  press(w, { enterExit: true });
+  assert.equal(w.player.ride?.kind, 'driver', 'wieder am Führerstand');
+  assert.equal(w.playerTrain, t, 'derselbe Zug');
 });

@@ -27,7 +27,7 @@ import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
 import { pointOn, tramTrackNear, TRAIN } from './transit.js';
-import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE } from './ride.js';
+import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
 import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
 
@@ -378,6 +378,7 @@ export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar
 
 // Mission neu starten: Spieler zum Späti, eigenes Auto repariert zurück auf den Parkplatz.
 export function restartMission(w) {
+  if (w.player.ride) endRide(w, 'teleport'); // Fahrgast/Zugführer: Neustart holt ihn aus dem Fahrzeug (Startpunkt s. u.)
   for (const c of w.cars) c.cargo = false;
   resetMission(w.mission);
   const far = Math.hypot(w.camera.x - w.city.places.playerSpawn.x, w.camera.y - w.city.places.playerSpawn.y) > TRAFFIC.despawn;
@@ -525,8 +526,8 @@ export function boardTransit(w) {
 export function alightTransit(w) {
   const p = w.player, r = p.ride, st = vehicleState(w, r.ref);
   if (!st) { endRide(w, 'gone'); return true; }
-  if (st.underground) {
-    if (!st.dwelling) { w.notice = { text: 'Nur am Bahnsteig', t: 1.5 }; return false; }
+  if (st.underground || elevated(w, st, st.cars[Math.min(r.car, st.cars.length - 1)])) { // Tunnel/Hochbahn: nur am Bahnhof
+    if (!st.dwelling) { w.notice = { text: st.underground ? 'Nur am Bahnsteig' : 'Aussteigen nur am Bahnhof', t: 1.5 }; return false; }
     const ex = stationExit(w, st.p, st.stop);
     p.ride = null; p.x = ex.x; p.y = ex.y; p.lvl = 0;
     w.events.push({ type: 'alight', hop: false, x: p.x, y: p.y });
