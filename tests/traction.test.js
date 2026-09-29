@@ -193,3 +193,51 @@ test('Aquaplaning versetzt die Fahrtrichtung spürbar (Gieren, solange das Auto 
   const dev = Math.abs(Math.atan2(Math.sin(r.car.angle - r.pd.a), Math.cos(r.car.angle - r.pd.a)));
   assert.ok(dev >= 0.5 * Math.abs(yaw) * AQUA.time, `Abweichung ${(dev * 180 / Math.PI).toFixed(1)}° (Soll ≥ ${(0.5 * Math.abs(yaw) * AQUA.time * 180 / Math.PI).toFixed(1)}°)`);
 });
+
+test('Pfützen auch in der Fahrspur (Radspur), nicht nur an der Rinne im Parkstreifen', async () => {
+  const { laneOffsets, parkingStrip } = await import('../web/src/street.js');
+  const { PARK } = await import('../web/src/citycodes.js');
+  const { projectOnPolyline } = await import('../web/src/geom.js');
+  let total = 0, inLane = 0;
+  for (const e of city.list('edge')) {
+    if (e.bridge || e.passage || e.cls > 8 || !e.cs) continue;
+    const ps = parkingStrip(e.cs, 1);
+    if (ps.kind !== PARK.lane && ps.kind !== PARK.half) continue;
+    const lo = laneOffsets(e.cs, city.scale);
+    if (lo.narrow) continue;
+    for (const p of edgePuddles(city, e)) {
+      const pr = projectOnPolyline(e.pts, p.x, p.y), side = Math.sign(-(p.x - pr.x) * pr.uy + (p.y - pr.y) * pr.ux), off = side * Math.sqrt(pr.d2);
+      total++;
+      if (off > lo.xL && off < lo.xR) inLane++; // e.cs ist im Spiel schon in px
+    }
+    if (total > 400) break;
+  }
+  assert.ok(total > 100, `${total} Pfützen geprüft`);
+  assert.ok(inLane / total > 0.25 && inLane / total < 0.55, `${inLane} von ${total} in der Fahrspur`);
+});
+
+test('Aquaplaning in der Spurmitte: eine Radspur-Pfütze reicht bei 90 km/h', async () => {
+  const { laneOffsets } = await import('../web/src/street.js');
+  const { projectOnPolyline } = await import('../web/src/geom.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle'; w.wet = 1; w.forceWeather = 'rain';
+  // Pfütze in der rechten Fahrspur einer Straße suchen; Auto fährt in der Spurmitte darauf zu
+  let pick = null;
+  for (const e of city.list('edge')) {
+    if (e.bridge || e.passage || e.cls > 8 || !e.cs || !e.cs.fwd) continue;
+    const lo = laneOffsets(e.cs, city.scale); if (lo.narrow) continue;
+    const lane = lo.fwd[lo.fwd.length - 1]; // px
+    for (const p of edgePuddles(city, e)) {
+      const pr = projectOnPolyline(e.pts, p.x, p.y), off = Math.sign(-(p.x - pr.x) * pr.uy + (p.y - pr.y) * pr.ux) * Math.sqrt(pr.d2);
+      if (Math.abs(off - lane) < 15 && pr.s > 300) { pick = { e, p, pr, lane }; break; }
+    }
+    if (pick) break;
+  }
+  assert.ok(pick, 'Radspur-Pfütze gefunden');
+  const { pr, lane } = pick, a = Math.atan2(pr.uy, pr.ux), v = 90 / 0.36;
+  const cx = pr.x - pr.uy * lane, cy = pr.y + pr.ux * lane; // Spurmitte auf Höhe der Pfütze
+  const car = w.cars.find((c) => c.id === w.playerCarId); w.player.inCar = car.id; car.driver = 'player';
+  car.angle = a; car.x = cx - Math.cos(a) * v * 0.3; car.y = cy - Math.sin(a) * v * 0.3; car.lvl = 0; car.vx = Math.cos(a) * v; car.vy = Math.sin(a) * v; car.angVel = 0;
+  let aq = 0;
+  for (let i = 0; i < 40; i++) { w.camera.x = car.x; w.camera.y = car.y; updateWorld(w, { ...idle(), throttle: 1 }, 1 / 60); aq += w.events.filter((x) => x.type === 'aquaplane').length; }
+  assert.ok(aq >= 1, 'aufgeschwommen');
+});
