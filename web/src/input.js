@@ -35,6 +35,7 @@ export function readPad(gp) {
     fire: v(BTN.RT) > 0.5, kick: b(BTN.B), reload: b(BTN.X), wpnNext: b(BTN.RB), wpnPrev: b(BTN.LB),
     a: b(BTN.A), b: b(BTN.B), x: b(BTN.X), y: b(BTN.Y), lb: b(BTN.LB), rb: b(BTN.RB),
     view: b(BTN.VIEW), menu: b(BTN.MENU), up: b(BTN.UP), down: b(BTN.DOWN), left: b(BTN.LEFT), right: b(BTN.RIGHT),
+    rideBtn: b(BTN.DOWN),
   };
 }
 
@@ -51,11 +52,12 @@ export function readKeys(k) {
     sprint: any('ShiftLeft', 'ShiftRight'), confirmKey: any('Enter', 'Space'),
     fire: any('ControlLeft', 'ControlRight'), kick: any('KeyV'), reload: any('KeyR'), wpnNext: any('KeyQ'),
     slot: [1, 2, 3, 4, 5, 6].find((d) => k.has('Digit' + d)) ?? 0,
+    rideBtn: any('KeyG'),
   };
 }
 
 const EMPTY = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, a: false, b: false, x: false, y: false, lb: false, rb: false, view: false, menu: false, up: false, down: false, left: false, right: false, sprint: false, confirmKey: false,
-  fire: false, kick: false, reload: false, wpnNext: false, wpnPrev: false, slot: 0 };
+  fire: false, kick: false, reload: false, wpnNext: false, wpnPrev: false, slot: 0, rideBtn: false };
 
 export function merge(a, b) {
   const out = { ...EMPTY };
@@ -85,7 +87,7 @@ export class InputState {
       moveX: clamp(raw.lx, -1, 1), moveY: clamp(raw.ly, -1, 1),
       steer: clamp(raw.lx, -1, 1), throttle: raw.rt, brake: raw.lt,
       handbrake: raw.rb || raw.b, sprint: raw.sprint || raw.a, horn: raw.x || raw.ls,
-      action: edge('a'), actionHeld: raw.a, enterExit: edge('y'), pause: edge('menu'), mapToggle: edge('view'),
+      action: edge('a'), actionHeld: raw.a, enterExit: edge('y'), ride: edge('rideBtn'), pause: edge('menu'), mapToggle: edge('view'),
       menuUp: menuDir === 'up', menuDown: menuDir === 'down', menuLeft: menuDir === 'left', menuRight: menuDir === 'right',
       confirm: edge('a') || edge('confirmKey'), back: edge('b'),
       menuHover: null, menuPick: null, // Maus (setzt main.js)

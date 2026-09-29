@@ -70,3 +70,71 @@ test('Menübildschirme liegen im zentrierten 16:9-Rahmen: Einträge und Klickfl�
   }
   void idle;
 });
+
+test('Steuerungsbildschirm: Tabelle passt in den 720px-Rahmen mit Abstand', () => {
+  const g = createGame({ storage: memoryStorage(), city });
+  const textCalls = [];
+  const rectCalls = [];
+  const ctx = fakeCtx();
+  const origText = ctx.fillText;
+  ctx.fillText = function(text, x, y) { textCalls.push({ text: String(text), x, y }); return origText?.call(this, text, x, y); };
+  const origRect = ctx.fillRect;
+  ctx.fillRect = function(x, y, w, h) { rectCalls.push({ x, y, w, h }); return origRect?.call(this, x, y, w, h); };
+
+  const hud = new Hud(ctx);
+  hud.begin(1920, 1080);
+  hud.drawControls();
+
+  // Alle Text-Y-Werte sollten ≤ 700 sein (720px Frame - 20px Abstand)
+  const textYs = textCalls.map(t => t.y);
+  const maxY = Math.max(...textYs);
+  assert.ok(maxY <= 700, `Kontrolltabelle überläuft: max y = ${maxY.toFixed(0)} > 700`);
+
+  // "Mitfahren" Zeile sollte vorhanden sein
+  assert.ok(textCalls.some(t => t.text.includes('Mitfahren')), 'Mitfahren-Zeile fehlt');
+
+  // "Bahn führen: Türen / Wenden" sollte NICHT als eigene Zeile vorhanden sein
+  const bahnRow = textCalls.filter(t => t.text === 'Bahn führen: Türen / Wenden');
+  assert.equal(bahnRow.length, 0, 'Bahn-Zeile sollte entfernt sein');
+
+  // "Türen/Wenden" sollte in der Aktion-Zeile enthalten sein
+  assert.ok(textCalls.some(t => t.text.includes('Türen/Wenden')), 'Türen/Wenden fehlt in Aktion-Zeile');
+
+  // Die letzte Tabellenzeile darf den Fußzeilen-Hinweis ("B / Zurück") nicht überdecken: mindestens
+  // 12px Abstand zwischen der Unterkante des letzten schattierten Zeilenbands und der Klickfläche des
+  // Hinweises (beide aus den echten Zeichenaufrufen gelesen, nicht aus geschätzten Konstanten).
+  const footerHit = hud.hits.find((h) => h.kind === 'key');
+  assert.ok(footerHit, 'Fußzeilen-Hinweis (B / Zurück) fehlt');
+  const rowBands = rectCalls.filter((r) => Math.abs(r.w - 920) < 0.5);
+  assert.ok(rowBands.length > 0, 'Keine schattierten Zeilenbänder gefunden');
+  const lastRowBandBottom = Math.max(...rowBands.map((r) => r.y + r.h));
+  const gap = footerHit.y - lastRowBandBottom;
+  assert.ok(gap >= 12, `Letzte Tabellenzeile (Bandunterkante ${lastRowBandBottom.toFixed(0)}) reicht zu nah an den Fußzeilen-Hinweis (dessen Klickfläche beginnt bei ${footerHit.y.toFixed(0)}, Abstand ${gap.toFixed(0)}px)`);
+});
+
+test('Fahrgast-/Fahrerleiste: im Bild, ohne NaN, überlappt das Auftragsfeld nicht', async () => {
+  const { createWorld } = await import('../web/src/world.js');
+  const { createDrive } = await import('../web/src/trainphysics.js');
+  const tr = city.transit, p = tr.patterns.find((q) => q.mode === 'tram' && q.name === 'M10');
+  const g = createGame({ storage: memoryStorage(), city }); g.screen = 'playing'; g.hintT = 99; g.worldScale = 1.8;
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); g.world = w;
+  w.mission.state = 'toPickup'; w.mission.timer = 100;
+  w.playerTrain = { pid: p.id, s: p.stops[2] + 40, v: 12, drive: createDrive('tram', 12), nextStop: 3, served: [], atStop: null, leftT: null, passengers: 30 };
+  for (const kind of ['driver', 'passenger']) {
+    w.player.ride = { kind, ref: { playerTrain: true }, mode: 'tram', car: 0, lastStop: { x: 0, y: 0, name: 'x', i: 2, pid: p.id }, since: 0, line: 'M10', dest: p.stopNames.at(-1), speed: 12 };
+    for (const [W, H] of SIZES) {
+      const texts = [], ctx = fakeCtx();
+      ctx.fillText = (t, x, y) => texts.push({ t: String(t), x, y });
+      const hud = new Hud(ctx); hud.begin(W, H); hud.drawGameplay(w, g);
+      const L = hud.layout;
+      assert.ok(hud.counts?.rideBar, `${kind} ${W}×${H}: Leiste gezeichnet`);
+      assert.ok(inside(L.rideBar, hud.vw, hud.vh), `${kind} ${W}×${H}: Leiste ragt aus dem Bild ${JSON.stringify(L.rideBar)}`);
+      assert.ok(!overlap(L.rideBar, L.mission), `${kind} ${W}×${H}: Leiste überlappt das Auftragsfeld`);
+      assert.ok(texts.every((q) => !q.t.includes('NaN') && !q.t.includes('undefined') && Number.isFinite(q.x) && Number.isFinite(q.y)), `${kind}: ${JSON.stringify(texts.filter((q) => /NaN|undefined/.test(q.t) || !Number.isFinite(q.x) || !Number.isFinite(q.y)))}`);
+      assert.ok(texts.some((q) => q.t === 'M10'), 'Linie');
+      assert.ok(texts.some((q) => /Halt/.test(q.t)), 'nächster Halt');
+      assert.equal(L.weapon, undefined, `${kind} ${W}×${H}: kein Waffenfeld während der Fahrt`);
+      if (kind === 'driver') assert.ok(texts.some((q) => /^\d+ km\/h$/.test(q.t)) && texts.some((q) => /Gas|Türen|Zug voraus/.test(q.t)), 'Tacho und Bedienhinweis');
+    }
+  }
+});

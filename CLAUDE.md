@@ -161,6 +161,17 @@ change in `web/`.
   shape via `lane.nextBus`, stop at stops), trams stay kinematic but stop for obstacles and feed `w.railObs` (collision,
   AI obstacles), S/U trains are drawn only on above-ground rails. Bus-only lanes (`lane.busOnly`: busways,
   `cs.busContra` contraflow) never appear in `lane.next`. `city.transit` is set by `main.js` / `tests/helpers/city.js`.
+- **Riding and driving transit:** vehicles are referenced, never copied: `{pid,key}` (virtual timetable vehicle),
+  `{carId}` (bus as AI car), `{playerTrain:true}`; `ride.js vehicleState(w, ref)` resolves one or returns `null` once it
+  is gone (→ `world.js endRide` puts the player on foot at `ride.lastStop`, S/U via `stationExit`; `rideExit` is shared
+  with the save). `w.player.ride = { kind: 'passenger'|'driver', ref, lastStop, … }`; passengers board/alight with
+  `input.ride` (G / D-pad down). Taking over at the cab (`enterExit`, `playertrain.js takeTrain`) marks the virtual
+  vehicle `gone` and continues it as `w.playerTrain`, driven by pure `trainphysics.js` (`stepDrive` with a `limit` =
+  free distance: end of line, `trainAhead`, `tramFree` → forced braking along √(2·a·d)); timetable trains of the same
+  pattern behind it wait (`behindPlayer` in `transitlive.js`). Underground = S/U with no visible rail running along the
+  line within 5 m (`tunnel.js undergroundAtS`, heading-aware; unloaded tile = above ground). `tunnelview.js drawTunnels`
+  draws the tunnel view, faded by `w.underground`. Tram tracks exist only in the timetable shapes (`transit.js
+  tramTrackNear`); parking slots avoid them (`e._slots` is keyed on `city.transit`, which loads async in the browser).
 - **Access:** fences/walls/hedges/bollard lines open `GATE_M` (4.4 m) at gate nodes and wherever any highway way crosses
   them (build, `accessAndRules`). Barrier posts block AI traffic via `e.blocked`, but the player's car knocks them over
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop

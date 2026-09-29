@@ -19,6 +19,7 @@ import { AREA_KIND } from './citycodes.js';
 import { VERSION } from './version.js';
 import { missionObjective, BRIEFING } from './mission.js';
 import { playerCar, speedOf } from './world.js';
+import { vehicleState } from './ride.js';
 
 const MINI_AREA = { [AREA_KIND.rail]: '#4a4640', [AREA_KIND.allotments]: '#35602c', [AREA_KIND.cemetery]: '#2f5a2a', [AREA_KIND.grass]: '#2f5a2a', [AREA_KIND.pitch]: '#2f5a2a', [AREA_KIND.sand]: '#6b6040', [AREA_KIND.wood]: '#284d22', [AREA_KIND.bridge]: '#4a4540' };
 const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus: 'Bushaltestelle', mall: 'Einkaufszentrum',
@@ -197,19 +198,21 @@ export class Hud {
     this.text(`${Math.round(fps)} fps · ${ms.toFixed(1)} ms · ${quality === 'high' ? 'hoch' : 'niedrig'}`, this.vw / 2, y + 21, { size: 14, weight: 700, align: 'center', color: fps >= 50 ? '#8f8' : fps >= 30 ? YELLOW : '#f88', shadow: false });
   }
 
-  // Statistik: vier Abschnitte in zwei Spalten, je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
+  // Statistik: Abschnitte in drei Spalten (Unterwegs + Verkehr | Kampf + Aufträge | Nahverkehr), je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
   // (Schüsse/Schläge, Treffer, Quote, Tote). inGame: Spielwelt dahinter.
   drawStats(stats, inGame) {
     this.fillScreen(inGame ? 'rgba(5,6,10,0.82)' : 'rgba(5,6,10,0.94)');
     this.inFrame(() => {
       const c = this.ctx, vw = this.vw, g = stats.game, t = stats.total;
       this.text('STATISTIK', vw / 2, 58, { size: 36, align: 'center', weight: 900, color: YELLOW });
-      const cols = [[STAT_SECTIONS[0], STAT_SECTIONS[1]], [STAT_SECTIONS[2], STAT_SECTIONS[3]]], colW = 520, x0 = vw / 2 - colW - 20;
+      const sec = (name) => STAT_SECTIONS.find(([n]) => n === name);
+      const cols = [[sec('Unterwegs'), sec('Verkehr')], [sec('Kampf'), sec('Aufträge')], [sec('Nahverkehr')]];
+      const colW = 370, gap = 20, x0 = vw / 2 - (cols.length * colW + (cols.length - 1) * gap) / 2, vOff = 112;
       let rows = 0, bottom = 0;
       cols.forEach((secs, ci) => {
-        const x = x0 + ci * (colW + 40);
+        const x = x0 + ci * (colW + gap);
         let y = 96;
-        this.text('dieses Spiel', x + colW - 150, y, { size: 13, align: 'right', color: '#999', weight: 700 });
+        this.text('dieses Spiel', x + colW - vOff, y, { size: 13, align: 'right', color: '#999', weight: 700 });
         this.text('insgesamt', x + colW - 8, y, { size: 13, align: 'right', color: '#999', weight: 700 });
         for (const [title, list] of secs) {
           y += 28; this.text(title.toUpperCase(), x, y, { size: 15, weight: 800, color: YELLOW });
@@ -217,7 +220,7 @@ export class Hud {
             y += 22;
             if (rows++ % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.04)'; c.fillRect(x - 6, y - 16, colW + 12, 22); }
             this.text(label, x, y, { size: 15, weight: 500, shadow: false });
-            this.text(formatStat(g[k] ?? 0, fmt), x + colW - 150, y, { size: 15, weight: 700, align: 'right', shadow: false });
+            this.text(formatStat(g[k] ?? 0, fmt), x + colW - vOff, y, { size: 15, weight: 700, align: 'right', shadow: false });
             this.text(formatStat(t[k] ?? 0, fmt), x + colW - 8, y, { size: 15, weight: 700, align: 'right', color: '#ccc', shadow: false });
           }
         }
@@ -374,8 +377,16 @@ export class Hud {
       }
     }
 
-    // Unten links: Minikarte (beim Briefing ausgeblendet)
-    if (ms !== 'briefing') this.drawMinimap(world, obj.target, m.x, vh - m.y - 200, 200);
+    // Oben mittig: Fahrgast-/Fahrerleiste (Linie, Ziel, nächster Halt; als Fahrer Tempo und Türen)
+    this.drawRideBar(world);
+
+    // Unten links: Minikarte (beim Briefing ausgeblendet; unter Tage gedämpft)
+    if (ms !== 'briefing') {
+      const dim = (world.underground ?? 0) > 0.5;
+      if (dim) { c.save(); c.globalAlpha = 0.6; }
+      this.drawMinimap(world, obj.target, m.x, vh - m.y - 200, 200);
+      if (dim) c.restore();
+    }
 
     // Unten rechts: Fahrzeugzustand
     if (car) {
@@ -394,7 +405,7 @@ export class Hud {
     }
 
     // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte
-    if (!car) this.drawWeaponPanel(world.player);
+    if (!car && !world.player.ride) this.drawWeaponPanel(world.player); // im Zug keine Waffe
     this.drawHurt(world.player);
 
     // Richtungspfeil zum Ziel (am Bildschirmrand, wenn außer Sicht)
@@ -419,6 +430,33 @@ export class Hud {
     }
     if (mission.state === 'briefing') this.drawBriefing();
     if (world.loading) this.drawLoading(world);
+  }
+
+  // Fahrgast-/Fahrerleiste oben mittig; weicht links aus, wenn rechts das Auftragsfeld steht
+  drawRideBar(world) {
+    const r = world.player.ride;
+    if (!r) return;
+    const c = this.ctx, w = 440, h = r.kind === 'driver' ? 92 : 64, y = this.m.y, mis = this.layout?.mission;
+    let x = this.vw / 2 - w / 2;
+    if (mis && mis.y < y + h && mis.y + mis.h > y) x = Math.min(x, mis.x - 16 - w);
+    this.layout = { ...(this.layout ?? {}), rideBar: { x, y, w, h } };
+    const st = vehicleState(world, r.ref);
+    this.panel(x, y, w, h);
+    const col = st?.p.color ? `#${String(st.p.color).replace('#', '')}` : YELLOW;
+    c.fillStyle = col; rr(c, x + 14, y + 12, 58, 26, 6); c.fill();
+    this.text(r.line, x + 43, y + 31, { size: 16, weight: 900, align: 'center', color: st?.p.color ? '#fff' : '#111', shadow: false });
+    this.text(`→ ${String(r.dest ?? '').replace(/^[SU]\s+/, '')}`, x + 84, y + 31, { size: 16, weight: 700 });
+    const next = st ? st.p.stopNames[Math.min(st.p.stopNames.length - 1, st.stop)] ?? '' : '';
+    const line2 = st?.dwelling ? `Hält: ${next}` : `Nächster Halt: ${next}`;
+    this.text(line2.replace(/\s\(.*\)$/, ''), x + 14, y + 56, { size: 15, weight: 600, color: '#ddd' });
+    if (r.kind === 'passenger') this.text(st?.underground && !st.dwelling ? 'Aussteigen nur am Bahnsteig' : 'G: aussteigen', x + w - 14, y + 56, { size: 13, weight: 700, align: 'right', color: '#aaa' });
+    if (r.kind === 'driver' && world.playerTrain) {
+      const t = world.playerTrain, kmh = Math.round(t.v * 0.36);
+      this.text(`${kmh} km/h`, x + 14, y + 82, { size: 18, weight: 800, color: t.blocked ? '#ff8080' : '#fff' });
+      const doors = t.drive.doors === 'open' ? 'Türen offen – E/A schließen' : t.atStop ? 'E/A: Türen öffnen' : t.blocked ? 'Zug voraus' : 'W/RT Gas · S/LT Bremse · Leertaste/B Notbremse';
+      this.text(doors, x + w - 14, y + 82, { size: 13, weight: 700, align: 'right', color: t.atStop ? YELLOW : '#aaa' });
+    }
+    this.counts = this.counts ?? {}; this.counts.rideBar = true;
   }
 
   // Welt wartet auf Kacheln: Fortschritt, oder klarer Hinweis, wenn der Spielserver nicht antwortet.
@@ -708,8 +746,9 @@ export class Hud {
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['Einsteigen / Aussteigen', 'Y', 'F / rechte Maus tippen'],
+      ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
       ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
-      ['Aktion (Auftrag, Einladen)', 'A', 'E'],
+      ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Hupe', 'X', 'H'],
       ['Stadtplan', 'Ansicht-Taste', 'M'],
@@ -719,9 +758,11 @@ export class Hud {
     const x0 = vw / 2 - 460;
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
     this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
+    // Reihenhöhe 34 (statt 40): 13 Zeilen enden bei y=618/Band bis 630 – Luft zur Fußzeile bleibt (Fuß-Klickfläche beginnt bei 654).
+    const rowH = 34;
     rows.forEach(([a, b, k], i) => {
-      const y = 210 + i * 42;
-      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - 28, 920, 42); }
+      const y = 210 + i * rowH;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - (rowH - 12), 920, rowH); }
       this.text(a, x0 + 16, y, { size: 20, weight: 600 });
       this.text(b, x0 + 470, y, { size: 20, weight: 500, color: '#ddd' });
       this.text(k, x0 + 740, y, { size: 20, weight: 500, color: '#ddd' });

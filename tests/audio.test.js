@@ -57,3 +57,19 @@ test('Umgebungsklang: Mischung steuert die Schichten, Stille bleibt still, Marti
     assert.equal(s.siren.o.frequency.target, 440);
   } finally { delete globalThis.AudioContext; }
 });
+
+test('Töne im Nahverkehr: Ein-/Aussteigen, Auf-/Abspringen, Türgong, Trinkgeld, Zug voraus – jeder Ton existiert', async () => {
+  const { soundFor, SYNTH } = await import('../web/src/audio.js');
+  assert.equal(soundFor({ type: 'board' }), 'door');
+  assert.equal(soundFor({ type: 'alight' }), 'door');
+  assert.equal(soundFor({ type: 'board', hop: true }), 'hit', 'Aufspringen rumst');
+  assert.equal(soundFor({ type: 'alight', hop: true }), 'hit', 'Abspringen rumst');
+  assert.equal(soundFor({ type: 'train-take' }), 'door');
+  assert.notEqual(soundFor({ type: 'doors-open' }), soundFor({ type: 'doors-close' }), 'Türgong auf/zu klingt verschieden');
+  assert.equal(soundFor({ type: 'tip' }), 'pickup');
+  assert.equal(soundFor({ type: 'train-blocked' }), 'tram-bell');
+  assert.equal(soundFor({ type: 'shot', weapon: 'pistol' }), 'pistol', 'bestehende Zuordnung bleibt');
+  assert.equal(soundFor({ type: 'unbekannt' }), null);
+  for (const type of ['board', 'alight', 'train-take', 'doors-open', 'doors-close', 'tip', 'train-blocked', 'crash', 'bump', 'knock', 'wasted', 'respawn'])
+    assert.ok(SYNTH[soundFor({ type })], `${type} → ${soundFor({ type })}: Klang fehlt`);
+});

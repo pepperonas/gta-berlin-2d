@@ -219,3 +219,21 @@ test('HUD: Statistikseite zeigt alle Abschnitte, die Werte und die Waffentabelle
   assert.equal(hud.counts.suggestions, 2);
   assert.ok(texts.includes('wetter sch') && texts.includes('schneesturm') && texts.includes('> zeit 12'));
 });
+
+test('Nahverkehr: Mitfahrten, Strecke im Nahverkehr und als Zugführer, bediente Halte, Trinkgeld, Auf-/Abspringen', () => {
+  const w = fakeWorld(), tr = createTracker(), S = sets();
+  trackStep(S, tr, w, [], 0);
+  trackStep(S, tr, w, [{ type: 'board', hop: true }, { type: 'train-take' }], 0);
+  w.player.ride = { kind: 'passenger' };
+  for (let i = 0; i < 100; i++) { w.player.x += 10; trackStep(S, tr, w, [], 1 / 60); }
+  w.player.ride = { kind: 'driver' };
+  for (let i = 0; i < 100; i++) { w.player.x += 20; trackStep(S, tr, w, [], 1 / 60); }
+  w.money += 7; // wie im Spiel: das Trinkgeld landet im selben Schritt auf dem Konto
+  trackStep(S, tr, w, [{ type: 'doors-open' }, { type: 'tip', amount: 7 }, { type: 'alight', hop: true }], 0);
+  const s = S[0];
+  assert.equal(s.rides, 1); assert.equal(s.hopsOn, 1); assert.equal(s.hopsOff, 1); assert.equal(s.trainsTaken, 1);
+  assert.ok(Math.abs(s.kmTransit - 0.1) < 1e-9 && Math.abs(s.kmTrainDriven - 0.2) < 1e-9);
+  assert.equal(s.kmFoot, 0, 'Fahrt zählt nicht als Fußweg');
+  assert.equal(s.stopsServed, 1); assert.equal(s.tipsEarned, 7);
+  assert.equal(s.moneyEarned, 0, 'Trinkgeld zählt nicht noch einmal als verdientes Geld');
+});

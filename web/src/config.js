@@ -46,3 +46,11 @@ export const RENDER = { heightScale: 0.5, budgetMs: 14, recoverMs: 8, sampleFram
 export const CLOCK = { minutesPerSecond: 1, start: 16 * 60 };
 
 export const SPEED_TO_KMH = 0.36;
+
+// Selbst gefahrene Bahnen (trainphysics.js): Höchsttempo, Anfahren, Bremsen in px/s bzw. px/s² (10 px = 1 m)
+export const TRAIN_DRIVE = {
+  tram: { vmax: 60 / 0.36, acc: 13, brake: 15, emergency: 25 },
+  ubahn: { vmax: 70 / 0.36, acc: 11, brake: 12, emergency: 25 },
+  sbahn: { vmax: 100 / 0.36, acc: 10, brake: 12, emergency: 25 },
+  roll: 0.6, stopZone: 250, stopExact: 30, stillV: 3, tipMax: 10, gentle: 13, doorsAuto: 20,
+};

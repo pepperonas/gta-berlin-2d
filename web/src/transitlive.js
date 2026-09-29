@@ -2,7 +2,8 @@
 // Busse werden nahe der Kamera zu echten KI-Fahrzeugen, die ihre Halte der Reihe nach anfahren und dort halten
 // (Wartende steigen ein). Straßenbahnwagen sind für Verkehr und Spieler feste, fahrende Hindernisse.
 // Nur in der Welt mit Tagesrhythmus und wenn die Fahrplandaten geladen sind (city.transit).
-import { stepTransit, positionAt, pointOn, trainCars, TRANSIT, BUS } from './transit.js';
+import { stepTransit, positionAt, pointOn, trainCars, TRANSIT, BUS, TRAIN } from './transit.js';
+import { undergroundAtS } from './tunnel.js';
 import { createCar, speedOf, damage } from './car.js';
 import { placeOnLane, dropClaims, projectNear } from './traffic.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
@@ -12,6 +13,18 @@ import { LIFE } from './life.js';
 export const BUS_COLOR = '#f0cf1f';
 const outOfView = (w, x, y, pad = 80) => Math.abs(x - w.camera.x) > LIFE.viewHalfX + pad || Math.abs(y - w.camera.y) > LIFE.viewHalfY + pad;
 
+// Steht an (x, y) etwas im Weg einer Straßenbahn? (Spieler zu Fuß, Autos, fahrende Räder, Passanten)
+// !ride: der Spieler als Fahrgast/Fahrer sitzt im Zug und ist kein Hindernis.
+export function obstacleAt(w, x, y) {
+  const hit = (ox, oy, r) => Math.hypot(ox - x, oy - y) < r;
+  if (!w.player.inCar && !w.player.ride && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
+  for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4)) return true;
+  for (const b of w.bikes ?? []) if (b.state === 'ride' && hit(b.x, b.y, 18)) return true;
+  for (const ped of w.peds) if (ped.state !== 'dead' && ped.state !== 'hang' && hit(ped.x, ped.y, 16)) return true;
+  return false;
+}
+const trainLenOf = (m) => TRAIN[m].cars * TRAIN[m].carL + (TRAIN[m].cars - 1) * TRAIN[m].gap;
+
 // Straßenbahn vor einem Hindernis auf dem Gleis? (Spitze plus 2–8 m voraus, seitlich 2,2 m)
 function tramBlocked(w, p, v) {
   const pos = positionAt(p, v.tau);
@@ -20,14 +33,7 @@ function tramBlocked(w, p, v) {
   const cam = w.camera;
   const hp = pointOn(p, head);
   if (Math.abs(hp.x - cam.x) > 2500 || Math.abs(hp.y - cam.y) > 2500) return false; // weit weg: keine Hindernisse
-  for (const d of [20, 45, 75]) {
-    const q = pointOn(p, head + d);
-    const hit = (x, y, r) => Math.hypot(x - q.x, y - q.y) < r;
-    if (!w.player.inCar && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
-    for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4)) return true;
-    for (const b of w.bikes ?? []) if (b.state === 'ride' && hit(b.x, b.y, 18)) return true;
-    for (const ped of w.peds) if (ped.state !== 'dead' && ped.state !== 'hang' && hit(ped.x, ped.y, 16)) return true;
-  }
+  for (const d of [20, 45, 75]) { const q = pointOn(p, head + d); if (obstacleAt(w, q.x, q.y)) return true; }
   return false;
 }
 
@@ -61,7 +67,10 @@ export function updateTransit(w, dt) {
   w.railObs = [];
   if (!tr || !w.rhythm) return;
   const st = (w.transit ??= { tracked: new Map(), seed: w.seed ?? 0 });
-  stepTransit(st, tr, w.camera, w.clock, w.day, dt, w.time, (p, v) => p.mode === 'tram' && tramBlocked(w, p, v) && (v.blockedT = (v.blockedT ?? 0) + dt) >= 0);
+  // Fahrplan-Züge desselben Musters hinter dem Spielerzug warten, bevor sie auf 600 px an sein Heck kommen
+  const pt = w.playerTrain;
+  const behindPlayer = (p, v) => { if (!pt || pt.pid !== p.id) return false; const vs = positionAt(p, v.tau).s; return vs < pt.s && pt.s - trainLenOf(p.mode) - vs < 600; };
+  stepTransit(st, tr, w.camera, w.clock, w.day, dt, w.time, (p, v) => behindPlayer(p, v) || (p.mode === 'tram' && tramBlocked(w, p, v) && (v.blockedT = (v.blockedT ?? 0) + dt) >= 0));
   const cam = w.camera;
   // Busse in der Nähe auf die Straße holen, fertige/ferne wieder abbauen
   for (const [id, s] of st.tracked) {
@@ -107,6 +116,11 @@ export function updateTransit(w, dt) {
       const spd = moving ? (p.stops[pos.stop] - p.stops[Math.max(0, pos.stop - 1)]) / Math.max(1, p.off[pos.stop] - p.off[Math.max(0, pos.stop - 1)] - p.dwell) : 0;
       for (const c of trainCars(p, pos.s)) w.railObs.push({ x: c.x, y: c.y, angle: c.angle, hw: c.L / 2, hh: c.W / 2, vx: Math.cos(c.angle) * spd, vy: Math.sin(c.angle) * spd, tram: true });
     }
+  }
+  // Spielerzug: Straßenbahn immer, S-/U-Bahn nur oberirdisch als festes, fahrendes Hindernis
+  if (pt) {
+    const p = tr.patterns[pt.pid];
+    if (p.mode === 'tram' || !undergroundAtS(w.city, p, pt.s)) for (const c of trainCars(p, pt.s)) w.railObs.push({ x: c.x, y: c.y, angle: c.angle, hw: c.L / 2, hh: c.W / 2, vx: Math.cos(c.angle) * pt.v, vy: Math.sin(c.angle) * pt.v, tram: true });
   }
   collideRail(w);
 }
@@ -156,7 +170,7 @@ function collideRail(w) {
       }
     }
     const pl = w.player;
-    if (!pl.inCar) {
+    if (!pl.inCar && !pl.ride) { // !ride: defensiv – updateRide setzt den Fahrgast ohnehin nach updateTransit in den Wagen
       const m = circleVsObb(pl.x, pl.y, 7, o);
       if (m) { pl.x += m.nx * m.depth; pl.y += m.ny * m.depth; }
     }

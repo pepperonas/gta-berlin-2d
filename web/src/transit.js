@@ -5,7 +5,7 @@
 // aus ihrer Fahrzeit τ bestehen – so laufen sie auch dort, wo die Karte gerade nicht geladen ist. Busse werden in der
 // Nähe zu echten KI-Fahrzeugen (world.js/services.js), Straßenbahnen und Züge bleiben an ihrem Linienweg.
 import { SpatialHash } from './collision.js';
-import { undelta, pointAlong } from './geom.js';
+import { undelta, pointAlong, segDist2 } from './geom.js';
 import { hash01 } from './map.js';
 
 export const TRANSIT = { track: 12000, every: 1, busLive: 2200, dwell: { bus: 12, tram: 15, sbahn: 25, ubahn: 20 } };
@@ -41,7 +41,7 @@ export function prepareTransit(json) {
     const pts = sh.pts;
     for (let i = 0; i < pts.length - 2; i += 2) {
       const x0 = Math.min(pts[i], pts[i + 2]), y0 = Math.min(pts[i + 1], pts[i + 3]);
-      hash.insert({ list }, { x: x0, y: y0, w: Math.abs(pts[i + 2] - pts[i]), h: Math.abs(pts[i + 3] - pts[i + 1]) });
+      hash.insert({ list, tram: list.some((p) => p.mode === 'tram'), ax: pts[i], ay: pts[i + 1], bx: pts[i + 2], by: pts[i + 3] }, { x: x0, y: y0, w: Math.abs(pts[i + 2] - pts[i]), h: Math.abs(pts[i + 3] - pts[i + 1]) });
     }
   }
   return { patterns, shapes, hash, attribution: json.attribution, lines: json.lines };
@@ -86,6 +86,14 @@ export function patternsNear(tr, x, y, r) {
   for (const e of tr.hash.query({ x: x - r, y: y - r, w: 2 * r, h: 2 * r }, [])) for (const p of e.list) set.add(p);
   return set;
 }
+
+// Liegt ein Straßenbahngleis näher als r an (x, y)? Die Karte kennt keine Straßenbahngleise (der Build übernimmt nur
+// rail/light_rail/subway) – ihr Verlauf steht nur in den Linienwegen des Fahrplans.
+export function tramTrackNear(tr, x, y, r) {
+  for (const e of tr.hash.query({ x: x - r, y: y - r, w: 2 * r, h: 2 * r }, qTram)) if (e.tram && segDist2(x, y, e.ax, e.ay, e.bx, e.by) < r * r) return true;
+  return false;
+}
+const qTram = [];
 
 // Virtuelle Fahrzeuge eines Musters beim ersten Verfolgen: gleichmäßig im aktuellen Takt verteilt (Phase fest je Muster)
 export function initialVehicles(p, perHour, seed = 0) {

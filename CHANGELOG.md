@@ -4,6 +4,35 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.29.0] – 2026-09-29
+
+### Neu
+- **Mitfahren im Nahverkehr:** neben einem Bus, einer Straßenbahn, S- oder U-Bahn **G** (Controller: Steuerkreuz
+  unten) steigt ein – auch in Fahrt (Aufspringen ab 25 km/h); **G** noch einmal steigt aus, schnell ist das Abspringen
+  mit Sturz (ab 40 km/h mit Schaden). Unter Tage nur am Bahnsteig, Ausgang an der Straße. Leiste oben mittig mit Linie,
+  Ziel und nächstem Halt.
+- **Straßenbahn, S- und U-Bahn selbst fahren:** vorn am Führerstand **Y/F** übernimmt den Zug. Gas/Bremse/Notbremse,
+  Türen an der Haltestelle mit **E/A**, Trinkgeld bis 10 € für einen sanften, genauen Halt, Wenden am Endhalt. Vor
+  Zügen auf derselben Strecke und vor Hindernissen auf dem Straßenbahngleis bremst der Zug selbst, Fahrplanzüge
+  dahinter warten.
+- **Tunnelansicht:** unter Tage wird die Stadt abgedunkelt; Röhren, Bahnsteige mit Bahnhofsnamen und die Züge darin
+  werden gezeichnet.
+- Statistik-Abschnitt **Nahverkehr** (Mitfahrten, Strecke als Fahrgast und Zugführer, geführte Bahnen, bediente Halte,
+  Trinkgeld, Auf-/Abspringen); die Statistikseite hat dafür drei Spalten. Töne für Ein-/Aussteigen, Türgong,
+  Trinkgeld und „Zug voraus“.
+
+### Behoben
+- Parkende Autos standen auf Straßenbahngleisen (die Gleise kennt nur der Fahrplan, nicht die Karte) und hielten
+  Straßenbahnen dauerhaft auf.
+
+### Regeln
+- Einsteigen nur auf gleicher Ebene: in einen Zug auf dem Viadukt (U1) von der Straße nur, während er im Bahnhof hält;
+  von der Hochbahn aussteigen nur am Bahnhof, Ausgang an der Straße.
+
+### Bekannt
+- Wo der Linienweg einer Straßenbahn in der Gegenspur liegt (z. B. M10 an der Herzbergstraße), können sie und ein
+  entgegenkommender Bus aufeinander warten.
+
 ## [0.28.0] – 2026-09-28
 
 ### Neu

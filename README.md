@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.4.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.29.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -175,6 +175,10 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 | Handbremse | RB oder B | Leertaste |
 | Ein-/Aussteigen | Y | F oder rechte Maustaste (tippen) |
 | Aktion (Auftrag, Einladen, Abliefern) | A | E |
+| Mitfahren / Aussteigen (Bus, Straßenbahn, S-, U-Bahn) | Steuerkreuz unten | G |
+| Bahn führen (am Führerstand vorn) / aussteigen | Y | F oder rechte Maustaste (tippen) |
+| Als Zugführer: Fahrt / Bremse / Notbremse | RT / LT / B | W / S / Leertaste |
+| Als Zugführer: Türen auf/zu, am Endhalt wenden | A | E |
 | Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
 | Hupe | X | H |
 | Stadtplan | Ansicht-Taste | M |
@@ -355,6 +359,23 @@ Gehtempo. Alle – auch der Spieler – laufen mit echtem Gangbild: Schritte und
 Vorlage und langen Schritten, weiches Anlaufen und Anhalten, Atmen im Stand. Der Spieler läuft in Laufrichtung und
 dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). Prüfseite: `http://localhost:8080/lab/figures.html`.
 
+## Nahverkehr
+
+Busse, Straßenbahnen, S- und U-Bahnen fahren nach dem echten VBB-Fahrplan. **Mitfahren:** neben einem Wagen **G**
+(Steuerkreuz unten) – auch in Fahrt (ab 25 km/h aufspringen); **G** noch einmal steigt aus, schnell gefahren ist das
+Abspringen mit Sturz (ab 40 km/h mit Schaden). Unter Tage und auf der Hochbahn geht das nur am Bahnhof, man kommt am
+Straßenausgang heraus; in einen Zug auf dem Viadukt steigt man von der Straße nur, während er im Bahnhof hält. Oben mittig zeigt eine Leiste Linie, Ziel und nächsten Halt.
+
+**Selbst fahren:** vorn am Führerstand einer Straßenbahn, S- oder U-Bahn **Y/F** – der Zug verlässt den Fahrplan und
+gehört dem Spieler (Höchsttempo 60/70/100 km/h); einen stehengelassenen eigenen Zug übernimmt man am Führerstand wieder. Gas und Bremse wie im Auto, Notbremse Leertaste/B. An einer
+Haltestelle im Stand öffnet **E/A** die Türen (sie schließen nach 20 s selbst); ein sanfter, genauer Halt bringt bis zu
+10 € Trinkgeld. Vor einem Zug auf derselben Strecke und vor Hindernissen auf dem Straßenbahngleis bremst der Zug von
+selbst; Fahrplanzüge dahinter warten. Am Endhalt wendet **E/A** auf die Gegenrichtung, wo es eine gibt. Unter Tage wird
+die Stadt abgedunkelt, die Röhren mit Bahnsteigen, Bahnhofsnamen und den Zügen darin erscheinen (Tunnelansicht).
+
+Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; eine Straßenbahn in einer Straße mit Gegenverkehr auf
+dem Gleis kann mit einem entgegenkommenden Bus hängen bleiben (Fahrplandaten legen die Strecke dort in die Gegenspur).
+
 ## Befehlszeile und Statistik
 
 **Enter** öffnet im Spiel eine Befehlszeile (die Welt steht still, solange sie offen ist). Beim Tippen erscheinen
@@ -376,14 +397,31 @@ erste steht grau hinter dem Getippten und kommt mit **Tab** oder **→** in die 
 Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
 Brücken, Teleports, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, Tote (erschossen
 / Nahkampf), Schüsse, Kugeln, Treffer und Trefferquote **je Waffe**, zerstörte Autos, Aufträge, verdientes Geld,
-Krankenhauskosten und Cheats. Gespeichert wird lokal in **IndexedDB** (Datenbank `gta-berlin`, alle 5 s und beim
+Krankenhauskosten und Cheats, dazu im Nahverkehr: Mitfahrten, Strecke als Fahrgast und als Zugführer, geführte Bahnen,
+bediente Halte, Trinkgeld, Auf- und Abspringen. Gespeichert wird lokal in **IndexedDB** (Datenbank `gta-berlin`, alle 5 s und beim
 Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 ## Stand und Prüfumfang
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 295 automatischen Tests grün, darunter:
+- Alle 339 automatischen Tests grün, darunter:
+  - Nahverkehr: eigene Taste fürs Mitfahren (G/Steuerkreuz unten, nicht S/Pfeil); einsteigen in Reichweite eines
+    Wagens auch in Fahrt, aussteigen neben dem Wagen (nie in Wand, Baum, Poller oder Auto), Abspringen mit Sturz und ab
+    40 km/h Schaden, unter Tage nur am Bahnsteig mit Ausgang an der Straße; verschwindet das Fahrzeug, Teleport, K. o.
+    oder Speichern während der Fahrt → zu Fuß an der letzten Haltestelle bzw. deren Straßenausgang, nie im Gleisbett;
+    Tunnel aus Linienweg ohne sichtbares Gleis (eine querende Hochbahn zählt nicht, nicht geladene Kachel = oben);
+    Zugphysik je Modus (Höchsttempo, Bremsweg, Zwangsbremsung folgt der Bremskurve, Trinkgeld nach Genauigkeit und
+    Sanftheit); Zug übernehmen nur am Führerstand, fahren, Türen nur im Stand an der Haltestelle, Trinkgeld beim
+    sauberen Halt, Türen schließen selbst, Abstand zum Zug voraus, Fahrplanzug dahinter wartet, Wenden am Endhalt über
+    die Taste (auch wo der Endhalt im Fahrplan doppelt steht), eigenen Zug wieder übernehmen, Auftrag neu starten holt
+    aus dem Zug, Hochbahn nur im Bahnhof ein-/aussteigen,
+    eigene Straßenbahn hält vor einem Auto auf dem Gleis ohne es zu schieben; kein Stellplatz auf einem
+    Straßenbahngleis (auch wenn der Fahrplan erst nach den Stellplätzen geladen wird); Tunnelansicht mit Röhre, einem
+    Bahnsteig je Richtung entlang der Kurve, Namen einmal und zuletzt, eigener Zug am Bahnsteig; Leiste für Fahrgast
+    und Fahrer in jedem Fensterformat ohne Überlappung mit dem Auftrag; Statistik und Töne. Jede Schutzprüfung mit
+    Mutationsprobe (über 30, alle erkannt); im Browser geprüft: U8 unter Kottbusser Tor (Tunnelansicht), M10 mit F am
+    Führerstand übernommen und angefahren;
   - Waffenrad-Bedienung: Zeiger auf den Radius begrenzt (zurückziehen wechselt sofort), Bewegung vor dem Öffnen zählt
     nicht, Mausrad dreht eine Raste je Feld, Zifferntaste wählt und schließt, Abbrechen ohne Wahl, Controller-Stick mit
     Totzone (losgelassen bleibt die Wahl), LB tippen/halten, verpasstes Loslassen wird nachgeholt, Zeitlupe blendet

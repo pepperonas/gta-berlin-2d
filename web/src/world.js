@@ -26,6 +26,9 @@ import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js'
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
 import { updateTransit } from './transitlive.js';
+import { pointOn, tramTrackNear, TRAIN } from './transit.js';
+import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
+import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
@@ -292,6 +295,7 @@ export function openSpot(w, x, y, car) {
 export function teleportTo(w, spot) {
   const car = playerCar(w), p = w.player;
   if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0, lvl: undefined });
+  if (p.ride) endRide(w, 'teleport'); // Teleport (Karte, Konsole) beendet eine Fahrt
   p.x = spot.x; p.y = spot.y; p.lvl = undefined; // Ebene neu von der Landestelle
   w.camera.x = spot.x; w.camera.y = spot.y;
   // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
@@ -304,8 +308,10 @@ export function teleportTo(w, spot) {
 const SLOT_M = { parallel: 5.6, diagonal: 3.0, perpendicular: 2.6 };
 
 // Stellplätze einer Kante (deterministisch, einmal berechnet): Mitte des Parkstreifens, Autoausrichtung je Aufstellung.
+// Stellplatz näher am Straßenbahngleis als halbe Bahn + halbes Auto + Luft: dort stünde das Auto im Weg jeder Bahn
+const TRAM_CLEAR = TRAIN.tram.W / 2 + CAR.width / 2 + 3;
 export function parkingSlots(city, e) {
-  if (e._slots) return e._slots;
+  if (e._slots && e._slotsTr === city.transit) return e._slots; // Fahrplan nachgeladen: neu (Gleise, s. u.)
   const S = city.scale, slots = [];
   if (e.inside && e.cls <= 8 && !e.bridge) {
     // StVO § 12: kein Parken bis 5 m vor/nach der Ecke einer Kreuzung (Ecke = halbe Breite der Querstraße vom Knoten)
@@ -321,6 +327,7 @@ export function parkingSlots(city, e) {
         pointAlong(e.pts, s, p);
         const x = p.x - p.uy * ps.offset, y = p.y + p.ux * ps.offset;
         if (avoid.some((q) => q && Math.hypot(q.x - x, q.y - y) < 12 * S)) continue;
+        if (city.transit && tramTrackNear(city.transit, x, y, TRAM_CLEAR)) continue; // nicht aufs Straßenbahngleis
         let angle = Math.atan2(p.uy, p.ux) + (side < 0 ? Math.PI : 0);          // parallel in Fahrtrichtung der Seite
         if (ps.orient === 'perpendicular') angle += side * Math.PI / 2;
         else if (ps.orient === 'diagonal') angle += side * Math.PI / 4;
@@ -328,7 +335,7 @@ export function parkingSlots(city, e) {
       }
     }
   }
-  e._slots = slots;
+  e._slots = slots; e._slotsTr = city.transit;
   return slots;
 }
 
@@ -371,6 +378,7 @@ export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar
 
 // Mission neu starten: Spieler zum Späti, eigenes Auto repariert zurück auf den Parkplatz.
 export function restartMission(w) {
+  if (w.player.ride) endRide(w, 'teleport'); // Fahrgast/Zugführer: Neustart holt ihn aus dem Fahrzeug (Startpunkt s. u.)
   for (const c of w.cars) c.cargo = false;
   resetMission(w.mission);
   const far = Math.hypot(w.camera.x - w.city.places.playerSpawn.x, w.camera.y - w.city.places.playerSpawn.y) > TRAFFIC.despawn;
@@ -467,7 +475,7 @@ function updateLevels(w) {
   for (const ped of w.peds) upd(ped, ped.angle ?? null);
   for (const b of w.bikes ?? []) upd(b, b.angle);
   const p = w.player, pc = playerCar(w);
-  if (pc) p.lvl = pc.lvl; else if (!p.dead) upd(p, null);
+  if (pc) p.lvl = pc.lvl; else if (p.ride?.underground) { /* im Tunnel: updateRide setzt die Ebene */ } else if (!p.dead) upd(p, null);
 }
 
 function updatePlayerOnFoot(w, input, dt) {
@@ -496,6 +504,80 @@ function applyDriverInput(car, input) {
   car.horn = input.horn;
 }
 
+// Mitfahren (Fahrgast): eigene Taste (input.ride). Einsteigen überall in Reichweite eines Wagens, auch in Fahrt
+// (Aufspringen); Aussteigen jederzeit, schnell = Abspringen mit Sturz; unter Tage nur am Bahnsteig, Ausgang an der Straße.
+function lastStopOf(st) {
+  const i = Math.max(0, Math.min(st.p.stops.length - 1, st.dwelling ? st.stop : st.stop - 1));
+  const q = pointOn(st.p, st.p.stops[i]);
+  return { x: q.x, y: q.y, name: st.p.stopNames[i] ?? '', i, pid: st.p.id };
+}
+export function boardTransit(w) {
+  const p = w.player;
+  if (p.stun > 0) return false; // gestürzt (z. B. gerade abgesprungen): erst aufstehen
+  const hit = transitNear(w, p.x, p.y, RIDE.reach).find((h) => !h.ref.playerTrain);
+  if (!hit) return false;
+  const st = vehicleState(w, hit.ref);
+  if (!st) return false;
+  const hop = st.speed > RIDE.hopOn;
+  p.ride = { kind: 'passenger', ref: hit.ref, mode: st.mode, car: hit.car, lastStop: lastStopOf(st), since: w.time, line: st.p.name, dest: st.p.stopNames[st.p.stopNames.length - 1] };
+  w.events.push({ type: 'board', mode: st.mode, line: st.p.name, hop, x: p.x, y: p.y });
+  return true;
+}
+export function alightTransit(w) {
+  const p = w.player, r = p.ride, st = vehicleState(w, r.ref);
+  if (!st) { endRide(w, 'gone'); return true; }
+  if (st.underground || elevated(w, st, st.cars[Math.min(r.car, st.cars.length - 1)])) { // Tunnel/Hochbahn: nur am Bahnhof
+    if (!st.dwelling) { w.notice = { text: st.underground ? 'Nur am Bahnsteig' : 'Aussteigen nur am Bahnhof', t: 1.5 }; return false; }
+    const ex = stationExit(w, st.p, st.stop);
+    p.ride = null; p.x = ex.x; p.y = ex.y; p.lvl = 0;
+    w.events.push({ type: 'alight', hop: false, x: p.x, y: p.y });
+    return true;
+  }
+  const spot = alightSpot(w, st, r.car);
+  if (!spot) { w.notice = { text: 'Kein Platz zum Aussteigen', t: 1.5 }; return false; }
+  const hop = st.speed > RIDE.hopOff;
+  p.ride = null; p.x = spot.x; p.y = spot.y;
+  if (hop) {
+    const c = st.cars[Math.min(r.car, st.cars.length - 1)];
+    const fx = p.x + Math.cos(c.angle) * 20, fy = p.y + Math.sin(c.angle) * 20; // Schwung in Fahrtrichtung
+    if (spotFreeHere(w, fx, fy, 8, p.lvl ?? 0)) { p.x = fx; p.y = fy; } // nur wenn dort nichts Festes steht
+    p.stun = RIDE.stun;
+    if (st.speed > RIDE.hurtFrom) hurtPlayer(w, RIDE.hurt, c.x, c.y);
+  }
+  w.events.push({ type: 'alight', hop, x: p.x, y: p.y });
+  return true;
+}
+// Wo ein Fahrgast ohne Fahrzeug landet: letzte Haltestelle, bei S-/U-Bahn deren Straßenausgang (nicht das Gleisbett).
+// Gemeinsam für endRide und den Spielstand (save.js makeSave).
+export function rideExit(w, ride) {
+  const pat = w.city.transit?.patterns[ride.lastStop.pid];
+  const ex = pat && (pat.mode === 'ubahn' || pat.mode === 'sbahn') ? stationExit(w, pat, ride.lastStop.i) : ride.lastStop;
+  return { x: ex.x, y: ex.y };
+}
+// Fahrt beenden, ohne Fahrzeug (verschwunden, Teleport, K. o.): an der letzten Haltestelle zu Fuß
+export function endRide(w, reason) {
+  const p = w.player, r = p.ride;
+  if (!r) return;
+  p.ride = null;
+  if (reason !== 'teleport') {
+    const ex = rideExit(w, r);
+    p.x = ex.x; p.y = ex.y; p.lvl = 0;
+  }
+  w.events.push({ type: 'ride-end', reason, x: p.x, y: p.y });
+}
+function updateRide(w) {
+  const p = w.player, r = p.ride;
+  if (p.dead) { endRide(w, 'ko'); return; }
+  const st = vehicleState(w, r.ref);
+  if (!st) { endRide(w, 'gone'); return; }
+  const c = st.cars[Math.min(r.car, st.cars.length - 1)];
+  p.x = c.x; p.y = c.y; p.angle = c.angle;
+  if (st.underground) p.lvl = -2;
+  else if (r.underground) p.lvl = undefined; // aus dem Tunnel: Ebene neu bestimmen (updateLevels)
+  if (st.dwelling && r.kind === 'passenger') r.lastStop = lastStopOf(st); // Fahrer: playertrain.js setzt ihn beim Türöffnen
+  r.speed = st.speed; r.underground = st.underground;
+}
+
 // Ein fester Simulationsschritt. input: siehe input.js (abstrakte Aktionen).
 export function updateWorld(w, input, dt) {
   w.events.length = 0;
@@ -519,7 +601,18 @@ export function updateWorld(w, input, dt) {
   }
 
   const p = w.player;
-  if (input.enterExit && !p.dead) { if (p.inCar) tryExit(w); else tryEnter(w); }
+  if (input.ride && !p.dead && !p.inCar && p.ride?.kind !== 'driver') { if (p.ride) alightTransit(w); else boardTransit(w); }
+  else if (input.enterExit && !p.dead) {
+    if (p.ride?.kind === 'driver') leaveTrain(w);
+    else if (!p.ride) {
+      if (p.inCar) tryExit(w);
+      else { // am Führerstand einer Bahn (Spitze ≤ RIDE.cab): übernehmen, sonst wie immer ein Auto
+        const cab = transitNear(w, p.x, p.y, RIDE.cab + 10).find((h) => h.car === 0 && h.front <= RIDE.cab && h.mode !== 'bus');
+        if (!(cab && takeTrain(w, cab))) tryEnter(w);
+      }
+    }
+  }
+  if (input.action && p.ride?.kind === 'driver' && atTerminus(w)) turnAround(w); // vor updatePlayerTrain: sonst öffnete E/A die Türen erneut
 
   const pc = playerCar(w);
   if (pc) {
@@ -527,8 +620,8 @@ export function updateWorld(w, input, dt) {
     else applyDriverInput(pc, input);
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else if (!p.dead) updatePlayerOnFoot(w, input, dt);
-  updatePlayerCombat(w, input, dt);
+  } else if (!p.dead && !p.ride) updatePlayerOnFoot(w, input, dt);
+  if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
   for (const c of w.cars) if (c.driver === 'npc') { driveAi(c, w, dt); updateService(w, c, dt); }
@@ -546,6 +639,12 @@ export function updateWorld(w, input, dt) {
   }
 
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
+  updatePlayerTrain(w, input, dt); // vom Spieler geführter Zug (playertrain.js)
+  if (p.ride) updateRide(w); // Fahrgast/Fahrer sitzt im Wagen (nach dem Fortschreiben der Fahrzeuge)
+  // Tunnelansicht weich ein-/ausblenden (render.js/tunnelview.js), 0 = oben, 1 = unter Tage
+  const ugTarget = p.ride?.underground ? 1 : 0;
+  w.underground = (w.underground ?? 0) + (ugTarget - (w.underground ?? 0)) * Math.min(1, dt / 0.6);
+  if (Math.abs(w.underground - ugTarget) < 0.01) w.underground = ugTarget;
 
   if (pc) { p.x = pc.x; p.y = pc.y; p.angle = pc.angle; }
   updateLevels(w); // Ebene je Objekt (Brücke, Boden, Unterführung) – levels.js
@@ -571,7 +670,7 @@ export function updateWorld(w, input, dt) {
       && Math.hypot(c.x - cam.x, c.y - cam.y) > 900));
 
   // Spieler zu Fuß gegen Autos.
-  if (!p.inCar) {
+  if (!p.inCar && !p.ride) {
     for (const c of w.cars) {
       const mm = circleVsObb(p.x, p.y, PLAYER.radius, c);
       if (!mm || !touch(w.city, p, c)) continue;
@@ -689,6 +788,7 @@ export function updateCamera(w, dt) {
     tx = car.x + car.vx * 0.45; ty = car.y + car.vy * 0.45;
     zoom = 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28;
   }
+  if (p.ride) { const ahead = p.ride.kind === 'driver' ? (p.ride.speed ?? 0) * 0.6 : 0; tx = p.x + Math.cos(p.angle) * ahead; ty = p.y + Math.sin(p.angle) * ahead; zoom = 1 - clamp((p.ride.speed ?? 0) / 330, 0, 1) * 0.28; }
   cam.x = damp(cam.x, tx, 5, dt);
   cam.y = damp(cam.y, ty, 5, dt);
   cam.zoom = damp(cam.zoom, zoom, 2, dt);

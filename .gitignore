@@ -10,3 +10,4 @@ xbox/.vs/
 *.user
 .playwright-mcp/
 data/raw/
+.superpowers/

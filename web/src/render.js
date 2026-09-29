@@ -19,8 +19,9 @@ import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, 
 import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
 import { transitVisible } from './transitlive.js';
-import { patternsNear } from './transit.js';
-import { segDist2 } from './geom.js';
+import { patternsNear, trainCars } from './transit.js';
+import { drawTunnels } from './tunnelview.js';
+import { railAt } from './tunnel.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
@@ -828,7 +829,8 @@ export class Renderer {
 
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
     this.stats.lights = 0;
-    if (L.dark > 0.02) {
+    const under = world.underground ?? 0;
+    if (L.dark > 0.02 && under <= 0.5) { // unter Tage dunkelt die Tunnelansicht ab – nicht doppelt
       const fill = `rgb(${Math.round(L.ambient[0] * 255)},${Math.round(L.ambient[1] * 255)},${Math.round(L.ambient[2] * 255)})`;
       this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers),
         (g) => this.lightOccluders(g, cam, fill, L));
@@ -841,6 +843,8 @@ export class Renderer {
     this.stats.bolts = strikes.length ? drawLightning(ctx, v, strikes, cam) : 0;
 
     if (this.debug?.silhouettes !== false) for (const c of covered) this.drawCovered(ctx, c, s, t);
+    // Unter Tage (Fahrgast/Fahrer in U-/S-Bahn): Stadt abdunkeln, Röhren, Bahnsteige, Züge im Tunnel
+    this.stats.tunnel = drawTunnels(ctx, world, v, t, under);
     if (this.debug?.levels) this.drawLevelDebug(city, v, s);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
@@ -1316,8 +1320,7 @@ export class Renderer {
     }
     for (const b of world.bikes ?? []) if (near(b.x, b.y)) add(b, b.y, b.y, () => drawBike(ctx, b, riderShirt(b), L.sun, t), 9, 3.5, b.angle);
     // Bahnen: S-/U-Bahn nur, wo ihr Gleis oberirdisch liegt (sonst im Tunnel)
-    const rq = this._rq ??= [];
-    const railNear = (x, y) => { for (const f of city.render.query({ x: x - 50, y: y - 50, w: 100, h: 100 }, rq)) if (f.layer === 'rail') { const p = f.pts; for (let i = 0; i < p.length - 2; i += 2) if (segDist2(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 2500) return f; } return null; };
+    const railNear = (x, y) => railAt(city, x, y);
     const trains = this._trains = transitVisible(world, v, (x, y) => !!railNear(x, y));
     this.stats.trains = trains.length;
     for (const tr of trains) for (const c of tr.cars) {
@@ -1330,8 +1333,24 @@ export class Renderer {
         add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t), c.L / 2, c.W / 2, c.angle, { late: true, skipCover: true });
       }
     }
+    // vom Spieler geführter Zug (playertrain.js): Straßenbahn immer, S-/U-Bahn wo das Gleis oben liegt (sonst Tunnelansicht)
+    const ptn = world.playerTrain;
+    if (ptn && city.transit) {
+      const p = city.transit.patterns[ptn.pid];
+      for (const c of trainCars(p, ptn.s)) {
+        if (p.mode === 'tram') {
+          if (!near(c.x, c.y)) continue;
+          const o = { x: c.x, y: c.y, lvl: upper.length ? trackLevel(c.x, c.y, upper, ground) : 0 };
+          add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, 'tram', L.sun, true, t), c.L / 2, c.W / 2, c.angle);
+        } else {
+          const r = railNear(c.x, c.y);
+          if (!r) continue;
+          add({ x: c.x, y: c.y, lvl: r.lvl ?? 0 }, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, p.mode, L.sun, true, t), c.L / 2, c.W / 2, c.angle, { late: true, skipCover: true });
+        }
+      }
+    }
     const pl = world.player;
-    if (!pl.inCar) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
+    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
     return out;
   }
 

@@ -296,7 +296,7 @@ export function updateFight(ped, world, dt, move) {
   ped.fightT = (ped.fightT ?? 0) + dt;
   ped.punch = Math.max(0, (ped.punch ?? 0) - dt);
   const dx = p.x - ped.x, dy = p.y - ped.y, d = Math.hypot(dx, dy);
-  if (p.dead || p.inCar || d > FIGHT.far || ped.fightT > FIGHT.giveUp) return false; // aufgeben
+  if (p.dead || p.inCar || p.ride || d > FIGHT.far || ped.fightT > FIGHT.giveUp) return false; // aufgeben (auch: Spieler fährt mit)
   ped.facing = Math.atan2(dy, dx);
   if (d > FIGHT.reach) { const v = Math.min(d - FIGHT.reach + 1, PED.run * 0.85 * dt); move(ped, dx / d * v, dy / d * v, world); }
   ped.hitCd = (ped.hitCd ?? 0) - dt;

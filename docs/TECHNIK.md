@@ -443,6 +443,29 @@ wird ein Pfad je Lichtfarbe, in der Lichtkarte heller und im Nebel gedämpft.
 - S-/U-Bahn werden nur gezeichnet, wo ein Gleis der Karte (oberirdisch, Tunnel sind im Build ausgenommen) höchstens
   5 m entfernt liegt; ihr Rumpeln (auch im Tunnel) speist den Umgebungsklang.
 
+**Mitfahren und selbst fahren** (`web/src/ride.js`, `web/src/playertrain.js`, `web/src/trainphysics.js`,
+`web/src/tunnel.js`, `web/src/tunnelview.js`):
+- Fahrzeug-Referenzen statt Kopien: `{ pid, key }` (virtuelles Fahrplan-Fahrzeug), `{ carId }` (Bus als KI-Auto),
+  `{ playerTrain: true }` (der Zug des Spielers). `vehicleState` liefert daraus Lage, Tempo, Wagen, Halt und ob es
+  unter Tage fährt – oder `null`, sobald das Fahrzeug weg ist; dann steigt der Spieler zu Fuß an der letzten Haltestelle
+  aus (bei S-/U-Bahn an deren Straßenausgang, nie im Gleisbett). Dieselbe Regel gilt für Teleport, K. o. und den
+  Spielstand. Der Fahrgast sitzt in einem Wagen und wird mit ihm fortgeschrieben (nach `updateTransit`).
+- Übernehmen: das virtuelle Fahrzeug wird aus dem Fahrplan genommen (`gone`) und als `w.playerTrain` mit derselben
+  Lage und demselben Tempo fortgeführt. `trainphysics.js` ist rein: Zugkraft mit abfallender Kurve oberhalb von 40 %
+  des Höchsttempos, Betriebs- und Notbremse, Rollwiderstand, Türen. **Zwangsbremsung:** ein Weglimit (Endhalt, Zug
+  voraus, Hindernis auf dem Straßenbahngleis) begrenzt das Tempo auf die Notbrems-Kurve √(2·a·Restweg) – der Zug hält
+  davor, auch wenn der Spieler Vollgas gibt. Züge desselben Musters dahinter warten (Rückruf in `stepTransit`).
+  Trinkgeld aus Haltegenauigkeit (±30 px voll) und der größten Verzögerung der letzten 8 s.
+- Tunnel: die Karte hat keine Tunnelgleise (der Build verwirft sie). Unter Tage heißt deshalb: S-/U-Bahn und im Umkreis
+  von 5 m kein sichtbares Gleis, **das in Fahrtrichtung verläuft** (±35°) – an Kottbusser Tor liegt die U8 sonst unter
+  dem querenden U1-Viadukt „oben“. Eine noch nicht geladene Kachel gilt als oberirdisch (kein Aufblitzen beim
+  Nachladen). Die Tunnelansicht blendet über `w.underground` weich ein: abgedunkelte Stadt, Röhren entlang der
+  Linienwege, ein Bahnsteig je Richtung und Bahnhof dem (gebogenen) Weg entlang, Züge in der Röhre.
+- Straßenbahngleise kennt die Karte ebenfalls nicht (der Build übernimmt nur rail/light_rail/subway); ihr Verlauf steht
+  nur in den Linienwegen des Fahrplans (`tramTrackNear`). Parkplätze auf einem solchen Weg entfallen.
+- Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; wo der Linienweg einer Straßenbahn in der Gegenspur
+  liegt, warten entgegenkommende Busse auf die Bahn und die Bahn auf sie (offener Punkt).
+
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
 Reichweite, Pause zwischen Angriffen, Streuung, Magazin, Nachladezeit, Kugeln je Schuss). Schüsse sind sofortige
 Strahlen ab der Körpermitte gegen die vorhandenen Kollisionsdaten (Hauswand-Segmente, Stadtgrenze, Baumkreise,

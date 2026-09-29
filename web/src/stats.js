@@ -17,6 +17,11 @@ export const STAT_SECTIONS = [
     ['bollards', 'Poller umgefahren', 'n'], ['carjacks', 'Autos geklaut', 'n'], ['carsEntered', 'Autos gefahren', 'n'],
     ['ownWrecks', 'eigene Autos Schrott', 'n'],
   ]],
+  ['Nahverkehr', [
+    ['rides', 'Mitfahrten', 'n'], ['kmTransit', 'Strecke als Fahrgast', 'km'], ['trainsTaken', 'Bahnen geführt', 'n'],
+    ['kmTrainDriven', 'Strecke als Zugführer', 'km'], ['stopsServed', 'Halte bedient', 'n'], ['tipsEarned', 'Trinkgeld', 'eur'],
+    ['hopsOn', 'aufgesprungen', 'n'], ['hopsOff', 'abgesprungen', 'n'],
+  ]],
   ['Kampf', [
     ['kills', 'Menschen getötet', 'n'], ['killsShot', 'davon erschossen', 'n'], ['killsMelee', 'davon im Nahkampf', 'n'],
     ['shots', 'Schüsse', 'n'], ['bullets', 'Kugeln', 'n'], ['hits', 'Treffer', 'n'], ['carsDestroyed', 'Autos zerstört', 'n'],
@@ -65,7 +70,8 @@ export function trackStep(sets, tr, world, events, dt) {
     const d = Math.hypot(p.x - tr.x, p.y - tr.y);
     if (d < 600) {
       add(sets, 'kmTotal', d / PX_PER_KM);
-      add(sets, car ? 'kmCar' : 'kmFoot', d / PX_PER_KM);
+      const riding = p.ride;
+      add(sets, car ? 'kmCar' : riding ? (riding.kind === 'driver' ? 'kmTrainDriven' : 'kmTransit') : 'kmFoot', d / PX_PER_KM);
     }
   }
   if (car) add(sets, 'topKmh', Math.hypot(car.vx, car.vy) * SPEED_TO_KMH);
@@ -73,7 +79,9 @@ export function trackStep(sets, tr, world, events, dt) {
   const lvl = (car ?? p).lvl ?? 0;
   if (lvl >= 1 && !(tr.lvl >= 1)) add(sets, 'bridges');
   // Geld: jedes Plus aus Aufträgen (Ausgaben wie das Krankenhaus zählen extra)
-  if (tr.money !== null && world.money > tr.money) add(sets, 'moneyEarned', world.money - tr.money);
+  // Trinkgeld als Zugführer zählt eigens (tipsEarned), nicht noch einmal als verdientes Geld
+  const tips = events.reduce((a, e) => a + (e.type === 'tip' ? e.amount ?? 0 : 0), 0);
+  if (tr.money !== null && world.money - tips > tr.money) add(sets, 'moneyEarned', world.money - tips - tr.money);
   Object.assign(tr, { x: p.x, y: p.y, inCar: p.inCar, lvl, money: world.money });
   for (const e of events) {
     switch (e.type) {
@@ -95,6 +103,11 @@ export function trackStep(sets, tr, world, events, dt) {
       case 'mission-success': add(sets, 'missions'); break;
       case 'mission-fail': add(sets, 'missionsFailed'); break;
       case 'teleport': add(sets, 'teleports'); break;
+      case 'board': add(sets, 'rides'); if (e.hop) add(sets, 'hopsOn'); break;
+      case 'alight': if (e.hop) add(sets, 'hopsOff'); break;
+      case 'train-take': add(sets, 'trainsTaken'); break;
+      case 'doors-open': add(sets, 'stopsServed'); break;
+      case 'tip': add(sets, 'tipsEarned', e.amount ?? 0); break;
       case 'cheat': add(sets, 'cheats'); break;
     }
   }

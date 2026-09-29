@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeZip, listZip, zipCsv, csvRow } from '../tools/osm/zip.mjs';
 import { buildTransit, modeOf, pickDates, candidateDates, serviceDays, projectionFromMeta, undelta1 } from '../tools/osm/transit.mjs';
-import { prepareTransit, departuresPerHour, positionAt, initialVehicles, stepTransit, pointOn, patternsNear, trainCars, dayType } from '../web/src/transit.js';
+import { prepareTransit, departuresPerHour, positionAt, initialVehicles, stepTransit, pointOn, patternsNear, trainCars, dayType, TRAIN } from '../web/src/transit.js';
 import { realCity, realIndex, realTransit } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 import { createWorld, updateWorld, resetPopulation } from '../web/src/world.js';
@@ -236,3 +236,30 @@ test('S- und U-Bahn nur sichtbar, wo ihr Gleis oberirdisch liegt; Straßenbahnen
   assert.ok(insideBorder(city, kotti.x, kotti.y));
 });
 const tr0 = () => realTransit().patterns.find((p) => p.mode === 'ubahn');
+
+test('Parken: kein Stellplatz auf einem Straßenbahngleis (Gleise kennt nur der Fahrplan, nicht die Karte)', async () => {
+  const { parkingSlots } = await import('../web/src/world.js');
+  const { segDist2 } = await import('../web/src/geom.js');
+  const city = realCity(), tr = city.transit, clear = TRAIN.tram.W / 2 + 10 + 3; // halbe Bahn + halbes Auto + Luft
+  const trams = tr.patterns.filter((p) => p.mode === 'tram');
+  let slots = 0, onTrack = 0;
+  for (const e of city.list('edge')) {
+    for (const s of parkingSlots(city, e)) {
+      slots++;
+      const near = trams.some((p) => { const q = p.shape.pts; for (let i = 0; i < q.length - 2; i += 2) if (segDist2(s.x, s.y, q[i], q[i + 1], q[i + 2], q[i + 3]) < clear * clear) return true; return false; });
+      if (near) onTrack++;
+    }
+  }
+  assert.ok(slots > 1000, `genug Stellplätze geprüft (${slots})`);
+  assert.equal(onTrack, 0, `${onTrack} von ${slots} Stellplätzen liegen auf einem Straßenbahngleis`);
+});
+
+test('Parken: kommt der Fahrplan erst nach den Stellplätzen (Browser lädt ihn nach), werden sie neu berechnet', async () => {
+  const { parkingSlots } = await import('../web/src/world.js');
+  const city = realCity(), bare = { ...city, transit: undefined };
+  const e = city.list('edge').find((x) => { x._slots = undefined; const a = parkingSlots(bare, x).length; x._slots = undefined; return parkingSlots(city, x).length < a; });
+  assert.ok(e, 'eine Straße mit Stellplätzen auf dem Gleis');
+  e._slots = undefined;
+  const before = parkingSlots(bare, e).length; // ohne Fahrplan zwischengespeichert
+  assert.ok(parkingSlots(city, e).length < before, 'mit Fahrplan fallen die Plätze auf dem Gleis weg');
+});
