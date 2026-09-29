@@ -175,3 +175,19 @@ test('Haftung des eigenen Zugs: oberirdisch nass/Frost geringer, im Tunnel immer
   const i = u8.stopNames.findIndex((n) => n.includes('Kottbusser Tor'));
   assert.equal(trainAdhesion(w, { pid: u8.id, s: u8.stops[i] }), 1, 'unter Tage trocken');
 });
+
+test('Eigener Zug auf nassen Schienen: längerer Bremsweg in der Welt', () => {
+  const brake = (wet) => {
+    const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+    w.trafficScale = 0; w.wet = wet; w.forceWeather = wet ? 'rain' : 'clear';
+    const drive = (patch) => { w.cars.length = 0; w.wet = wet; press(w, patch); };
+    drive({ enterExit: true });
+    const t = w.playerTrain;
+    while (t.v < 80) drive({ throttle: 1 });
+    const s0 = t.s;
+    for (let i = 0; i < 60 * 30 && t.v > 0; i++) drive({ brake: 1 });
+    return t.s - s0;
+  };
+  const dry = brake(0), wet = brake(1);
+  assert.ok(wet > dry * 1.2, `nass ${wet.toFixed(0)} px, trocken ${dry.toFixed(0)} px`);
+});
