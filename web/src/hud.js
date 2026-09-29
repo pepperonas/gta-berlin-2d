@@ -19,6 +19,7 @@ import { AREA_KIND } from './citycodes.js';
 import { VERSION } from './version.js';
 import { missionObjective, BRIEFING } from './mission.js';
 import { playerCar, speedOf } from './world.js';
+import { vehicleState } from './ride.js';
 
 const MINI_AREA = { [AREA_KIND.rail]: '#4a4640', [AREA_KIND.allotments]: '#35602c', [AREA_KIND.cemetery]: '#2f5a2a', [AREA_KIND.grass]: '#2f5a2a', [AREA_KIND.pitch]: '#2f5a2a', [AREA_KIND.sand]: '#6b6040', [AREA_KIND.wood]: '#284d22', [AREA_KIND.bridge]: '#4a4540' };
 const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus: 'Bushaltestelle', mall: 'Einkaufszentrum',
@@ -374,8 +375,16 @@ export class Hud {
       }
     }
 
-    // Unten links: Minikarte (beim Briefing ausgeblendet)
-    if (ms !== 'briefing') this.drawMinimap(world, obj.target, m.x, vh - m.y - 200, 200);
+    // Oben mittig: Fahrgast-/Fahrerleiste (Linie, Ziel, nächster Halt; als Fahrer Tempo und Türen)
+    this.drawRideBar(world);
+
+    // Unten links: Minikarte (beim Briefing ausgeblendet; unter Tage gedämpft)
+    if (ms !== 'briefing') {
+      const dim = (world.underground ?? 0) > 0.5;
+      if (dim) { c.save(); c.globalAlpha = 0.6; }
+      this.drawMinimap(world, obj.target, m.x, vh - m.y - 200, 200);
+      if (dim) c.restore();
+    }
 
     // Unten rechts: Fahrzeugzustand
     if (car) {
@@ -419,6 +428,33 @@ export class Hud {
     }
     if (mission.state === 'briefing') this.drawBriefing();
     if (world.loading) this.drawLoading(world);
+  }
+
+  // Fahrgast-/Fahrerleiste oben mittig; weicht links aus, wenn rechts das Auftragsfeld steht
+  drawRideBar(world) {
+    const r = world.player.ride;
+    if (!r) return;
+    const c = this.ctx, w = 440, h = r.kind === 'driver' ? 92 : 64, y = this.m.y, mis = this.layout?.mission;
+    let x = this.vw / 2 - w / 2;
+    if (mis && mis.y < y + h && mis.y + mis.h > y) x = Math.min(x, mis.x - 16 - w);
+    this.layout = { ...(this.layout ?? {}), rideBar: { x, y, w, h } };
+    const st = vehicleState(world, r.ref);
+    this.panel(x, y, w, h);
+    const col = st?.p.color ? `#${String(st.p.color).replace('#', '')}` : YELLOW;
+    c.fillStyle = col; rr(c, x + 14, y + 12, 58, 26, 6); c.fill();
+    this.text(r.line, x + 43, y + 31, { size: 16, weight: 900, align: 'center', color: st?.p.color ? '#fff' : '#111', shadow: false });
+    this.text(`→ ${String(r.dest ?? '').replace(/^[SU]\s+/, '')}`, x + 84, y + 31, { size: 16, weight: 700 });
+    const next = st ? st.p.stopNames[Math.min(st.p.stopNames.length - 1, st.stop)] ?? '' : '';
+    const line2 = st?.dwelling ? `Hält: ${next}` : `Nächster Halt: ${next}`;
+    this.text(line2.replace(/\s\(.*\)$/, ''), x + 14, y + 56, { size: 15, weight: 600, color: '#ddd' });
+    if (r.kind === 'passenger') this.text(st?.underground && !st.dwelling ? 'Aussteigen nur am Bahnsteig' : 'G: aussteigen', x + w - 14, y + 56, { size: 13, weight: 700, align: 'right', color: '#aaa' });
+    if (r.kind === 'driver' && world.playerTrain) {
+      const t = world.playerTrain, kmh = Math.round(t.v * 0.36);
+      this.text(`${kmh} km/h`, x + 14, y + 82, { size: 18, weight: 800, color: t.blocked ? '#ff8080' : '#fff' });
+      const doors = t.drive.doors === 'open' ? 'Türen offen – E/A schließen' : t.atStop ? 'E/A: Türen öffnen' : t.blocked ? 'Zug voraus' : 'W/RT Gas · S/LT Bremse · Leertaste/B Notbremse';
+      this.text(doors, x + w - 14, y + 82, { size: 13, weight: 700, align: 'right', color: t.atStop ? YELLOW : '#aaa' });
+    }
+    this.counts = this.counts ?? {}; this.counts.rideBar = true;
   }
 
   // Welt wartet auf Kacheln: Fortschritt, oder klarer Hinweis, wenn der Spielserver nicht antwortet.

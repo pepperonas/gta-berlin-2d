@@ -19,7 +19,8 @@ import { drawCloudShadows, drawOvercast, drawRainLayers, drawWetRoads, drawFog, 
 import { drawUmbrella } from './critters.js';
 import { drawTrainCar, tramRails } from './railart.js';
 import { transitVisible } from './transitlive.js';
-import { patternsNear } from './transit.js';
+import { patternsNear, trainCars } from './transit.js';
+import { drawTunnels } from './tunnelview.js';
 import { railAt } from './tunnel.js';
 import { Lighting, casterBox, makeCanvas } from './lighting.js';
 import { edgeLamps } from './lamps.js';
@@ -828,7 +829,8 @@ export class Renderer {
 
     // 9b) Dämmerung/Nacht: Lichtkarte über die Welt legen
     this.stats.lights = 0;
-    if (L.dark > 0.02) {
+    const under = world.underground ?? 0;
+    if (L.dark > 0.02 && under <= 0.5) { // unter Tage dunkelt die Tunnelansicht ab – nicht doppelt
       const fill = `rgb(${Math.round(L.ambient[0] * 255)},${Math.round(L.ambient[1] * 255)},${Math.round(L.ambient[2] * 255)})`;
       this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers),
         (g) => this.lightOccluders(g, cam, fill, L));
@@ -841,6 +843,8 @@ export class Renderer {
     this.stats.bolts = strikes.length ? drawLightning(ctx, v, strikes, cam) : 0;
 
     if (this.debug?.silhouettes !== false) for (const c of covered) this.drawCovered(ctx, c, s, t);
+    // Unter Tage (Fahrgast/Fahrer in U-/S-Bahn): Stadt abdunkeln, Röhren, Bahnsteige, Züge im Tunnel
+    this.stats.tunnel = drawTunnels(ctx, world, v, t, under);
     if (this.debug?.levels) this.drawLevelDebug(city, v, s);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
@@ -1329,8 +1333,24 @@ export class Renderer {
         add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, tr.mode, L.sun, tr.lit, t), c.L / 2, c.W / 2, c.angle, { late: true, skipCover: true });
       }
     }
+    // vom Spieler geführter Zug (playertrain.js): Straßenbahn immer, S-/U-Bahn wo das Gleis oben liegt (sonst Tunnelansicht)
+    const ptn = world.playerTrain;
+    if (ptn && city.transit) {
+      const p = city.transit.patterns[ptn.pid];
+      for (const c of trainCars(p, ptn.s)) {
+        if (p.mode === 'tram') {
+          if (!near(c.x, c.y)) continue;
+          const o = { x: c.x, y: c.y, lvl: upper.length ? trackLevel(c.x, c.y, upper, ground) : 0 };
+          add(o, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, 'tram', L.sun, true, t), c.L / 2, c.W / 2, c.angle);
+        } else {
+          const r = railNear(c.x, c.y);
+          if (!r) continue;
+          add({ x: c.x, y: c.y, lvl: r.lvl ?? 0 }, c.y + 4, c.y + 4, () => drawTrainCar(ctx, c, p.mode, L.sun, true, t), c.L / 2, c.W / 2, c.angle, { late: true, skipCover: true });
+        }
+      }
+    }
     const pl = world.player;
-    if (!pl.inCar) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
+    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
     return out;
   }
 

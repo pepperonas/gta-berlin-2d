@@ -111,3 +111,29 @@ test('Steuerungsbildschirm: Tabelle passt in den 720px-Rahmen mit Abstand', () =
   const gap = footerHit.y - lastRowBandBottom;
   assert.ok(gap >= 12, `Letzte Tabellenzeile (Bandunterkante ${lastRowBandBottom.toFixed(0)}) reicht zu nah an den Fußzeilen-Hinweis (dessen Klickfläche beginnt bei ${footerHit.y.toFixed(0)}, Abstand ${gap.toFixed(0)}px)`);
 });
+
+test('Fahrgast-/Fahrerleiste: im Bild, ohne NaN, überlappt das Auftragsfeld nicht', async () => {
+  const { createWorld } = await import('../web/src/world.js');
+  const { createDrive } = await import('../web/src/trainphysics.js');
+  const tr = city.transit, p = tr.patterns.find((q) => q.mode === 'tram' && q.name === 'M10');
+  const g = createGame({ storage: memoryStorage(), city }); g.screen = 'playing'; g.hintT = 99; g.worldScale = 1.8;
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); g.world = w;
+  w.mission.state = 'toPickup'; w.mission.timer = 100;
+  w.playerTrain = { pid: p.id, s: p.stops[2] + 40, v: 12, drive: createDrive('tram', 12), nextStop: 3, served: [], atStop: null, leftT: null, passengers: 30 };
+  for (const kind of ['driver', 'passenger']) {
+    w.player.ride = { kind, ref: { playerTrain: true }, mode: 'tram', car: 0, lastStop: { x: 0, y: 0, name: 'x', i: 2, pid: p.id }, since: 0, line: 'M10', dest: p.stopNames.at(-1), speed: 12 };
+    for (const [W, H] of SIZES) {
+      const texts = [], ctx = fakeCtx();
+      ctx.fillText = (t, x, y) => texts.push({ t: String(t), x, y });
+      const hud = new Hud(ctx); hud.begin(W, H); hud.drawGameplay(w, g);
+      const L = hud.layout;
+      assert.ok(hud.counts?.rideBar, `${kind} ${W}×${H}: Leiste gezeichnet`);
+      assert.ok(inside(L.rideBar, hud.vw, hud.vh), `${kind} ${W}×${H}: Leiste ragt aus dem Bild ${JSON.stringify(L.rideBar)}`);
+      assert.ok(!overlap(L.rideBar, L.mission), `${kind} ${W}×${H}: Leiste überlappt das Auftragsfeld`);
+      assert.ok(texts.every((q) => !q.t.includes('NaN') && !q.t.includes('undefined') && Number.isFinite(q.x) && Number.isFinite(q.y)), `${kind}: ${JSON.stringify(texts.filter((q) => /NaN|undefined/.test(q.t) || !Number.isFinite(q.x) || !Number.isFinite(q.y)))}`);
+      assert.ok(texts.some((q) => q.t === 'M10'), 'Linie');
+      assert.ok(texts.some((q) => /Halt/.test(q.t)), 'nächster Halt');
+      if (kind === 'driver') assert.ok(texts.some((q) => /^\d+ km\/h$/.test(q.t)) && texts.some((q) => /Gas|Türen|Zug voraus/.test(q.t)), 'Tacho und Bedienhinweis');
+    }
+  }
+});

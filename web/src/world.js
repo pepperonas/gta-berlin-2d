@@ -640,6 +640,10 @@ export function updateWorld(w, input, dt) {
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
   updatePlayerTrain(w, input, dt); // vom Spieler geführter Zug (playertrain.js)
   if (p.ride) updateRide(w); // Fahrgast/Fahrer sitzt im Wagen (nach dem Fortschreiben der Fahrzeuge)
+  // Tunnelansicht weich ein-/ausblenden (render.js/tunnelview.js), 0 = oben, 1 = unter Tage
+  const ugTarget = p.ride?.underground ? 1 : 0;
+  w.underground = (w.underground ?? 0) + (ugTarget - (w.underground ?? 0)) * Math.min(1, dt / 0.6);
+  if (Math.abs(w.underground - ugTarget) < 0.01) w.underground = ugTarget;
 
   if (pc) { p.x = pc.x; p.y = pc.y; p.angle = pc.angle; }
   updateLevels(w); // Ebene je Objekt (Brücke, Boden, Unterführung) – levels.js
