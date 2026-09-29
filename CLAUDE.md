@@ -182,6 +182,14 @@ change in `web/`.
   tramTrackNear`); parking slots avoid them (`e._slots` is keyed on `city.transit`, which loads async in the browser).
   Trams have right of way: an AI car with a tram car head-on in front (`traffic.js tramHeadOn`) backs up (`ai.tramYield`),
   the car behind a yielding car too — the timetable shape lies in the oncoming lane on ~1.3 % of tram track.
+- **On-foot PC controls (0.32.0):** `game.settings.controls` = `'diablo'` (default) | `'classic'` (localStorage
+  `gta-controls`, toggled with ←/→ on the controls screen). Diablo input fields `clickWorld/clickPressed/clickHeld/
+  clickForce/walkSlow` (see `idle.js`, set by `main.js applyPointer`); `world.js clickControl` turns them into the
+  normal inputs before `updatePlayerOnFoot` (path via pure `footpath.js findFootPath`, A* on 8 px cells; attack via
+  `combat.js pickTarget`; WASD cancels). Speeds `PLAYER.walk/jog/sprint` + `STAMINA`; foot zoom `FOOT_ZOOM`/
+  `setFootZoom` (`w.footZoom`, localStorage `gta-foot-zoom`); render detail level (`DETAIL_ZOOM`, `stats.detail`) only
+  at quality high. Mouse aim snaps only via `pickTarget` under the cursor, spread × `spreadFactor(p)`; gamepad keeps
+  `aimAssist`. Trams give up yielding after `TRAM_PATIENCE` (20 s) against a strictly persisting obstacle.
 - **Access:** fences/walls/hedges/bollard lines open `GATE_M` (4.4 m) at gate nodes and wherever any highway way crosses
   them (build, `accessAndRules`). Barrier posts block AI traffic via `e.blocked`, but the player's car knocks them over
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop

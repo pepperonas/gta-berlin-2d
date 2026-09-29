@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.32.0] – 2026-09-29
+
+### Neu
+- **Neue Standard-Steuerung zu Fuß am PC (nach Diablo 3):** Klick auf den Boden läuft (halten = folgen, Wegfindung),
+  Klick auf Person/Auto greift an, Umschalt + Klick greift auf der Stelle an, rechte Maustaste tritt, Tab = Waffenrad,
+  Mausrad zoomt, Leertaste sprintet, Alt geht. Die bisherige Steuerung bleibt als „Klassisch“ wählbar (Menü Steuerung).
+- **Näherer Zoom zu Fuß** (2,0, per Mausrad 1,5–2,6) mit Detailstufe: Berliner Gehwege, Granit-Bordsteine, Baumscheiben.
+- **Realistische Geschwindigkeiten:** Joggen 3,5 m/s, Gehen 1,5 m/s, Sprint 7 m/s mit Ausdauer; Passanten 1,3 m/s.
+
+### Geändert
+- Maus-Zielhilfe rastet nur noch ein, wenn der Zeiger auf dem Ziel liegt; Streuung wächst mit der Bewegung.
+
+### Behoben
+- Fliehende Passanten liefen in Häuser.
+- Straßenbahnen warteten ewig auf ein Auto, das nicht zurücksetzen konnte; nach 20 s fahren sie vorsichtig vorbei.
+- Die Erkennung einer entgegenkommenden Bahn für Autos prüft jetzt denselben Bereich wie die Bahn selbst.
+
 ## [0.31.0] – 2026-09-29
 
 ### Neu

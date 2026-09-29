@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.31.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.32.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -167,6 +167,21 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 
 ## Steuerung
 
+Zu Fuß am PC gibt es zwei Schemata; gewählt wird im Menü „Steuerung“ mit ← / → (gespeichert):
+
+- **Diablo (Standard):** linke Maustaste auf den Boden läuft dorthin (halten = folgen, Wegfindung um Häuser und
+  Hindernisse), auf eine Person oder ein Auto greift an (läuft erst in Reichweite), Umschalt + linke Maustaste greift
+  auf der Stelle an, rechte Maustaste tritt, Tab halten öffnet das Waffenrad, Mausrad zoomt (1,5–2,6), Leertaste
+  sprintet, Alt geht langsam. WASD läuft weiterhin und bricht einen Klick ab. Im Auto gilt die normale Steuerung.
+- **Klassisch:** wie in der Tabelle unten (WASD laufen, Maus zielen, linke Maustaste schießen, rechte Maustaste
+  Waffenrad/Einsteigen).
+
+Zu Fuß: Joggen 3,5 m/s, Gehen 1,5 m/s (Alt oder Stick halb), Sprint 7 m/s mit Ausdauer (reicht etwa 8 s, erholt sich
+nach 1 s Pause). Die Kamera zoomt zu Fuß näher heran (2,0); ab Zoom 1,7 zeigt die Detailstufe Berliner Gehwege
+(Granitplatten mit Mosaikstreifen), Granit-Bordsteine und Baumscheiben. Zielhilfe mit der Maus rastet nur ein, wenn der
+Zeiger auf dem Ziel liegt; die Streuung wächst mit der Bewegung (Stehen am genauesten, Sprinten am ungenauesten). Mit
+dem Controller bleibt die Zielhilfe wie gehabt.
+
 | Aktion | Xbox-Controller | Tastatur |
 |---|---|---|
 | Laufen / Lenken | Linker Stick | WASD / Pfeiltasten |
@@ -201,7 +216,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 295 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 398 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -419,7 +434,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 386 automatischen Tests grün, darunter:
+- Alle 398 automatischen Tests grün, darunter:
+  - 0.32.0: Laufgeschwindigkeiten und Ausdauer, Passanten-Tempo, Zoom zu Fuß, Wegfindung zu Fuß um Häuser, Klick-Laufen
+    (WASD bricht ab), Klick-Angriff und Umschalt-Angriff, Schema-Umschaltung im Steuerungsmenü, Maus-Zielhilfe nur mit
+    Zeiger auf dem Ziel, größere Streuung im Laufen, Detailstufe nur bei nahem Zoom; eigene Straßenbahn fährt nach
+    20 s Geduld an einem nicht weichenden Auto vorbei; fliehende Passanten betreten keine Häuser mehr.
   - 0.31.0: Straßenbahn-Vorrang (an der M10-Stelle mit Gegenverkehr kommen die eigene Bahn und eine Fahrplanbahn in
     120 s zum nächsten Halt; ohne Zurücksetzen, mit zu enger Seitenprüfung oder ohne Mitzurücksetzen des Hintermanns
     scheitern die Tests); Wenden öffnet keine Türen, erneutes Türöffnen ist kein neuer Halt, ein stehengelassener Zug
