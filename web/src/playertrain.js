@@ -21,10 +21,25 @@ export function takeTrain(w, hit) {
   const s = w.transit.tracked.get(hit.ref.pid), v = s.veh.find((x) => x.key === hit.ref.key);
   v.gone = true; // aus dem Fahrplan
   const pos = positionAt(st.p, v.tau);
+  releaseTrain(w); // ein stehengelassener eigener Zug fährt als Fahrplanzug weiter
   w.playerTrain = { pid: st.p.id, s: st.s, v: st.speed, drive: createDrive(st.mode, st.speed), nextStop: pos.stop, served: [], atStop: null, leftT: null, passengers: 20 + Math.floor(hash01(st.p.id * 31 + Math.floor(w.clock)) * 60) };
   w.player.ride = { kind: 'driver', ref: { playerTrain: true }, mode: st.mode, car: 0, lastStop: { ...pointOn(st.p, st.p.stops[Math.max(0, pos.stop - 1)]), name: st.p.stopNames[Math.max(0, pos.stop - 1)], i: Math.max(0, pos.stop - 1), pid: st.p.id }, since: w.time, line: st.p.name, dest: st.p.stopNames[st.p.stopNames.length - 1] };
   w.events.push({ type: 'train-take', mode: st.mode, line: st.p.name, x: w.player.x, y: w.player.y });
   return true;
+}
+
+// Den stehengelassenen eigenen Zug an den Fahrplan zurückgeben: ein virtuelles Fahrzeug an seiner Stelle (Fahrzeit τ
+// per Bisektion aus der Bogenlänge – positionAt(p, τ).s wächst mit τ, in Haltezeiten steht es)
+export function releaseTrain(w) {
+  const t = w.playerTrain;
+  if (!t || w.player.ride?.kind === 'driver') return;
+  const p = w.city.transit.patterns[t.pid], st = w.transit?.tracked.get(t.pid);
+  if (st) {
+    let lo = 0, hi = p.duration;
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (positionAt(p, mid).s < t.s) lo = mid; else hi = mid; }
+    st.veh.push({ tau: hi, delay: 0, key: `pt${w.time.toFixed(3)}` });
+  }
+  w.playerTrain = null;
 }
 
 // Den eigenen, stehengelassenen Zug wieder übernehmen (Führerstand vorn)
@@ -92,11 +107,12 @@ export function updatePlayerTrain(w, input, dt) {
   if (driving && input.action && !atTerminus(w)) {
     if (t.drive.doors === 'closed' && t.atStop) {
       t.drive.doors = 'open'; t.drive.doorT = 0;
-      const tip = t.served.includes(t.atStop.i) ? 0 : tipFor(t.atStop.dist, maxDecel(t.drive));
-      t.served.push(t.atStop.i);
+      const first = !t.served.includes(t.atStop.i); // erneutes Öffnen: kein neuer bedienter Halt, kein Trinkgeld
+      const tip = first ? tipFor(t.atStop.dist, maxDecel(t.drive)) : 0;
+      if (first) t.served.push(t.atStop.i);
       const out = Math.floor(hash01(t.pid * 97 + t.atStop.i + Math.floor(w.clock / 10)) * 12), inn = Math.floor(hash01(t.pid * 53 + t.atStop.i * 7 + Math.floor(w.clock / 10)) * 14);
       t.passengers = Math.max(0, t.passengers - out) + inn;
-      w.events.push({ type: 'doors-open', out, inn });
+      w.events.push({ type: 'doors-open', out, inn, first });
       if (tip > 0) { w.money += Math.round(tip); w.events.push({ type: 'tip', amount: Math.round(tip) }); }
       const q = pointOn(p, p.stops[t.atStop.i]);
       w.player.ride.lastStop = { x: q.x, y: q.y, name: p.stopNames[t.atStop.i], i: t.atStop.i, pid: p.id };

@@ -209,3 +209,44 @@ test('Straßenbahn auf einer Straßenbrücke: die Zugspitze liegt auf der Ebene 
   w.wet = 1; w.ice = 0;
   assert.equal(trainAdhesion(w, { pid: p.id, s }), 0.75, 'nass auf der Brücke');
 });
+
+test('Wenden am Endhalt öffnet nicht zugleich die Türen am neuen ersten Halt', () => {
+  const p = pat('M1', 'tram'), n = p.stops.length, w = atFrontOf(p, n - 2);
+  w.trafficScale = 0;
+  const drive = (patch) => { w.cars.length = 0; press(w, patch); };
+  drive({ enterExit: true });
+  const t = w.playerTrain;
+  for (let i = 0; i < 60 * 180 && !(t.v === 0 && t.s >= p.stops[n - 1] - 30); i++) drive({ throttle: 1 });
+  drive({ action: true }); drive({ action: true });
+  const pid = t.pid;
+  drive({ action: true });
+  assert.notEqual(w.playerTrain.pid, pid, 'gewendet');
+  assert.equal(w.playerTrain.drive.doors, 'closed', 'Türen bleiben zu');
+});
+
+test('Türen am selben Halt erneut öffnen: nur das erste Öffnen ist ein bedienter Halt', () => {
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  const opens = [];
+  for (let k = 0; k < 4; k++) { press(w, { action: true }); opens.push(...w.events.filter((e) => e.type === 'doors-open')); }
+  assert.equal(opens.length, 2, 'zweimal geöffnet');
+  assert.deepEqual(opens.map((e) => e.first), [true, false]);
+});
+
+test('Einen zweiten Zug übernehmen: der erste fährt als Fahrplanzug weiter, statt zu verschwinden', () => {
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  press(w, { enterExit: true });
+  const first = w.playerTrain, s0 = first.s;
+  press(w, { enterExit: true }); // aussteigen
+  // zweites Fahrzeug derselben Linie am selben Halt, Spieler an dessen Führerstand
+  let tau = 0; while (!(positionAt(p, tau).stop === 3 && positionAt(p, tau).dwelling)) tau += 0.5;
+  w.transit.tracked.get(p.id).veh.push({ tau, delay: 0, key: 'zwei' });
+  const f = vehicleState(w, { pid: p.id, key: 'zwei' }).cars[0];
+  // das zweite Fahrzeug steht an derselben Stelle wie der erste Zug: den ersten 1 km zurücksetzen, damit sie sich nicht decken
+  first.s = s0 - 1000;
+  w.player.x = f.x + Math.cos(f.angle) * (f.L / 2 + 10); w.player.y = f.y + Math.sin(f.angle) * (f.L / 2 + 10);
+  press(w, { enterExit: true });
+  assert.notEqual(w.playerTrain, first, 'neuer Zug');
+  const back = w.transit.tracked.get(p.id).veh.find((v) => !v.gone && Math.abs(positionAt(p, v.tau).s - (s0 - 1000)) < 60);
+  assert.ok(back, 'der erste Zug steht als Fahrplanzug an seiner Stelle');
+});

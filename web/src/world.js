@@ -634,7 +634,8 @@ export function updateWorld(w, input, dt) {
       }
     }
   }
-  if (input.action && p.ride?.kind === 'driver' && atTerminus(w)) turnAround(w); // vor updatePlayerTrain: sonst öffnete E/A die Türen erneut
+  // Wenden verbraucht den Tastendruck – sonst öffnete updatePlayerTrain damit gleich die Türen am neuen ersten Halt
+  const trainInput = input.action && p.ride?.kind === 'driver' && atTerminus(w) && turnAround(w) ? { ...input, action: false } : input;
 
   const pc = playerCar(w);
   if (pc) {
@@ -661,7 +662,7 @@ export function updateWorld(w, input, dt) {
   }
 
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
-  updatePlayerTrain(w, input, dt); // vom Spieler geführter Zug (playertrain.js)
+  updatePlayerTrain(w, trainInput, dt); // vom Spieler geführter Zug (playertrain.js)
   if (p.ride) updateRide(w); // Fahrgast/Fahrer sitzt im Wagen (nach dem Fortschreiben der Fahrzeuge)
   // Tunnelansicht weich ein-/ausblenden (render.js/tunnelview.js), 0 = oben, 1 = unter Tage
   const ugTarget = p.ride?.underground ? 1 : 0;

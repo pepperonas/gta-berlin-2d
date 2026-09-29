@@ -68,7 +68,7 @@ export function trackStep(sets, tr, world, events, dt) {
   // Strecke: Sprünge (Teleport, Respawn) zählen nicht
   if (tr.x !== null) {
     const d = Math.hypot(p.x - tr.x, p.y - tr.y);
-    if (d < 600) {
+    if (d < 600 && !events.some((e) => e.type === 'ride-end')) { // Sprung ans Fahrtende (Notausstieg, K. o.) ist kein Weg
       add(sets, 'kmTotal', d / PX_PER_KM);
       const riding = p.ride;
       add(sets, car ? 'kmCar' : riding ? (riding.kind === 'driver' ? 'kmTrainDriven' : 'kmTransit') : 'kmFoot', d / PX_PER_KM);
@@ -106,7 +106,7 @@ export function trackStep(sets, tr, world, events, dt) {
       case 'board': add(sets, 'rides'); if (e.hop) add(sets, 'hopsOn'); break;
       case 'alight': if (e.hop) add(sets, 'hopsOff'); break;
       case 'train-take': add(sets, 'trainsTaken'); break;
-      case 'doors-open': add(sets, 'stopsServed'); break;
+      case 'doors-open': if (e.first !== false) add(sets, 'stopsServed'); break; // erneutes Öffnen am selben Halt zählt nicht
       case 'tip': add(sets, 'tipsEarned', e.amount ?? 0); break;
       case 'aquaplane': if (e.player) add(sets, 'aquaplanes'); break;
       case 'cheat': add(sets, 'cheats'); break;

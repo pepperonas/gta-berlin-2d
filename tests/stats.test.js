@@ -244,3 +244,13 @@ test('Statistik: Aquaplaning nur mit dem Spielerauto', () => {
   trackStep(S, tr, w, [{ type: 'aquaplane', player: true }, { type: 'aquaplane', player: false }], 0);
   assert.equal(S[0].aquaplanes, 1);
 });
+
+test('Statistik: erneutes Türöffnen am selben Halt zählt nicht; Sprung ans Fahrtende ist kein Fußweg', () => {
+  const w = fakeWorld(), tr = createTracker(), S = sets();
+  trackStep(S, tr, w, [], 0);
+  trackStep(S, tr, w, [{ type: 'doors-open', first: true }, { type: 'doors-open', first: false }], 0);
+  assert.equal(S[0].stopsServed, 1);
+  w.player.x += 300; // endRide setzt den Spieler an die letzte Haltestelle
+  trackStep(S, tr, w, [{ type: 'ride-end', reason: 'ko' }], 1 / 60);
+  assert.equal(S[0].kmFoot, 0, 'kein Fußweg');
+});
