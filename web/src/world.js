@@ -15,7 +15,8 @@ import { pointAlong } from './geom.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
-import { initCombat, updatePlayerCombat, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
+import { findFootPath } from './footpath.js';
+import { initCombat, updatePlayerCombat, pickTarget, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
@@ -480,6 +481,51 @@ function updateLevels(w) {
   if (pc) p.lvl = pc.lvl; else if (p.ride?.underground) { /* im Tunnel: updateRide setzt die Ebene */ } else if (!p.dead) upd(p, null);
 }
 
+// Klick-Steuerung zu Fuß (Diablo-Schema, main.js setzt clickWorld/clickPressed/clickHeld/clickForce): Klick auf den
+// Boden = hinlaufen (Weg um Hindernisse, footpath.js; gehalten = dem Zeiger folgen), Klick auf eine Person/ein Auto =
+// bis in Reichweite laufen und angreifen, Shift-Klick = stehen bleiben und zum Zeiger angreifen. Übersetzt das in die
+// gewohnten Eingaben (moveX/moveY, fire, aimWorld); WASD bricht einen Klick ab.
+function clickControl(w, input, dt) {
+  const p = w.player;
+  if (Math.hypot(input.moveX, input.moveY) > 0.05) { p.click = null; return input; }
+  const at = input.clickWorld;
+  if (at && (input.clickPressed || (input.clickHeld && (p.clickT = (p.clickT ?? 0) - dt) <= 0))) {
+    p.clickT = 0.15; // gehalten: Ziel alle 0,15 s neu
+    const t = input.clickForce ? null : pickTarget(w, at.x, at.y);
+    if (input.clickForce) p.click = { force: true, x: at.x, y: at.y };
+    else if (t) p.click = { target: t.obj };
+    else if (!p.click?.target || input.clickPressed) {
+      const path = findFootPath(w, p, at, p.lvl ?? 0);
+      p.click = path && path.length > 1 ? { path, i: 1 } : null;
+    }
+  }
+  const c = p.click;
+  if (!c) return input;
+  const out = { ...input };
+  if (c.force) {
+    if (!input.clickHeld && !input.clickPressed) { p.click = null; return input; }
+    return Object.assign(out, { aimWorld: { x: c.x, y: c.y }, fire: true, firePressed: !!input.clickPressed || (p.cool ?? 0) <= 0 });
+  }
+  if (c.target) {
+    const o = c.target, alive = o.state !== 'dead' && !o.wrecked && (w.peds.includes(o) || w.cars.includes(o));
+    if (!alive) { p.click = null; return input; }
+    const wp = WEAPONS[p.weapon ?? 0], dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy);
+    const reach = wp.melee ? (wp.range ?? 30) + 6 : (wp.range ?? 400) * 0.85;
+    if (d > reach) return Object.assign(out, { moveX: dx / d, moveY: dy / d });
+    // in Reichweite: angreifen (gehalten: wiederholt, sonst ein Angriff)
+    const ready = (p.cool ?? 0) <= 0;
+    if (!input.clickHeld && c.done && ready) { p.click = null; return input; }
+    if (ready) c.done = true;
+    return Object.assign(out, { aimWorld: { x: o.x, y: o.y }, fire: true, firePressed: ready });
+  }
+  // Weg abarbeiten
+  let q = c.path[c.i];
+  while (q && Math.hypot(q.x - p.x, q.y - p.y) < 5) q = c.path[++c.i];
+  if (!q) { p.click = null; return input; }
+  const d = Math.hypot(q.x - p.x, q.y - p.y);
+  return Object.assign(out, { moveX: (q.x - p.x) / d, moveY: (q.y - p.y) / d });
+}
+
 function updatePlayerOnFoot(w, input, dt) {
   const p = w.player;
   if (p.stun > 0) { p.stun -= dt; return; }
@@ -655,7 +701,7 @@ export function updateWorld(w, input, dt) {
     else applyDriverInput(pc, input);
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else if (!p.dead && !p.ride) updatePlayerOnFoot(w, input, dt);
+  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); updatePlayerOnFoot(w, input, dt); }
   if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
