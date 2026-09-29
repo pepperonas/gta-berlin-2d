@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { realCity, geoToPx } from './helpers/city.js';
-import { parseBarFeed, parseWeek, normName, attachBars, feedBarFor, barLevel, typicalLevel, nightlifeAt, NIGHT } from '../web/src/nightlife.js';
+import { parseBarFeed, parseWeek, parseGlobalWeek, berlinSlot, normName, attachBars, feedBarFor, barLevel, typicalLevel, nightlifeAt, NIGHT } from '../web/src/nightlife.js';
 import { geoToPx as gameGeoToPx } from '../web/src/projection.js';
 import { lifeSpots, frontOf } from '../web/src/life.js';
 import { ambienceAt } from '../web/src/ambience.js';
@@ -38,6 +38,46 @@ test('Feed-Parser: Google-Stoßzeiten, Prozent-Auslastung, GeoJSON; Unbrauchbare
   assert.equal(parseWeek({ fr: hours(() => 100) })[FR][0], 1, 'Wochentag als Schlüssel');
   assert.equal(normName('Bar Tausend Berlin'), 'tausend');
   assert.equal(normName('Möbel-Olfe'), 'mobel olfe');
+});
+
+test('gostumblr: Antwort von /api/v1/bars/busyness + Wochenschnitt → Stundenprofil je Bar in Berliner Zeit', () => {
+  // Berliner Ortszeit: Sa 26.09.2026 22:00 UTC = So 00:00 MESZ; 15.01.2026 12:00 UTC = Do 13:00 MEZ
+  assert.deepEqual(berlinSlot(Date.parse('2026-09-26T22:00:00Z') / 1000), { dow: 6, hour: 0 });
+  assert.deepEqual(berlinSlot(Date.parse('2026-01-15T12:00:00Z') / 1000), { dow: 3, hour: 13 });
+  // Wochenschnitt: dow 0 = Sonntag (wie gostumblr/Postgres) → im Spiel Index 6
+  const weekly = [0, 1, 2, 3, 4, 5, 6].map((dow) => ({ dow, hours: hours((h) => ({ hour: h, avg_occupancy: dow === 6 && h === 23 ? 80 : 40 })).map((x) => x) }));
+  const gw = parseGlobalWeek(weekly);
+  assert.equal(gw[5][23], 0.8, 'Samstag (dow 6) → Index 5');
+  assert.equal(gw[6][23], 0.4);
+  const scraped = '2026-09-26T21:05:00+00:00'; // Sa 23:05 Berlin
+  const doc = { total: 3, with_data: 1, weekly, bars: [
+    { id: 'a', name: 'Würgeengel', address: 'Dresdener Str. 122', latitude: 52.4995, longitude: 13.418, google_maps_url: 'x',
+      occupancy_percent: 72, usual_percent: 40, is_live: true, is_closed: false, last_scraped: scraped, closes_at: null, opens_at: null, open_24h: false,
+      trend: [[Date.parse('2026-09-26T20:10:00Z') / 1000, 55], [Date.parse('2026-09-26T20:40:00Z') / 1000, 65], [Date.parse(scraped) / 1000, 72]], distance_km: null },
+    { id: 'b', name: 'Beliebt', latitude: 52.5, longitude: 13.42, occupancy_percent: null, usual_percent: 160, is_live: false, is_closed: true, last_scraped: scraped, trend: [] },
+    { id: 'c', name: 'Ohne Ort', latitude: null, longitude: null, occupancy_percent: null, usual_percent: null, last_scraped: null, trend: [] },
+  ] };
+  const f = parseBarFeed(doc);
+  assert.equal(f.bars.length, 3);
+  const [a, b, c] = f.bars;
+  assert.deepEqual([a.lat, a.lon, a.current, a.usual], [52.4995, 13.418, 0.72, 0.4]);
+  assert.equal(b.current, null, 'nicht live = kein Live-Wert');
+  assert.equal(c.lat, null);
+  // Profil: Form des Wochenschnitts × Beliebtheit (üblich 40 % zur Messzeit Sa 23 Uhr, Schnitt dort 80 % → halb so voll)
+  assert.ok(Math.abs(a.week[1][12] - 0.2) < 1e-9, 'Dienstagmittag: 40 % × 0,5');
+  // …überschrieben mit den echten Messungen der letzten 24 h (Sa 22 Uhr: Mittel aus 55 und 65; Sa 23 Uhr: 72)
+  assert.ok(Math.abs(a.week[5][22] - 0.6) < 1e-9);
+  assert.ok(Math.abs(a.week[5][23] - 0.72) < 1e-9);
+  assert.ok(barLevel('bar', a, 23 * 60, SA) > barLevel('bar', a, 12 * 60, DI));
+  // Beliebtere Bar (üblich 100 % bei 80 % Schnitt) ist zur gleichen Spielzeit voller
+  assert.ok(barLevel('bar', b, 21 * 60, DI) > barLevel('bar', a, 21 * 60, DI));
+  // Ohne Wochenschnitt: nur die gemessenen Stunden, sonst typischer Verlauf mit Live-/Üblich-Wert
+  const noWeek = parseBarFeed({ bars: doc.bars }).bars;
+  assert.ok(Math.abs(noWeek[0].week[5][23] - 0.72) < 1e-9);
+  assert.equal(noWeek[0].week[1], null);
+  assert.equal(noWeek[1].week, null);
+  assert.equal(barLevel('bar', noWeek[1], 12 * 60, DI), 0, 'tagsüber still');
+  assert.ok(barLevel('bar', noWeek[1], 23 * 60, FR) > 0.5);
 });
 
 test('Verlauf: Freitag-/Samstagnacht voll, Dienstagmittag still, Clubs erst ab 23 Uhr, Kneipe schon zum Feierabend', () => {

@@ -46,13 +46,75 @@ export function parseWeek(v) {
   return week.some(Boolean) ? week : null;
 }
 
-// Feed → { at (s, Unix), bars: [{ name, key, lat, lon, current, week }] }. Nimmt ein Array oder { bars | venues | data | … }.
-// Unbrauchbare Einträge (ohne Namen und ohne Koordinaten) fallen weg; wirft nur, wenn gar nichts Brauchbares drin ist.
+// Berliner Ortszeit eines Unix-Zeitpunkts (s): Wochentag (0 = Mo) und Stunde. Die Spieluhr ist Berliner Zeit, gostumblr
+// rechnet seine Stundenwerte ebenfalls in Ortszeit.
+const BERLIN = (() => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', weekday: 'short', hour: '2-digit', hourCycle: 'h23' }); } catch { return null; } })();
+const WD = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+export function berlinSlot(epoch) {
+  const d = new Date(epoch * 1000);
+  if (BERLIN) {
+    const parts = Object.fromEntries(BERLIN.formatToParts(d).map((p) => [p.type, p.value]));
+    return { dow: WD[parts.weekday], hour: Number(parts.hour) % 24 };
+  }
+  const u = new Date(d.getTime() + 3600e3); // ohne Intl: MEZ
+  return { dow: (u.getUTCDay() + 6) % 7, hour: u.getUTCHours() };
+}
+
+// Wochenschnitt aller Bars. gostumblr liefert ihn je Wochentag (GET /api/v1/bars/busyness/weekly?dow=N, 0 = Sonntag):
+// [{ dow, hours: [{ hour, avg_occupancy }] }]; im Schnappschuss steht er schon als 7 × 24 (Mo zuerst, 0..1).
+export function parseGlobalWeek(v) {
+  if (!v) return null;
+  if (Array.isArray(v) && v.some((d) => d && typeof d === 'object' && !Array.isArray(d) && d.dow !== undefined)) {
+    const week = new Array(7).fill(null);
+    for (const d of v) {
+      if (!d || !Array.isArray(d.hours)) continue;
+      const di = (Number(d.dow) + 6) % 7; // Sonntag zuerst → Montag zuerst
+      const row = new Array(24).fill(null);
+      for (const h of d.hours) if (h && h.hour >= 0 && h.hour < 24) row[h.hour] = level(h.avg_occupancy);
+      if (row.some((x) => x !== null)) week[di] = row;
+    }
+    return week.some(Boolean) ? week : null;
+  }
+  return parseWeek(v);
+}
+
+// Wochenprofil einer gostumblr-Bar: Form des Wochenschnitts, skaliert mit ihrer Beliebtheit (Googles „üblich“ bzw. der
+// Live-Wert gegenüber dem Schnitt zur selben Stunde), darüber die echten Messungen der letzten 24 h (trend) je Stunde.
+function barWeek(b, global) {
+  let week = null;
+  if (global) {
+    let ratio = 1;
+    const ref = b.usual ?? b.current, slot = b.at !== null ? berlinSlot(b.at) : null, avg = slot ? global[slot.dow]?.[slot.hour] : null;
+    if (ref !== null && ref !== undefined && avg) ratio = Math.max(0.3, Math.min(2.5, ref / avg));
+    week = global.map((row) => (row ? row.map((v) => (v === null ? null : clamp01(v * ratio))) : null));
+  }
+  if (b.trend?.length) {
+    const sum = new Map();
+    for (const [t, pct] of b.trend) {
+      const v = level(pct);
+      if (v === null || !Number.isFinite(t)) continue;
+      const { dow, hour } = berlinSlot(t), k = dow * 24 + hour, o = sum.get(k) ?? [0, 0];
+      o[0] += v; o[1]++; sum.set(k, o);
+    }
+    if (sum.size) {
+      week ??= new Array(7).fill(null);
+      for (const [k, [a, n]] of sum) { const d = Math.floor(k / 24); week[d] = week[d] ? [...week[d]] : new Array(24).fill(null); week[d][k % 24] = a / n; }
+    }
+  }
+  return week;
+}
+
+// Feed → { at (s, Unix), week, bars: [{ name, key, lat, lon, current, usual, week, at }] }. Versteht die Antwort von
+// gostumblr (GET /api/v1/bars/busyness: { bars: [{ name, latitude, longitude, occupancy_percent, usual_percent,
+// last_scraped, trend: [[epoch, pct]] }] }, dazu optional weekly = Wochenschnitt) und allgemein eine Liste oder
+// { bars | venues | data | … } bzw. GeoJSON. Unbrauchbare Einträge (ohne Namen und ohne Koordinaten) fallen weg; wirft
+// nur, wenn gar nichts Brauchbares drin ist.
 export function parseBarFeed(json) {
   const list = Array.isArray(json) ? json : pick(json, ['bars', 'venues', 'data', 'results', 'items', 'places', 'features']);
   if (!Array.isArray(list)) throw new Error('Bar-Feed: keine Liste gefunden (erwartet Array oder { bars: [...] })');
   const stamp = (v) => { if (v === undefined || v === null) return null; const n = typeof v === 'number' ? v : Date.parse(v) / 1000; return Number.isFinite(n) ? (n > 1e11 ? n / 1000 : n) : null; };
   const at = stamp(pick(json, ['at', 'updated', 'updated_at', 'updatedAt', 'timestamp', 'time'])) ?? null;
+  const global = Array.isArray(json) ? null : parseGlobalWeek(pick(json, ['week', 'weekly']));
   const bars = [];
   for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
@@ -63,13 +125,16 @@ export function parseBarFeed(json) {
     if (Array.isArray(pos) && pos.length >= 2) { lon = Number(pos[0]); lat = Number(pos[1]); } // GeoJSON-Reihenfolge
     const hasPos = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && (lat !== 0 || lon !== 0);
     if (!name && !hasPos) continue;
-    const current = level(pick(b, ['current_popularity', 'currentPopularity', 'current', 'live', 'occupancy', 'auslastung', 'load', 'busy', 'busyness', 'level', 'value']));
-    const week = parseWeek(pick(b, ['populartimes', 'popular_times', 'popularTimes', 'week', 'weekly', 'profile', 'hours', 'woche']));
-    const t = stamp(pick(b, ['at', 'updated', 'updated_at', 'updatedAt', 'timestamp', 'time'])) ?? at;
-    bars.push({ name, key: normName(name), lat: hasPos ? lat : null, lon: hasPos ? lon : null, current, week, at: t });
+    const current = level(pick(b, ['occupancy_percent', 'current_popularity', 'currentPopularity', 'current', 'live', 'occupancy', 'auslastung', 'load', 'busy', 'busyness', 'level', 'value']));
+    const usual = level(pick(b, ['usual_percent', 'usual']));
+    const t = stamp(pick(b, ['last_scraped', 'at', 'updated', 'updated_at', 'updatedAt', 'timestamp', 'time'])) ?? at;
+    const trend = Array.isArray(b.trend) ? b.trend.filter((p) => Array.isArray(p) && p.length >= 2).map(([e, v]) => [stamp(e), Number(v)]) : null;
+    const bar = { name, key: normName(name), lat: hasPos ? lat : null, lon: hasPos ? lon : null, current, usual, at: t, trend };
+    bar.week = parseWeek(pick(b, ['populartimes', 'popular_times', 'popularTimes', 'week', 'weekly', 'profile', 'woche'])) ?? barWeek(bar, global);
+    bars.push(bar);
   }
   if (!bars.length) throw new Error('Bar-Feed: keine Bar mit Namen oder Koordinaten');
-  return { at, bars };
+  return { at, week: global, bars };
 }
 
 // Feed an die Karte hängen: Koordinaten in px (toPx aus projection.js geoToPx), Namensindex. gen zählt hoch, damit
@@ -133,9 +198,10 @@ export function barLevel(kind, bar, minutes, day, now = null) {
   if (!bar) return typ;
   const wk = bar.week ? weekLevel(bar.week, minutes, day) : null;
   if (wk !== null) return clamp01(wk);
-  const fresh = bar.current !== null && (now === null || bar.at === null || now - bar.at < NIGHT.stale);
+  const live = bar.current ?? bar.usual ?? null; // gostumblr: Live-Wert, sonst Googles „üblich“ zur Messzeit
+  const fresh = live !== null && (now === null || bar.at === null || now - bar.at < NIGHT.stale);
   const base = Math.max(typ, typicalLevel('bar', minutes, day));
-  return clamp01(base * (fresh ? 0.45 + 1.1 * bar.current : 1.1));
+  return clamp01(base * (fresh ? 0.45 + 1.1 * live : 1.1));
 }
 
 // Was man vom Nachtleben an (x, y) hört: crowd (Stimmengewirr), music (Bass aus Clubs/Kneipen, gedämpft), pan (−1 links

@@ -11,3 +11,4 @@ xbox/.vs/
 .playwright-mcp/
 data/raw/
 .superpowers/
+web/data/bars.json

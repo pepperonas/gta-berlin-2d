@@ -3,28 +3,28 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchBars, GOSTUMBLR } from './bars-source.mjs';
 
 const root = fileURLToPath(new URL('../web/', import.meta.url));
 const port = Number(process.env.PORT ?? 8080);
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.css': 'text/css' };
 
-// Nachtleben: mit BARS_URL=https://… npm start reicht der Server den Bar-Feed (gostumblr) unter /data/bars.json live
-// durch (höchstens einmal je Minute abgefragt) – so braucht der eigene Server kein CORS für localhost.
-const barsUrl = process.env.BARS_URL ?? null;
+// Nachtleben: der Server reicht die Bar-Auslastung aus gostumblr (tools/bars-source.mjs) unter /data/bars.json live
+// durch (höchstens alle 2 min abgefragt, wie die gostumblr-App selbst) – so braucht gostumblr kein CORS für localhost.
+// BARS_URL=https://… nimmt eine andere Quelle, BARS_URL=aus schaltet ab (dann gilt der Schnappschuss, falls vorhanden).
+const barsUrl = process.env.BARS_URL === 'aus' ? null : (process.env.BARS_URL ?? GOSTUMBLR);
 let barsCache = null;
 async function liveBars() {
-  if (barsCache && Date.now() - barsCache.t < 60000) return barsCache.body;
-  const r = await fetch(barsUrl, { headers: { accept: 'application/json', ...(process.env.BARS_TOKEN ? { authorization: `Bearer ${process.env.BARS_TOKEN}` } : {}) } });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  barsCache = { t: Date.now(), body: Buffer.from(await r.arrayBuffer()) };
+  if (barsCache && Date.now() - barsCache.t < 120000) return barsCache.body;
+  barsCache = { t: Date.now(), body: Buffer.from(JSON.stringify(await fetchBars(barsUrl))) };
   return barsCache.body;
 }
 
 createServer(async (req, res) => {
   try {
     if (barsUrl && new URL(req.url, 'http://x').pathname === '/data/bars.json') {
-      try { const body = await liveBars(); res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' }); res.end(body); return; }
-      catch (err) { console.warn(`Bar-Feed ${barsUrl}: ${err.message} – nehme den Schnappschuss`); }
+      try { const body = await liveBars(); if (!body) throw new Error('zuletzt nicht erreichbar'); res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' }); res.end(body); return; }
+      catch (err) { barsCache = { t: Date.now(), body: null }; console.warn(`Bar-Feed ${barsUrl}: ${err.message} – nehme den Schnappschuss`); }
     }
     let path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
     let file = join(root, path);

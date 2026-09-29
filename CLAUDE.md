@@ -23,7 +23,7 @@ npm run map:fetch                      # Geofabrik Berlin PBF + LOR boundaries +
 npm run map:build                      # data/raw/ + data/places.json → web/data/berlin/ (deterministic, ~40 s, ~6 GB RAM)
 npm run map:transit                    # data/raw/gtfs.zip (VBB GTFS, fetch with map:fetch -- --gtfs) → web/data/berlin/transit.json (~20 s)
 npm run map:preview -- out.svg [x y w h]   # SVG of a px window (default 4×4 km around the mission) for visual checks
-BARS_URL=https://… npm run bars:fetch  # bar occupancy feed (gostumblr, own VPS) → web/data/bars.json snapshot; BARS_URL=… npm start proxies it live
+npm run bars:fetch                     # gostumblr bar occupancy (app.gostumblr.com/api/v1/bars/busyness + weekly) → web/data/bars.json (gitignored); npm start proxies it live (BARS_URL=aus disables, BARS_URL=… other source)
 node tools/check-bridges.mjs           # drives every bridge carriageway both ways on the right lane, reports blocks/wrong levels (~30 s)
 node tools/check-bridges.mjs 52.4965 13.4585 1500   # only bridges within 1500 m of a point
 ```
@@ -173,7 +173,10 @@ change in `web/`.
   on the POI per `gen`), `barLevel`, `nightlifeAt` (crowd/music/pan/sources; feed bars without OSM POI sound at their
   coordinate). `life.js` scales smokers/club queues by `barLevel` only for feed bars (so tests without a feed are
   unchanged). Feed source in `main.js`: `?bars=` (localStorage `gta-bars-url`), console `bars`, else `data/bars.json`
-  (served live by `tools/serve.mjs` when `BARS_URL` is set). `web/src/projection.js` holds the map projection
+  (served live by `tools/serve.mjs` via `tools/bars-source.mjs fetchBars`, default gostumblr). gostumblr format: bars with
+  `latitude/longitude/occupancy_percent/usual_percent/last_scraped/trend[[epoch,pct]]` + `weekly` (per-dow average of
+  all bars, dow 0 = Sunday, Berlin local hours); `parseBarFeed` turns that into a per-bar 7×24 week (Mon first):
+  weekly shape × popularity ratio (usual vs. weekly at `berlinSlot(last_scraped)`), overridden by trend hours. `web/src/projection.js` holds the map projection
   (`geoToPx(meta)`), re-exported by `tools/osm/geo.mjs`.
 - **Snow tracks:** `snowtracks.js` (pure, presentation only): `render.js drawSnowTrails` records rear-wheel segments of
   all `world.cars` per frame into a ring buffer (world time, reset per world), fades them (`trailAlpha`: age, snowfall).

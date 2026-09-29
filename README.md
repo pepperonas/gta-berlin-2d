@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.34.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.34.1** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -217,7 +217,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 415 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 416 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -422,22 +422,25 @@ Dopplereffekt. Zu Fuß hört man die eigenen Schritte (Schnee knirscht, Nässe p
 Gläserklirren und gedämpften Bass, am meisten Freitag- und Samstagnacht, Clubs erst ab 23 Uhr. Bei Regen wird es
 draußen leiser.
 
-**Bar-Auslastung (gostumblr):** Liefert der eigene Server einen Auslastungs-Feed, sind die dort genannten Bars am
-lautesten, und davor stehen mehr Leute. Der Feed ist JSON: eine Liste oder `{ "bars": [...] }` (auch GeoJSON), je Bar
-`name`, Koordinaten (`lat`/`lon` bzw. `lng`, `coordinates`, `location`), eine aktuelle Auslastung (`current_popularity`,
-`occupancy`, `auslastung`, `load` …; 0–1 oder Prozent) und/oder ein Wochenprofil (`populartimes` im Google-Format
-`[{ "name": "Monday", "data": [24 Werte] }]`, `week` als 7 × 24, Mo zuerst). Das Wochenprofil gilt zur Spielzeit, eine
-reine Live-Auslastung macht die Bar gegenüber anderen voller oder leerer. Bars werden per Name (in der Nähe) den
-OSM-Lokalen zugeordnet; unbekannte klingen direkt an ihrer Koordinate. Quelle einstellen:
+**Bar-Auslastung (gostumblr):** Die Bars aus [gostumblr](https://github.com/pepperonas/gostumblr) (eigener Server,
+`https://app.gostumblr.com/api/v1/bars/busyness`, ohne Anmeldung) sind am lautesten, und davor stehen mehr Leute –
+auch Bars, die OpenStreetMap nicht kennt, klingen an ihrer Koordinate. Aus der Antwort zählen Name, `latitude`/
+`longitude`, `occupancy_percent` (live), `usual_percent` (Googles „üblich“), `last_scraped` und der 24-h-Verlauf
+`trend`; dazu holt das Spiel den Wochenschnitt aller Bars (`…/busyness/weekly?dow=0…6`, 0 = Sonntag). Daraus entsteht
+je Bar ein Stundenprofil für die ganze Woche: Form des Wochenschnitts × Beliebtheit der Bar (üblich zur Messzeit
+gegenüber dem Schnitt), überschrieben mit den echten Messungen der letzten 24 h – alles in Berliner Zeit, abgespielt
+zur Spieluhr. Bars werden per Name (in der Nähe) den OSM-Lokalen zugeordnet.
 
 ```bash
-BARS_URL=https://mein-vps/… npm start          # Dev-Server reicht den Feed unter data/bars.json durch (kein CORS nötig)
-BARS_URL=https://mein-vps/… npm run bars:fetch # Schnappschuss nach web/data/bars.json (z. B. für die Xbox)
+npm start                # Dev-Server holt gostumblr live (alle 2 min) und liefert es unter data/bars.json aus
+BARS_URL=aus npm start   # ohne gostumblr: Nachtleben nur nach den OSM-Lokalen
+npm run bars:fetch       # Schnappschuss nach web/data/bars.json (für die Xbox vor prepare-xbox; nicht im Git)
 ```
 
-Im Browser geht auch `http://localhost:8080/?bars=https://mein-vps/…` (wird gemerkt; der Server muss dafür CORS
-erlauben) oder in der Befehlszeile `bars https://…`, `bars neu`, `bars aus`. Optional `BARS_TOKEN` für einen
-Bearer-Token. Der Feed wird alle 5 min neu geholt.
+`BARS_URL=https://…` nimmt eine andere Quelle (auch eine Liste, `{ "bars": [...] }`, GeoJSON oder Google-„Stoßzeiten“),
+`BARS_TOKEN` schickt einen Bearer-Token mit. Direkt im Browser (`?bars=https://…`, Befehl `bars https://…`, `bars neu`,
+`bars aus`) geht es nur, wenn gostumblr die Herkunft per CORS erlaubt (`CORS_ORIGINS`, ab Werk nur gostumblr selbst
+und localhost:5173) – über den Dev-Server ist das nicht nötig. Das Spiel lädt den Feed alle 5 min neu.
 
 ## Befehlszeile und Statistik
 
@@ -470,7 +473,12 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 415 automatischen Tests grün, darunter:
+- Alle 416 automatischen Tests grün, darunter:
+  - 0.34.1: gostumblr-Antwort im echten Format (`/api/v1/bars/busyness` + Wochenschnitt, Sonntag zuerst) ergibt je
+    Bar ein Stundenprofil in Berliner Zeit (Sommer-/Winterzeit), Beliebtheit skaliert, echte 24-h-Messungen haben
+    Vorrang; ohne Wochenschnitt nur gemessene Stunden, sonst typischer Verlauf. Gegen einen nachgebauten gostumblr-Server
+    geprüft: `bars:fetch` schreibt den Schnappschuss, der Dev-Server reicht den Feed durch, das Spiel lädt ihn im Browser
+    ohne Fehler. **Nicht** geprüft: der echte Server (aus der Testumgebung nicht erreichbar).
   - 0.34.0: Bar-Feed-Parser (Google-Stoßzeiten, Prozent, GeoJSON, Wochentag als Schlüssel, Unbrauchbares fällt weg);
     Nachtleben-Verlauf (Fr/Sa-Nacht voll, Dienstagmittag still, Clubs erst ab 23 Uhr, Feierabendbier, veralteter
     Live-Wert zählt nicht); Projektion im Spiel = Projektion des Builds; Feed-Bar per Name einem echten OSM-Lokal

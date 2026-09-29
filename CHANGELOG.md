@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.34.1] – 2026-09-29
+
+### Geändert
+- **Nachtleben aus gostumblr:** Das Spiel versteht jetzt genau die Antwort von gostumblr
+  (`https://app.gostumblr.com/api/v1/bars/busyness`: Live-Auslastung, „üblich“, 24-h-Verlauf je Bar) und den
+  Wochenschnitt aller Bars; daraus wird je Bar ein Stundenprofil für die ganze Woche in Berliner Zeit. `npm start` holt
+  gostumblr jetzt von selbst (alle 2 min, `BARS_URL=aus` schaltet ab), `npm run bars:fetch` ohne Angabe ebenso.
+- Der Bar-Schnappschuss `web/data/bars.json` liegt nicht mehr im Git (wird mit `bars:fetch` erzeugt).
+
 ## [0.34.0] – 2026-09-29
 
 ### Neu
