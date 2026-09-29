@@ -173,7 +173,11 @@ test('Warnschild: verschwindet aus dem Layout mit der Warnung; Zielpfeil weicht 
     // Ziel weit rechts unten: der Pfeil landet am unteren rechten Rand, dort, wo das Schild steht
     w.mission.state = 'toPickup'; const tgt = { x: car.x + 40000, y: car.y + 22000 };
     const texts = [], ctx = fakeCtx(); ctx.fillText = (t, x, y) => texts.push({ t: String(t), x, y });
-    const h2 = new Hud(ctx); h2.begin(W, H); h2.drawGameplay(w, g); h2.drawTargetArrow(w, tgt, g);
+    const h2 = new Hud(ctx); h2.begin(W, H); h2.drawGameplay(w, g);
+    // Ziel genau in Richtung der Schildmitte (von der Bildmitte aus), weit außerhalb des Bildes
+    const S0 = h2.layout.roadWarn, dx = S0.x + S0.w / 2 - h2.vw / 2, dy = S0.y + S0.h / 2 - h2.vh / 2, dl = Math.hypot(dx, dy);
+    tgt.x = car.x + dx / dl * 60000; tgt.y = car.y + dy / dl * 60000;
+    texts.length = 0; h2.drawTargetArrow(w, tgt, g);
     const R = h2.layout.roadWarn, label = texts.find((q) => /^\d+ m$/.test(q.t));
     assert.ok(R && label, `${W}×${H}: Schild und Pfeil`);
     const inR = label.x > R.x - 30 && label.x < R.x + R.w + 30 && label.y > R.y - 10 && label.y < R.y + R.h + 16;
