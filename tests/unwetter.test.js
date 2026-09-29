@@ -207,3 +207,17 @@ test('Zeichnen bei jedem Wetter: gültige Koordinaten, Schnee liegt, Flocken, Bl
   assert.equal(r.stats.bolts, 1, 'Blitzstrahl im Bild');
   assert.deepEqual(bad, []);
 });
+
+test('Spielstand: Glätte wird gespeichert; alter Spielstand ohne Glätte lädt ohne', async () => {
+  const { makeSave, applySave, validateSave } = await import('../web/src/save.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const w = createWorld({ city }); w.ice = 0.63;
+  const s = makeSave(w);
+  assert.equal(s.ice, 0.63);
+  const w2 = createWorld({ city }); applySave(w2, s);
+  assert.equal(w2.ice, 0.63);
+  assert.equal(validateSave({ ...s, ice: 7 }).ice, null, 'ungültige Glätte verworfen');
+  const old = { ...s }; delete old.ice;
+  const w3 = createWorld({ city }); applySave(w3, validateSave(old) ?? old);
+  assert.equal(w3.ice, 0, 'alter Spielstand: keine Glätte');
+});

@@ -24,7 +24,7 @@ import { pickKind as pickPersonKind, KINDS as PERSON_KINDS } from './figure.js';
 import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
-import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor } from './weather.js';
+import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor, temperatureAt, stepIce } from './weather.js';
 import { updateTransit } from './transitlive.js';
 import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
@@ -36,7 +36,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, snow: 0, forceWeather: null,
+    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, snow: 0, ice: 0, temp: 0, forceTemp: null, forceWeather: null,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -591,6 +591,8 @@ export function updateWorld(w, input, dt) {
   const snowWas = w.snow ?? 0;
   w.snow = stepSnow(snowWas, w.weather, dt);
   if (w.snow < snowWas) w.wet = Math.max(w.wet, Math.min(1, w.snow * 1.5)); // Tauwetter: Matsch und nasse Straßen
+  w.temp = w.forceTemp ?? temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather); // °C (Konsole: temp)
+  w.ice = stepIce(w.ice ?? 0, w.wet, w.temp, dt); // überfrierende Nässe
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
   const m = w.mission;
 

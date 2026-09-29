@@ -2,7 +2,7 @@
 // Befehle setzen Uhrzeit, Wetter, Dichte, teleportieren, schummeln oder schalten Debug-Ansichten. Autovervollständigung:
 // Befehlsnamen, feste Werte je Argument und Orte (Straßen, Bahnhöfe, Ortsteile, Kieze, Bezirke) mit Vorschlagsliste;
 // Tab/→ übernimmt, ↑/↓ wählt (ohne Vorschläge: Verlauf), Enter führt aus, Esc schließt.
-import { WEATHER_KINDS, WX_LABEL } from './weather.js';
+import { WEATHER_KINDS, WX_LABEL, temperatureAt } from './weather.js';
 import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
 import { KINDS } from './fleet.js';
@@ -105,6 +105,16 @@ export const COMMANDS = [
     run(ctx, [v]) { const n = num(v); if (n === null || n < 0 || n > 1) return { ok: false, msg: 'schnee 0 bis 1' }; ctx.world.snow = n; return `Schneedecke ${Math.round(n * 100)} %`; } },
   { name: 'nass', aliases: ['wet'], help: 'Nässe der Straßen 0–1', args: [{ name: '0–1', values: () => ['0', '0.5', '1'].map((l) => ({ label: l, hint: '' })) }],
     run(ctx, [v]) { const n = num(v); if (n === null || n < 0 || n > 1) return { ok: false, msg: 'nass 0 bis 1' }; ctx.world.wet = n; return `Nässe ${Math.round(n * 100)} %`; } },
+  { name: 'glaette', aliases: ['ice', 'glätte'], help: 'Glätte der Straßen 0–1 (taut über 0 °C, s. temp)', args: [{ name: '0–1', values: () => ['0', '0.5', '1'].map((l) => ({ label: l, hint: '' })) }],
+    run(ctx, [v]) { const n = num(v); if (n === null || n < 0 || n > 1) return { ok: false, msg: 'glaette 0 bis 1' }; ctx.world.ice = n; return `Glätte ${Math.round(n * 100)} %`; } },
+  { name: 'temp', aliases: ['temperatur'], help: 'Temperatur zeigen; temp -5 erzwingt sie, temp auto gibt sie frei', args: [{ name: '°C', optional: true, values: () => ['auto', '-5', '0', '5', '20'].map((l) => ({ label: l, hint: '' })) }],
+    run(ctx, [v]) {
+      const w = ctx.world;
+      if (v === undefined) return `${(w.forceTemp ?? temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather)).toFixed(1).replace('.', ',')} °C${w.forceTemp != null ? ' (erzwungen)' : ''}`;
+      if (v === 'auto') { w.forceTemp = null; return 'Temperatur wieder natürlich'; }
+      const n = num(v); if (n === null || n < -30 || n > 40) return { ok: false, msg: 'temp -30 bis 40 oder auto' };
+      w.forceTemp = n; return `Temperatur ${n} °C`;
+    } },
   { name: 'tempo', aliases: ['zeitraffer'], help: 'Tempo der Spieluhr (1 = normal, 0 = Uhr steht)', args: [{ name: 'faktor', values: () => ['0', '0.5', '1', '2', '5', '10', '30'].map((l) => ({ label: l, hint: l === '1' ? 'normal' : '' })) }],
     run(ctx, [v]) { const n = num(v); if (n === null || n < 0 || n > 120) return { ok: false, msg: 'tempo 0 bis 120' }; ctx.world.clockRate = n; return n === 1 ? 'Spieluhr normal' : `Spieluhr × ${n}`; } },
   { name: 'verkehr', aliases: ['traffic'], help: 'Verkehrsdichte (1 = normal)', args: [{ name: 'faktor', values: () => ['0', '0.5', '1', '1.5', '2', '3'].map((l) => ({ label: l, hint: '' })) }],

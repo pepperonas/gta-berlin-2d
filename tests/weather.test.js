@@ -174,3 +174,51 @@ test('Zeichnen bei Regen in der Nacht und bei Nebel: gültige Koordinaten, Leuch
   assert.equal(r.stats.fog, true); assert.equal(r.stats.drops, 0);
   assert.deepEqual(bad, []);
 });
+
+test('Temperatur: Spanne je Tagestyp, kältester Punkt 5 Uhr, wärmster 15 Uhr, stetig über Mitternacht', async () => {
+  const { temperatureAt, dayType } = await import('../web/src/weather.js');
+  // Tage mit gleichartigen Nachbartagen: sonst läuft die Nacht auf einen wärmeren/kälteren Folgetag zu (gewollt, stetig)
+  const seed = 1989, day = (type) => { let d = 1; while (!(dayType(seed, d) === type && dayType(seed, d - 1) === type && dayType(seed, d + 1) === type)) d++; return d; };
+  const w = day('winter'), n = day('normal');
+  assert.ok(temperatureAt(seed, w, 300) >= -8 && temperatureAt(seed, w, 300) <= -4, `Winter früh ${temperatureAt(seed, w, 300)}`);
+  assert.ok(temperatureAt(seed, w, 900) >= 1 && temperatureAt(seed, w, 900) <= 5, `Winter mittags ${temperatureAt(seed, w, 900)}`);
+  assert.ok(temperatureAt(seed, n, 900) >= 20 && temperatureAt(seed, n, 900) <= 24);
+  for (const d of [w, n]) {
+    let lo = Infinity, hi = -Infinity, loAt = 0, hiAt = 0;
+    for (let m = 0; m < 1440; m += 10) { const t = temperatureAt(seed, d, m); if (t < lo) { lo = t; loAt = m; } if (t > hi) { hi = t; hiAt = m; } }
+    assert.ok(Math.abs(hiAt - 900) <= 10, `Höchstwert ${hiAt}`);
+    assert.ok(Math.abs(loAt - 300) <= 10 || loAt === 0 || loAt >= 1430, `Tiefstwert ${loAt}`); // Folgetag kann kälter sein
+  }
+  let jump = 0;
+  for (let d = 0; d < 5; d++) for (let m = 0; m < 1440; m++) {
+    const a = temperatureAt(seed, d, m), b = m < 1439 ? temperatureAt(seed, d, m + 1) : temperatureAt(seed, d + 1, 0);
+    jump = Math.max(jump, Math.abs(b - a));
+  }
+  assert.ok(jump < 0.1, `Sprung ${jump.toFixed(3)} °C je Minute`);
+  assert.equal(temperatureAt(seed, n, 900), temperatureAt(seed, n, 900), 'deterministisch');
+  assert.ok(temperatureAt(seed, n, 900, 'snow') <= 1 && temperatureAt(seed, n, 900, 'heavysnow') <= 1, 'erzwungener Schnee ≤ +1 °C');
+});
+
+test('Glätte: wächst nur bei Nässe und Frost, taut darüber, bleibt trocken stehen', async () => {
+  const { stepIce, ICE } = await import('../web/src/weather.js');
+  assert.ok(Math.abs(stepIce(0, 1, -2, 1) - ICE.rise) < 1e-9);
+  assert.equal(stepIce(0, 0.05, -2, 1), 0, 'trocken: keine Glätte');
+  assert.ok(Math.abs(stepIce(0.5, 1, 1, 1) - (0.5 - ICE.melt)) < 1e-9, 'taut über 0 °C');
+  assert.equal(stepIce(0.5, 0, -3, 1), 0.5, 'trocken und kalt: bleibt');
+  let ice = 0; for (let i = 0; i < 12 * 60; i++) ice = stepIce(ice, 1, -1, 1 / 60);
+  assert.equal(ice, 1, 'voll nach ≈ 10 Spielminuten (1 Spielminute je Sekunde)');
+});
+
+test('Welt: Glätte aus Temperatur und Nässe; erzwungene Temperatur', async () => {
+  const { createWorld, updateWorld } = await import('../web/src/world.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 }); w.mission.state = 'idle';
+  w.wet = 1; w.forceWeather = 'rain'; w.forceTemp = -3;
+  for (let i = 0; i < 12 * 60; i++) updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.temp, -3); assert.ok(w.ice > 0.95, `Glätte ${w.ice}`);
+  w.forceTemp = 2;
+  for (let i = 0; i < 5 * 60; i++) updateWorld(w, idle(), 1 / 60);
+  assert.ok(w.ice < 0.8, 'taut');
+  w.forceTemp = null;
+  updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.temp, (await import('../web/src/weather.js')).temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather));
+});

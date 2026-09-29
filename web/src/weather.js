@@ -129,6 +129,33 @@ export function stepWet(wet, rain, dt) {
   return rain > 0.05 ? Math.min(1, wet + WET.rise * rain * dt) : Math.max(0, wet - WET.dry * dt);
 }
 
+// Temperatur (rein): Tageskurve mit Tiefstwert um 5 Uhr und Höchstwert um 15 Uhr, Spanne nach Tagestyp, je Tag ±2 °C aus
+// dem Samen. Stetig über Mitternacht (die Nacht läuft vom Höchstwert des Tages zum Tiefstwert des Folgetags).
+// Erzwungener Schnee (Konsole) höchstens +1 °C, damit Glätte und Schnee zusammenpassen.
+const TEMP = { winter: [-6, 3], unsettled: [4, 14], normal: [8, 22] }, T_LOW = 300, T_HIGH = 900;
+function tempRange(seed, d) {
+  const [lo, hi] = TEMP[dayType(seed, d)], sh = (hash01((seed * 7907 + d * 3571 + 17) | 0) - 0.5) * 4;
+  return [lo + sh, hi + sh];
+}
+export function temperatureAt(seed, dayCount, minutes, force = null) {
+  const m = ((minutes % 1440) + 1440) % 1440, ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * u);
+  let v;
+  if (m >= T_LOW && m <= T_HIGH) { const [lo, hi] = tempRange(seed, dayCount); v = lo + (hi - lo) * ease((m - T_LOW) / (T_HIGH - T_LOW)); }
+  else {
+    const d = m > T_HIGH ? dayCount : dayCount - 1, u = ((m > T_HIGH ? m : m + 1440) - T_HIGH) / (1440 - T_HIGH + T_LOW);
+    const hi = tempRange(seed, d)[1], lo = tempRange(seed, d + 1)[0];
+    v = hi + (lo - hi) * ease(u);
+  }
+  return force === 'snow' || force === 'heavysnow' ? Math.min(v, 1) : v;
+}
+
+// Glätte des Bodens je Sekunde: überfrierende Nässe (voll in ~10 Spielminuten), taut über 0 °C (~20 Spielminuten)
+export const ICE = { rise: 1 / 10, melt: 1 / 20 };
+export function stepIce(ice, wet, tempC, dt) {
+  if (tempC > 0) return Math.max(0, ice - ICE.melt * dt);
+  return wet > 0.1 ? Math.min(1, ice + ICE.rise * dt) : ice;
+}
+
 // Licht an das Wetter anpassen: Wolken nehmen der Sonne die Schatten und dämpfen das Umgebungslicht, Regen und Nebel
 // machen den Tag grau (die Lichtkarte kommt dann schon am Tag mit – Scheinwerfer an).
 export function weatherLight(L, wx, cover = 0) {

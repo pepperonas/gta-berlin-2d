@@ -165,3 +165,18 @@ test('Im Spiel: offene Befehlszeile hält die Welt an; tp teleportiert ohne Rüc
   press(g, { back: true });
   assert.equal(g.screen, 'playing');
 });
+
+test('Konsole: glaette setzt die Glätte, temp zeigt und erzwingt die Temperatur', async () => {
+  const { execute } = await import('../web/src/console.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const { createGame } = await import('../web/src/game.js');
+  const { memoryStorage } = await import('../web/src/save.js');
+  const world = createWorld({ city, cars: 0, pedestrians: 0 }), game = createGame({ storage: memoryStorage(), city });
+  const ctx = { game, world, city };
+  assert.ok(execute('glaette 0.8', ctx).ok); assert.equal(world.ice, 0.8);
+  assert.equal(execute('glaette 3', ctx).ok, false);
+  assert.match(execute('temp', ctx).msg, /°C/);
+  assert.ok(execute('temp -5', ctx).ok); assert.equal(world.forceTemp, -5);
+  assert.ok(execute('temp auto', ctx).ok); assert.equal(world.forceTemp, null);
+  assert.equal(execute('temp 99', ctx).ok, false);
+});
