@@ -418,14 +418,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 368 automatischen Tests grün, darunter:
+- Alle 372 automatischen Tests grün, darunter:
   - Wetter-Fahrphysik: Temperaturkurve (Spanne je Tagestyp, 5/15 Uhr, stetig über Mitternacht, erzwungener Schnee
     ≤ +1 °C), Glätte nur bei Nässe und Frost, Spielstand mit Glätte, alter Stand ohne; Haftungsfaktoren (trocken exakt
     1, Mischung mit Untergrenze), überdacht trocken, Brücke glatter, Pfütze nur in der gezeichneten Ellipse und bei
     Nässe; Bremsweg aus 50 km/h ≈ 1 : 1,3 : 2 : 3, Anfahren/Lenken schwächer, Aquaplaning nur über 70 km/h in einer
     echten Pfütze mit genau einem Ereignis, gleich bei 30 und 60 fps; Böen 0,5–1 m Versatz, Brücke stärker, schwere
     Autos weniger, geparkte nie; KI auf freier Strecke langsamer, vor Rot sanfter bremsend und vor der Linie, Schlange
-    ohne Auffahren, 3 min Glätte an einer engen Stelle ohne Dauerstau; eigener Zug bremst auf nassen Schienen länger
+    ohne Auffahren, je 3 min Glätte und Schnee an einer engen Stelle ohne Zusammenstoß und ohne Dauerstau; überdacht nur unter echten Überführungen (nicht an 60 geprüften Brückenanfängen, nicht auf der eigenen Brücke der Straßenbahn); Aquaplaning versetzt die Fahrtrichtung; eigener Zug bremst auf nassen Schienen länger
     (auch in der Welt), Zwangsbremsung unter der verringerten Kurve, Tunnel trocken; Warnschild mit Vorrang und ohne
     Überlappung, Temperatur neben der Uhr, Platschen, Statistik. Jede Schutzprüfung mit Mutationsprobe (über 25, alle
     erkannt; mehrere zunächst blinde führten zu schärferen Tests);
