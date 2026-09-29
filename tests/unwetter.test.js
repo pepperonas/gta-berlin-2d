@@ -218,6 +218,6 @@ test('Spielstand: Glätte wird gespeichert; alter Spielstand ohne Glätte lädt 
   assert.equal(w2.ice, 0.63);
   assert.equal(validateSave({ ...s, ice: 7 }).ice, null, 'ungültige Glätte verworfen');
   const old = { ...s }; delete old.ice;
-  const w3 = createWorld({ city }); applySave(w3, validateSave(old) ?? old);
+  const w3 = createWorld({ city }); w3.ice = 0.4; applySave(w3, validateSave(old) ?? old);
   assert.equal(w3.ice, 0, 'alter Spielstand: keine Glätte');
 });
