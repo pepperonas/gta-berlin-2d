@@ -99,10 +99,13 @@ export const RETRY_MS = [500, 1000, 2000, 3000];
 // Fahren kaum spürbar, solange die Welt wartet deutlich mehr.
 export const PUMP_MS = { playing: 4, waiting: 30 };
 const now = () => (globalThis.performance?.now ? performance.now() : Date.now());
+// Uhr der Wiederholpause nach einem Ladefehler (city.clock ist der Fokus-Zähler); Tests setzen city.now, um nicht von der
+// echten Zeit abzuhängen
+const wall = (city) => (city.now ?? Date.now)();
 
 function request(city, key) {
   const old = city.tiles.get(key);
-  if (old && !(old.state === 'failed' && Date.now() >= old.retryAt)) return;
+  if (old && !(old.state === 'failed' && wall(city) >= old.retryAt)) return;
   const res = city.loader(key);
   if (res && typeof res.then === 'function') {
     const entry = { state: 'loading', fails: old?.fails ?? 0 };
@@ -114,7 +117,7 @@ function request(city, key) {
 
 function failed(city, key, entry, err) {
   const fails = entry.fails + 1;
-  city.tiles.set(key, { state: 'failed', fails, retryAt: Date.now() + RETRY_MS[Math.min(fails, RETRY_MS.length) - 1], error: String(err?.message ?? err) });
+  city.tiles.set(key, { state: 'failed', fails, retryAt: wall(city) + RETRY_MS[Math.min(fails, RETRY_MS.length) - 1], error: String(err?.message ?? err) });
   if (fails === 1) console.error(`Kachel ${key}:`, err); // einmal melden, nicht bei jedem neuen Versuch
 }
 
@@ -149,7 +152,7 @@ function loadStatus(city, x, y) {
   const st = keys.map((k) => city.tiles.get(k));
   const failedTiles = st.filter((t) => t?.state === 'failed');
   return { needed: keys.length, ready: st.filter((t) => t?.state === 'ready').length, failed: failedTiles.length,
-    retryIn: failedTiles.length ? Math.max(0, Math.min(...failedTiles.map((t) => t.retryAt)) - Date.now()) : 0 };
+    retryIn: failedTiles.length ? Math.max(0, Math.min(...failedTiles.map((t) => t.retryAt)) - wall(city)) : 0 };
 }
 
 function evict(city) {

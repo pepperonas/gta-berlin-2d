@@ -232,13 +232,20 @@ test('Kachel lädt nicht: kein erneuter Versuch in jedem Bild, sondern nach eine
   const c = openCity(realIndex(), (k) => { calls.set(k, (calls.get(k) ?? 0) + 1); return offline ? Promise.reject(new Error('offline')) : Promise.resolve(sync(k)); });
   const p = c.places.giver, errors = [];
   const orig = console.error; console.error = (...a) => errors.push(a);
+  // Die Wiederholpause misst die Karte mit ihrer Uhr (city.now); hier steht sie still – sonst hinge das Ergebnis davon
+  // ab, wie schnell 60 Takte unter Last vergehen (die 500-ms-Pause lief im vollen Testlauf manchmal ab)
+  let clock = 1000;
+  c.now = () => clock;
   try {
-    for (let i = 0; i < 60; i++) { c.focus('w', p.x, p.y); await new Promise((r) => setTimeout(r, 0)); }
+    for (let i = 0; i < 60; i++) {
+      c.focus('w', p.x, p.y); await new Promise((r) => setTimeout(r, 0));
+      if (i === 30) await new Promise((r) => setTimeout(r, 600)); // echte Zeit vergeht – die Pause der Karte nicht
+    }
     assert.ok([...calls.values()].every((n) => n === 1), 'jede Kachel nur einmal angefragt');
     assert.equal(errors.length, calls.size, 'ein Fehler je Kachel, nicht je Bild');
     assert.ok(!c.ready(p.x, p.y));
     offline = false;
-    for (const t of c.tiles.values()) t.retryAt = 0; // Pause abgelaufen
+    clock += 10000; // Pause abgelaufen
     // eingetroffene Kacheln werden in Zeitscheiben eingebaut (je Aufruf von focus), nicht alle auf einmal
     let steps = 0;
     for (; steps < 200 && !c.focus('w', p.x, p.y); steps++) await new Promise((r) => setTimeout(r, 0));
