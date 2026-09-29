@@ -6,7 +6,7 @@ import { createDrive, stepDrive, stopInfo, tipFor, maxDecel } from './trainphysi
 import { TRAIN_DRIVE } from './config.js';
 import { hash01 } from './map.js';
 import { RIDE, vehicleState, alightSpot, stationExit, elevated } from './ride.js';
-import { obstacleAt } from './transitlive.js';
+import { obstacleAt, TRAM_PATIENCE } from './transitlive.js';
 import { roadCondition, adhesionOf, spotLevel } from './traction.js';
 import { undergroundAtS, railAt } from './tunnel.js';
 
@@ -93,7 +93,12 @@ export function updatePlayerTrain(w, input, dt) {
   const tr = w.city.transit, p = tr.patterns[t.pid], k = TRAIN_DRIVE, driving = w.player.ride?.kind === 'driver';
   const endFree = Math.max(0, p.stops[p.stops.length - 1] - t.s);
   const aheadFree = trainAhead(w, t);
-  const limit = Math.min(endFree, aheadFree, p.mode === 'tram' ? tramFree(w, p, t.s) : Infinity);
+  // Wartezeit vor einem Hindernis: zählt, solange es wirklich da ist (nicht nur, solange der Zug steht) – sonst setzte das
+  // Anfahren im Geduld-Modus sie zurück und der Zug ruckte nur alle TRAM_PATIENCE s ein Stück
+  const strict = p.mode === 'tram' ? tramFree(w, p, t.s) : Infinity;
+  t.waitT = strict < 5 ? (t.waitT ?? 0) + (t.drive.v < 1 || t.waitT > TRAM_PATIENCE ? dt : 0) : 0;
+  const tf = t.waitT > TRAM_PATIENCE ? tramFree(w, p, t.s, true) : strict;
+  const limit = Math.min(endFree, aheadFree, tf);
   const adhesion = trainAdhesion(w, t);
   const inp = driving ? { throttle: input.throttle, brake: input.brake, emergency: !!input.handbrake, limit, adhesion } : { brake: 1, limit, adhesion };
   const wasBlocked = t.blocked;
@@ -180,7 +185,8 @@ export function atTerminus(w) {
 // also schon an der Spitze sein. Mit weniger Abstand schöbe der Zug das Hindernis (collideRail) im Kriechgang vor sich
 // her, statt davor zu stehen.
 const OBSTACLE_MARGIN = 40;
-export function tramFree(w, p, s) {
-  for (const d of [20, 45, 75, 110, 150, 200]) { const q = pointOn(p, s + d); if (obstacleAt(w, q.x, q.y)) return Math.max(0, d - OBSTACLE_MARGIN); }
+export function tramFree(w, p, s, patient = false) {
+  const head = patient ? pointOn(p, s).angle : null; // nach langem Warten: Gegenverkehr zählt nicht (wie tramBlocked)
+  for (const d of [20, 45, 75, 110, 150, 200]) { const q = pointOn(p, s + d); if (obstacleAt(w, q.x, q.y, head)) return Math.max(0, d - OBSTACLE_MARGIN); }
   return Infinity;
 }

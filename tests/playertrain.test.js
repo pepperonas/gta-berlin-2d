@@ -267,6 +267,30 @@ test('Straßenbahn hat Vorrang: eine Fahrplanbahn kommt an derselben Stelle durc
   const v = s.veh.find((x) => x.key === 'mine');
   // Spieler aus dem Weg (atFrontOf stellt ihn vor die Spitze – dort wartet die Bahn zu Recht); Kamera fährt mit der Bahn
   const at = pointOn(p, positionAt(p, v.tau).s); w.player.x = at.x - Math.sin(at.angle) * 150; w.player.y = at.y + Math.cos(at.angle) * 150;
-  for (let i = 0; i < 60 * 120 && positionAt(p, v.tau).s < p.stops[4]; i++) { const h = pointOn(p, positionAt(p, v.tau).s); updateWorld(w, idle(), 1 / 60); w.camera.x = h.x; w.camera.y = h.y; }
-  assert.ok(positionAt(p, v.tau).s >= p.stops[4] - 5, `Fahrplanbahn bei ${(positionAt(p, v.tau).s - p.stops[4]).toFixed(0)} px vor dem Halt`);
+  // 150 s: durchkommen statt ewig hängen; Passanten queren mit realistischen 1,3 m/s und halten die Bahn länger auf
+  for (let i = 0; i < 60 * 150 && positionAt(p, v.tau).s < p.stops[4]; i++) { const h = pointOn(p, positionAt(p, v.tau).s); updateWorld(w, idle(), 1 / 60); w.camera.x = h.x; w.camera.y = h.y; }
+  // Diagnose für den Fehlerfall: was steht vor dem Kopf der Bahn?
+  const head = positionAt(p, v.tau).s, ha = pointOn(p, head).angle, what = [];
+  for (const d of [20, 45, 75]) { const q = pointOn(p, head + d);
+    for (const c of w.cars) if (Math.hypot(c.x - q.x, c.y - q.y) < 24 + c.hw * 0.4) what.push(`${d}:Auto ${c.kind}/${c.driver} cos ${Math.cos(c.angle - ha).toFixed(2)} rev ${c.ai?.reverseT?.toFixed(2)}`);
+    for (const e of w.peds) if (e.state !== 'dead' && e.state !== 'hang' && Math.hypot(e.x - q.x, e.y - q.y) < 16) what.push(`${d}:Passant ${e.state}`);
+    for (const b of w.bikes ?? []) if (b.state === 'ride' && Math.hypot(b.x - q.x, b.y - q.y) < 18) what.push(`${d}:Rad`); }
+  assert.ok(head >= p.stops[4] - 5, `Fahrplanbahn bei ${(head - p.stops[4]).toFixed(0)} px vor dem Halt; davor: ${what.join(' | ') || 'nichts'}`);
+});
+
+test('Eigene Straßenbahn vor einem entgegenkommenden Auto, das nicht zurück kann: nach der Wartezeit fährt sie an', async () => {
+  const { createCar } = await import('../web/src/car.js');
+  const { TRAM_PATIENCE } = await import('../web/src/transitlive.js');
+  const p = pat('M10', 'tram'), w = atFrontOf(p, 3);
+  w.trafficScale = 0;
+  press(w, { enterExit: true });
+  const t = w.playerTrain, q = pointOn(p, t.s + 250);
+  // Auto frontal auf dem Gleis, festgesetzt (Handbremse, kein Fahrer = kann nicht ausweichen)
+  const car = createCar({ x: q.x, y: q.y, angle: q.angle + Math.PI }); car.driver = null; car.role = 'stuck'; w.cars = [car];
+  const keep = (patch) => { w.cars = w.cars.filter((c) => c === car); press(w, patch); };
+  for (let i = 0; i < 60 * 8; i++) keep({ throttle: 1 });
+  assert.equal(t.v, 0, 'wartet zuerst');
+  const s0 = t.s;
+  for (let i = 0; i < 60 * (TRAM_PATIENCE + 6); i++) keep({ throttle: 1 });
+  assert.ok(t.s > s0 + 30, `fährt nach der Wartezeit an (${(t.s - s0).toFixed(0)} px)`);
 });

@@ -1,6 +1,6 @@
 // Spielwelt: verbindet Stadt, Spieler, Autos, Passanten und Mission zu einem Simulationsschritt.
 // Enthält kein DOM – Eingaben kommen als abstrakter Zustand (siehe input.js), Ausgaben als Ereignisse.
-import { PLAYER, PED, TRAFFIC, CAR, PARKED, CLOCK } from './config.js';
+import { PLAYER, STAMINA, PED, TRAFFIC, CAR, PARKED, CLOCK } from './config.js';
 import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
@@ -485,9 +485,16 @@ function updatePlayerOnFoot(w, input, dt) {
   if (p.stun > 0) { p.stun -= dt; return; }
   let mx = input.moveX, my = input.moveY;
   const mag = Math.min(1, Math.hypot(mx, my));
+  // Ausdauer: Sprint leert sie, nach kurzer Pause erholt sie sich; leer = nur joggen, bis wieder genug da ist
+  p.stamina ??= 1; p.tired ??= false;
+  const wantSprint = !!input.sprint && mag > 0.05 && !input.walkSlow;
+  if (p.tired && p.stamina >= STAMINA.again) p.tired = false;
+  const sprinting = wantSprint && !p.tired && p.stamina > 0;
+  if (sprinting) { p.stamina = Math.max(0, p.stamina - dt / STAMINA.drain); p.rest = 0; if (p.stamina === 0) p.tired = true; }
+  else if ((p.rest = (p.rest ?? 0) + dt) > STAMINA.pause) p.stamina = Math.min(1, p.stamina + dt / STAMINA.recover);
   if (mag > 0.05) {
-    const run = input.sprint || mag > 0.92;
-    const speed = (run ? PLAYER.run : PLAYER.walk) * (input.sprint ? 1 : mag);
+    // Stick halb = gehen, darüber joggen; Alt = gehen; Sprint mit Ausdauer
+    const speed = sprinting ? PLAYER.sprint : input.walkSlow || mag <= 0.6 ? PLAYER.walk : PLAYER.jog;
     const nx = mx / (Math.hypot(mx, my) || 1), ny = my / (Math.hypot(mx, my) || 1);
     p.x += nx * speed * dt; p.y += ny * speed * dt;
     p.angle = Math.atan2(ny, nx);

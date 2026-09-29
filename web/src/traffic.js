@@ -270,18 +270,20 @@ export function obstacleAhead(car, world) {
   return { dCar, dOther, playerBlock, blocker, pedBlock };
 }
 
-// Abstand (Stoßstange zu Stoßstange, px) zu einem Straßenbahnwagen, der frontal vor dem Auto steht oder entgegenkommt:
-// vor dem Auto, entgegengesetzte Richtung, seitlich überlappend. Geradlinig statt entlang der Route – die hilft beim
-// Zurücksetzen nicht (sonst pendelt das Auto vor und zurück).
+// Wie weit (px) vor dem Kopf einer entgegenkommenden Straßenbahn dieses Auto in ihrem Weg steht (Infinity: gar nicht).
+// Dieselbe Geometrie wie die Hindernisprüfung der Bahn (transitlive.js obstacleAt: Punkte auf der Strecke vor dem Kopf,
+// Umkreis 24 + 0,4 · halbe Autolänge), nur weiter voraus – so weicht ein Auto genau dann, wenn die Bahn auf es wartet.
+// Geradlinig statt entlang der Route – die hilft beim Zurücksetzen nicht (sonst pendelt das Auto vor und zurück).
 export function tramHeadOn(car, world) {
-  const c = Math.cos(car.angle), s = Math.sin(car.angle);
+  const r = 24 + 0.4 * car.hw + 4;
   let best = Infinity;
   for (const o of world.railObs ?? []) {
     if (Math.cos(o.angle - car.angle) > -0.5) continue;
-    const rx = o.x - car.x, ry = o.y - car.y, along = rx * c + ry * s, side = Math.abs(-rx * s + ry * c);
-    // seitlich so weit, wie die Bahn selbst ein Auto als Hindernis zählt (transitlive.js obstacleAt: 24 + 0,4 · halbe Länge)
-    if (along <= 0 || side > 24 + 0.4 * car.hw + 4) continue;
-    best = Math.min(best, Math.max(0, along - o.hw - car.hw));
+    const c = Math.cos(o.angle), s = Math.sin(o.angle);
+    for (let d = 10; d <= TRAM_YIELD && d < best; d += 15) {
+      const px = o.x + c * (o.hw + d), py = o.y + s * (o.hw + d);
+      if (Math.hypot(car.x - px, car.y - py) < r) { best = d; break; }
+    }
   }
   return best;
 }

@@ -220,7 +220,8 @@ test('Gegenwehr: wer sich wehrt, steht nach dem Schlag auf, kommt zurück und tr
   const n = pedOfKind(w2, p2.x + Math.cos(a2) * 16, p2.y + Math.sin(a2) * 16, false);
   step(w2, { aimWorld: { x: n.x, y: n.y }, fire: true, firePressed: true });
   for (let i = 0; i < 60 * 4; i++) step(w2);
-  assert.ok(n.state === 'flee' || n.state === 'return' || n.state === 'walk', `flieht (${n.state})`);
+  // flieht statt zu kämpfen – danach geht er weiter (walk/cross/return; mit realistischem Tempo ist die Flucht nach 4 s vorbei)
+  assert.ok(n.state !== 'fight' && n.state !== 'down', `flieht (${n.state})`);
   assert.equal(p2.hp, PLAYER_HP);
 });
 

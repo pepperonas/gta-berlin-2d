@@ -214,7 +214,10 @@ export function updatePed(ped, world, dt) {
     case 'flee': {
       ped.t -= dt;
       const dx = ped.x - ped.threat.x, dy = ped.y - ped.threat.y, d = Math.hypot(dx, dy) || 1;
+      const ox = ped.x, oy = ped.y;
       moveWithCollision(ped, dx / d * PED.run * dt, dy / d * PED.run * dt, world);
+      // nicht durch eine Haustür ins Haus fliehen: dann die Flucht beenden und zurück zum Gehweg
+      if (inBuilding(city, ped.x, ped.y)) { ped.x = ox; ped.y = oy; ped.t = 0; }
       if (ped.t <= 0) {
         const sp = nearestSpot(city, ped.x, ped.y);
         if (sp) { Object.assign(ped, { edge: sp.edge, side: sp.side, s: sp.s }); ped.state = 'return'; }

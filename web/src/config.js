@@ -18,8 +18,11 @@ export const CAR = {
 // Poller und Schranken: ab dieser Aufprallgeschwindigkeit (px/s, ≈ 16 km/h) fährt ein Auto sie um
 export const KNOCK = { speed: 45, slow: 0.9, damage: 3 };
 
-export const PLAYER = { radius: 7, walk: 80, run: 155, enterDist: 40 };
-export const PED = { radius: 6, walk: 36, run: 120 };
+// Tempo in px/s (10 px = 1 m): langsam gehen 1,5 m/s, joggen 3,5 m/s (Standard), sprinten 7 m/s
+export const PLAYER = { radius: 7, walk: 15, jog: 35, sprint: 70, enterDist: 40 };
+// Sprint-Ausdauer: leer in drain s, voll in recover s (nach pause s Ruhe), Sprint erst wieder ab again
+export const STAMINA = { drain: 12, recover: 20, pause: 1, again: 0.25 };
+export const PED = { radius: 6, walk: 13, run: 45 }; // gehen ~1,3 m/s, rennen 4,5 m/s
 
 export const MISSION = {
   timeLimit: 120,     // Rückfall; das echte Limit berechnet der Karten-Build aus der Route

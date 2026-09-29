@@ -15,25 +15,30 @@ const outOfView = (w, x, y, pad = 80) => Math.abs(x - w.camera.x) > LIFE.viewHal
 
 // Steht an (x, y) etwas im Weg einer Straßenbahn? (Spieler zu Fuß, Autos, fahrende Räder, Passanten)
 // !ride: der Spieler als Fahrgast/Fahrer sitzt im Zug und ist kein Hindernis.
-export function obstacleAt(w, x, y) {
+// headOn: Fahrtrichtung der Bahn – dann zählen frontal entgegenkommende Fahrzeuge nicht (Rückfall nach langem Warten)
+export function obstacleAt(w, x, y, headOn = null) {
   const hit = (ox, oy, r) => Math.hypot(ox - x, oy - y) < r;
   if (!w.player.inCar && !w.player.ride && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
-  for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4)) return true;
+  for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4) && !(headOn !== null && Math.cos(c.angle - headOn) < -0.5)) return true;
   for (const b of w.bikes ?? []) if (b.state === 'ride' && hit(b.x, b.y, 18)) return true;
   for (const ped of w.peds) if (ped.state !== 'dead' && ped.state !== 'hang' && hit(ped.x, ped.y, 16)) return true;
   return false;
 }
+export const TRAM_PATIENCE = 20; // s
 const trainLenOf = (m) => TRAIN[m].cars * TRAIN[m].carL + (TRAIN[m].cars - 1) * TRAIN[m].gap;
 
 // Straßenbahn vor einem Hindernis auf dem Gleis? (Spitze plus 2–8 m voraus, seitlich 2,2 m)
-function tramBlocked(w, p, v) {
+function tramBlocked(w, p, v, strict = false) {
   const pos = positionAt(p, v.tau);
   if (pos.dwelling) return false;
   const head = pos.s;
   const cam = w.camera;
   const hp = pointOn(p, head);
   if (Math.abs(hp.x - cam.x) > 2500 || Math.abs(hp.y - cam.y) > 2500) return false; // weit weg: keine Hindernisse
-  for (const d of [20, 45, 75]) { const q = pointOn(p, head + d); if (obstacleAt(w, q.x, q.y)) return true; }
+  // Rückfall: nach 20 s Warten (das entgegenkommende Fahrzeug kommt nicht zurück, z. B. hinter ihm steht ein Parker)
+  // zählt Gegenverkehr nicht mehr – die Bahn fährt an und schiebt ihn beiseite (collideRail)
+  const patient = !strict && (v.blockedT ?? 0) > TRAM_PATIENCE ? hp.angle : null;
+  for (const d of [20, 45, 75]) { const q = pointOn(p, head + d); if (obstacleAt(w, q.x, q.y, patient)) return true; }
   return false;
 }
 
@@ -78,7 +83,7 @@ export function updateTransit(w, dt) {
     if (p.mode === 'tram') {
       for (const v of s.veh) {
         if ((v.blockedT ?? 0) > 2.5 && !v.rang) { v.rang = true; const q = pointOn(p, positionAt(p, v.tau).s); w.events.push({ type: 'tram-bell', x: q.x, y: q.y }); }
-        if (v.blockedT && !tramBlocked(w, p, v)) { v.blockedT = 0; v.rang = false; }
+        if (v.blockedT && !tramBlocked(w, p, v, true)) { v.blockedT = 0; v.rang = false; } // erst zurücksetzen, wenn wirklich frei
       }
       continue;
     }
