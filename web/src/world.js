@@ -579,7 +579,7 @@ function updateRide(w) {
   r.speed = st.speed; r.underground = st.underground;
 }
 
-// Wetter am Auto: Haftung (car.traction), Aufschwimmen in einer Pfütze (car.aqua, einmal je Pfütze) und Böen
+// Wetter am Auto: Haftung (car.traction), Aufschwimmen in einer Pfütze (car.aqua) und Böen
 function applyWeather(w, c, dt) {
   const lvl = c.lvl ?? 0;
   c.traction = tractionOf(roadCondition(w, c.x, c.y, lvl));
@@ -589,11 +589,11 @@ function applyWeather(w, c, dt) {
     const ca = Math.cos(c.angle), sa = Math.sin(c.angle), fx = c.hw * 0.7, fy = c.hh * 0.8;
     for (const s of [-1, 1]) { p = puddleAt(w, c.x + ca * fx - sa * fy * s, c.y + sa * fx + ca * fy * s, lvl); if (p) break; }
   }
-  if (p && p !== c._aquaP && !(c.aqua > 0)) {
+  // einmal je Pfütze: eine Pfütze ist höchstens ~5 m lang, bei über 70 km/h ist man vor Ablauf von AQUA.time hindurch
+  if (p && !(c.aqua > 0)) {
     c.aqua = AQUA.time; c.angVel += aquaYaw(p);
     w.events.push({ type: 'aquaplane', x: c.x, y: c.y, carId: c.id, player: c.id === w.player.inCar });
   }
-  if (p) c._aquaP = p; else if (!(c.aqua > 0)) c._aquaP = null;
   const g = gustPush(w, c, lvl);
   if (g) { c.vx += g.ax * dt; c.vy += g.ay * dt; }
 }
