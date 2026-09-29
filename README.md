@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.30.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.31.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -373,16 +373,17 @@ Haltestelle im Stand öffnet **E/A** die Türen (sie schließen nach 20 s selbst
 selbst; Fahrplanzüge dahinter warten. Am Endhalt wendet **E/A** auf die Gegenrichtung, wo es eine gibt. Unter Tage wird
 die Stadt abgedunkelt, die Röhren mit Bahnsteigen, Bahnhofsnamen und den Zügen darin erscheinen (Tunnelansicht).
 
-Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; eine Straßenbahn in einer Straße mit Gegenverkehr auf
-dem Gleis kann mit einem entgegenkommenden Bus hängen bleiben (Fahrplandaten legen die Strecke dort in die Gegenspur).
+Straßenbahnen haben Vorrang: Wo ihr Linienweg in der Gegenspur liegt (vor allem Linie 21, Teile von M10 und M13),
+setzen entgegenkommende Autos und Busse zurück, bis die Bahn vorbei ist. Grenzen: keine Signale und Weichen, keine
+Bahnhofs-Innenräume.
 
 ## Wetter und Fahren
 
 Das Wetter wirkt aufs Fahren. Auf nasser Straße wird der Bremsweg etwa ein Drittel länger, auf Schnee etwa doppelt,
 auf Glätte etwa dreimal so lang; Anfahren, Seitenhalt und Lenkung lassen entsprechend nach, auf Glätte drehen die Räder
 durch. **Glätte** entsteht, wo es nass ist und die Temperatur (neben der Uhr) unter 0 °C fällt – an Wintertagen oft
-früh morgens; Brücken frieren zuerst, unter Brücken und in Durchfahrten bleibt die Straße trocken. Wer schneller als
-etwa 70 km/h durch eine der sichtbaren **Pfützen** am Fahrbahnrand fährt, schwimmt kurz auf (**Aquaplaning**, mit
+früh morgens; Brücken frieren zuerst, unter Brücken, Hochbahn-Viadukten und in Durchfahrten bleibt die Straße trocken. Wer schneller als
+etwa 70 km/h durch eine der sichtbaren **Pfützen** fährt (gut die Hälfte liegt in der Fahrspur, der Rest im Parkstreifen), schwimmt kurz auf (**Aquaplaning**, mit
 Spritzwasser). **Sturmböen** versetzen Autos quer, auf Brücken stärker, leichte Autos mehr als Transporter. Der
 **KI-Verkehr** fährt bei schlechtem Wetter langsamer, bremst sanfter und hält mehr Abstand. Als **Zugführer** bremst
 man auf nassen oder vereisten Schienen schlechter (im Tunnel ist es trocken), die Zwangsbremsung hält trotzdem vor
@@ -418,7 +419,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 372 automatischen Tests grün, darunter:
+- Alle 386 automatischen Tests grün, darunter:
+  - 0.31.0: Straßenbahn-Vorrang (an der M10-Stelle mit Gegenverkehr kommen die eigene Bahn und eine Fahrplanbahn in
+    120 s zum nächsten Halt; ohne Zurücksetzen, mit zu enger Seitenprüfung oder ohne Mitzurücksetzen des Hintermanns
+    scheitern die Tests); Wenden öffnet keine Türen, erneutes Türöffnen ist kein neuer Halt, ein stehengelassener Zug
+    fährt als Fahrplanzug weiter, der Sprung ans Fahrtende ist kein Fußweg; Pfützen in der Fahrspur und Aquaplaning aus
+    der Spurmitte, kein Pfützen-Cache am Rand des geladenen Gebiets, trocken ohne Abfrage, Hochbahn überdacht, Pfütze
+    unter der Fahrzeugmitte, Warnschild verschwindet mit der Warnung, Zielpfeil weicht dem Schild aus, Temperatur ab
+    dem Start, Mindestabstand in der Glätte-Schlange;
   - Wetter-Fahrphysik: Temperaturkurve (Spanne je Tagestyp, 5/15 Uhr, stetig über Mitternacht, erzwungener Schnee
     ≤ +1 °C), Glätte nur bei Nässe und Frost, Spielstand mit Glätte, alter Stand ohne; Haftungsfaktoren (trocken exakt
     1, Mischung mit Untergrenze), überdacht trocken, Brücke glatter, Pfütze nur in der gezeichneten Ellipse und bei

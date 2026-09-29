@@ -157,7 +157,9 @@ change in `web/`.
   ice; puddles = `edgePuddles`), written per step to `car.traction` by `world.js applyWeather` (also `car.aqua`
   aquaplaning, `gustPush`); `car.js`, `traffic.js` (slower, gentler braking, longer following distance; standstill gap
   unchanged) and `trainphysics.js` (`input.adhesion` from `playertrain.js trainAdhesion`, tunnels = 1) read only
-  factors. Missing `car.traction` = dry. HUD: temperature next to the clock, `roadWarning` sign.
+  factors. Missing `car.traction` = dry (and dry + no storm skips the lookup: `car.traction = DRY`). `under()` counts a
+  higher edge as a roof only if it doesn't connect to the own level nearby (bridge approaches aren't covered); viaducts
+  (rails of higher level, not at their ends) cover too. HUD: temperature next to the clock, `roadWarning` sign.
 - **Windows:** `windows.js` (pure) decides per window (flat hash + room hash vs. `windowsLit`) whether it is lit and in
   which colour; `render.js drawLitWindows` draws them per face, cached per building and game minute.
 - **Public transport:** `transit.json` (built by `tools/osm/transit.mjs` from VBB GTFS, own ZIP reader `zip.mjs`) →
@@ -178,6 +180,8 @@ change in `web/`.
   line within 5 m (`tunnel.js undergroundAtS`, heading-aware; unloaded tile = above ground). `tunnelview.js drawTunnels`
   draws the tunnel view, faded by `w.underground`. Tram tracks exist only in the timetable shapes (`transit.js
   tramTrackNear`); parking slots avoid them (`e._slots` is keyed on `city.transit`, which loads async in the browser).
+  Trams have right of way: an AI car with a tram car head-on in front (`traffic.js tramHeadOn`) backs up (`ai.tramYield`),
+  the car behind a yielding car too — the timetable shape lies in the oncoming lane on ~1.3 % of tram track.
 - **Access:** fences/walls/hedges/bollard lines open `GATE_M` (4.4 m) at gate nodes and wherever any highway way crosses
   them (build, `accessAndRules`). Barrier posts block AI traffic via `e.blocked`, but the player's car knocks them over
   (`car.js knockOver`, `KNOCK` in config): `world.knocked` (post key → angle, survives tile reloads), every solids loop

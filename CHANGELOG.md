@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.31.0] – 2026-09-29
+
+### Neu
+- **Straßenbahnen haben Vorrang:** Wo der Linienweg einer Bahn in der Gegenspur liegt, setzen entgegenkommende Autos
+  und Busse zurück, statt ewig mit der Bahn aufeinander zu warten (betraf vor allem Linie 21, M10, M13).
+- Unter Hochbahn-Viadukten bleibt die Straße bei Regen und Frost trocken.
+
+### Behoben
+- Wenden am Endhalt öffnete zugleich die Türen am neuen ersten Halt.
+- Erneutes Türöffnen am selben Halt zählte als weiterer bedienter Halt.
+- Übernahm man einen zweiten Zug, verschwand der erste im Bild; jetzt fährt er als Fahrplanzug weiter.
+- Der Sprung an die letzte Haltestelle (K. o., Notausstieg) zählte als Fußweg.
+- Pfützen am Rand des geladenen Gebiets wurden mit unvollständigen Häusern zwischengespeichert.
+- Aquaplaning auch mit der Fahrzeugmitte in einer Pfütze (nicht nur mit den Vorderrädern).
+- Der Zielpfeil lag unten rechts im Warnschild; das Warnschild blieb im Layout stehen, wenn es verschwand.
+- Die Temperatur zeigte bis zum ersten Schritt 0 °C.
+- Weniger Rechenaufwand bei trockenem Wetter ohne Sturm.
+
 ## [0.30.0] – 2026-09-29
 
 ### Neu

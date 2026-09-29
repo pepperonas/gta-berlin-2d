@@ -463,8 +463,12 @@ wird ein Pfad je Lichtfarbe, in der Lichtkarte heller und im Nebel gedämpft.
   Linienwege, ein Bahnsteig je Richtung und Bahnhof dem (gebogenen) Weg entlang, Züge in der Röhre.
 - Straßenbahngleise kennt die Karte ebenfalls nicht (der Build übernimmt nur rail/light_rail/subway); ihr Verlauf steht
   nur in den Linienwegen des Fahrplans (`tramTrackNear`). Parkplätze auf einem solchen Weg entfallen.
-- Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume; wo der Linienweg einer Straßenbahn in der Gegenspur
-  liegt, warten entgegenkommende Busse auf die Bahn und die Bahn auf sie (offener Punkt).
+- Vorrang der Straßenbahn: Auf etwa 1,3 % der Straßenbahnstrecke liegt der (ungenaue) Linienweg aus dem Fahrplan auf
+  einer Gegenfahrspur. Früher warteten dort Bahn und entgegenkommendes Auto ewig aufeinander. Jetzt setzt ein KI-Auto
+  zurück, solange ein Bahnwagen frontal vor ihm steht oder entgegenkommt (`traffic.js tramHeadOn`, geradlinig, seitlich
+  so weit, wie die Bahn selbst ein Auto als Hindernis zählt: 24 px + 0,4 × halbe Länge); wer direkt hinter ihm steht,
+  setzt mit zurück. Die saubere Lösung wären echte Straßenbahngleise aus OSM statt der Fahrplan-Linienwege.
+- Grenzen: keine Signale und Weichen, keine Bahnhofs-Innenräume.
 
 **Wetter auf der Straße** (`web/src/weather.js temperatureAt/stepIce`, `web/src/traction.js`):
 - Temperatur ist eine reine Tageskurve (Tiefst 5 Uhr, Höchst 15 Uhr; Winter −6…+3, wechselhaft +4…+14, normal
@@ -480,6 +484,8 @@ wird ein Pfad je Lichtfarbe, in der Lichtkarte heller und im Nebel gedämpft.
   der Abstand im Stand bleibt (Schlangen und Engstellen-Reservierungen unverändert).
 - Zug: `stepDrive` bekommt die Schienenhaftung (nass 0,75, Frost 0,6, Tunnel 1) für Bremse, Notbremse, Zugkraft und
   die Zwangsbremsung.
+- Überdacht sind auch Stellen unter einem Hochbahn-Viadukt (Gleis höherer Ebene, nicht an dessen Enden); eine höhere
+  Fahrbahn, die hier an die eigene Ebene anschließt, ist ein Brückenanfang und kein Dach.
 - Grenzen: Fußgänger und Radfahrer unberührt, keine Jahreszeiten, keine Streufahrzeuge; Glätte ist flächig.
 
 **Kampf** (`web/src/combat.js`, in `updateWorld` nach der Bewegung der Spielfigur): Waffen sind eine Tabelle (Schaden,
