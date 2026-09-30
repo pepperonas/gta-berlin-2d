@@ -74,13 +74,23 @@ function paintSand(g, rnd, size) {
   speckle(g, rnd, size, 300, ['rgba(120,90,40,0.15)', 'rgba(255,255,255,0.18)'], 0.3, 0.9);
 }
 
+// Platz: Granitplatten im Läuferverband, jede Reihe mit eigenem Versatz und unregelmäßig langen Platten (kein
+// Schachbrett), wenig Farbunterschied, feine Fugen, Körnung; die Plattenlängen jeder Reihe gehen nahtlos über die Kante.
 function paintPlaza(g, rnd, size) {
-  g.fillStyle = '#8e8b85'; g.fillRect(0, 0, size, size);
-  const p = 8; // kleinere Platten
-  for (let y = 0; y < size; y += p) for (let x = 0; x < size; x += p) {
-    const v = Math.round((rnd() - 0.5) * 12);
-    g.fillStyle = `rgb(${142 + v},${139 + v},${133 + v})`; g.fillRect(x + 0.5, y + 0.5, p - 1, p - 1);
+  g.fillStyle = '#7f7c76'; g.fillRect(0, 0, size, size); // Fugen
+  const rows = 6, h = size / rows;
+  for (let r = 0; r < rows; r++) {
+    let x = rnd() * size;
+    const end = x + size;
+    while (x < end - 0.5) {
+      const w = Math.min(end - x, 7 + rnd() * 9);
+      const v = Math.round((rnd() - 0.5) * 9), warm = Math.round(rnd() * 3);
+      g.fillStyle = `rgb(${150 + v + warm},${147 + v},${140 + v - warm})`;
+      for (const ox of [0, -size]) g.fillRect(x + ox + 0.35, r * h + 0.35, w - 0.7, h - 0.7);
+      x += w;
+    }
   }
+  speckle(g, rnd, size, 300, ['rgba(255,255,255,0.08)', 'rgba(0,0,0,0.07)', 'rgba(70,60,50,0.05)'], 0.2, 0.6);
 }
 
 function paintRailBed(g, rnd, size) {

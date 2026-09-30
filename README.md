@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 430 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 432 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -511,7 +511,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 430 automatischen Tests grün, darunter:
+- Alle 432 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -592,6 +592,9 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
     und Fahrer in jedem Fensterformat ohne Überlappung mit dem Auftrag; Statistik und Töne. Jede Schutzprüfung mit
     Mutationsprobe (über 30, alle erkannt); im Browser geprüft: U8 unter Kottbusser Tor (Tunnelansicht), M10 mit F am
     Führerstand übernommen und angefahren;
+  - Gebrauchsspuren: Schmutz nur in Senken, Ausbleichen nur auf Kuppen (dazwischen unverändert), Ölband in jeder
+    Spurmitte innerhalb der Fahrbahn, nicht auf Pflaster; Zeichnen mit Schmutz, Ölband, Kontaktschatten, Vignette,
+    Schnee deckt den Schmutz zu;
   - U-Bahnhöfe: aus dem Fahrplan erzeugt (Kottbusser Tor/U8 unter der Erde, Hochbahnhof Görlitzer Bahnhof nicht),
     Bahnsteig zuglang, beide Richtungen, Eingänge am Gehweg nicht im Haus; hinein über den Eingang, unten nur auf dem
     Bahnsteig, hinaus über die andere Treppe an deren Ausgang, nicht gleich wieder hinein; Einsteigen nur an der Kante

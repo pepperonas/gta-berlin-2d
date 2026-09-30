@@ -31,6 +31,7 @@ import { edgeLamps } from './lamps.js';
 import { nearestEdge, surfaceAt, T as SURF } from './map.js';
 import { texture } from './textures.js';
 import { edgeDecals } from './decals.js';
+import { drawGrime, drawLaneWear, drawContactShadows, roofGrime, waterGlint, drawVignette } from './grime.js';
 import { roofOf } from './roofs.js';
 import { litWindows, houseFraction, tvFlicker, WIN_TYPES, WIN_COLOR, WIN_LIGHT } from './windows.js';
 import { occludersOf, samplePoints, levelSurfaces, surfacesOver, trackLevel } from './occlusion.js';
@@ -659,7 +660,8 @@ export class Renderer {
       const p = pathOf(wa);
       ctx.fillStyle = WATER; ctx.fill(p, 'evenodd');
       ctx.save(); ctx.clip(p, 'evenodd');
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1.5;
+      const glint = this.quality === 'high' && waterGlint(ctx, p, t, L.sun.strength);
+      ctx.strokeStyle = `rgba(255,255,255,${glint ? 0.06 : 0.12})`; ctx.lineWidth = 1.5;
       const x0 = Math.max(v.x, wa.bbox.x), x1 = Math.min(v.x + v.w, wa.bbox.x + wa.bbox.w);
       const y0 = Math.max(v.y, wa.bbox.y), y1 = Math.min(v.y + v.h, wa.bbox.y + wa.bbox.h);
       for (let y = Math.floor(y0 / 22) * 22 + 10; y < y1; y += 22) {
@@ -704,7 +706,7 @@ export class Renderer {
     const detail = this.quality === 'high' && (cam.zoom ?? 1) >= DETAIL_ZOOM;
     this.stats.detail = { sidewalks: 0, curbs: 0, treePits: 0 };
     if (detail) this.drawTreePits(trees, city);
-    this.stats.tracks = 0; this.stats.bridgeFills = 0; this.stats.puddles = 0;
+    this.stats.tracks = 0; this.stats.bridgeFills = 0; this.stats.puddles = 0; this.stats.laneWear = 0; this.stats.grime = 0;
     for (let li = 0; li < levels.length; li++) {
       const lvl = levels[li], up = lvl >= 1;
       const E = edges.filter((e) => lv(e) === lvl), P = paths.filter((p) => lv(p) === lvl), J = junctions.filter((j) => (j.lvl ?? 0) === lvl);
@@ -749,9 +751,11 @@ export class Renderer {
         }
         this.drawTracks2(E);
       }
-      if (this.quality === 'high') this.drawDecals(E, city);
+      if (this.quality === 'high') { this.stats.laneWear += drawLaneWear(ctx, city, E); this.drawDecals(E, city); }
       this.drawStreetMarkings(E, city);
       if (lvl === 0) this.drawCrossings(crossings);
+      // Gebrauchsspuren über Boden, Grün, Straßen und Markierungen (Schnee deckt sie zu)
+      if (lvl === 0) this.stats.grime = drawGrime(ctx, v, 1 - Math.min(1, snowD * 2));
       this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L, { layer: (fn, a) => this.overlayLayer(fn, a), t, rain: wx?.rain ?? 0 });
       if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
       if (lvl === 0) this.drawSnowTrails(world, v, snowD);
@@ -794,6 +798,9 @@ export class Renderer {
       const casters = cq.filter((f) => f.layer === 'building');
       this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : []);
     }
+
+    // Kontaktschatten ums Haus (auch nachts und bei Bewölkung: kommt vom Himmelslicht, nicht von der Sonne)
+    this.stats.contact = drawContactShadows(ctx, buildings.filter((b) => !(b.lvl > 0)), pathOf, 1 - Math.min(0.6, snowD));
 
     // Blut am Boden (verblasst langsam)
     for (const st of this.stains) {
@@ -917,6 +924,9 @@ export class Renderer {
     // Unter Tage (Fahrgast/Fahrer in U-/S-Bahn): Stadt abdunkeln, Röhren, Bahnsteige, Züge im Tunnel
     this.stats.tunnel = drawTunnels(ctx, world, v, t, under);
     if (this.debug?.levels) this.drawLevelDebug(city, v, s);
+
+    // Vignette: Bildränder leicht abgedunkelt (lenkt den Blick zur Mitte, wirkt wie ein Kameraobjektiv)
+    this.stats.vignette = drawVignette(ctx, W, H, this.quality === 'high' ? 1 : 0.7);
 
     // Spieler-Markierung über dem Dach, falls er hinter einem Haus verschwindet
     if (!pl.inCar) {
@@ -1142,8 +1152,9 @@ export class Renderer {
     }
     if (roof.style === 'flat' || roof.style === 'berlin' || roof.style === 'mansard') {
       if (hi && roof.style === 'flat') { const gr = texture(ctx, 'gravel'); if (gr) { ctx.fillStyle = gr; ctx.fill(p, 'evenodd'); } }
-      if (roof.style === 'flat') { ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p); } // Attika
     }
+    if (hi && !g.dome) roofGrime(ctx, p); // Moos und Ruß
+    if (roof.style === 'flat') { ctx.strokeStyle = col.parapet; ctx.lineWidth = 2.4; ctx.stroke(p); } // Attika
     if (hi) for (const d of roof.decor) drawDecor(ctx, d);
     if ((this._snowD ?? 0) > 0.03) this.roofSnow(ctx, b, roof, g, p, this._snowD, sun, col);
     ctx.strokeStyle = col.line; ctx.lineWidth = 1.3; ctx.stroke(p);
@@ -1717,11 +1728,15 @@ export class Renderer {
         ctx.restore();
       }
       if (lightMode) continue;
-      // Kontaktschatten am Fuß der Fassade
+      // Kontaktschatten am Fuß der Fassade, darüber Spritzwasser-/Straßenschmutz, der nach oben ausläuft
       ctx.save();
       ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
       ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, f.L, 2.5);
       ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, 2.5, f.L, 3);
+      if (this.quality === 'high' && ctx.createLinearGradient) {
+        ctx.scale(1, H);
+        ctx.fillStyle = this._soil ??= soilGradient(ctx); ctx.fillRect(0, 0, f.L, 0.5);
+      }
       ctx.restore();
       if (b.doors) for (const [dr, de, dt] of b.doors) if (dr === f.ri && de === f.ei) { // Hauseingang
         ctx.save();
@@ -1772,6 +1787,14 @@ function silhouettePath(g, o) {
     g.moveTo(-L + r, -W); g.lineTo(L - r, -W); g.quadraticCurveTo(L, -W, L, -W + r); g.lineTo(L, W - r); g.quadraticCurveTo(L, W, L - r, W);
     g.lineTo(-L + r, W); g.quadraticCurveTo(-L, W, -L, W - r); g.lineTo(-L, -W + r); g.quadraticCurveTo(-L, -W, -L + r, -W); g.closePath();
   } else g.arc(0, 0, 7, 0, Math.PI * 2);
+}
+
+// Fassadenschmutz: vom Sockel (y = 0) bis zur halben Höhe (y = 0.5 nach ctx.scale(1, H)) auslaufend
+function soilGradient(ctx) {
+  const g = ctx.createLinearGradient(0, 0, 0, 0.5);
+  if (!g?.addColorStop) return 'rgba(0,0,0,0)';
+  g.addColorStop(0, 'rgba(52,42,32,0.2)'); g.addColorStop(0.35, 'rgba(52,42,32,0.06)'); g.addColorStop(1, 'rgba(52,42,32,0)');
+  return g;
 }
 
 function drawCrate(ctx, c) {

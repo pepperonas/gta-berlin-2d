@@ -279,6 +279,11 @@ change in `web/`.
   events + `game.statQueue` (teleport, cheat) into `game.stats.game`/`total`; `statsdb.js` persists them in IndexedDB
   (`applyStoredStats` merges the async answer). New counters need a row in `STAT_SECTIONS`; events that count must
   carry who caused them (`player`, `weapon`, `carId`).
+- **Wear and look (0.40.0):** `grime.js` (presentation): `drawGrime` (dirt/bleach noise patterns via `wetfx.js
+  noisePattern/scrolled`, two scales rotated, at lvl 0 after crossings, faded by snow), `laneWear(city, e)` (pure, lane
+  centre offsets, cached `e._wear`) + `drawLaneWear` (oil band, high quality), `drawContactShadows` (AO strokes around
+  footprints before the depth-sorted objects), `roofGrime`, `waterGlint`, `drawVignette` (screen space). Facade soil
+  gradient in `drawBuilding` (`soilGradient`). Pure colour mapping `grimeRGBA(kind, n)`.
 - **Tree shadows:** `lighting.js treeShadowGeom` (pure) + `addTrunkShadow` (trunk strip in the opaque shadow path) +
   `crownShadowSprite` (crown sprite as black silhouette with gaps and blurred edge, stretched along the sun).
 - **Mission** (`mission.js`) is a state machine; save (`save.js`) is one `localStorage` slot, auto-written after a

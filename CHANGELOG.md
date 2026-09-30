@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.40.0] – 2026-09-30
+
+### Geändert
+- **Realistischere Grafik:** Großräumige Gebrauchsspuren über Boden, Grün und Straßen (Schmutzflecken und ausgeblichene
+  Stellen in zwei Maßstäben, ohne sichtbare Kachel; Schnee deckt sie zu), dunkles Ölband in der Mitte jedes
+  Fahrstreifens wie auf Luftbildern, weicher Kontaktschatten am Fuß jedes Hauses, Straßenschmutz am Fassadensockel,
+  Moos und Ruß auf Dächern, wandernde Lichtreflexe auf dem Wasser, Plätze mit Granitplatten im Läuferverband statt
+  Schachbrett, leichte Vignette.
+
 ## [0.39.0] – 2026-09-30
 
 ### Neu

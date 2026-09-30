@@ -301,7 +301,7 @@ export function snowNoise(px, py, N) {
 const NOISE_N = 256, noisePats = new WeakMap();
 const smooth = (u) => { const x = clamp01(u); return x * x * (3 - 2 * x); };
 // build(n, x, y) → [r, g, b, a] (0…255) für das Rauschen n an der Stelle (x, y); null ohne Canvas
-function noisePattern(ctx, key, build) {
+export function noisePattern(ctx, key, build) {
   let per = noisePats.get(ctx);
   if (!per) noisePats.set(ctx, per = new Map());
   if (per.has(key)) return per.get(key);
@@ -321,7 +321,7 @@ function noisePattern(ctx, key, build) {
   return pat;
 }
 // Muster in Weltkoordinaten verschieben (Wind) und vergrößern (eine Kachel = 256 × scale px)
-function scrolled(pat, scale, ox, oy, sy = scale, rot = 0) {
+export function scrolled(pat, scale, ox, oy, sy = scale, rot = 0) {
   try { pat.setTransform?.(new DOMMatrix().translate(ox, oy).rotate(rot * 180 / Math.PI).scale(scale, sy)); } catch { /* ohne DOMMatrix: unverschoben */ }
   return pat;
 }
