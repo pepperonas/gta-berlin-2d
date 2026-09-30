@@ -4,7 +4,8 @@
 // Moos/Ruß auf Dächern, bewegte Lichtreflexe auf dem Wasser und eine leichte Vignette.
 // Alles rein aus Ort/Zeit abgeleitet (kein world.rng); ohne Canvas-Bilddaten (Tests) fällt jede Ebene still weg.
 import { noisePattern, scrolled } from './wetfx.js';
-import { offsetPolyline } from './geom.js';
+import { offsetPolyline, polylineLength } from './geom.js';
+import { cutPolyline } from './roadgraph.js';
 import { laneOffsets } from './street.js';
 import { SURFACE } from './citycodes.js';
 
@@ -39,20 +40,28 @@ const pattern = (ctx, kind) => noisePattern(ctx, 'grime-' + kind, (n) => grimeRG
 
 // Schmutz und ausgeblichene Stellen über dem sichtbaren Ausschnitt v (Weltkoordinaten). k = Stärke (Schnee deckt zu).
 // Liefert die Zahl der gezeichneten Ebenen.
-export function drawGrime(ctx, v, k = 1) {
+// water: Wasserflächen (Path2D), die ausgespart werden; low: nur eine Ebene (Qualität niedrig)
+export function drawGrime(ctx, v, k = 1, water = [], low = false) {
   if (k < 0.02) return 0;
   const dirt = pattern(ctx, 'dirt'), bleach = pattern(ctx, 'bleach');
   if (!dirt || !bleach) return 0;
   const a0 = ctx.globalAlpha, x = v.x - 5, y = v.y - 5, w = v.w + 10, h = v.h + 10;
+  ctx.save();
+  if (water.length && typeof Path2D !== 'undefined') { // Schmutz liegt nicht auf dem Wasser
+    const clip = new Path2D(); clip.rect(x, y, w, h);
+    for (const wp of water) clip.addPath(wp);
+    ctx.clip(clip, 'evenodd');
+  }
   let n = 0;
   // ein Kachel = 256 × scale px: 3,5 → ≈ 90 m (Flecken), 13 → ≈ 330 m (ganze Ecken schmutziger), gedreht gegeneinander
-  for (const [pat, scale, rot, a] of [[dirt, 3.5, 0.37, GRIME.dirt * 0.55], [dirt, 13, 1.21, GRIME.dirt * 0.45], [bleach, 6, 2.3, GRIME.bleach]]) {
-    ctx.globalAlpha = a0 * a * k;
+  const layers = [[dirt, 3.5, 0.37, GRIME.dirt * 0.55], [dirt, 13, 1.21, GRIME.dirt * 0.45], [bleach, 6, 2.3, GRIME.bleach]];
+  for (const [pat, scale, rot, a] of low ? [layers[0]] : layers) {
+    ctx.globalAlpha = a0 * a * k * (low ? 1.6 : 1);
     ctx.fillStyle = scrolled(pat, scale, 0, 0, scale, rot);
     ctx.fillRect(x, y, w, h);
     n++;
   }
-  ctx.globalAlpha = a0;
+  ctx.restore();
   return n;
 }
 
@@ -79,10 +88,12 @@ export function drawLaneWear(ctx, city, E) {
   for (const e of E) {
     const offs = laneWear(city, e);
     if (!offs.length) continue;
-    if (!e._wearPath) {
-      const p = new Path2D();
+    if (!e._wearPath) { // endet vor der Kreuzung (wie Gullys und Flicken: halbe Fahrbahnbreite + 3 m)
+      const p = new Path2D(), margin = Math.min(e.len / 2, e.w / 2 + 3 * city.scale);
       for (const off of offs) {
-        const pts = off ? offsetPolyline(e.pts, off) : e.pts;
+        const full = off ? offsetPolyline(e.pts, off) : e.pts, L = polylineLength(full);
+        const pts = cutPolyline(full, margin, L - margin);
+        if (pts.length < 4) continue;
         p.moveTo(pts[0], pts[1]);
         for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
       }
@@ -97,11 +108,11 @@ export function drawLaneWear(ctx, city, E) {
 
 // Weicher Kontaktschatten ums Haus am Boden (Umgebungsverdeckung): drei Striche um den Grundriss, außen breit und
 // schwach, innen schmal und dichter – das Haus selbst deckt die innere Hälfte ab.
-export function drawContactShadows(ctx, buildings, pathOf, k = 1) {
+export function drawContactShadows(ctx, buildings, pathOf, k = 1, low = false) {
   if (k < 0.02 || !buildings.length) return 0;
   ctx.save();
   ctx.lineJoin = 'round';
-  for (const [w, a] of GRIME.ao) {
+  for (const [w, a] of low ? [[12, 0.12]] : GRIME.ao) { // niedrige Qualität: ein Strich statt drei
     ctx.strokeStyle = `rgba(20,18,16,${(a * k).toFixed(3)})`; ctx.lineWidth = w;
     for (const b of buildings) ctx.stroke(pathOf(b));
   }
@@ -109,13 +120,15 @@ export function drawContactShadows(ctx, buildings, pathOf, k = 1) {
   return buildings.length;
 }
 
-// Moos und Ruß auf einem Dach (Pfad p, schon an seinem Platz); das Muster liegt in Weltkoordinaten
+// Moos und Ruß auf einem Dach (Pfad p, schon an seinem Platz); das Muster liegt in Weltkoordinaten, seine
+// Transformation ist fest (einmal gesetzt, nicht je Dach neu)
 export function roofGrime(ctx, p) {
   const pat = pattern(ctx, 'roof');
   if (!pat) return false;
+  if (!pat._set) { scrolled(pat, 1.6, 0, 0, 1.6, 0.8); pat._set = true; }
   const a0 = ctx.globalAlpha;
   ctx.globalAlpha = a0 * GRIME.roof;
-  ctx.fillStyle = scrolled(pat, 1.6, 0, 0, 1.6, 0.8); ctx.fill(p, 'evenodd');
+  ctx.fillStyle = pat; ctx.fill(p, 'evenodd');
   ctx.globalAlpha = a0;
   return true;
 }

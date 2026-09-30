@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 441 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 446 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -432,8 +432,9 @@ die Stadt abgedunkelt, die Röhren mit Bahnsteigen, Bahnhofsnamen und den Zügen
 Straßenbahnen haben Vorrang: Wo ihr Linienweg in der Gegenspur liegt (vor allem Linie 21, Teile von M10 und M13),
 setzen entgegenkommende Autos und Busse zurück, bis die Bahn vorbei ist. Grenzen: keine Signale und Weichen.
 
-**U-Bahnhöfe betreten:** An jedem unterirdischen U- und S-Bahnhof führen zwei Treppenabgänge (blaues U- bzw. grünes
-S-Schild) am Gehweg nach unten, jeweils über den Enden des Bahnsteigs. Wer hineinläuft, sieht statt der Stadt den
+**U-Bahnhöfe betreten:** An jedem unterirdischen U- und S-Bahnhof führen Treppenabgänge (blaues U- bzw. grünes
+S-Schild) am Gehweg nach unten: je einer über den Enden des Bahnsteigs und einer am U-/S-Symbol der Station. Einfach
+hineinlaufen oder in der Nähe **E** drücken (Hinweis „Hinunter zur U-Bahn …“); die Minikarte zeigt die Eingänge. Wer hineinläuft, sieht statt der Stadt den
 Bahnhof: Mittelbahnsteig mit Treppen, Säulen, gefliesten Wänden in der Farbe des Bahnhofs, Namensschildern,
 Fahrgastanzeigen (Linie, Ziel, Minuten) und wartenden Fahrgästen. Die Züge kommen nach dem echten Fahrplan, halten und
 fahren weiter. An der Bahnsteigkante neben einem haltenden Zug steigt man mit **G** ein; **G** am nächsten
@@ -529,7 +530,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 441 automatischen Tests grün, darunter:
+- Alle 446 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -621,6 +622,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
   - Gebrauchsspuren: Schmutz nur in Senken, Ausbleichen nur auf Kuppen (dazwischen unverändert), Ölband in jeder
     Spurmitte innerhalb der Fahrbahn, nicht auf Pflaster; Zeichnen mit Schmutz, Ölband, Kontaktschatten, Vignette,
     Schnee deckt den Schmutz zu;
+  - U-Bahnhöfe, Fehlerfälle: Eingang höchstens 20 m vom U-/S-Symbol (Bahnart passend, nicht im Haus), E in Reichweite
+    führt hinunter, weiter weg nicht; Ostkreuz/Plänterwald nicht begehbar; gleiche Bahnsteige egal von wo man kommt
+    (Yorckstraße S/U7); Neustart und Teleport holen heraus bzw. lassen nicht hineinfallen; Straßenbahn hält nicht für die
+    Figur unten; Spielstand behält das Automodell; Gas beim Rückwärtsrollen bremst, Wiese begrenzt das Tempo, nach dem
+    Aussteigen kein Fahrzustand; Ölband endet vor Kreuzungen, niedrige Qualität spart Ebenen;
   - U-Bahnhöfe: aus dem Fahrplan erzeugt (Kottbusser Tor/U8 unter der Erde, Hochbahnhof Görlitzer Bahnhof nicht),
     Bahnsteig zuglang, beide Richtungen, Eingänge am Gehweg nicht im Haus; hinein über den Eingang, unten nur auf dem
     Bahnsteig, hinaus über die andere Treppe an deren Ausgang, nicht gleich wieder hinein; Einsteigen nur an der Kante

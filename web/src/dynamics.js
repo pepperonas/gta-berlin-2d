@@ -59,7 +59,7 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
   const d = car.dyn ??= { esp: 0, delta: 0, ax: 0, ay: 0, alphaF: 0, alphaR: 0, spinF: 0, spinR: 0, lockR: 0, understeer: 0 };
   const aq = (car.aqua ?? 0) > 0;
   const F = DYN.fun, muBase = spec.mu * (surf.grip ?? 1) * F.grip;
-  const P = spec.kW * 1000 * F.power, vmax = spec.vmax / 3.6;
+  const P = spec.kW * 1000 * F.power, vmax = spec.vmax / 3.6 * (surf.top ?? 1); // Wiese, Wasser, Pflaster: langsamer
   const roll = DYN.roll * m * g * (surf.drag ?? 1);
   const cd = Math.max(0.05, (P * 0.92 / vmax - DYN.roll * m * g) / (vmax * vmax)); // Höchsttempo aus Leistung und Luftwiderstand
   const steerMax0 = Math.min(0.8, spec.steerMax * F.steer), [lockLow, v0, v1] = DYN.lowLock;
@@ -86,6 +86,10 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     // --- Längskräfte je Achse ---
     let Fxf = 0, Fxr = 0, spinF = 0, spinR = 0, lockR = 0, esp = 0;
     const fwd = u > -0.5;
+    if (ctl.throttle > 0 && u < -0.5) { // Gas, während das Auto rückwärts rollt: erst abbremsen (wie die Fußbremse)
+      const Fb = ctl.throttle * muB * m * g;
+      Fxf += Math.min(Fb * spec.bias, muB * Fzf * DYN.abs); Fxr += Math.min(Fb * (1 - spec.bias), muB * Fzr * DYN.abs);
+    }
     if (ctl.throttle > 0 && fwd) {
       const Fd = ctl.throttle * Math.min(P / spec.vLow, P / Math.max(0.5, u)) * (u < vmax ? 1 : 0);
       const share = spec.drive === 'fwd' ? 1 : spec.drive === 'rwd' ? 0 : spec.awdFront;
@@ -148,7 +152,7 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
       if (over > 0.05 && Math.abs(d.alphaR) > 0.06) { dw -= sgn(w) * DYN.espYaw * over; esp = 1; }
     }
     u += du * h; v += dv * h; w += dw * h;
-    if (aq) w += (car.aquaYaw ?? 0) * h * 4; // Aquaplaning: das schwimmende Auto giert
+    if (aq) w += ((car.aquaYaw ?? 0) - w) * Math.min(1, 6 * h); // Aquaplaning: das schwimmende Auto giert (wie im Verkehr)
     // Schritttempo: rein geometrisch rollen (Reifenmodell ist dort singulär); dazwischen weich überblenden
     const sp = Math.hypot(u, v), q = clamp((sp - k0) / (k1 - k0), 0, 1);
     if (q < 1) {

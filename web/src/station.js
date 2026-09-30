@@ -7,10 +7,10 @@
 // (Ebene −2); Bewegung und Kollision laufen im Bahnhofsrahmen (u entlang der Strecke, v quer, rechts positiv).
 // Die Züge sind die Fahrplanzüge (transit.js): wer hält, steht genau am Bahnsteig; einsteigen mit G am Bahnsteigrand.
 import { pointOn, positionAt, TRAIN } from './transit.js';
-import { undergroundAtS } from './tunnel.js';
+import { railAt } from './tunnel.js';
 import { SpatialHash } from './collision.js';
 import { nearestSpot, sidewalkPoint } from './pedestrians.js';
-import { hash01, nearestEdge } from './map.js';
+import { hash01, nearestEdge, inBuilding, surfaceAt, T } from './map.js';
 
 export const STATION = {
   half: 46,      // px halbe Bahnsteigbreite (Mittelbahnsteig ≈ 9 m)
@@ -22,7 +22,10 @@ export const STATION = {
   pillar: 7,     // px Säulenradius
   pillarStep: 110,
   edge: 16,      // px: so nah an der Bahnsteigkante lässt sich einsteigen
-  entrance: 12,  // px: Radius des Eingangs an der Straße (hineinlaufen)
+  entrance: 18,  // px: Radius des Eingangs an der Straße (hineinlaufen)
+  reach: 70,     // px: so nah am Eingang reicht E (Aktion) zum Hinuntergehen, und der Hinweis erscheint
+  probe: 150,    // px: Bahnsteig gilt als unterirdisch, wenn in diesem Umkreis kein gleichgerichtetes Gleis sichtbar ist
+  poiEntrance: 150, // px: Eingang am Bahnhofssymbol (OSM-Station), wenn keiner der Treppeneingänge so nah liegt
   group: 450,    // px: Halte gleichen Namens so nah → derselbe Bahnhof
   near: 1800,    // px: Bahnhöfe um die Kamera (Eingänge zeichnen/prüfen)
 };
@@ -35,17 +38,21 @@ export function stationName(n) {
   return String(n ?? '').replace(/\s*\(.*\)\s*$/, '').replace(/^(S\+U|U\+S|U|S)\s+/, '').replace(/\s+Bhf\.?$/, '').trim();
 }
 const keyOf = (n) => stationName(n).toLowerCase();
+// Vergleichsschlüssel Fahrplan ↔ OSM: „Boddinstr.“ = „Boddinstraße“, Groß/klein, Bindestriche und Leerzeichen egal
+const matchKey = (n) => keyOf(n).replace(/stra(ß|ss)e\b/g, 'str').replace(/str\./g, 'str').replace(/[^a-zäöüß0-9]/g, '');
 
 // Alle U-/S-Bahn-Halte des Fahrplans in einem Raster-Hash (einmal je Fahrplan)
+// hash.byKey: alle Halte je Name – ein Bahnhof entsteht immer aus allen seinen Halten, egal von wo man kommt
 function stopIndex(tr) {
   if (tr._stopIdx) return tr._stopIdx;
   const hash = new SpatialHash(1600);
+  hash.byKey = new Map();
   for (const p of tr.patterns) {
     if (p.mode !== 'ubahn' && p.mode !== 'sbahn') continue;
     p.stops.forEach((s, i) => {
       const q = pointOn(p, s);
       const it = { p, i, x: q.x, y: q.y, angle: q.angle, name: stationName(p.stopNames[i]), key: keyOf(p.stopNames[i]) };
-      if (it.key) hash.insert(it, { x: q.x, y: q.y, w: 0, h: 0 });
+      if (it.key) { hash.insert(it, { x: q.x, y: q.y, w: 0, h: 0 }); if (!hash.byKey.has(it.key)) hash.byKey.set(it.key, []); hash.byKey.get(it.key).push(it); }
     });
   }
   return (tr._stopIdx = hash);
@@ -64,9 +71,10 @@ function buildPlatforms(city, stops) {
   }
   const out = [];
   for (const g of groups) {
-    // unterirdisch? (nur mit geladenen Kacheln entscheidbar – sonst später noch einmal)
-    let under = null;
-    for (const st of g.stops) { const u = undergroundAtS(city, st.p, st.p.stops[st.i]); if (city.ready(st.x, st.y, 60)) { under = u; break; } }
+    // unterirdisch? Der ganze Bahnsteig jedes Halts (fünf Punkte entlang des Zugs) ohne sichtbares gleichgerichtetes
+    // Gleis im weiten Umkreis – ein einzelner Punkt reicht nicht (in großen Bahnhöfen wie Ostkreuz liegt der Linienweg
+    // des Fahrplans gelegentlich neben dem Gleis). Nur mit geladenen Kacheln entscheidbar – sonst später noch einmal.
+    const under = platformUnderground(city, g.stops);
     if (under === null) { out.push({ pending: true, key: g.key }); continue; }
     if (!under) continue;
     let axis = g.axis; if (Math.cos(axis) < 0) axis -= Math.PI; // Schrift auf den Schildern nicht kopfüber
@@ -86,17 +94,53 @@ function buildPlatforms(city, stops) {
       halts: g.stops.map((s) => ({ pid: s.p.id, i: s.i, dir: Math.cos(s.angle - axis) >= 0 ? 1 : -1 })),
     };
     st.exits = [-1, 1].map((e) => entranceFor(city, st, e));
+    // dazu ein Eingang am Bahnhofssymbol (dort sucht man ihn), wenn keiner der beiden in der Nähe liegt
+    const poi = mainPoi(city, st);
+    if (poi && st.exits.every((ex) => Math.hypot(ex.x - poi.x, ex.y - poi.y) > STATION.poiEntrance)) {
+      const l = toLocal(st, poi.x, poi.y);
+      st.exits.push({ ...entranceAt(city, st, poi.x, poi.y, l.u < 0 ? -1 : 1, true), main: true });
+    }
     out.push(st);
   }
   return out;
 }
 
+function platformUnderground(city, stops) {
+  for (const s of stops) {
+    const L = trainLength(s.p.mode);
+    for (let k = 0; k <= 4; k++) {
+      const q = pointOn(s.p, s.p.stops[s.i] - L * k / 4);
+      if (!city.ready(q.x, q.y, STATION.probe)) return null;
+      if (railAt(city, q.x, q.y, Math.cos(q.angle), Math.sin(q.angle), STATION.probe)) return false;
+    }
+  }
+  return true;
+}
+
+// Die OSM-Station gleichen Namens beim Bahnsteig (U-/S-Symbol auf Karte und Straße)
+function mainPoi(city, st) {
+  const r = st.HL + 400;
+  let best = null, bd = Infinity;
+  for (const q of city.poiHash?.query({ x: st.x - r, y: st.y - r, w: 2 * r, h: 2 * r }, []) ?? []) {
+    if ((q.cat !== 'ubahn' && q.cat !== 'sbahn') || matchKey(q.name) !== matchKey(st.name)) continue;
+    const d = Math.hypot(q.x - st.x, q.y - st.y) + (q.cat === (st.sbahn ? 'sbahn' : 'ubahn') ? 0 : 1e6); // nur die passende Bahnart (S+U: das U-Symbol zum U-Bahnsteig)
+    if (d < bd && d < r) { bd = d; best = q; }
+  }
+  return best;
+}
+
 // Eingang oben für das Treppenende e (−1/1): nächster Gehweg über der Treppe, Blick zur Straße
 function entranceFor(city, st, e) {
   const u = e * (st.HL - STATION.stairL / 2);
-  const wx = st.x + st.ax * u, wy = st.y + st.ay * u;
-  const spot = nearestSpot(city, wx, wy);
-  const p = spot ? sidewalkPoint(city, spot.edge, spot.side, spot.s) : { x: wx, y: wy };
+  return entranceAt(city, st, st.x + st.ax * u, st.y + st.ay * u, e);
+}
+// Eingang am nächsten Gehweg zu (wx, wy); e = Bahnsteigende, an dem man unten ankommt
+// here: der Punkt selbst, wenn man dort gehen kann (Platz, Gehweg – nicht Haus oder Fahrbahn)
+function entranceAt(city, st, wx, wy, e, here = false) {
+  const walkable = here && !inBuilding(city, wx, wy) && [T.SIDEWALK, T.PLAZA, T.GRASS].includes(surfaceAt(city, wx, wy, 0));
+  const spot = walkable ? null : nearestSpot(city, wx, wy);
+  let p = spot ? sidewalkPoint(city, spot.edge, spot.side, spot.s) : { x: wx, y: wy };
+  if (inBuilding(city, p.x, p.y)) p = { x: wx, y: wy };
   const road = nearestEdge(city, p.x, p.y, 400, (x) => x.cls <= 10);
   return { e, x: p.x, y: p.y, face: road ? Math.atan2(road.y - p.y, road.x - p.x) : st.axis, street: road?.e?.name ?? '' };
 }
@@ -112,10 +156,7 @@ export function stationsNear(city, x, y, r = STATION.near) {
   for (const k of keys) {
     let list = cache.byKey.get(k);
     if (!list || list.some((s) => s.pending)) {
-      const stops = [];
-      const any = stopIndex(tr).query({ x: x - r - STATION.group, y: y - r - STATION.group, w: 2 * (r + STATION.group), h: 2 * (r + STATION.group) }, []).filter((s) => s.key === k);
-      for (const s of any) stops.push(s);
-      list = buildPlatforms(city, stops);
+      list = buildPlatforms(city, stopIndex(tr).byKey.get(k) ?? []);
       if (!list.some((s) => s.pending)) { cache.byKey.set(k, list); for (const s of list) cache.byId.set(s.id, s); }
     }
     for (const s of list) if (!s.pending && Math.hypot(s.x - x, s.y - y) < r + s.HL) out.push(s);
@@ -203,7 +244,9 @@ export function departures(w, st) {
   for (const h of st.halts) {
     const s = w.transit.tracked.get(h.pid);
     if (!s) continue;
-    const p = tr.patterns[h.pid], arrive = p.off[h.i] - Math.min(p.dwell, p.off[h.i] * 0.4);
+    // Ankunft wie positionAt: Halt i erreicht, wenn die Fahrzeit des Abschnitts ohne den Aufenthalt vorbei ist
+    const p = tr.patterns[h.pid], last = h.i === p.off.length - 1;
+    const arrive = h.i === 0 ? 0 : p.off[h.i] - (last ? 0 : Math.min(p.dwell, (p.off[h.i] - p.off[h.i - 1]) * 0.4));
     for (const v of s.veh) {
       if (v.gone || v.live) continue;
       const sec = arrive - v.tau;
@@ -225,4 +268,14 @@ export function waiting(st, hour) {
     out.push({ id: Math.floor(h(4) * 1e6), u, v: side * (STATION.half - 12 - h(3) * 14), side, angle: side > 0 ? Math.PI / 2 : -Math.PI / 2 });
   }
   return out;
+}
+
+// Nächster Eingang (an der Straße) im Umkreis r um (x, y) aus einer Bahnhofsliste: { stn, ex, d } oder null
+export function entranceNear(stations, x, y, r = STATION.reach) {
+  let best = null;
+  for (const stn of stations ?? []) for (const ex of stn.exits) {
+    const d = Math.hypot(ex.x - x, ex.y - y);
+    if (d < r && (!best || d < best.d)) best = { stn, ex, d };
+  }
+  return best;
 }

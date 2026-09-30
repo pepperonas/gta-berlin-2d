@@ -64,7 +64,7 @@ export function manageEmergency(w, dt) {
   const E = (w.emerg ??= { incidents: [], passT: EMERG.passMin + w.rng() * (EMERG.passMax - EMERG.passMin), lastPolice: -1e9 });
   // neue Einsätze aus dem Geschehen
   for (const p of w.peds) if (p.state === 'dead' && !p.reported) { p.reported = true; E.incidents.push({ kind: 'ambulance', x: p.x, y: p.y, t: EMERG.ambulanceDelay }); }
-  for (const ev of w.events) if (ev.type === 'shot' && w.time - E.lastPolice > EMERG.policeCooldown) {
+  for (const ev of w.events) if (ev.type === 'shot' && !w.player.inside && w.time - E.lastPolice > EMERG.policeCooldown) { // unter Tage: keine Polizei oben
     E.lastPolice = w.time; E.incidents.push({ kind: 'police', x: ev.x ?? w.player.x, y: ev.y ?? w.player.y, t: EMERG.policeDelay });
   }
   // Tote in der Nähe eines schon laufenden Rettungseinsatzes zusammenfassen

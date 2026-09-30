@@ -154,3 +154,27 @@ test('Spielspaß: Handbremse dreht das Auto um die Ecke und lässt den Schwung, 
   const R = Math.hypot(r.vx, r.vy) / 10 / Math.abs(r.angVel);
   assert.ok(R < 5, `Wendekreis-Radius ${R.toFixed(1)} m`);
 });
+
+test('Fehlerfälle: Gas beim Rückwärtsrollen bremst, Wiese begrenzt das Tempo, nach dem Aussteigen kein Fahrzustand', async () => {
+  const c = car('limousine'); c.vx = -30; // rollt mit 3 m/s rückwärts
+  run(c, 1.2, { throttle: 1 });
+  assert.ok(c.vx > -2, `hält an und fährt vorwärts (${(c.vx / 10).toFixed(2)} m/s)`);
+  const { stepDynamics } = await import('../web/src/dynamics.js');
+  const g = car('limousine'); for (let i = 0; i < 40 * 60; i++) stepDynamics(g, DT, { grip: 0.55, drag: 3.2, top: 0.5 }, { brake: 1, accel: 1, lat: 1, steer: 1 }, { throttle: 1, brake: 0, steer: 0, handbrake: false });
+  assert.ok(kmh(g) <= SPECS.limousine.vmax * 0.5 + 1, `Wiese: höchstens halbe Spitze (${kmh(g).toFixed(0)} km/h)`);
+  const { createWorld, updateWorld } = await import('../web/src/world.js');
+  const { realCity } = await import('./helpers/city.js');
+  const { idle } = await import('./helpers/bot.js');
+  const w = createWorld({ city: realCity(), cars: 0, pedestrians: 0 }); w.mission.state = 'idle';
+  const pc = w.cars.find((q) => q.id === w.playerCarId);
+  w.player.x = pc.x - Math.sin(pc.angle) * 22; w.player.y = pc.y + Math.cos(pc.angle) * 22;
+  updateWorld(w, { ...idle(), enterExit: true }, DT);
+  assert.equal(w.player.inCar, pc.id);
+  for (let i = 0; i < 60; i++) updateWorld(w, { ...idle(), throttle: 1, steer: 0.4 }, DT);
+  for (let i = 0; i < 30; i++) updateWorld(w, { ...idle(), brake: 1 }, DT);
+  assert.ok(pc.dyn, 'fährt mit Fahrdynamik');
+  for (let i = 0; i < 120 && w.player.inCar; i++) updateWorld(w, { ...idle(), brake: 1, enterExit: i % 20 === 19 }, DT);
+  assert.equal(w.player.inCar, null, 'ausgestiegen');
+  assert.equal(pc.dyn, null, 'Fahrzustand gelöscht');
+  assert.deepEqual(bodyShift(pc), [0, 0], 'keine schiefe Karosserie');
+});

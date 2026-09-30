@@ -2,6 +2,7 @@
 // storage ist injizierbar (Tests nutzen eine Map-Attrappe).
 import { playerCar, resetPopulation, rideExit, stationSaveSpot } from './world.js';
 import { insideBorder, inBuilding } from './map.js';
+import { CAR_MODELS, carModel } from './carmodels.js';
 
 const MAX_XY = 1e7; // grobe Plausibilität; ob die Position in der Stadt liegt, prüft applySave
 
@@ -16,7 +17,7 @@ export function makeSave(w, now = Date.now()) {
     money: w.money, completed: w.completed, bestTime: w.bestTime, clock: Math.round(w.clock), day: w.day, dayCount: w.dayCount ?? 0,
     wet: Math.round((w.wet ?? 0) * 100) / 100, snow: Math.round((w.snow ?? 0) * 100) / 100, ice: Math.round((w.ice ?? 0) * 100) / 100,
     player: { x: Math.round(pos.x), y: Math.round(pos.y) },
-    car: car && !car.wrecked ? { x: Math.round(car.x), y: Math.round(car.y), angle: car.angle, health: car.health } : null,
+    car: car && !car.wrecked ? { x: Math.round(car.x), y: Math.round(car.y), angle: car.angle, health: car.health, ...((car.kind ?? 'car') === 'car' ? { model: carModel(car) } : {}) } : null, // Modell = Fahrverhalten
   };
 }
 
@@ -71,6 +72,7 @@ export function resolveSave(w) {
   const valid = (p) => p && insideBorder(w.city, p.x, p.y) && !inBuilding(w.city, p.x, p.y);
   if (s.car && car && valid(s.car)) {
     Object.assign(car, { x: s.car.x, y: s.car.y, angle: s.car.angle, health: s.car.health, vx: 0, vy: 0 });
+    if (CAR_MODELS.includes(s.car.model)) car.model = s.car.model;
     for (const side of [1, -1, 0]) { // neben dem Auto, aber nicht in einem Haus
       w.player.x = s.car.x - Math.sin(s.car.angle) * 24 * side;
       w.player.y = s.car.y + Math.cos(s.car.angle) * 24 * side;

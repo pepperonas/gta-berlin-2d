@@ -13,8 +13,8 @@ export const TUNNEL = { probe: 50, step: 60, maxAngle: 35 };
 const MAX_COS = Math.cos(TUNNEL.maxAngle * Math.PI / 180);
 const q = [];
 
-export function railAt(city, x, y, dx, dy) {
-  const r = TUNNEL.probe, r2 = r * r;
+export function railAt(city, x, y, dx, dy, r = TUNNEL.probe) {
+  const r2 = r * r;
   const hl = dx === undefined || dy === undefined ? 0 : Math.hypot(dx, dy);
   const hx = hl > 1e-9 ? dx / hl : 0, hy = hl > 1e-9 ? dy / hl : 0;
   for (const f of city.render.query({ x: x - r, y: y - r, w: 2 * r, h: 2 * r }, q)) {

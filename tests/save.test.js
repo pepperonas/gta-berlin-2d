@@ -49,3 +49,18 @@ test('volles/gesperrtes Storage meldet Fehler statt zu werfen', () => {
   const st = { getItem: () => null, setItem: () => { throw new Error('QuotaExceeded'); } };
   assert.equal(writeSave(st, createWorld({ city: realCity(), cars: 0, pedestrians: 0 })), false);
 });
+
+test('Das Automodell (und damit sein Fahrverhalten) übersteht Speichern und Laden', () => {
+  const w = createWorld({ city: realCity(), cars: 0, pedestrians: 0 });
+  const car = w.cars.find((c) => c.id === w.playerCarId);
+  car.model = 'sportwagen';
+  const st = memoryStorage();
+  assert.ok(writeSave(st, w));
+  const w2 = createWorld({ city: realCity(), cars: 0, pedestrians: 0 });
+  applySave(w2, readSave(st));
+  assert.equal(w2.cars.find((c) => c.id === w2.playerCarId).model, 'sportwagen');
+  const bad = readSave(st); bad.car.model = 'raumschiff';
+  const w3 = createWorld({ city: realCity(), cars: 0, pedestrians: 0 });
+  applySave(w3, bad);
+  assert.equal(w3.cars.find((c) => c.id === w3.playerCarId).model, undefined, 'unbekanntes Modell ignoriert');
+});

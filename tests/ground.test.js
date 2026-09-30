@@ -113,3 +113,39 @@ test('Zeichnen: Schmutz, Ölband, Kontaktschatten, Dachmoos, Wasserglanz und Vig
   w.snow = 1; r.draw(w, 1280, 720, 1.2);
   assert.equal(r.stats.grime, 0, 'Schnee deckt den Schmutz zu');
 });
+
+test('Ölband endet vor der Kreuzung; niedrige Qualität spart Schmutz- und Schattenebenen', async () => {
+  const { drawLaneWear } = await import('../web/src/grime.js');
+  const saved = globalThis.Path2D;
+  const pts = [];
+  globalThis.Path2D = class { moveTo(x, y) { pts.push([x, y]); } lineTo(x, y) { pts.push([x, y]); } };
+  try {
+    const es = city.list('edge').filter((e) => e.cls <= 8 && e.cs && !e.junction && e.len > 400).slice(0, 40);
+    for (const e of es) { delete e._wearPath; pts.length = 0; drawLaneWear({ save() {}, restore() {}, stroke() {} }, city, [e]);
+      const margin = Math.min(e.len / 2, e.w / 2 + 3 * S) - 1;
+      const ends = [[e.pts[0], e.pts[1]], [e.pts.at(-2), e.pts.at(-1)]];
+      for (const [x, y] of pts) for (const [nx, ny] of ends) assert.ok(Math.hypot(x - nx, y - ny) >= margin - e.w / 2, `${e.name}: Band reicht in die Kreuzung`);
+      delete e._wearPath;
+    }
+  } finally { globalThis.Path2D = saved; }
+  globalThis.Path2D ??= class { constructor() { return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => {}) }); } };
+  const mk = () => new Proxy({ canvas: { width: 1280, height: 720 }, globalAlpha: 1 }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'createPattern' || k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {}, setTransform() {} });
+      if (k === 'createImageData') return (wd, hg) => ({ data: new Uint8ClampedArray(wd * hg * 4) });
+      return () => {};
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  globalThis.OffscreenCanvas = class { constructor(wd, hg) { this.width = wd; this.height = hg; } getContext() { return mk(); } };
+  const { Renderer } = await import('../web/src/render.js');
+  const { createWorld } = await import('../web/src/world.js');
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  w.camera.x = w.city.places.giver.x; w.camera.y = w.city.places.giver.y;
+  const r = new Renderer(mk()); r.quality = 'low'; r.adaptive = false;
+  r.draw(w, 1280, 720, 1.2);
+  assert.equal(r.stats.grime, 1, 'eine Schmutzebene');
+  assert.equal(r.stats.laneWear, 0, 'kein Ölband');
+});

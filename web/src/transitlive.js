@@ -18,7 +18,7 @@ const outOfView = (w, x, y, pad = 80) => Math.abs(x - w.camera.x) > LIFE.viewHal
 // headOn: Fahrtrichtung der Bahn – dann zählen frontal entgegenkommende Fahrzeuge nicht (Rückfall nach langem Warten)
 export function obstacleAt(w, x, y, headOn = null) {
   const hit = (ox, oy, r) => Math.hypot(ox - x, oy - y) < r;
-  if (!w.player.inCar && !w.player.ride && !w.player.dead && hit(w.player.x, w.player.y, 22)) return true;
+  if (!w.player.inCar && !w.player.ride && !w.player.dead && !w.player.inside && hit(w.player.x, w.player.y, 22)) return true; // im U-Bahnhof: unten
   for (const c of w.cars) if (hit(c.x, c.y, 24 + c.hw * 0.4) && !(headOn !== null && Math.cos(c.angle - headOn) < -0.5)) return true;
   for (const b of w.bikes ?? []) if (b.state === 'ride' && hit(b.x, b.y, 18)) return true;
   for (const ped of w.peds) if (ped.state !== 'dead' && ped.state !== 'hang' && hit(ped.x, ped.y, 16)) return true;
@@ -175,7 +175,7 @@ function collideRail(w) {
       }
     }
     const pl = w.player;
-    if (!pl.inCar && !pl.ride) { // !ride: defensiv – updateRide setzt den Fahrgast ohnehin nach updateTransit in den Wagen
+    if (!pl.inCar && !pl.ride && !pl.inside) { // !ride: defensiv; !inside: der Spieler ist unten im Bahnhof – updateRide setzt den Fahrgast ohnehin nach updateTransit in den Wagen
       const m = circleVsObb(pl.x, pl.y, 7, o);
       if (m) { pl.x += m.nx * m.depth; pl.y += m.ny * m.depth; }
     }

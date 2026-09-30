@@ -33,6 +33,7 @@ import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE,
 import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
 import { specLine } from './carmodels.js';
+import { entranceNear } from './station.js';
 import { stationsNear, stationById, keepInside, stairAt, arrivalAt, boardable, toLocal, toWorld, STATION, stationName } from './station.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
@@ -301,7 +302,7 @@ export function teleportTo(w, spot) {
   const car = playerCar(w), p = w.player;
   if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0, lvl: undefined });
   if (p.ride) endRide(w, 'teleport'); // Teleport (Karte, Konsole) beendet eine Fahrt
-  p.inside = null; p.entryGuard = null; // aus dem U-Bahnhof hinaus (Teleport, Krankenhaus)
+  p.inside = null; p.entryGuard = { x: spot.x, y: spot.y }; // aus dem U-Bahnhof hinaus; landet man auf einem Eingang, nicht gleich hinunter
   p.x = spot.x; p.y = spot.y; p.lvl = undefined; // Ebene neu von der Landestelle
   w.camera.x = spot.x; w.camera.y = spot.y;
   // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
@@ -385,6 +386,7 @@ export function playerCar(w) { return w.cars.find((c) => c.id === w.player.inCar
 // Mission neu starten: Spieler zum Späti, eigenes Auto repariert zurück auf den Parkplatz.
 export function restartMission(w) {
   if (w.player.ride) endRide(w, 'teleport'); // Fahrgast/Zugführer: Neustart holt ihn aus dem Fahrzeug (Startpunkt s. u.)
+  Object.assign(w.player, { inside: null, entryGuard: null, click: null, lvl: undefined }); // auch aus dem U-Bahnhof hinaus
   for (const c of w.cars) c.cargo = false;
   resetMission(w.mission);
   const far = Math.hypot(w.camera.x - w.city.places.playerSpawn.x, w.camera.y - w.city.places.playerSpawn.y) > TRAFFIC.despawn;
@@ -462,7 +464,7 @@ function tryExit(w) {
     { x: car.x + fx * (car.hw + 10), y: car.y + fy * (car.hw + 10) }];
   const spot = cands.find((s) => spotFree(w, s.x, s.y, PLAYER.radius, car));
   if (!spot) { w.notice = { text: 'Kein Platz zum Aussteigen', t: 1.5 }; return false; }
-  car.driver = null;
+  car.driver = null; car.dyn = null; // Fahrdynamik endet: kein Nicken/Einschlag, Motorklang wieder nach Art
   car.controls = { throttle: 0, brake: 0, steer: 0, handbrake: speedOf(car) < 60 };
   w.player.inCar = null;
   w.player.x = spot.x; w.player.y = spot.y;
@@ -703,11 +705,11 @@ function boardAtPlatform(w) {
   return true;
 }
 // Jeden Schritt zu Fuß: Treppe hinauf (Ausgang an der Straße) bzw. an der Straße in einen Eingang hinein
-function updateStationPresence(w) {
+function updateStationPresence(w, input = {}) {
   const p = w.player;
   if (p.inside) {
     const stn = stationById(w.city, p.inside.id);
-    if (!stn) { p.inside = null; return; }
+    if (!stn) { p.inside = null; p.lvl = undefined; return; }
     const e = stairAt(stn, p.x, p.y);
     if (!e) { p.inside.guard = false; return; }
     if (p.inside.guard) return; // gerade heruntergekommen: erst von der Treppe gehen
@@ -718,10 +720,12 @@ function updateStationPresence(w) {
     return;
   }
   if (p.entryGuard && Math.hypot(p.x - p.entryGuard.x, p.y - p.entryGuard.y) > 30) p.entryGuard = null;
-  if ((w._stT = (w._stT ?? 0) - 1) <= 0) { w._stT = 30; w._stNear = stationsNear(w.city, p.x, p.y, 1200); } // alle 0,5 s
   if ((p.lvl ?? 0) !== 0) return;
-  for (const stn of w._stNear ?? []) for (const ex of stn.exits) {
-    if (Math.hypot(p.x - ex.x, p.y - ex.y) > STATION.entrance || p.entryGuard) continue;
+  // hineinlaufen (Eingang betreten) oder E in der Nähe eines Eingangs (nicht, wenn E gerade etwas anderes meint)
+  const near = entranceNear(w._stNear, p.x, p.y, STATION.reach);
+  const walkIn = near && near.d <= STATION.entrance && !p.entryGuard;
+  const byKey = near && input.action && !w.mission.prompt;
+  for (const { stn, ex } of walkIn || byKey ? [near] : []) {
     const at = arrivalAt(stn, ex.e);
     p.x = at.x; p.y = at.y; p.angle = at.angle; p.lvl = -2; p.click = null;
     p.inside = { id: stn.id, guard: true };
@@ -830,6 +834,8 @@ export function updateWorld(w, input, dt) {
   // Wenden verbraucht den Tastendruck – sonst öffnete updatePlayerTrain damit gleich die Türen am neuen ersten Halt
   const trainInput = input.action && p.ride?.kind === 'driver' && atTerminus(w) && turnAround(w) ? { ...input, action: false } : input;
 
+  // Bahnhöfe um den Spieler (Eingänge, Hinweis, Minikarte) – alle 0,5 s, auch im Auto und nach Teleports
+  if ((w._stT = (w._stT ?? 0) - 1) <= 0 || w._stAt !== w.city.gen) { w._stT = 30; w._stAt = w.city.gen; const o = playerCar(w) ?? p; w._stNear = stationsNear(w.city, o.x, o.y, 1200); }
   const pc = playerCar(w);
   if (pc) {
     if (pc.wrecked) applyDriverInput(pc, { throttle: 0, brake: 0, steer: 0, handbrake: false, horn: false });
@@ -837,7 +843,7 @@ export function updateWorld(w, input, dt) {
     pc.esp = w.esp !== false; // ASR/ESP (Befehl „esp aus“ schaltet ab)
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) { updatePlayerOnFoot(w, input, dt); updateStationPresence(w); } }
+  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) { updatePlayerOnFoot(w, input, dt); updateStationPresence(w, input); } }
   if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
@@ -903,7 +909,7 @@ export function updateWorld(w, input, dt) {
     if (e.type === 'horn' && !e.npc) threats.push({ x: e.x, y: e.y, r: 170, always: true });
     if (e.type === 'horn' && e.npc) threats.push({ x: e.x, y: e.y, r: 80, always: true }); // KI hupt: wer direkt davor steht, weicht
     if (e.type === 'crash' && e.strength > 0.25) threats.push({ x: e.x, y: e.y, r: 130, always: true });
-    if (e.type === 'shot') threats.push({ x: e.x, y: e.y, r: GUNSHOT_SCARE, always: true });
+    if (e.type === 'shot' && !w.player.inside) threats.push({ x: e.x, y: e.y, r: GUNSHOT_SCARE, always: true }); // unten hört oben keiner
     if ((e.type === 'blood' || e.type === 'swing') && !e.npc) threats.push({ x: e.x, y: e.y, r: e.type === 'blood' ? 220 : 90, always: true, melee: e.type === 'swing' });
   }
   for (const ped of w.peds) {

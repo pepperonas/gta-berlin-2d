@@ -203,7 +203,7 @@ export function drawCarBody(ctx, car, t) {
   const spr = carSprite(model, body, L, W, car.wrecked);
   if (!spr) return false;
   // Räder (unter der Karosserie, an den Ecken sichtbar); Vorderräder lenken mit
-  const steer = car.dyn ? car.dyn.delta : (car.controls?.steer ?? 0) * 0.45, wx = L / 2 - 8, wy = W / 2 - 1.2;
+  const steer = car.dyn && car.driver === 'player' ? car.dyn.delta : (car.controls?.steer ?? 0) * 0.45, wx = L / 2 - 8, wy = W / 2 - 1.2;
   ctx.fillStyle = '#16171a';
   for (const [x, y, front] of [[wx, -wy, 1], [wx, wy, 1], [-wx + 1, -wy, 0], [-wx + 1, wy, 0]]) {
     ctx.save(); ctx.translate(x, y); if (front) ctx.rotate(steer); ctx.fillRect(-3.8, -1.7, 7.6, 3.4); ctx.restore();
@@ -238,7 +238,7 @@ export function drawCarBody(ctx, car, t) {
 // Schwerpunkthöhe, höchstens 6 px (bewusst etwas übertrieben: man soll den Schwerpunkt sehen). Ohne Fahrdynamik (Verkehr, geparkt) keiner.
 export function bodyShift(car) {
   const d = car.dyn;
-  if (!d || car.wrecked) return [0, 0];
+  if (!d || car.wrecked || car.driver !== 'player') return [0, 0];
   const k = specOf(car).h * 0.35, cl = (x) => Math.max(-6, Math.min(6, x));
   return [cl(-d.ax * k), cl(-d.ay * k)];
 }

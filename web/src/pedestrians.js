@@ -184,7 +184,7 @@ export function updatePed(ped, world, dt) {
       // Vor dem Spieler kurz warten.
       const ahead = sidewalkPoint(city, ped.edge, ped.side, ped.s + ped.dirSign * 14);
       const pl = world.player;
-      if (!pl.inCar && Math.hypot(pl.x - ahead.x, pl.y - ahead.y) < 11) break;
+      if (!pl.inCar && !pl.inside && Math.hypot(pl.x - ahead.x, pl.y - ahead.y) < 11) break; // unten im U-Bahnhof: kein Hindernis
       if (carComing(world, ped, ahead)) break; // Gehweg quert hier eine Fahrbahn (Einmündung)
       ped.s += ped.dirSign * ped.speed * dt;
       const [w0, w1] = walkRange(city, ped.edge);

@@ -755,7 +755,12 @@ export class Renderer {
       this.drawStreetMarkings(E, city);
       if (lvl === 0) this.drawCrossings(crossings);
       // Gebrauchsspuren über Boden, Grün, Straßen und Markierungen (Schnee deckt sie zu)
-      if (lvl === 0) this.stats.grime = drawGrime(ctx, v, 1 - Math.min(1, snowD * 2));
+      if (lvl === 0) {
+        const low = this.quality !== 'high';
+        this.stats.grime = drawGrime(ctx, v, 1 - Math.min(1, snowD * 2), water.map(pathOf), low);
+        // Kontaktschatten ums Haus (auch nachts: Himmelslicht) – am Boden, bevor Brücken darüber kommen
+        this.stats.contact = drawContactShadows(ctx, buildings.filter((b) => !(b.lvl > 0)), pathOf, 1 - Math.min(0.6, snowD), low);
+      }
       this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L, { layer: (fn, a) => this.overlayLayer(fn, a), t, rain: wx?.rain ?? 0 });
       if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
       if (lvl === 0) this.drawSnowTrails(world, v, snowD);
@@ -798,9 +803,6 @@ export class Renderer {
       const casters = cq.filter((f) => f.layer === 'building');
       this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : []);
     }
-
-    // Kontaktschatten ums Haus (auch nachts und bei Bewölkung: kommt vom Himmelslicht, nicht von der Sonne)
-    this.stats.contact = drawContactShadows(ctx, buildings.filter((b) => !(b.lvl > 0)), pathOf, 1 - Math.min(0.6, snowD));
 
     // Blut am Boden (verblasst langsam)
     for (const st of this.stains) {

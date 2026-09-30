@@ -4,6 +4,29 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.42.0] – 2026-09-30
+
+### Neu
+- **U-Bahnhöfe leichter betreten:** Zusätzlich zu den Treppen über den Bahnsteigenden gibt es einen Eingang genau am
+  U-/S-Symbol der Station (dort, wo man ihn sucht). In der Nähe eines Eingangs zeigt ein Hinweis „E: Hinunter zur
+  U-Bahn …“ – E führt hinunter, hineinlaufen geht weiter auch. Die Minikarte zeigt die Eingänge.
+
+### Behoben
+- Oberirdische S-Bahnhöfe (z. B. Ostkreuz, Plänterwald) galten als unterirdisch und hatten Treppen in den Boden; jetzt
+  muss der ganze Bahnsteig ohne sichtbares Gleis sein.
+- Welche Bahnsteige ein Bahnhof hatte, hing davon ab, von wo man zuerst kam (z. B. fehlte die U7 an der Yorckstraße,
+  wenn man von der S-Bahn kam).
+- „Mission neu starten“ im U-Bahnhof setzte einen wieder auf den Bahnsteig; ein Teleport auf einen Eingang ließ einen
+  sofort hinunterfallen.
+- Straßenbahnen hielten für die Figur unten im Bahnhof, Passanten warteten auf sie, Schüsse unten erschreckten Passanten
+  oben und riefen die Polizei.
+- Abfahrtstafel: Ankunftszeiten passen jetzt genau zu den einfahrenden Zügen.
+- Fahrdynamik: Gas beim Rückwärtsrollen bremst jetzt ab, Wiese/Wasser/Pflaster begrenzen das Tempo wieder, nach dem
+  Aussteigen bleibt das Auto nicht schief stehen, Aquaplaning giert wie beim übrigen Verkehr.
+- Der Spielstand merkt sich das Automodell (und damit das Fahrverhalten) des eigenen Autos.
+- Grafik: Ölbänder enden vor Kreuzungen, Kontaktschatten liegen nicht mehr auf Brücken, Schmutz nicht auf dem Wasser;
+  bei niedriger Zeichenqualität entfallen die teuren Zusatzebenen. Tacho: Modellname überlappt nicht mehr.
+
 ## [0.41.0] – 2026-09-30
 
 ### Neu

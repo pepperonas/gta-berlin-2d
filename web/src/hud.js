@@ -5,7 +5,7 @@
 import { specOf } from './carmodels.js';
 const DRIVE_SHORT = { fwd: 'FRONT', rwd: 'HECK', awd: 'ALLRAD' };
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
-import { stationById, boardable } from './station.js';
+import { stationById, boardable, entranceNear, STATION } from './station.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
 import { WEAPONS, PLAYER_HP } from './combat.js';
@@ -413,8 +413,8 @@ export class Hud {
       if (car.cargo) this.text('▣ Kisten', x + w - 20, y + 30, { size: 16, align: 'right', color: '#e0b060', weight: 700 });
       else if (car.dyn) { // Fahrdynamik: Modell und Antrieb, ESP-Leuchte blinkt beim Eingreifen, „ESP AUS“ dauerhaft gelb
         const sp = specOf(car);
-        this.text(sp.label, x + w - 20, y + 26, { size: 12, align: 'right', color: '#ddd', weight: 700 });
-        this.text(DRIVE_SHORT[sp.drive], x + w - 20, y + 42, { size: 12, align: 'right', color: '#9aa', weight: 700 });
+        this.text(sp.label, x + w - 20, y + 22, { size: 12, align: 'right', color: '#ddd', weight: 700 }); // über der km/h-Zeile
+        this.text(DRIVE_SHORT[sp.drive], x + w - 20, y + 36, { size: 12, align: 'right', color: '#9aa', weight: 700 });
         const off = world.esp === false || sp.noAids, on = car.dyn.esp && Math.floor(performance.now() / 120) % 2 === 0;
         if (off || on) this.text(off ? 'ESP AUS' : 'ESP', x + w - 20, y + 60, { size: 12, align: 'right', color: '#ffb020', weight: 800 });
       }
@@ -453,6 +453,10 @@ export class Hud {
       const bike = !near && (world.bikes ?? []).find((b) => (b.state === 'ride' || b.state === 'lying') && Math.hypot(b.x - world.player.x, b.y - world.player.y) < 34);
       if (near) hint = 'Y: Einsteigen';
       else if (bike) hint = bike.state === 'ride' ? 'Y: Rad kapern' : 'Y: Aufs Rad';
+    }
+    if (!hint && !world.player.inCar && !stn && !world.player.ride && (world.player.lvl ?? 0) === 0) { // U-Bahn-Eingang in der Nähe
+      const ne = entranceNear(world._stNear, world.player.x, world.player.y, STATION.reach);
+      if (ne) hint = `A: Hinunter zur ${ne.stn.sbahn ? 'S' : 'U'}-Bahn ${ne.stn.name}`;
     }
     if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = car.top ? 'Y: Absteigen' : 'Y: Aussteigen';
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
@@ -533,6 +537,13 @@ export class Hud {
       this.stationIcon(q.cat, mx, my, 6);
     }
     const toMini = (wx, wy) => [x + size / 2 + (wx - p.x) * zoom, y + size / 2 + (wy - p.y) * zoom];
+    // Eingänge der begehbaren Bahnhöfe (Treppen hinunter): kleine Symbole mit weißem Rand
+    for (const stn of world._stNear ?? []) for (const ex of stn.exits) {
+      const [mx, my] = toMini(ex.x, ex.y);
+      c.fillStyle = '#fff';
+      if (stn.sbahn) { c.beginPath(); c.arc(mx, my, 5, 0, Math.PI * 2); c.fill(); } else c.fillRect(mx - 5, my - 5, 10, 10);
+      this.stationIcon(stn.sbahn ? 'sbahn' : 'ubahn', mx, my, 4);
+    }
     for (const car of world.cars) {
       if (car === playerCar(world)) continue;
       const [mx, my] = toMini(car.x, car.y);

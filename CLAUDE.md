@@ -225,6 +225,13 @@ change in `web/`.
   `boardAtPlatform` / `platformArrival` (alight underground onto the next platform); `stationSaveSpot` for saves.
   `stationview.js drawStation` replaces the whole frame in `render.js` while inside; `drawEntrance` draws the stair
   shafts at lvl 0. Combat skips targets when one side is below lvl −1; `ambienceAt` returns a muffled station mix.
+  Stations are built per name from **all** stops of that name (`stopIndex(tr).byKey`), never from a radius query (the
+  first approach must not decide which platforms exist); `platformUnderground` requires five points along every halt's
+  train to have no same-direction rail within `STATION.probe` (15 m). A third exit `main: true` sits at the OSM station
+  POI (`mainPoi`, name matched via `matchKey`, same mode) unless a stair exit is within `poiEntrance`. `entranceNear`
+  + `STATION.reach`: E (action) enters, HUD hint, minimap icons; `w._stNear` is refreshed every 0.5 s in `updateWorld`
+  (also in cars). `teleportTo` sets `entryGuard` at the landing spot; `restartMission` clears `inside`. Trams
+  (`obstacleAt`, `collideRail`), pedestrians and gunshot reactions (scare, police) ignore a player who is inside.
 - **On-foot PC controls (0.32.0):** `game.settings.controls` = `'diablo'` (default) | `'classic'` (localStorage
   `gta-controls`, toggled with ←/→ on the controls screen). Diablo input fields `clickWorld/clickPressed/clickHeld/
   clickForce/walkSlow` (see `idle.js`, set by `main.js applyPointer`); `world.js clickControl` turns them into the

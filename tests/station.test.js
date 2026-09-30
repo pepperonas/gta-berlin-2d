@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { realCity } from './helpers/city.js';
 import { idle } from './helpers/bot.js';
 import { createWorld, updateWorld } from '../web/src/world.js';
-import { stationsNear, stationById, toLocal, toWorld, STATION, stationName, trainsAt, boardable, departures } from '../web/src/station.js';
+import { stationsNear, stationById, toLocal, toWorld, STATION, stationName, trainsAt, boardable, departures, entranceNear } from '../web/src/station.js';
 import { pointOn, positionAt } from '../web/src/transit.js';
 import { inBuilding } from '../web/src/map.js';
 import { pickTarget } from '../web/src/combat.js';
@@ -130,4 +130,67 @@ test('Unten und oben getrennt: keine Ziele von der Straße, gedämpfter Klang, S
   assert.equal(m.station, true); assert.equal(m.traffic, 0); assert.ok(m.muffle > 0.8);
   const s = makeSave(w);
   assert.ok(st.exits.some((ex) => Math.hypot(ex.x - s.player.x, ex.y - s.player.y) < 2), 'Spielstand am Ausgang oben');
+});
+
+test('Eingang dort, wo man ihn sucht: am U-Symbol; E in der Nähe führt hinunter; oberirdische S-Bahnhöfe nicht begehbar', () => {
+  const pois = city.list('poi').filter((q) => q.cat === 'ubahn' || q.cat === 'sbahn');
+  const norm = (n) => stationName(n).toLowerCase().replace(/stra(ß|ss)e\b/g, 'str').replace(/str\./g, 'str').replace(/[^a-zäöüß0-9]/g, '');
+  let checked = 0;
+  for (const q of pois) {
+    const sts = stationsNear(city, q.x, q.y, 600).filter((st) => norm(st.name) === norm(q.name) && q.cat === (st.sbahn ? 'sbahn' : 'ubahn'));
+    if (!sts.length || sts.some((st) => Math.hypot(st.x - q.x, st.y - q.y) > st.HL + 400)) continue;
+    const d = Math.min(...sts.flatMap((st) => st.exits.map((ex) => Math.hypot(ex.x - q.x, ex.y - q.y))));
+    assert.ok(d < 200, `${q.name}: nächster Eingang ${Math.round(d / 10)} m vom Symbol`);
+    for (const st of sts) for (const ex of st.exits) assert.ok(!inBuilding(city, ex.x, ex.y), `${st.name}: Eingang im Haus`);
+    checked++;
+  }
+  assert.ok(checked >= 15, `${checked} Bahnhöfe geprüft`);
+  for (const key of ['ostkreuz', 'plänterwald']) {
+    const q = pois.find((x) => stationName(x.name).toLowerCase() === key);
+    if (q) assert.ok(!stationsNear(city, q.x, q.y, 800).some((st) => st.key === key), `${key} ist oberirdisch`);
+  }
+  // E (Aktion) in Reichweite eines Eingangs: hinunter; weiter weg nicht
+  const { w, st } = world();
+  const ex = st.exits[0];
+  w.player.x = ex.x + STATION.reach * 0.7; w.player.y = ex.y;
+  for (let i = 0; i < 40; i++) updateWorld(w, idle(), 1 / 60);
+  assert.ok(entranceNear(w._stNear, w.player.x, w.player.y), 'Eingang in Reichweite (Hinweis)');
+  assert.equal(w.player.inside ?? null, null, 'ohne Taste nicht');
+  updateWorld(w, { ...idle(), action: true }, 1 / 60);
+  assert.ok(w.player.inside, 'mit E unten');
+  const { w: w2, st: st2 } = world();
+  w2.player.x = st2.exits[0].x + STATION.reach * 1.6; w2.player.y = st2.exits[0].y;
+  for (let i = 0; i < 40; i++) updateWorld(w2, idle(), 1 / 60);
+  updateWorld(w2, { ...idle(), action: true }, 1 / 60);
+  assert.equal(w2.player.inside ?? null, null, 'zu weit weg');
+});
+
+test('Fehlerfälle: Bahnhöfe unabhängig vom ersten Blick, Neustart/Teleport holen heraus, oben merkt niemand die Figur unten', async () => {
+  const { restartMission, teleportTo } = await import('../web/src/world.js');
+  const { obstacleAt } = await import('../web/src/transitlive.js');
+  // Yorckstraße: zuerst von der S-Bahn her, dann bei der U7 – die U7 ist trotzdem da
+  const u7 = city.transit.patterns.find((q) => q.name === 'U7' && q.stopNames.some((n) => stationName(n) === 'Yorckstr.'));
+  const sb = city.transit.patterns.find((q) => q.mode === 'sbahn' && q.stopNames.some((n) => stationName(n).startsWith('Yorckstr')));
+  const at = (p) => pointOn(p, p.stops[p.stopNames.findIndex((n) => stationName(n).startsWith('Yorckstr'))]);
+  const fresh = () => { city._stations = null; };
+  fresh(); const direct = stationsNear(city, at(u7).x, at(u7).y, 300).map((s) => s.id).sort();
+  fresh(); if (sb) stationsNear(city, at(sb).x, at(sb).y, 100);
+  assert.deepEqual(stationsNear(city, at(u7).x, at(u7).y, 300).map((s) => s.id).sort(), direct, 'gleiche Bahnsteige');
+  assert.ok(direct.some((id) => id.includes('U7')), 'U7-Bahnsteig vorhanden');
+  // Neustart im Bahnhof: oben am Start, nicht zurück auf den Bahnsteig
+  const { w, st } = world();
+  toward(w, st.exits[0].x, st.exits[0].y, 3, () => !!w.player.inside);
+  assert.ok(w.player.inside);
+  // unten: keine Straßenbahn hält für die Figur, Schüsse rufen oben keine Polizei
+  assert.equal(obstacleAt(w, w.player.x, w.player.y), false, 'Straßenbahn oben hält nicht');
+  restartMission(w);
+  for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.player.inside, null); assert.notEqual(w.player.lvl, -2);
+  assert.ok(Math.hypot(w.player.x - city.places.playerSpawn.x, w.player.y - city.places.playerSpawn.y) < 80, 'am Start');
+  // Teleport genau auf einen Eingang: nicht sofort hinunter (erst weggehen oder E)
+  teleportTo(w, { x: st.exits[0].x, y: st.exits[0].y, angle: 0 });
+  for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.player.inside, null, 'bleibt oben');
+  updateWorld(w, { ...idle(), action: true }, 1 / 60);
+  assert.ok(w.player.inside, 'E führt hinunter');
 });
