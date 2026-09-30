@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.39.0] – 2026-09-30
+
+### Neu
+- **U-Bahnhöfe betreten:** Unterirdische U- und S-Bahnhöfe haben Treppenabgänge mit U-/S-Schild am Gehweg. Hinunter
+  wechselt die Ansicht vom Stadtplan in den Bahnhof: Bahnsteig, Treppen, Säulen, geflieste Wände, Namensschilder,
+  Fahrgastanzeigen, wartende Fahrgäste und Züge nach dem echten Fahrplan. G an der Bahnsteigkante steigt in einen
+  haltenden Zug, G am nächsten unterirdischen Halt steigt auf dessen Bahnsteig aus; die Treppen an beiden Enden führen
+  zu ihrem Ausgang. Unten gedämpfter Klang, keine Ziele von der Straße; Spielstände legen die Figur an den Ausgang.
+
 ## [0.38.0] – 2026-09-30
 
 ### Neu

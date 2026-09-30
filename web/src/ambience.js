@@ -28,6 +28,11 @@ export function birdLevel(minutes) {
 // Mischung an der Kamera (alle Werte 0..1, sirens: Liste nach Entfernung)
 export function ambienceAt(world) {
   const cam = world.camera, city = world.city, H = AMB.hear;
+  // Im U-Bahnhof: gedämpftes Grundrauschen der Halle, Züge rumpeln laut, von oben kommt kaum etwas an
+  if (world.player?.inside) {
+    const rumble = world.transit && city.transit ? clamp01(trainRumble(world, cam) * 1.3) : 0;
+    return { hum: 0.5, traffic: 0, wind: 0, birds: 0, rain: 0, bar: 0, music: 0, barPan: 0, nightFeed: 0, water: 0, rumble, sirens: [], muffle: 0.9, inCar: false, gust: 0, storm: 0, snowfall: 0, station: true };
+  }
   const box = { x: cam.x - H, y: cam.y - H, w: 2 * H, h: 2 * H };
   let green = 0, water = 0, hochbahn = Infinity;
   for (const f of city.render.query(box, [])) {

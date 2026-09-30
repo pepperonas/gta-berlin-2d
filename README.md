@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 426 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 430 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -412,8 +412,17 @@ selbst; Fahrplanzüge dahinter warten. Am Endhalt wendet **E/A** auf die Gegenri
 die Stadt abgedunkelt, die Röhren mit Bahnsteigen, Bahnhofsnamen und den Zügen darin erscheinen (Tunnelansicht).
 
 Straßenbahnen haben Vorrang: Wo ihr Linienweg in der Gegenspur liegt (vor allem Linie 21, Teile von M10 und M13),
-setzen entgegenkommende Autos und Busse zurück, bis die Bahn vorbei ist. Grenzen: keine Signale und Weichen, keine
-Bahnhofs-Innenräume.
+setzen entgegenkommende Autos und Busse zurück, bis die Bahn vorbei ist. Grenzen: keine Signale und Weichen.
+
+**U-Bahnhöfe betreten:** An jedem unterirdischen U- und S-Bahnhof führen zwei Treppenabgänge (blaues U- bzw. grünes
+S-Schild) am Gehweg nach unten, jeweils über den Enden des Bahnsteigs. Wer hineinläuft, sieht statt der Stadt den
+Bahnhof: Mittelbahnsteig mit Treppen, Säulen, gefliesten Wänden in der Farbe des Bahnhofs, Namensschildern,
+Fahrgastanzeigen (Linie, Ziel, Minuten) und wartenden Fahrgästen. Die Züge kommen nach dem echten Fahrplan, halten und
+fahren weiter. An der Bahnsteigkante neben einem haltenden Zug steigt man mit **G** ein; **G** am nächsten
+unterirdischen Halt steigt dort auf den Bahnsteig aus. Die Treppen an beiden Enden führen zum jeweiligen Straßenausgang.
+Unten ist man von der Straße getrennt (keine Ziele, kein Verkehr, gedämpfter Klang); ein Spielstand legt die Figur an
+den Ausgang oben. Die Bahnhöfe werden aus dem Fahrplan erzeugt und liegen unter der echten Strecke; ihre Innenräume
+sind schematisch, durch die Tunnel laufen kann man nicht.
 
 ## Wetter und Fahren
 
@@ -502,7 +511,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 426 automatischen Tests grün, darunter:
+- Alle 430 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -583,6 +592,12 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
     und Fahrer in jedem Fensterformat ohne Überlappung mit dem Auftrag; Statistik und Töne. Jede Schutzprüfung mit
     Mutationsprobe (über 30, alle erkannt); im Browser geprüft: U8 unter Kottbusser Tor (Tunnelansicht), M10 mit F am
     Führerstand übernommen und angefahren;
+  - U-Bahnhöfe: aus dem Fahrplan erzeugt (Kottbusser Tor/U8 unter der Erde, Hochbahnhof Görlitzer Bahnhof nicht),
+    Bahnsteig zuglang, beide Richtungen, Eingänge am Gehweg nicht im Haus; hinein über den Eingang, unten nur auf dem
+    Bahnsteig, hinaus über die andere Treppe an deren Ausgang, nicht gleich wieder hinein; Einsteigen nur an der Kante
+    neben einem haltenden Zug, Aussteigen am nächsten Bahnhof auf dessen Bahnsteig; keine Ziele von oben, gedämpfter
+    Klang, Spielstand am Ausgang; im Browser geprüft: Eingang an der Reichenberger Straße, Bahnhofsansicht mit
+    Fahrplanzug, Anzeigen und Fahrgästen;
   - Waffenrad-Bedienung: Zeiger auf den Radius begrenzt (zurückziehen wechselt sofort), Bewegung vor dem Öffnen zählt
     nicht, Mausrad dreht eine Raste je Feld, Zifferntaste wählt und schließt, Abbrechen ohne Wahl, Controller-Stick mit
     Totzone (losgelassen bleibt die Wahl), LB tippen/halten, verpasstes Loslassen wird nachgeholt, Zeitlupe blendet

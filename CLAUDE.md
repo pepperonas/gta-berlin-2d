@@ -216,6 +216,15 @@ change in `web/`.
   tramTrackNear`); parking slots avoid them (`e._slots` is keyed on `city.transit`, which loads async in the browser).
   Trams have right of way: an AI car with a tram car head-on in front (`traffic.js tramHeadOn`) backs up (`ai.tramYield`),
   the car behind a yielding car too — the timetable shape lies in the oncoming lane on ~1.3 % of tram track.
+- **Walkable stations (0.39.0):** `station.js` (pure) builds schematic platforms from the timetable: `stationsNear(city,
+  x, y, r)` groups underground U/S stops (`undergroundAtS`) by name + axis, cached in `city._stations` (`stationById`);
+  a station has centre, axis (`ax/ay`), half length `HL` (train length), `halts [{pid, i, dir}]` (dir +1 keeps right, v > 0)
+  and two `exits` (street entrances above the stair ends). Local frame `toLocal/toWorld` (u along, v across);
+  `keepInside`, `stairAt`, `arrivalAt`, `trainsAt` (timetable vehicles as cars), `boardable`, `departures`, `waiting`.
+  `world.js updateStationPresence`: entrance → `p.inside = {id}` (lvl −2, city hidden), stairs → exit (+`entryGuard`);
+  `boardAtPlatform` / `platformArrival` (alight underground onto the next platform); `stationSaveSpot` for saves.
+  `stationview.js drawStation` replaces the whole frame in `render.js` while inside; `drawEntrance` draws the stair
+  shafts at lvl 0. Combat skips targets when one side is below lvl −1; `ambienceAt` returns a muffled station mix.
 - **On-foot PC controls (0.32.0):** `game.settings.controls` = `'diablo'` (default) | `'classic'` (localStorage
   `gta-controls`, toggled with ←/→ on the controls screen). Diablo input fields `clickWorld/clickPressed/clickHeld/
   clickForce/walkSlow` (see `idle.js`, set by `main.js applyPointer`); `world.js clickControl` turns them into the

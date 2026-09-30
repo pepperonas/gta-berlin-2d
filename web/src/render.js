@@ -7,6 +7,8 @@ import { drawCar, drawTree, shade, drawDog } from './assets.js';
 import { drawPerson } from './people.js';
 import { drawBike, drawBird, drawParkedScooter } from './critters.js';
 import { isBikeKind } from './fleet.js';
+import { stationsNear, stationById } from './station.js';
+import { drawStation, drawEntrance } from './stationview.js';
 import { parkedScooters, riderShirt } from './bikes.js';
 import { playerCar, speedOf } from './world.js';
 import { signalState } from './signals.js';
@@ -591,6 +593,17 @@ export class Renderer {
     const v = { x: cam.x - vw / 2, y: cam.y - vh / 2, w: vw, h: vh };
     const t = world.time;
     this._time = t; this.stats.litWindows = 0; this._fog = world.weather?.fog ?? 0;
+    // Im U-Bahnhof: die Stadt verschwindet, nur der Bahnhof (station.js/stationview.js)
+    const inside = world.player.inside && stationById(city, world.player.inside.id);
+    this.stats.station = inside ? inside.name : null;
+    if (inside) {
+      const pl = world.player;
+      this.stats.stationView = drawStation(ctx, world, inside, v, t, { player: () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }) });
+      if (overlayMarkers && !pl.dead) { drawClickMarks(ctx, world, this.hover, this.clickFx, performance.now()); if (this.crosshair !== false) drawCrosshair(ctx, pl); }
+      this.flashes = []; // Mündungsfeuer (unten wie oben)
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      return;
+    }
     const L0 = lightAt(world.clock ?? 780), wx = world.weather ?? null;
     const snowD = this._snowD = world.snow ?? 0;
     let L = wx ? weatherLight(L0, wx, snowD) : L0;
@@ -749,6 +762,12 @@ export class Renderer {
       if (lvl === 0) {
         this.drawSignals(world, v);
         this.drawGroundProps(world, city, edges, fences, barriers, furns, trees);
+        // U-Bahn-Eingänge (station.js): Treppenschacht mit U-Schild am Gehweg
+        if (city.transit) {
+          if (!this._stCache || this._stCache.city !== city || Math.hypot(this._stCache.x - cam.x, this._stCache.y - cam.y) > 400 || t - this._stCache.t > 2) this._stCache = { city, x: cam.x, y: cam.y, t, list: stationsNear(city, cam.x, cam.y, Math.max(v.w, v.h) + 600) };
+          this.stats.entrances = 0;
+          for (const stn of this._stCache.list) for (const ex of stn.exits) if (ex.x > v.x - 40 && ex.x < v.x + v.w + 40 && ex.y > v.y - 40 && ex.y < v.y + v.h + 60) { drawEntrance(ctx, ex, stn.sbahn); this.stats.entrances++; }
+        }
       }
       // wer unter der nächsten Ebene liegt, kommt jetzt (danach wird sie über ihn gezeichnet)
       const next = levels[li + 1];

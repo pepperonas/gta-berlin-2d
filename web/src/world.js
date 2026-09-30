@@ -32,6 +32,7 @@ import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
 import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
+import { stationsNear, stationById, keepInside, stairAt, arrivalAt, boardable, toLocal, toWorld, STATION, stationName } from './station.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
 export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrians = TRAFFIC.pedestrians } = {}) {
@@ -299,6 +300,7 @@ export function teleportTo(w, spot) {
   const car = playerCar(w), p = w.player;
   if (car) Object.assign(car, { x: spot.x, y: spot.y, angle: spot.angle, vx: 0, vy: 0, angVel: 0, lvl: undefined });
   if (p.ride) endRide(w, 'teleport'); // Teleport (Karte, Konsole) beendet eine Fahrt
+  p.inside = null; p.entryGuard = null; // aus dem U-Bahnhof hinaus (Teleport, Krankenhaus)
   p.x = spot.x; p.y = spot.y; p.lvl = undefined; // Ebene neu von der Landestelle
   w.camera.x = spot.x; w.camera.y = spot.y;
   // Verkehr und Passanten sofort am neuen Ort aufbauen (sonst wäre die Straße einige Sekunden leer).
@@ -506,7 +508,7 @@ function updateLevels(w) {
   for (const ped of w.peds) upd(ped, ped.angle ?? null);
   for (const b of w.bikes ?? []) upd(b, b.angle);
   const p = w.player, pc = playerCar(w);
-  if (pc) p.lvl = pc.lvl; else if (p.ride?.underground) { /* im Tunnel: updateRide setzt die Ebene */ } else if (!p.dead) upd(p, null);
+  if (pc) p.lvl = pc.lvl; else if (p.ride?.underground) { /* im Tunnel: updateRide setzt die Ebene */ } else if (p.inside) p.lvl = -2; else if (!p.dead) upd(p, null);
 }
 
 // Klick-Steuerung zu Fuß (Diablo-Schema, main.js setzt clickWorld/clickPressed/clickHeld/clickForce): Klick auf den
@@ -522,7 +524,7 @@ function clickControl(w, input, dt) {
   const p = w.player;
   if (Math.hypot(input.moveX, input.moveY) > 0.05) { p.click = null; return input; }
   const at = input.clickWorld;
-  const walk = (to) => { const path = findFootPath(w, p, to, p.lvl ?? 0); return path && path.length > 1 ? { path, i: 1 } : null; };
+  const walk = (to) => { if (p.inside) { const t = { x: to.x, y: to.y }, stn = stationById(w.city, p.inside.id); if (stn) keepInside(stn, t, PLAYER.radius); return { path: [{ x: p.x, y: p.y }, t], i: 1 }; } const path = findFootPath(w, p, to, p.lvl ?? 0); return path && path.length > 1 ? { path, i: 1 } : null; }; // im Bahnhof: gerade (keepInside hält am Bahnsteig)
   if (at && input.clickPressed) {
     const it = clickIntent(w, at.x, at.y, !!input.clickForce, { double: !!input.clickDouble });
     p.clickT = 0.15;
@@ -605,6 +607,8 @@ function updatePlayerOnFoot(w, input, dt) {
     p.step += speed * dt;
   }
   if (mag <= 0.05) p.moveSpeed = 0;
+  const st = p.inside && stationById(w.city, p.inside.id);
+  if (st) { keepInside(st, p, PLAYER.radius); return; } // im U-Bahnhof: nur Bahnsteig und Säulen
   pushCircleOutOfWorld(w, p, PLAYER.radius);
   p.x = clamp(p.x, 8, w.city.width - 8); p.y = clamp(p.y, 8, w.city.height - 8);
 }
@@ -641,6 +645,8 @@ export function alightTransit(w) {
   if (!st) { endRide(w, 'gone'); return true; }
   if (st.underground || elevated(w, st, st.cars[Math.min(r.car, st.cars.length - 1)])) { // Tunnel/Hochbahn: nur am Bahnhof
     if (!st.dwelling) { w.notice = { text: st.underground ? 'Nur am Bahnsteig' : 'Aussteigen nur am Bahnhof', t: 1.5 }; return false; }
+    // unter Tage mit begehbarem Bahnhof: auf dessen Bahnsteig neben dem Wagen; sonst wie bisher an die Straße
+    if (st.underground && platformArrival(w, st, r.car)) { w.events.push({ type: 'alight', hop: false, x: p.x, y: p.y, station: true }); return true; }
     const ex = stationExit(w, st.p, st.stop);
     p.ride = null; p.x = ex.x; p.y = ex.y; p.lvl = 0;
     w.events.push({ type: 'alight', hop: false, x: p.x, y: p.y });
@@ -660,6 +666,75 @@ export function alightTransit(w) {
   w.events.push({ type: 'alight', hop, x: p.x, y: p.y });
   return true;
 }
+// --- U-Bahnhöfe (station.js): hinein über die Eingänge an der Straße, hinaus über die Treppen, Züge am Bahnsteig ----
+// Bahnhof, an dessen Bahnsteig Muster pid am Halt i hält (oder null)
+function stationOfHalt(w, pid, i) {
+  const pat = w.city.transit?.patterns[pid];
+  if (!pat) return null;
+  const q = pointOn(pat, pat.stops[i]);
+  return stationsNear(w.city, q.x, q.y, 800).find((s) => s.halts.some((h) => h.pid === pid && h.i === i)) ?? null;
+}
+// Aussteigen unter Tage auf den Bahnsteig neben Wagen car
+function platformArrival(w, st, car) {
+  const stn = stationOfHalt(w, st.p.id, st.stop);
+  if (!stn) return false;
+  const h = stn.halts.find((x) => x.pid === st.p.id && x.i === st.stop), k = TRAIN[st.p.mode];
+  const u = h.dir * (stn.L / 2 - (Math.min(car, k.cars - 1) * (k.carL + k.gap) + k.carL / 2));
+  const at = toWorld(stn, u, h.dir * (STATION.half - 12));
+  const p = w.player;
+  p.ride = null; p.x = at.x; p.y = at.y; p.lvl = -2; p.inside = { id: stn.id, guard: false }; p.click = null;
+  keepInside(stn, p, PLAYER.radius);
+  return true;
+}
+// Einsteigen am Bahnsteig (G): haltender Zug auf der eigenen Seite, Figur am Rand neben einem Wagen
+function boardAtPlatform(w) {
+  const p = w.player, stn = stationById(w.city, p.inside.id);
+  if (!stn || p.stun > 0) return false;
+  const b = boardable(w, stn, p.x, p.y);
+  if (!b) { w.notice = { text: 'Zum Einsteigen an die Bahnsteigkante neben einen haltenden Zug', t: 1.5 }; return false; }
+  const vs = vehicleState(w, b.train.ref);
+  if (!vs) return false;
+  p.inside = null;
+  p.ride = { kind: 'passenger', ref: b.train.ref, mode: vs.mode, car: b.car, lastStop: lastStopOf(vs), since: w.time, line: vs.p.name, dest: vs.p.stopNames[vs.p.stopNames.length - 1] };
+  w.events.push({ type: 'board', mode: vs.mode, line: vs.p.name, hop: false, x: p.x, y: p.y });
+  return true;
+}
+// Jeden Schritt zu Fuß: Treppe hinauf (Ausgang an der Straße) bzw. an der Straße in einen Eingang hinein
+function updateStationPresence(w) {
+  const p = w.player;
+  if (p.inside) {
+    const stn = stationById(w.city, p.inside.id);
+    if (!stn) { p.inside = null; return; }
+    const e = stairAt(stn, p.x, p.y);
+    if (!e) { p.inside.guard = false; return; }
+    if (p.inside.guard) return; // gerade heruntergekommen: erst von der Treppe gehen
+    const ex = stn.exits[e < 0 ? 0 : 1];
+    p.inside = null; p.x = ex.x; p.y = ex.y; p.lvl = undefined; p.click = null;
+    p.entryGuard = { x: ex.x, y: ex.y }; // nicht gleich wieder hinunter
+    w.events.push({ type: 'station-exit', x: p.x, y: p.y, name: stn.name });
+    return;
+  }
+  if (p.entryGuard && Math.hypot(p.x - p.entryGuard.x, p.y - p.entryGuard.y) > 30) p.entryGuard = null;
+  if ((w._stT = (w._stT ?? 0) - 1) <= 0) { w._stT = 30; w._stNear = stationsNear(w.city, p.x, p.y, 1200); } // alle 0,5 s
+  if ((p.lvl ?? 0) !== 0) return;
+  for (const stn of w._stNear ?? []) for (const ex of stn.exits) {
+    if (Math.hypot(p.x - ex.x, p.y - ex.y) > STATION.entrance || p.entryGuard) continue;
+    const at = arrivalAt(stn, ex.e);
+    p.x = at.x; p.y = at.y; p.angle = at.angle; p.lvl = -2; p.click = null;
+    p.inside = { id: stn.id, guard: true };
+    w.events.push({ type: 'station-enter', x: p.x, y: p.y, name: stn.name });
+    return;
+  }
+}
+// Ausgang, an dem man bei einem Spielstand im Bahnhof wieder oben steht
+export function stationSaveSpot(w) {
+  const stn = w.player.inside && stationById(w.city, w.player.inside.id);
+  if (!stn) return null;
+  const l = toLocal(stn, w.player.x, w.player.y), ex = stn.exits[l.u < 0 ? 0 : 1];
+  return { x: ex.x, y: ex.y };
+}
+export { stationName };
+
 // Wo ein Fahrgast ohne Fahrzeug landet: letzte Haltestelle, bei S-/U-Bahn deren Straßenausgang (nicht das Gleisbett).
 // Gemeinsam für endRide und den Spielstand (save.js makeSave).
 export function rideExit(w, ride) {
@@ -738,8 +813,8 @@ export function updateWorld(w, input, dt) {
   }
 
   const p = w.player;
-  if (input.ride && !p.dead && !p.inCar && p.ride?.kind !== 'driver') { if (p.ride) alightTransit(w); else boardTransit(w); }
-  else if (input.enterExit && !p.dead) {
+  if (input.ride && !p.dead && !p.inCar && p.ride?.kind !== 'driver') { if (p.ride) alightTransit(w); else if (p.inside) boardAtPlatform(w); else boardTransit(w); }
+  else if (input.enterExit && !p.dead && !p.inside) {
     if (p.ride?.kind === 'driver') leaveTrain(w);
     else if (!p.ride) {
       if (p.inCar) tryExit(w);
@@ -758,7 +833,7 @@ export function updateWorld(w, input, dt) {
     else applyDriverInput(pc, input);
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
-  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) updatePlayerOnFoot(w, input, dt); }
+  } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) { updatePlayerOnFoot(w, input, dt); updateStationPresence(w); } }
   if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
@@ -807,8 +882,8 @@ export function updateWorld(w, input, dt) {
   w.cars = w.cars.filter((c) => !(c.wrecked && c.wreckT > 20 && c.id !== w.playerCarId && c.id !== p.inCar && !c.cargo
       && Math.hypot(c.x - cam.x, c.y - cam.y) > 900));
 
-  // Spieler zu Fuß gegen Autos.
-  if (!p.inCar && !p.ride) {
+  // Spieler zu Fuß gegen Autos (nicht im U-Bahnhof – die fahren oben).
+  if (!p.inCar && !p.ride && !p.inside) {
     for (const c of w.cars) {
       const mm = circleVsObb(p.x, p.y, PLAYER.radius, c);
       if (!mm || !touch(w.city, p, c)) continue;

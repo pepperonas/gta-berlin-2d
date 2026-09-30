@@ -136,18 +136,20 @@ export function castRay(w, ox, oy, ang, range, shooter = null, lvl = shooter?.lv
 // Was liegt unter dem Mauszeiger? Lebende Person (Körper + 4 px) oder Auto (gedrehtes Rechteck + 2 px); { obj, x, y } | null
 export function pickTarget(w, x, y) {
   let best = null, bd = Infinity;
+  const lvl = w.player.lvl ?? 0, other = (o) => (o.lvl ?? 0) !== lvl && (lvl < -1 || (o.lvl ?? 0) < -1); // U-Bahnhof ↔ Straße
   for (const ped of w.peds) {
-    if (ped.state === 'dead') continue;
+    if (ped.state === 'dead' || other(ped)) continue;
     const d = Math.hypot(ped.x - x, ped.y - y);
     if (d < PED.radius + 4 && d < bd) { bd = d; best = { obj: ped, x: ped.x, y: ped.y }; }
   }
   for (const b of w.bikes ?? []) { // Rad mit Fahrer oder liegendes Rad
-    if (b.state !== 'ride' && b.state !== 'lying') continue;
+    if ((b.state !== 'ride' && b.state !== 'lying') || other(b)) continue;
     const d = Math.hypot(b.x - x, b.y - y);
     if (d < BIKE.r + 5 && d < bd) { bd = d; best = { obj: b, x: b.x, y: b.y }; }
   }
   if (best) return best;
   for (const car of w.cars) {
+    if (other(car)) continue;
     const c = Math.cos(car.angle), s = Math.sin(car.angle), dx = x - car.x, dy = y - car.y;
     if (Math.abs(dx * c + dy * s) < car.hw + 2 && Math.abs(-dx * s + dy * c) < car.hh + 2) return { obj: car, x: car.x, y: car.y };
   }
@@ -208,23 +210,23 @@ export function aimAssist(w, p, ang, range, cone = ASSIST.cone) {
 
 // Ziele im Nahkampfbogen (Passanten und Autos)
 export function meltargets(w, p, ang, wp) {
-  const out = [];
+  const out = [], lvl = p.lvl ?? 0, other = (o) => (o.lvl ?? 0) !== lvl && (lvl < -1 || (o.lvl ?? 0) < -1); // U-Bahnhof ↔ Straße
   for (const ped of w.peds) {
-    if (ped.state === 'dead') continue;
+    if (ped.state === 'dead' || other(ped)) continue;
     const dx = ped.x - p.x, dy = ped.y - p.y, d = Math.hypot(dx, dy);
     if (d > wp.range + PED.radius + 6) continue;
     if (d > 4 && Math.abs(wrapAngle(Math.atan2(dy, dx) - ang)) > wp.arc / 2) continue;
     out.push(ped);
   }
   for (const b of w.bikes ?? []) {
-    if (b.state !== 'ride') continue;
+    if (b.state !== 'ride' || other(b)) continue;
     const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
     if (d > wp.range + BIKE.r + 6) continue;
     if (d > 4 && Math.abs(wrapAngle(Math.atan2(dy, dx) - ang)) > wp.arc / 2) continue;
     out.push(b);
   }
   for (const car of w.cars) {
-    if (car.id === w.player.inCar) continue;
+    if (car.id === w.player.inCar || other(car)) continue;
     const tx = p.x + Math.cos(ang) * wp.range, ty = p.y + Math.sin(ang) * wp.range;
     if (rayObb(p.x, p.y, Math.cos(ang), Math.sin(ang), car) <= wp.range) out.push(car);
     else if (Math.hypot(tx - car.x, ty - car.y) < CAR.width / 2) out.push(car);
@@ -377,7 +379,7 @@ export function updateFight(ped, world, dt, move) {
   ped.fightT = (ped.fightT ?? 0) + dt;
   ped.punch = Math.max(0, (ped.punch ?? 0) - dt);
   const dx = p.x - ped.x, dy = p.y - ped.y, d = Math.hypot(dx, dy);
-  if (p.dead || p.inCar || p.ride || d > FIGHT.far || ped.fightT > FIGHT.giveUp) return false; // aufgeben (auch: Spieler fährt mit)
+  if (p.dead || p.inCar || p.ride || p.inside || d > FIGHT.far || ped.fightT > FIGHT.giveUp) return false; // aufgeben (auch: Spieler fährt mit)
   ped.facing = Math.atan2(dy, dx);
   if (d > FIGHT.reach) { const v = Math.min(d - FIGHT.reach + 1, PED.run * 0.85 * dt); move(ped, dx / d * v, dy / d * v, world); }
   ped.hitCd = (ped.hitCd ?? 0) - dt;

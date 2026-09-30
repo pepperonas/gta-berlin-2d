@@ -3,6 +3,7 @@
 // wächst die virtuelle Fläche mit (vw ≥ 1280, vh ≥ 720). Das Spiel-HUD hängt an den Fensterrändern (5 % Title-Safe-Rand,
 // TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
+import { stationById, boardable } from './station.js';
 import { locationName, nearestPoi } from './map.js';
 import { formatClock, SUNRISE } from './daylight.js';
 import { WEAPONS, PLAYER_HP } from './combat.js';
@@ -355,7 +356,8 @@ export class Hud {
     const obj = missionObjective(world.mission, ctx);
 
     // Oben links: Ort + Geld
-    this.text(locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
+    const stn = world.player.inside && stationById(world.city, world.player.inside.id);
+    this.text(stn ? `${stn.sbahn ? 'S' : 'U'}-Bahnhof ${stn.name} · ${stn.lines.join(' ')}` : locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
     const mw = this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
     const night = world.clock >= 1230 || world.clock < SUNRISE;
     const wx = world.weather, icon = wx && wx.kind !== 'clear' && (wx.cloud > 0.3 || wx.fog > 0.3) ? WX_ICON[wx.kind] : night ? '☾' : '☀';
@@ -433,7 +435,11 @@ export class Hud {
     let hint = mission.prompt, hintY = vh - m.y - 40;
     // längere Meldungen über den Eckfeldern (Waffe/Tacho unten rechts), damit sie nicht überlappen
     if (!hint && world.notice) { hint = world.notice.text; hintY = vh - m.y - 140; }
-    if (!hint && !world.player.inCar) {
+    if (!hint && stn) { // im U-Bahnhof: Einsteigen am Bahnsteig, sonst Hinweis auf die Treppen
+      const b = boardable(world, stn, world.player.x, world.player.y);
+      hint = b ? `G: Einsteigen ${b.train.line} → ${b.train.dest}` : null;
+    }
+    if (!hint && !world.player.inCar && !stn) {
       const near = world.cars.some((cc) => !cc.wrecked && Math.hypot(cc.x - world.player.x, cc.y - world.player.y) < PLAYER.enterDist);
       const bike = !near && (world.bikes ?? []).find((b) => (b.state === 'ride' || b.state === 'lying') && Math.hypot(b.x - world.player.x, b.y - world.player.y) < 34);
       if (near) hint = 'Y: Einsteigen';
