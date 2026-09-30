@@ -190,3 +190,36 @@ test('Welt: Passanten bekommen einen Typ und dessen Tempo, ohne den Welt-Zufall 
   const senior = assignKind({ ...w, clock: 600, day: 1 }, { id: [...Array(500).keys()].find((i) => pickKind(i, { minutes: 600, day: 1, bezirk: 'Friedrichshain-Kreuzberg' }) === 'senior'), x: w.player.x, y: w.player.y, speed: 36 });
   assert.equal(senior.kind, 'senior'); assert.ok(senior.speed < 36 * 0.7, 'Senioren gehen langsamer');
 });
+
+test('Zeichnen: Rumpf und Kopf als gespeicherte Bilder (geteilt, begrenzt), niedrige Detailstufe spart Striche', async () => {
+  const { personSpriteCount, setPeopleDetail } = await import('../web/src/people.js');
+  const saved = globalThis.OffscreenCanvas;
+  let made = 0;
+  globalThis.OffscreenCanvas = class {
+    constructor(w, h) { this.width = w; this.height = h; made++; }
+    getContext() { return new Proxy({}, { get: (t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}) }); }
+  };
+  try {
+    const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+    const p = { id: 777, kind: 'tourist', x: 0, y: 0, facing: 0, step: 0 };
+    drawPerson(ctx, p, { time: 0 });
+    const n = made;
+    assert.ok(n >= 1 && n <= 2, `Rumpf und Kopf je ein Bild (${n})`);
+    for (let f = 1; f < 30; f++) { p.step += 1; drawPerson(ctx, p, { time: f / 60 }); }
+    assert.equal(made, n, 'beim Gehen wiederverwendet');
+    for (let i = 0; i < 2500; i++) drawPerson(ctx, { id: 5000 + i, kind: KIND_IDS[i % KIND_IDS.length], x: 0, y: 0, facing: 0, step: 0 }, { time: 0 });
+    assert.ok(personSpriteCount() <= 900, `Speicher begrenzt (${personSpriteCount()})`);
+    assert.ok(made < 2 * 2500, 'gleiche Köpfe/Rümpfe werden geteilt');
+  } finally { globalThis.OffscreenCanvas = saved; }
+  const strokes = (on) => {
+    setPeopleDetail(on);
+    let n = 0;
+    const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'stroke' ? () => { n++; } : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+    const p = { id: 31, kind: 'everyday', x: 0, y: 0, facing: 0, step: 0 };
+    for (let f = 0; f < 5; f++) { p.step += 1.2; drawPerson(ctx, p, { time: f / 60 }); }
+    return n;
+  };
+  const hi = strokes(true), lo = strokes(false);
+  setPeopleDetail(true);
+  assert.ok(lo < hi, `niedrig ${lo} < hoch ${hi} Striche`);
+});

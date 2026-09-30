@@ -397,6 +397,16 @@ Gehtempo. Alle – auch der Spieler – laufen mit echtem Gangbild: Schritte und
 Vorlage und langen Schritten, weiches Anlaufen und Anhalten, Atmen im Stand. Der Spieler läuft in Laufrichtung und
 dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). Prüfseite: `http://localhost:8080/lab/figures.html`.
 
+Die Figuren sind von oben wie echte Menschen aufgebaut: Schultern als gerundetes Rechteck (Anzug eckig, Mantel länger),
+Arme aus Ober- und Unterarm mit Ellbogen (kurze Ärmel lassen die Unterarme frei), Hände, Schuhe mit Sohle, Kopf mit
+Ohren, Nasenspitze, Haaransatz und Strähnen; Kleidung mit Nähten, Kragen, Revers, Kapuze, Reflexstreifen und
+Rucksackgurten; Mützen mit Strickrippen und Bommel, Caps mit Schirm und Nähten, Hüte mit Band, Bauhelme mit Grat, Kopftücher
+mit Falten. Rumpf und Kopf haben Volumen (Mitte heller, Rand dunkler) und werden je Aussehen einmal als Bild gerechnet;
+die Sonne hellt die zugewandte Schulter auf. Liegende zeigen das Gesicht. Der Spieler trägt einen Ring am Boden.
+Fertige Figuren aus freien Paketen (z. B. Kenneys CC0-„Topdown Shooter“) passen nicht: nur wenige Charaktere in festen
+Posen ohne Gehzyklus, Sitzen, Liegen und Kleidungsvarianten. Eigene Bilder lassen sich weiter über
+`web/assets/manifest.json` (`player`, `pedestrian`) einsetzen.
+
 ## Fahrzeuge und Fahrgefühl
 
 37 Pkw-Modelle fahren durch Berlin, jedes mit eigenem (erfundenem) Namen und eigener Technik – die neueren nach echten
@@ -542,7 +552,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 451 automatischen Tests grün, darunter:
+- Alle 452 automatischen Tests grün, darunter:
+  - 0.46.0: Figuren – jeder Typ in allen Haltungen ohne ungültige Werte, Typen verschieden, Rumpf und Kopf als Bild
+    gerechnet und beim Gehen wiederverwendet, Bildspeicher begrenzt (älteste zuerst), gleiche Köpfe/Rümpfe geteilt,
+    niedrige Detailstufe zeichnet weniger Striche. Im Browser: Prüfseite aller Typen und Haltungen, Spiel bei normalem
+    Zoom; Zeichenzeit für 250 Personen ≈ 18 ms statt 15 ms vorher (Software-Renderer ohne Grafikkarte).
   - 0.45.0: alle 37 Pkw erreichen ihr Höchsttempo (± 6 %) und bremsen aus 100 km/h in 18–36 m; alle Modelle kommen im
     Verkehr vor; Schneespuren: Räder eines echten Autos liegen unter der Karosserie an den Flanken (vier Spuren, Spurweite
     = Wagenbreite), Zweirad eine Spur, Drift trennt Vorder- und Hinterradspuren, auf der Brücke keine Spur am Boden;

@@ -116,6 +116,12 @@ change in `web/`.
   when aiming against it. `people.js drawPerson` draws it all (weapons, `ACT_ARMS`, sitting, lying). Visual check:
   `web/lab/figures.html` (every kind × stand/walk/run/sit/weapon/lying, zoomed, with animation toggle).
   `assets.js personLook` remains for bike riders (`critters.js`).
+  0.46.0: `people.js` draws humans anatomically from above (superellipse shoulders `bodyPath`/`torsoDims`, two-segment
+  arms `drawArm(ctx, look, side, hx, hy)` with elbow, shoes, head with ears/nose/hairline). Torso and head are painted
+  once per look into offscreen canvases (`layer`, key from `keysOf`, LRU `SPR_MAX`, `RES` px/unit, `HEAD_K` head
+  scale); without a canvas (Node) it paints directly, so tests see the fills. Never `shade()` a shaded colour (it
+  returns `rgb()`); per-frame parts use the memo `tone()`. `ACT_ARMS[act](ctx, look, t, arm)`. `setPeopleDetail`
+  (from `Renderer.quality`) drops limb outlines at low quality. Player marker = ground ring.
 - **Combat:** `combat.js` (pure: `WEAPONS`, `KICK`, `castRay`, `aimAssist`, `strike`, `shoot`, `hurtPed`, `hurtCar`,
   `updatePlayerCombat`). Input fields `fire/firePressed/kick/reload/weaponNext/weaponPrev/weaponSlot/aimX/aimY/aimWorld`
   (see `idle.js`); keyboard fire is Ctrl/mouse, never W (W is throttle/walk). Peds have `hp` and a `'dead'` state

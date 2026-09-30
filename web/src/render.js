@@ -4,7 +4,7 @@
 import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawTree, shade, drawDog } from './assets.js';
-import { drawPerson } from './people.js';
+import { drawPerson, setPeopleDetail } from './people.js';
 import { drawBike, drawBird, drawParkedScooter } from './critters.js';
 import { isBikeKind, isMotoKind } from './fleet.js';
 import { drawMoto } from './vehicles.js';
@@ -585,6 +585,7 @@ export class Renderer {
       ts.length = 0;
     }
     if (this.debug?.quality) this.quality = this.debug.quality; // Konsole: qualitaet hoch|niedrig (auto = null)
+    setPeopleDetail(this.quality === 'high'); // niedrige Stufe: Gliedmaßen ohne Kontur
   }
 
   drawFrame(world, W, H, scale, overlayMarkers) {

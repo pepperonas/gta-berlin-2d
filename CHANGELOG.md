@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.46.0] – 2026-09-30
+
+### Geändert
+- **Schönere, realistischere Menschen:** Spieler und Passanten neu gezeichnet – Schultern statt Ellipse (Anzug eckig,
+  Mantel länger), Arme mit Ellbogen und Händen (kurze Ärmel zeigen die Unterarme), Schuhe mit Sohle, Kopf mit Ohren,
+  Nasenspitze, Haaransatz und Strähnen, Glatze mit Haarkranz, Iro mit rasierten Seiten, Locken, Zopf, Dutt, lange Haare
+  auf den Schultern. Kleidung mit Kragen, Nähten, Revers und Krawatte, Zweireiher-Knöpfen, Kapuze auf dem Rücken,
+  Reflexstreifen, Rucksack mit Gurten; Mützen mit Strickrippen und Bommel, Caps mit Nähten und Schirm, Hut mit Band,
+  Strohhut, Bauhelm mit Grat, Kopftuch mit Falten, Kopfhörer. Volumen-Schattierung und Sonnenlicht auf der Schulter.
+  Liegende zeigen ihr Gesicht (Augen geschlossen), die Arme liegen neben dem Körper.
+- Der Spieler ist an einem Ring am Boden zu erkennen statt an einem Umriss auf dem Körper.
+- Rumpf und Kopf werden je Aussehen einmal als Bild gerechnet (geteilter Speicher, älteste zuerst verworfen); bei
+  niedriger Qualitätsstufe ohne Konturen an Armen und Beinen.
+
+### Behoben
+- Rucksack wurde doppelt als Fläche gezeichnet (`roundRect` und `rect` zugleich).
+
 ## [0.45.0] – 2026-09-30
 
 ### Neu
