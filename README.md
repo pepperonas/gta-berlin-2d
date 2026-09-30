@@ -20,7 +20,7 @@ Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TEC
 
 ## Version
 
-Aktuell **0.37.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuell **0.38.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -160,6 +160,12 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   Treffern bleiben sie liegen, mit Blut. Schüsse vertreiben die Passanten ringsum. Etwa jeder siebte Passant wehrt
   sich mit den Fäusten. Die Spielfigur hat 100 Lebenspunkte (heilen nach einer Pause); bei 0 wacht man im nächsten
   echten Krankenhaus auf, 10 % des Geldes sind weg, ein laufender Auftrag scheitert.
+- **Radfahrer:** Schüsse, Schläge und Tritte holen Radfahrer und E-Roller-Fahrer vom Rad (sie stürzen und nehmen den
+  Treffer, das Rad bleibt liegen); die Zielhilfe erfasst sie. **Kapern** mit F/Y direkt neben dem Rad (fahrende sind
+  schnell – im Sprint einholen) oder per Doppelklick: der Fahrer wird heruntergezogen und flieht, man fährt selbst
+  (Fahrrad ≈ 26 km/h, E-Roller ≈ 20 km/h, ohne Motor, die Kamera bleibt nah). Liegende Räder hebt man einfach auf,
+  absteigen mit F/Y; das Rad bleibt stehen. Mit der Maus: Klick auf einen Radfahrer greift an, Doppelklick kapert.
+  Kisten passen nicht aufs Rad. `auto fahrrad` / `auto e-roller` stellt eines bereit.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
 - **Maus:** alle Menüs (Titel, Pause, Ergebnis, Steuerung) mit Zeigen und Klicken bedienbar, eigener Mauszeiger im
@@ -228,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 421 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 426 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -486,7 +492,7 @@ Sie arbeitet wie eine Befehlspalette:
 | `stats` | Statistik öffnen |
 
 Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
-Brücken, Teleports, Aquaplaning, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, Tote (erschossen
+Brücken, Teleports, Aquaplaning, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, gekaperte Räder, vom Rad geholte Radfahrer, Tote (erschossen
 / Nahkampf), Schüsse, Kugeln, Treffer und Trefferquote **je Waffe**, zerstörte Autos, Aufträge, verdientes Geld,
 Krankenhauskosten und Cheats, dazu im Nahverkehr: Mitfahrten, Strecke als Fahrgast und als Zugführer, geführte Bahnen,
 bediente Halte, Trinkgeld, Auf- und Abspringen. Gespeichert wird lokal in **IndexedDB** (Datenbank `gta-berlin`, alle 5 s und beim
@@ -496,7 +502,12 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 421 automatischen Tests grün, darunter:
+- Alle 426 automatischen Tests grün, darunter:
+  - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
+    (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
+    Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
+    liegendes Rad ohne Herunterziehen aufheben; Maus: Klick greift an, Doppelklick kapert, liegendes Rad weit weg =
+    hinlaufen, nah = aufsteigen. Im Browser: Rad per `auto fahrrad`, Anfahren bis 25 km/h, Darstellung mit Fahrer.
   - 0.37.0: Klick auf ein entferntes Auto läuft nur hin (steht danach am Auto, nicht drin, kein Schuss), Klick
     daneben steigt nach dem Halt an der Tür ein (≥ 0,35 s), Doppelklick aus der Ferne steigt ein. Befehlszeile:
     Uhrzeit/Wetter/Ort ohne Befehlswort, „schnee“ allein = Wetter, mit Wert = Schneedecke, vertippter Befehl gibt

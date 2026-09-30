@@ -12,7 +12,11 @@ export const KINDS = {
   police: { L: 48, W: 20, power: 1.1, colors: ['#e8ecef'] },                                         // Berliner Polizei (silber-blau)
   ambulance: { L: 60, W: 22, power: 1, colors: ['#f5f5f2'] },                                        // RTW der Feuerwehr
   bus: { L: 120, W: 25, power: 0.75, colors: ['#f0cf1f'] },                                          // Linienbus (12 m), aus dem Fahrplan
+  // gekaperte Räder und E-Roller (bikes.js): fahren mit der Autophysik, aber klein, leise und langsam (top in px/s)
+  bicycle: { L: 18, W: 7, power: 0.45, top: 72, accel: 0.55, bike: true },                         // ≈ 26 km/h
+  escooter: { L: 14, W: 6, power: 0.4, top: 56, accel: 0.5, bike: true },                          // ≈ 20 km/h (Grenze)
 };
+export const isBikeKind = (kind) => !!KINDS[kind]?.bike;
 export const EMERGENCY = new Set(['police', 'ambulance']);
 export const kindOf = (car) => car.kind ?? 'car';
 export const sizeOf = (kind) => KINDS[kind] ?? KINDS.car;

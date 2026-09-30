@@ -13,7 +13,7 @@ export const CAR_COLORS = ['#c0392b', '#2e86de', '#f1c40f', '#27ae60', '#ecf0f1'
 export function createCar({ x, y, angle = 0, color = '#c0392b', role = 'traffic', kind = 'car' }) {
   const k = sizeOf(kind);
   return {
-    id: nextId++, x, y, angle, vx: 0, vy: 0, angVel: 0, kind, power: k.power,
+    id: nextId++, x, y, angle, vx: 0, vy: 0, angVel: 0, kind, power: k.power, top: k.top ?? null, accelK: k.accel ?? 1,
     hw: k.L / 2, hh: k.W / 2,
     health: CAR.health, wrecked: false, wreckT: 0,
     driver: null, // 'player' | 'npc' | null
@@ -47,15 +47,15 @@ export function stepCar(car, dt, city) {
   const kBrake = tr.brake * (aq ? AQUA.brake : 1), kLat = tr.lat * (aq ? AQUA.lat : 1), kSteer = tr.steer * (aq ? AQUA.steer : 1);
   car.spin = 0;
 
-  const pw = car.power ?? 1, top = CAR.maxSpeed * surf.top * (0.55 + 0.45 * pw);
+  const pw = car.power ?? 1, top = (car.top ?? CAR.maxSpeed * (0.55 + 0.45 * pw)) * surf.top; // Räder: eigenes Höchsttempo
   if (ctl.throttle > 0 && vf < top) {
     const t = vf > 0 ? 1 - (vf / top) * 0.55 : 1.4; // aus dem Rückwärtsrollen kräftiger
-    vf += CAR.accel * pw * ctl.throttle * t * tr.accel * dt;
+    vf += CAR.accel * pw * (car.accelK ?? 1) * ctl.throttle * t * tr.accel * dt;
     car.spin = ctl.throttle > 0.8 && tr.accel < 0.7 && vf < 150 ? 1 : 0; // Räder drehen durch (nur Darstellung)
   }
   if (ctl.brake > 0) {
     if (vf > 5) vf = Math.max(0, vf - CAR.brake * ctl.brake * kBrake * dt);
-    else if (vf > -CAR.maxReverse) vf -= CAR.accel * 0.6 * ctl.brake * dt;
+    else if (vf > -(car.top ? 22 : CAR.maxReverse)) vf -= CAR.accel * 0.6 * ctl.brake * dt; // Rad: nur schieben
   }
   if (ctl.handbrake) vf -= sign(vf) * Math.min(Math.abs(vf), CAR.handbrake * kBrake * dt);
   vf -= vf * CAR.drag * surf.drag * dt;

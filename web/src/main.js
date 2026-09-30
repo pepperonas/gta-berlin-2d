@@ -14,6 +14,7 @@ import { createRightButton, WHEEL, easeTimeScale } from './weaponwheel.js';
 import { consoleKey, openConsole, consoleAccept } from './console.js';
 import { openStatsStore } from './statsdb.js';
 import { WEAPONS, clickIntent, CLICK } from './combat.js';
+import { isBikeKind } from './fleet.js';
 import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
@@ -461,7 +462,8 @@ function draw() {
   const fdt = Math.min(0.1, (now - (sndT ?? now)) / 1000); sndT = now;
   if (car && car.id !== engCar) { engSt = {}; engCar = car.id; }
   if (car) stepEngine(engSt, car, fdt);
-  sound.setVehicle(!!car && !car.wrecked, car ? engSt : null, car ? tireState(game.world, car) : null, { inCar: !!car, rain: game.world?.weather?.rain ?? 0 });
+  const onBike = !!car && isBikeKind(car.kind); // Rad/E-Roller: kein Motor, keine Karosserie – nur Reifen und Fahrtwind
+  sound.setVehicle(!!car && !car.wrecked, car && !onBike ? engSt : null, car ? tireState(game.world, car) : null, { inCar: !!car && !onBike, rain: game.world?.weather?.rain ?? 0 });
   // Schritte zu Fuß (Schnee knirscht, Nässe platscht)
   const pl = game.world?.player;
   if (pl && !car && game.screen === 'playing' && !pl.ride && !pl.dead) {

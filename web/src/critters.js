@@ -13,7 +13,7 @@ export function drawBike(ctx, b, shirt, sun, t) {
   ctx.beginPath(); ctx.ellipse(sx * 0.4, sy * 0.4, 11, 4, b.angle, 0, Math.PI * 2); ctx.fill();
   ctx.rotate(b.angle);
   const scooter = b.kind === 'scooter';
-  if (b.state === 'lying') ctx.rotate(1.3); // umgefallen
+  if (b.state === 'lying') ctx.rotate(1.3); // umgefallen (abgestellt: 'parked' – steht, ohne Fahrer)
   if (scooter) {
     ctx.fillStyle = '#2d3436'; ctx.fillRect(-7, -1.6, 12, 3.2);              // Trittbrett
     ctx.fillStyle = SCOOTER[b.seed % SCOOTER.length]; ctx.fillRect(4, -1.2, 3, 2.4); // Lenksäule
@@ -27,7 +27,7 @@ export function drawBike(ctx, b, shirt, sun, t) {
     ctx.fillStyle = '#222'; ctx.fillRect(5.5, -4.2, 1.5, 8.4);               // Lenker
     if (b.seed % 3 === 0) { ctx.fillStyle = '#6d4c41'; ctx.fillRect(-11, -2.2, 4, 4.4); } // Korb/Tasche
   }
-  if (b.state === 'lying') { ctx.restore(); return; }
+  if (b.state === 'lying' || b.state === 'parked') { ctx.restore(); return; }
   // Fahrer: Rad = sitzend mit tretenden Knien, Roller = stehend
   const look = personLook({ id: b.seed }), skin = ['#f2d0b1', '#e0ac69', '#c68642', '#8d5524', '#f5d6c6'][b.seed % 5];
   if (!scooter) {

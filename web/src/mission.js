@@ -3,6 +3,7 @@
 //                                 ↘ failed (Zeit abgelaufen / Ware zerstört)
 import { MISSION } from './config.js';
 import { speedOf } from './car.js';
+import { isBikeKind } from './fleet.js';
 
 export const BRIEFING = [
   'Kalle vom Späti „Zum Kiez“:',
@@ -25,12 +26,13 @@ const inZone = (x, y, p, r = MISSION.zoneRadius) => Math.hypot(x - p.x, y - p.y)
 export function updateMission(m, ctx, dt) {
   const events = [];
   const { places, player, input } = ctx;
-  const car = player.inCar ? ctx.cars.find((c) => c.id === player.inCar) : null;
+  const veh = player.inCar ? ctx.cars.find((c) => c.id === player.inCar) : null;
+  const car = veh && !isBikeKind(veh.kind) ? veh : null; // aufs Rad passen keine Kisten
   m.prompt = null;
 
   switch (m.state) {
     case 'available':
-      if (!car && !player.ride && inZone(player.x, player.y, places.giver, MISSION.giverRadius)) {
+      if (!veh && !player.ride && inZone(player.x, player.y, places.giver, MISSION.giverRadius)) {
         m.prompt = 'A: Auftrag annehmen';
         if (input.action) { m.state = 'briefing'; m.briefingPage = 0; events.push({ type: 'ui' }); }
       }

@@ -435,9 +435,11 @@ export class Hud {
     if (!hint && world.notice) { hint = world.notice.text; hintY = vh - m.y - 140; }
     if (!hint && !world.player.inCar) {
       const near = world.cars.some((cc) => !cc.wrecked && Math.hypot(cc.x - world.player.x, cc.y - world.player.y) < PLAYER.enterDist);
+      const bike = !near && (world.bikes ?? []).find((b) => (b.state === 'ride' || b.state === 'lying') && Math.hypot(b.x - world.player.x, b.y - world.player.y) < 34);
       if (near) hint = 'Y: Einsteigen';
+      else if (bike) hint = bike.state === 'ride' ? 'Y: Rad kapern' : 'Y: Aufs Rad';
     }
-    if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = 'Y: Aussteigen';
+    if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = car.top ? 'Y: Absteigen' : 'Y: Aussteigen';
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
     if (hint && !g.console?.open) this.prompt(hint, vw / 2, hintY); // offene Befehlszeile verdeckt sonst den Hinweis
     if (mission.load > 0 && mission.state === 'toPickup') {

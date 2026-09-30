@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.38.0] – 2026-09-30
+
+### Neu
+- **Radfahrer abschießen und umhauen:** Schüsse, Schläge und Tritte holen Radfahrer und E-Roller-Fahrer vom Rad; sie
+  stürzen, nehmen den Treffer (können daran sterben), das Rad bleibt liegen. Zielhilfe und Maus-Klick erfassen sie.
+- **Räder kapern:** F/Y direkt neben einem Rad (oder Doppelklick) zieht den Fahrer herunter – er flieht – und man fährt
+  selbst: Fahrrad ≈ 26 km/h, E-Roller ≈ 20 km/h, ohne Motorgeräusch und ohne gedämpfte Umgebung, Kamera nah. Liegende
+  Räder aufheben, absteigen lässt das Rad stehen. Kisten passen nicht aufs Rad.
+- Statistik: „Räder gekapert“ und „Radfahrer vom Rad geholt“; Befehl `auto fahrrad` / `auto e-roller` (deutsche Namen
+  für alle Fahrzeugarten).
+
 ## [0.37.0] – 2026-09-29
 
 ### Geändert

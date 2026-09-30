@@ -173,7 +173,7 @@ export const COMMANDS = [
     run(ctx, [v]) { const on = onOff(v, ctx.world.god); if (on === null) return { ok: false, msg: 'gott an|aus' }; ctx.world.god = on; return `Gottmodus ${on ? 'an' : 'aus'}`; } },
   { name: 'auto', aliases: ['car', 'fahrzeug'], cheat: true, help: 'Fahrzeug neben dir abstellen', args: [{ name: 'art', optional: true, values: () => Object.keys(KINDS).map((k) => ({ label: k, hint: KIND_LABEL[k] ?? '' })) }],
     run(ctx, [v]) {
-      const kind = v ? norm(v) : 'car';
+      const kind = v ? (KINDS[norm(v)] ? norm(v) : Object.keys(KIND_LABEL).find((k) => norm(KIND_LABEL[k]) === norm(v)) ?? norm(v)) : 'car'; // auch „fahrrad“, „polizei“
       if (!KINDS[kind]) return { ok: false, msg: `Art: ${Object.keys(KINDS).join(', ')}` };
       const p = ctx.world.player, spot = openSpot(ctx.world, p.x + Math.cos(p.angle ?? 0) * 60, p.y + Math.sin(p.angle ?? 0) * 60, true);
       if (!spot) return { ok: false, msg: 'Kein Platz für ein Fahrzeug' };
@@ -212,7 +212,7 @@ export const COMMANDS = [
   { name: 'stats', aliases: ['statistik'], help: 'Statistik anzeigen', args: [],
     run(ctx) { ctx.game.returnTo = 'playing'; ctx.game.screen = 'stats'; ctx.game.console.open = false; return 'Statistik'; } },
 ];
-const KIND_LABEL = { car: 'Pkw', truck: 'Lkw', delivery: 'Lieferwagen', garbage: 'Müllauto', police: 'Polizei', ambulance: 'Rettungswagen', bus: 'Bus' };
+const KIND_LABEL = { car: 'Pkw', truck: 'Lkw', delivery: 'Lieferwagen', garbage: 'Müllauto', police: 'Polizei', ambulance: 'Rettungswagen', bus: 'Bus', bicycle: 'Fahrrad', escooter: 'E-Roller' };
 
 export function findCommand(name) {
   const n = norm(name ?? '');

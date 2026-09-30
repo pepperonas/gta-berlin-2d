@@ -25,7 +25,7 @@ export const STAT_SECTIONS = [
   ['Kampf', [
     ['kills', 'Menschen getötet', 'n'], ['killsShot', 'davon erschossen', 'n'], ['killsMelee', 'davon im Nahkampf', 'n'],
     ['shots', 'Schüsse', 'n'], ['bullets', 'Kugeln', 'n'], ['hits', 'Treffer', 'n'], ['carsDestroyed', 'Autos zerstört', 'n'],
-    ['deaths', 'selbst umgehauen', 'n'],
+    ['cyclistsDown', 'Radfahrer vom Rad geholt', 'n'], ['bikesJacked', 'Räder gekapert', 'n'], ['deaths', 'selbst umgehauen', 'n'],
   ]],
   ['Aufträge', [
     ['missions', 'Aufträge erledigt', 'n'], ['missionsFailed', 'Aufträge verpatzt', 'n'], ['moneyEarned', 'Geld verdient', 'eur'],
@@ -97,7 +97,8 @@ export function trackStep(sets, tr, world, events, dt) {
       case 'wreck': if (e.player) add(sets, 'carsDestroyed'); else if (e.carId === world.playerCarId || e.carId === p.inCar) add(sets, 'ownWrecks'); break;
       case 'crash': if (e.carId !== undefined && e.carId === p.inCar && e.strength > 0.15) add(sets, 'crashes'); break;
       case 'knock': if (e.carId === p.inCar) add(sets, 'bollards'); break;
-      case 'carjack': add(sets, 'carjacks'); break;
+      case 'carjack': add(sets, e.bike ? 'bikesJacked' : 'carjacks'); break;
+      case 'bike-down': if (e.player) add(sets, 'cyclistsDown'); break;
       case 'wasted': add(sets, 'deaths'); break;
       case 'respawn': add(sets, 'hospitalFees', e.fee ?? 0); if (tr) tr.money = world.money; break;
       case 'mission-success': add(sets, 'missions'); break;

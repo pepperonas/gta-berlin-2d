@@ -20,10 +20,10 @@ import { initCombat, updatePlayerCombat, clickIntent, CLICK, WEAPONS, GUNSHOT_SC
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
-import { pickKind, KINDS } from './fleet.js';
+import { pickKind, KINDS, isBikeKind } from './fleet.js';
 import { pickKind as pickPersonKind, KINDS as PERSON_KINDS } from './figure.js';
 import { updateService, manageEmergency } from './services.js';
-import { createBike, updateBike, bikeSpawn, BIKE, riderShirt } from './bikes.js';
+import { createBike, updateBike, bikeSpawn, BIKE, riderShirt, dismount } from './bikes.js';
 import { manageAnimals, updateAnimals } from './animals.js';
 import { weatherAt, stepWet, stepSnow, peopleFactor, bikeFactor, temperatureAt, stepIce } from './weather.js';
 import { roadCondition, tractionOf, puddleAt, gustPush, aquaYaw, AQUA, DRY } from './traction.js';
@@ -410,15 +410,23 @@ function spotFree(w, x, y, r, ignoreCar, lvl = 0) {
   return w.cars.every((c) => c === ignoreCar || !circleVsObb(x, y, r, c));
 }
 
-// only: genau dieses Auto (Klick-Steuerung), sonst das nächste in Reichweite; quiet: Türgeräusch kam schon
+// only: genau dieses Auto oder Rad (Klick-Steuerung), sonst das nächste in Reichweite; quiet: Türgeräusch kam schon.
+// Räder (w.bikes) zählen mit: ein fahrendes wird gekapert (Fahrer runter, flieht), ein liegendes aufgehoben.
 function tryEnter(w, only = null, { quiet = false } = {}) {
   const p = w.player;
   let best = null, bd = PLAYER.enterDist;
-  for (const c of only ? [only] : w.cars) {
+  const bikes = only ? (w.bikes.includes(only) ? [only] : []) : w.bikes;
+  for (const c of only ? (w.cars.includes(only) ? [only] : []) : w.cars) {
     if (c.wrecked) continue;
     const d = Math.hypot(c.x - p.x, c.y - p.y);
     if (d < bd) { bd = d; best = c; }
   }
+  for (const b of bikes) {
+    if (b.state !== 'ride' && b.state !== 'lying') continue;
+    const d = Math.hypot(b.x - p.x, b.y - p.y);
+    if (d < Math.min(bd, BIKE_GRAB)) { bd = d; best = b; }
+  }
+  if (best && w.bikes.includes(best)) best = takeBike(w, best);
   if (!best) return false;
   if (best.driver === 'npc') {
     // Fahrer steigt aus und flieht.
@@ -429,7 +437,7 @@ function tryEnter(w, only = null, { quiet = false } = {}) {
   best.driver = 'player'; best.ai = null;
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
   p.inCar = best.id;
-  if (best.role !== 'player' && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id;
+  if (best.role !== 'player' && !isBikeKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id;
   if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
   return true;
 }
@@ -455,6 +463,25 @@ function tryExit(w) {
   w.player.x = spot.x; w.player.y = spot.y;
   w.events.push({ type: 'door', x: car.x, y: car.y });
   return true;
+}
+
+// Rad kapern: aus dem Radfahrer (bikes.js) wird ein Fahrzeug der Art 'bicycle'/'escooter' (fleet.js), das die
+// Spielfigur mit der Autophysik fährt; ein Fahrer wird heruntergezogen (stolpert nicht, flieht) – bei Tempo stürzt er.
+const BIKE_GRAB = 34; // px: so nah muss man an ein Rad heran (fahrende sind schnell weg)
+function takeBike(w, b) {
+  const kind = b.kind === 'scooter' ? 'escooter' : 'bicycle';
+  const car = createCar({ x: b.x, y: b.y, angle: b.angle, kind, color: '#1e272e', role: 'bike' });
+  car.seed = b.seed; car.lvl = b.lvl;
+  const v = b.state === 'ride' ? b.speed * 0.3 : 0; // wer runtergezogen wird, bremst ab
+  car.vx = Math.cos(b.angle) * v; car.vy = Math.sin(b.angle) * v;
+  if (b.state === 'ride') {
+    const ped = dismount(w, b, w.player.x, w.player.y, { fall: b.speed > 40 });
+    if (ped) { const off = sideSpot(car, 1, 10); ped.x = off.x; ped.y = off.y; if (ped.state !== 'down') scare(ped, w.player.x, w.player.y, 3.5); }
+    w.events.push({ type: 'carjack', x: b.x, y: b.y, bike: true });
+  }
+  w.bikes.splice(w.bikes.indexOf(b), 1);
+  w.cars.push(car);
+  return car;
 }
 
 // Fahrer steigt aus und flieht (wird danach ein normaler Passant).
@@ -517,10 +544,11 @@ function clickControl(w, input, dt) {
     return Object.assign(out, { aimWorld: o ? { x: o.x, y: o.y } : { x: c.x, y: c.y }, fire: true, firePressed: !!input.clickPressed || (p.cool ?? 0) <= 0 });
   }
   if (c.enter) {
-    const car = c.enter;
-    if (car.wrecked || !w.cars.includes(car) || car.id === p.inCar) { p.click = null; return input; }
+    const car = c.enter, bike = w.bikes.includes(car);
+    if (bike ? car.state !== 'ride' && car.state !== 'lying' : car.wrecked || !w.cars.includes(car) || car.id === p.inCar) { p.click = null; return input; }
     const dx = car.x - p.x, dy = car.y - p.y, d = Math.hypot(dx, dy);
-    if (d < PLAYER.enterDist - 2) {
+    if (bike && d < BIKE_GRAB - 4 && !c.approach) { p.click = null; tryEnter(w, car); return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false }); } // Rad: packen, aufsteigen
+    if (d < (bike ? BIKE_GRAB - 4 : PLAYER.enterDist - 2)) {
       if (c.approach) { p.click = null; p.angle = Math.atan2(dy, dx); return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false }); } // angekommen
       // an der Tür: kurz stehen bleiben (Tür auf), dann einsteigen
       if (c.doorT === undefined) { c.doorT = CLICK.door; p.angle = Math.atan2(dy, dx); w.events.push({ type: 'door', x: car.x, y: car.y }); }
@@ -528,6 +556,7 @@ function clickControl(w, input, dt) {
       return Object.assign(out, { moveX: 0, moveY: 0, fire: false, firePressed: false });
     }
     // Weg zum Auto (um Häuser herum), neu, wenn es weggefahren ist
+    if (bike && car.state === 'ride') return Object.assign(out, { moveX: dx / d, moveY: dy / d, fire: false, firePressed: false }); // fahrendem Rad direkt nach (sprinten hilft)
     if (!c.path || Math.hypot(car.x - c.tx, car.y - c.ty) > 30) { const wk = walk(car); c.path = wk?.path ?? null; c.i = 1; c.tx = car.x; c.ty = car.y; }
     let q = c.path?.[c.i];
     while (q && Math.hypot(q.x - p.x, q.y - p.y) < 5) q = c.path[++c.i];
@@ -535,7 +564,7 @@ function clickControl(w, input, dt) {
     return Object.assign(out, { moveX: (gx - p.x) / gd, moveY: (gy - p.y) / gd, fire: false, firePressed: false });
   }
   if (c.target) {
-    const o = c.target, alive = o.state !== 'dead' && !o.wrecked && w.peds.includes(o);
+    const o = c.target, alive = w.bikes.includes(o) ? o.state === 'ride' : o.state !== 'dead' && !o.wrecked && w.peds.includes(o); // Radfahrer: bis er vom Rad ist
     if (!alive) { p.click = null; return input; }
     const wp = WEAPONS[p.weapon ?? 0], dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy);
     const reach = wp.melee ? (wp.range ?? 30) + 6 : (wp.range ?? 400) * 0.85;
@@ -828,9 +857,7 @@ export function updateWorld(w, input, dt) {
     for (const c of w.cars) {
       if (Math.abs(c.x - b.x) > c.hw + 8 || Math.abs(c.y - b.y) > c.hw + 8 || speedOf(c) < 60) continue;
       if (!circleVsObb(b.x, b.y, BIKE.r, c)) continue;
-      b.state = 'lying'; b.t = 0; b.speed = 0;
-      const sp = nearestSpot(w.city, b.x, b.y);
-      if (sp) { const ped = createPed(w.city, sp, w.rng); Object.assign(ped, { x: b.x, y: b.y, shirt: riderShirt(b) }); knockDown(ped, c.x, c.y); w.peds.push(ped); }
+      dismount(w, b, c.x, c.y);
       w.events.push({ type: 'hit', x: b.x, y: b.y, strength: Math.min(1, speedOf(c) / 300), carId: c.id, player: c.id === w.player.inCar, bike: true, speed: speedOf(c) });
       break;
     }
@@ -897,7 +924,7 @@ export function updateCamera(w, dt) {
   let tx = p.x, ty = p.y, zoom = w.footZoom ?? FOOT_ZOOM;
   if (car) {
     tx = car.x + car.vx * 0.45; ty = car.y + car.vy * 0.45;
-    zoom = 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28;
+    zoom = isBikeKind(car.kind) ? (w.footZoom ?? FOOT_ZOOM) * 0.8 : 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28; // Rad: fast so nah wie zu Fuß
   }
   if (p.ride) { const ahead = p.ride.kind === 'driver' ? (p.ride.speed ?? 0) * 0.6 : 0; tx = p.x + Math.cos(p.angle) * ahead; ty = p.y + Math.sin(p.angle) * ahead; zoom = 1 - clamp((p.ride.speed ?? 0) / 330, 0, 1) * 0.28; }
   cam.x = damp(cam.x, tx, 5, dt);

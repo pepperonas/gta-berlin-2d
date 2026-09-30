@@ -8,7 +8,7 @@ import { laneOffsets } from './street.js';
 import { offsetPolyline, polylineLength, pointAlong } from './geom.js';
 import { signalState } from './signals.js';
 import { hash01, inBuilding, onRoad } from './map.js';
-import { walkable, sidewalkOffset, walkRange } from './pedestrians.js';
+import { walkable, sidewalkOffset, walkRange, createPed, nearestSpot, knockDown } from './pedestrians.js';
 
 export const BIKE = { r: 6, bike: [45, 62], scooter: [50, 70], accel: 55, brake: 160, look: 34, obey: 0.8, share: 0.15, scooterShare: 0.25 };
 let nextId = 1;
@@ -124,6 +124,19 @@ export function updateBike(b, world, dt) {
     b.s = 0;
   }
   place(city, b);
+}
+
+// Fahrer runter (Auto-Zusammenstoß, Schuss, Schlag): das Rad bleibt liegen, der Fahrer wird ein Passant, der gestürzt
+// am Boden liegt (fromX/fromY: woher der Stoß kam). Liefert den Fahrer (oder null, wenn kein Gehweg in der Nähe ist).
+export function dismount(w, b, fromX, fromY, { fall = true } = {}) {
+  b.state = 'lying'; b.t = 0; b.speed = 0; b.cross = null;
+  const sp = nearestSpot(w.city, b.x, b.y);
+  if (!sp) return null;
+  const ped = createPed(w.city, sp, w.rng);
+  Object.assign(ped, { x: b.x, y: b.y, shirt: riderShirt(b), lvl: b.lvl });
+  if (fall) knockDown(ped, fromX, fromY);
+  w.peds.push(ped);
+  return ped;
 }
 
 // Zufälliger Startplatz auf einer radtauglichen Spur im Ring minR…maxR

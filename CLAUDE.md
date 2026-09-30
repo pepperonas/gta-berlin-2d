@@ -146,6 +146,14 @@ change in `web/`.
   incidents (dead peds → ambulance, shots → police) with goal routing (`traffic.js goalField/setGoal`, `ai.urgent`
   runs reds). `bikes.js`: `w.bikes` on the lane graph (rightmost lane, offset to cycle lane/curb). `animals.js`:
   `w.animals` pigeons/ducks. All four only when `w.rhythm`. `ambience.js` is the pure sound mix for `audio.js`.
+- **Cyclists as targets and vehicles:** `combat.js castRay`/`meltargets`/`aimAssist`/`pickTarget` include riding
+  `w.bikes` (hit type `'bike'`); `hurtBike` → `bikes.js dismount` (bike `'lying'`, rider becomes a knocked-down ped that
+  takes the hit; event `bike-down`). `world.js tryEnter` also grabs bikes within `BIKE_GRAB` → `takeBike` turns the bike
+  into a car of kind `'bicycle'`/`'escooter'` (`fleet.js KINDS` with `bike: true`, `top` px/s, `accel`; `isBikeKind`),
+  removes it from `w.bikes`, pulls a rider off (`carjack` with `bike: true`). Such cars: drawn with `critters.js drawBike`
+  (state `'parked'` = no rider), no engine sound/muffle (`main.js onBike`, `ambience.js inCar`), camera near
+  (`updateCamera`), never `playerCarId`, no mission cargo (`mission.js veh` vs `car`). Diablo: click on a riding cyclist
+  = attack, double-click = hijack; lying bike like a car (approach/enter).
 - **Weather:** `weather.js` (pure: blocks per day from `seed`+`w.dayCount`, `weatherLight` adjusts `lightAt`, `stepWet`),
   world keeps `w.weather`/`w.wet` (only with `w.rhythm`, else clear; `w.forceWeather` / `?wetter=`); `wetfx.js` draws
   clouds, rain, wet roads + puddles (`e._puddles`), fog and neon signs; `render.js facadeLight` shades walls by sun.

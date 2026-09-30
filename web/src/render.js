@@ -6,6 +6,7 @@ import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawTree, shade, drawDog } from './assets.js';
 import { drawPerson } from './people.js';
 import { drawBike, drawBird, drawParkedScooter } from './critters.js';
+import { isBikeKind } from './fleet.js';
 import { parkedScooters, riderShirt } from './bikes.js';
 import { playerCar, speedOf } from './world.js';
 import { signalState } from './signals.js';
@@ -1412,6 +1413,12 @@ export class Renderer {
     const snow = world.snow ?? 0, wet = world.wet ?? 0;
     for (const c of world.cars) if (near(c.x, c.y)) add(c, c.y + 6, c.y + 6, () => {
       const sp = Math.hypot(c.vx, c.vy);
+      if (isBikeKind(c.kind)) { // gekapertes Rad: wie die Radfahrer gezeichnet, mit der Spielfigur oder abgestellt
+        c._pedal = (c._pedal ?? 0) + sp * 0.12 / 60;
+        const mine = c.id === world.player.inCar;
+        drawBike(ctx, { x: c.x, y: c.y, angle: c.angle, kind: c.kind === 'escooter' ? 'scooter' : 'bike', seed: c.seed ?? c.id, pedal: c._pedal, state: c.driver ? 'ride' : 'parked' }, mine ? '#ff7a1a' : '#555', L.sun, t);
+        return;
+      }
       if (sp > 120 && (wet > 0.3 || snow > 0.2)) drawSpray(ctx, c, sp, wet, snow);
       drawCar(ctx, c, t, L.sun);
       if (snow > 0.05) drawCarSnow(ctx, c, snow, sp);

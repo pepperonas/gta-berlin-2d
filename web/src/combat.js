@@ -6,6 +6,7 @@
 import { blocks } from './car.js';
 import { PED, CAR, PLAYER } from './config.js';
 import { wrapAngle } from './math.js';
+import { dismount, BIKE } from './bikes.js';
 
 // dmg je Treffer (bei der Schrotflinte je Schrotkugel); range in px (10 px = 1 m); cooldown s zwischen zwei Angriffen;
 // arc: Öffnungswinkel des Nahkampfbogens; spread: Streuung (rad, Standardabweichung) bzw. Fächer der Schrotflinte.
@@ -122,6 +123,11 @@ export function castRay(w, ox, oy, ang, range, shooter = null, lvl = shooter?.lv
     const t = rayObb(ox, oy, dx, dy, car);
     if (t < best) { best = t; hit = { type: 'car', obj: car }; }
   }
+  for (const b of w.bikes ?? []) { // Radfahrer (fahrend): Treffer holt ihn vom Rad
+    if (b.state !== 'ride' || (b.lvl ?? 0) !== (lvl ?? 0)) continue;
+    const t = rayCircle(ox, oy, dx, dy, b.x, b.y, BIKE.r + 2);
+    if (t < best) { best = t; hit = { type: 'bike', obj: b }; }
+  }
   return { t: best, x: ox + dx * best, y: oy + dy * best, hit };
 }
 
@@ -134,6 +140,11 @@ export function pickTarget(w, x, y) {
     if (ped.state === 'dead') continue;
     const d = Math.hypot(ped.x - x, ped.y - y);
     if (d < PED.radius + 4 && d < bd) { bd = d; best = { obj: ped, x: ped.x, y: ped.y }; }
+  }
+  for (const b of w.bikes ?? []) { // Rad mit Fahrer oder liegendes Rad
+    if (b.state !== 'ride' && b.state !== 'lying') continue;
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d < BIKE.r + 5 && d < bd) { bd = d; best = { obj: b, x: b.x, y: b.y }; }
   }
   if (best) return best;
   for (const car of w.cars) {
@@ -156,11 +167,16 @@ export function clickIntent(w, x, y, force = false, opts = {}) {
   const t = pickTarget(w, x, y);
   if (force) return { kind: 'force', obj: t?.obj ?? null };
   if (!t) return { kind: 'move', obj: null };
+  const p = w.player, near = (o) => Math.hypot(o.x - p.x, o.y - p.y) <= PLAYER.enterDist + CLICK.nearCar;
   if (w.cars.includes(t.obj)) {
-    const car = t.obj, p = w.player;
+    const car = t.obj;
     if (car.wrecked) return { kind: 'move', obj: null };
-    const near = Math.hypot(car.x - p.x, car.y - p.y) <= PLAYER.enterDist + CLICK.nearCar;
-    return { kind: near || opts.double ? 'enter' : 'approach', obj: car };
+    return { kind: near(car) || opts.double ? 'enter' : 'approach', obj: car };
+  }
+  if ((w.bikes ?? []).includes(t.obj)) { // Radfahrer: Klick greift an, Doppelklick kapert; liegendes Rad: aufsteigen
+    const b = t.obj;
+    if (b.state === 'ride') return { kind: opts.double ? 'enter' : 'attack', obj: b };
+    return { kind: near(b) || opts.double ? 'enter' : 'approach', obj: b };
   }
   return { kind: 'attack', obj: t.obj };
 }
@@ -186,6 +202,7 @@ export function aimAssist(w, p, ang, range, cone = ASSIST.cone) {
   };
   for (const ped of w.peds) if (ped.state !== 'dead') consider(ped, ped.x, ped.y);
   for (const car of w.cars) if (car.driver === 'npc' && !car.wrecked) consider(car, car.x, car.y);
+  for (const b of w.bikes ?? []) if (b.state === 'ride') consider(b, b.x, b.y);
   return best ? { ang: best.ang, target: best.obj } : { ang, target: null };
 }
 
@@ -199,6 +216,13 @@ export function meltargets(w, p, ang, wp) {
     if (d > 4 && Math.abs(wrapAngle(Math.atan2(dy, dx) - ang)) > wp.arc / 2) continue;
     out.push(ped);
   }
+  for (const b of w.bikes ?? []) {
+    if (b.state !== 'ride') continue;
+    const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
+    if (d > wp.range + BIKE.r + 6) continue;
+    if (d > 4 && Math.abs(wrapAngle(Math.atan2(dy, dx) - ang)) > wp.arc / 2) continue;
+    out.push(b);
+  }
   for (const car of w.cars) {
     if (car.id === w.player.inCar) continue;
     const tx = p.x + Math.cos(ang) * wp.range, ty = p.y + Math.sin(ang) * wp.range;
@@ -209,6 +233,15 @@ export function meltargets(w, p, ang, wp) {
 }
 
 // --- Wirkung -----------------------------------------------------------------------------------------------------
+
+// Radfahrer getroffen: er stürzt vom Rad (das liegen bleibt) und nimmt den Treffer als Person (kann daran sterben)
+export function hurtBike(w, b, dmg, fromX, fromY, melee = false, src = null) {
+  if (b.state !== 'ride') return null;
+  const ped = dismount(w, b, fromX, fromY);
+  w.events.push({ type: 'bike-down', x: b.x, y: b.y, player: !!src?.player });
+  if (ped) hurtPed(w, ped, dmg, fromX, fromY, melee, src);
+  return ped;
+}
 
 // src (optional): { weapon, player } – wer mit welcher Waffe, für die Statistik (kill-Ereignis)
 export function hurtPed(w, ped, dmg, fromX, fromY, melee = false, src = null) {
@@ -240,8 +273,10 @@ export function strike(w, p, wp, ang) {
   w.events.push({ type: 'swing', x: p.x, y: p.y, weapon: wp.id, hit: hits.length > 0 });
   const src = { weapon: wp.id, player: p === w.player };
   for (const t of hits) {
+    const isBike = (w.bikes ?? []).includes(t);
     w.events.push({ type: 'weapon-hit', weapon: wp.id, player: src.player, target: t.hw !== undefined ? 'car' : 'ped' });
     if (t.hw !== undefined) { w.events.push({ type: 'thud', x: t.x, y: t.y }); continue; } // Auto: nur ein Scheppern
+    if (isBike) { hurtBike(w, t, wp.dmg, p.x, p.y, true, src); continue; }
     hurtPed(w, t, wp.dmg, p.x, p.y, true, src);
   }
   return hits.length;
@@ -256,8 +291,9 @@ export function shoot(w, p, wp, ang, rng, spreadK = 1) {
     const a = ang + off, r = castRay(w, p.x, p.y, a, wp.range, null, p.lvl); // ab Körpermitte: trifft auch aus nächster Nähe
     traces.push([r.x, r.y]);
     const src = { weapon: wp.id, player: p === w.player };
-    if (r.hit?.type === 'ped' || r.hit?.type === 'car') w.events.push({ type: 'weapon-hit', weapon: wp.id, player: src.player, target: r.hit.type });
+    if (r.hit?.type === 'ped' || r.hit?.type === 'car' || r.hit?.type === 'bike') w.events.push({ type: 'weapon-hit', weapon: wp.id, player: src.player, target: r.hit.type === 'car' ? 'car' : 'ped' });
     if (r.hit?.type === 'ped') hurtPed(w, r.hit.obj, wp.dmg, p.x, p.y, false, src);
+    else if (r.hit?.type === 'bike') hurtBike(w, r.hit.obj, wp.dmg, p.x, p.y, false, src);
     else if (r.hit?.type === 'car') hurtCar(w, r.hit.obj, wp.dmg, p.x, p.y, src);
     else if (r.hit?.type === 'wall') w.events.push({ type: 'impact', x: r.x, y: r.y });
   }
