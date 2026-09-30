@@ -1369,8 +1369,13 @@ export class Renderer {
     if (!segs.length) return;
     const ctx = this.ctx, unit = world.city.scale ?? 10, B = 4, paths = [];
     for (const q of segs) { const k = Math.min(B - 1, Math.floor(q.a / 0.55 * B)); (paths[k] ??= new Path2D()); paths[k].moveTo(q.ax, q.ay); paths[k].lineTo(q.bx, q.by); }
-    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 0.32 * unit;
-    for (let k = 0; k < B; k++) if (paths[k]) { ctx.strokeStyle = `rgba(88,96,108,${((k + 0.5) / B * 0.55).toFixed(3)})`; ctx.stroke(paths[k]); }
+    // festgefahrene Rille (0,26 m Reifenbreite): kühles Grau, darin ein dunklerer Kern (Profil drückt den Schnee am tiefsten)
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let k = 0; k < B; k++) if (paths[k]) {
+      const a = (k + 0.5) / B;
+      ctx.lineWidth = 0.26 * unit; ctx.strokeStyle = `rgba(96,106,122,${(a * 0.5).toFixed(3)})`; ctx.stroke(paths[k]);
+      ctx.lineWidth = 0.12 * unit; ctx.strokeStyle = `rgba(62,70,84,${(a * 0.45).toFixed(3)})`; ctx.stroke(paths[k]);
+    }
     ctx.restore();
   }
 

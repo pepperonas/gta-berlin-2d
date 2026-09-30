@@ -32,7 +32,6 @@ import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
 import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
-import { specLine } from './carmodels.js';
 import { entranceNear } from './station.js';
 import { buildGrid, near } from './grid.js';
 import { stationsNear, stationById, keepInside, stairAt, arrivalAt, boardable, toLocal, toWorld, STATION, stationName } from './station.js';
@@ -48,7 +47,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
     mission: createMission(),
     money: 0, completed: 0, bestTime: null,
     camera: { x: 0, y: 0, zoom: 1 },
-    prompt: null, notice: null,
+    prompt: null, notice: null, vehInfo: null,
   };
 
   initCombat(w.player);
@@ -443,7 +442,7 @@ function tryEnter(w, only = null, { quiet = false } = {}) {
   best.driver = 'player'; best.ai = null;
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
   best.dyn = null; best.fallen = false; // Fahrdynamik beginnt mit geradem Lenkrad; ein umgefallenes Zweirad wird aufgerichtet
-  if (!isBikeKind(best.kind) && !quiet) w.notice = { text: specLine(best), t: 3 }; // „Sportwagen · Mittelmotor · Heckantrieb · 320 kW“
+  if (!isBikeKind(best.kind) && !quiet) w.vehInfo = { carId: best.id, t: 0 }; // HUD blendet Name und Technik ein (wie GTA: ohne Kasten)
   p.inCar = best.id;
   if (best.role !== 'player' && !isOpenKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id; // Zweiräder nie
   if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
@@ -459,6 +458,9 @@ function sideSpot(car, side, extra) {
 // Raster für Nachbarschaftsfragen (grid.js): Zelle 128 px; ein Passant kann nur Autos berühren, deren Mitte näher als
 // halbe Länge + halbe Breite + Radius liegt – beim Bus (12 m) ≈ 80 px
 const GRID_CELL = 128, GRID_REACH = 90;
+
+// Einblendung von Name und Technik nach dem Einsteigen (Sekunden, HUD blendet aus)
+export const VEH_INFO_S = 4.5;
 
 // Abwurf vom Zweirad: die Maschine fällt um und rutscht aus, der Fahrer landet daneben, benommen und verletzt
 export const MOTO = { throwAt: 0.25, stun: 1.2, hurt: [8, 45] };
@@ -829,6 +831,7 @@ export function updateWorld(w, input, dt) {
   w.temp = w.forceTemp ?? temperatureAt(w.seed, w.dayCount, w.clock, w.forceWeather); // °C (Konsole: temp)
   w.ice = stepIce(w.ice ?? 0, w.wet, w.temp, dt); // überfrierende Nässe
   if (w.notice && (w.notice.t -= dt) <= 0) w.notice = null;
+  if (w.vehInfo && (w.vehInfo.t += dt) > VEH_INFO_S) w.vehInfo = null;
   const m = w.mission;
 
   // Briefing/Ergebnis frieren die Welt ein; nur die Mission reagiert auf Eingaben.

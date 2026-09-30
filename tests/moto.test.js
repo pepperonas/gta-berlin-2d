@@ -39,7 +39,7 @@ test('Motorrad: Wheelie begrenzt den Anzug, Stoppie die Bremse – es bremst lä
   assert.ok(Math.abs(kmh(r) - SPECS.scooter.vmax) < 6, `Roller ${kmh(r).toFixed(0)} km/h`);
   const k = run(veh('motorcycle', { v0: 60 }), 1.2, { steer: 0.6, throttle: 0.3 });
   assert.ok(Math.abs(k.dyn.lean) > 0.3, `legt sich in die Kurve (${(k.dyn.lean * 57.3).toFixed(0)}°)`);
-  assert.equal(specLine(veh('motorcycle')), 'Motorrad · Vierzylinder · Kette · 110 kW');
+  assert.equal(specLine(veh('motorcycle')), 'Motorrad · Vierzylinder · Kette · 150 PS');
 });
 
 test('Neue Pkw: Oldtimer bremst schlechter, Muscle-Car ohne Fahrhilfen dreht sich unter Gas, Pick-up hat leere Hinterachse', () => {

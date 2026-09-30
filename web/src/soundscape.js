@@ -39,6 +39,25 @@ export const MODEL_ENGINES = {
   pickup: { idle: 700, red: 4500, cyl: 4, gears: [17, 29, 43, 57, 75, 111], diesel: true },
   kleinbus: { idle: 850, red: 4500, cyl: 4, gears: [14, 26, 42, 71], diesel: false },               // luftgekühlter Boxer
   rallye: { idle: 900, red: 7000, cyl: 3, gears: [13, 22, 32, 43, 56, 92], diesel: false },         // Dreizylinder-Turbo
+  supersport: { idle: 1000, red: 8500, cyl: 10, gears: [18, 24, 33, 45, 62, 85, 115], diesel: false },
+  gtcoupe: { idle: 800, red: 7000, cyl: 8, gears: [21, 29, 39, 54, 73, 100, 137], diesel: false },
+  leichtbau: { idle: 900, red: 6800, cyl: 4, gears: [17, 23, 32, 44, 59, 81, 111], diesel: false },
+  elektrosport: { idle: 0, red: 16000, cyl: 0, gears: [45], diesel: false, electric: true },
+  sprinter: { idle: 700, red: 4200, cyl: 4, gears: [18, 24, 33, 45, 62, 84, 115], diesel: true },
+  hochdach: { idle: 750, red: 4500, cyl: 4, gears: [22, 31, 43, 61, 86, 121], diesel: true },
+  powerkombi: { idle: 800, red: 6800, cyl: 8, gears: [19, 25, 33, 43, 56, 73, 95, 124], diesel: false },
+  familienkombi: { idle: 750, red: 4600, cyl: 4, gears: [23, 31, 42, 58, 79, 108, 148], diesel: true },
+  business: { idle: 700, red: 6800, cyl: 6, gears: [17, 22, 29, 38, 50, 65, 85, 111], diesel: false },
+  sportlimo: { idle: 850, red: 7200, cyl: 6, gears: [19, 26, 35, 48, 65, 89, 122], diesel: false },
+  luxus: { idle: 650, red: 6200, cyl: 8, gears: [19, 24, 32, 42, 55, 71, 93, 122], diesel: false },
+  coupe: { idle: 850, red: 7200, cyl: 6, gears: [18, 25, 34, 47, 64, 87, 120], diesel: false },
+  leichtcoupe: { idle: 850, red: 7500, cyl: 4, gears: [17, 23, 33, 46, 65, 91], diesel: false },
+  gklasse: { idle: 650, red: 6200, cyl: 8, gears: [16, 21, 27, 35, 46, 60, 78, 102], diesel: false },
+  defender: { idle: 700, red: 4800, cyl: 6, gears: [18, 24, 32, 41, 54, 70, 92, 120], diesel: true },
+  niva: { idle: 800, red: 5400, cyl: 4, gears: [17, 24, 36, 54, 79], diesel: false },
+  kompaktsuv: { idle: 800, red: 6000, cyl: 4, gears: [15, 21, 29, 39, 54, 74, 101], diesel: false },
+  sportsuv: { idle: 750, red: 6700, cyl: 6, gears: [17, 22, 29, 38, 50, 65, 85, 110], diesel: false },
+  grosssuv: { idle: 700, red: 6500, cyl: 6, gears: [17, 23, 30, 39, 51, 66, 86, 113], diesel: false },
 };
 export const engineOf = (kind) => ENGINES[kind] ?? ENGINES.car;
 // Motor eines Autos: im selbst gefahrenen Pkw (mit Fahrdynamik) oder fest gewählten Modell nach Modell, sonst nach Art

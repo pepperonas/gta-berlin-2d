@@ -2,18 +2,24 @@
 // mit Zeitstempel. Sie verblassen mit der Zeit und schneller, solange es schneit (Neuschnee deckt zu); ohne Schneedecke
 // sind sie unsichtbar. Aufgezeichnet wird mit der Weltzeit, damit Pause und Zeitlupe stimmen – die Simulation bleibt
 // davon unberührt.
-export const TRAILS = { max: 6000, step: 6, inset: 2, rear: 0.62, jump: 150, life: 240, minDepth: 0.05 };
+// Radstellung wie gezeichnet (vehicles.js drawCarBody): rear/front = Achsabstand von der Mitte als Anteil der halben Länge (car.hw), inset = Rad innen von der
+// Flanke (car.hh = halbe Breite). Ein Auto zieht vier Spuren (geradeaus decken sich vorn und hinten, in Kurven und beim
+// Driften laufen sie auseinander), ein Zweirad eine.
+export const TRAILS = { max: 12000, step: 6, inset: 1.2, rear: 0.57, front: 0.62, jump: 150, life: 240, minDepth: 0.05 };
 
 export function createTrails() {
   const M = TRAILS.max;
   return { ax: new Float32Array(M), ay: new Float32Array(M), bx: new Float32Array(M), by: new Float32Array(M), t: new Float64Array(M), n: 0, head: 0, last: new Map(), gen: 0 };
 }
 
-// Hinterräder links/rechts: [lx, ly, rx, ry]
-function wheels(c) {
-  const ca = Math.cos(c.angle), sa = Math.sin(c.angle), bx = c.x - ca * c.hh * TRAILS.rear, by = c.y - sa * c.hh * TRAILS.rear;
-  const off = Math.max(1, c.hw - TRAILS.inset);
-  return [bx - sa * off, by + ca * off, bx + sa * off, by - ca * off];
+const TWO = new Set(['bicycle', 'escooter', 'motorcycle', 'scooter']);
+// Aufstandspunkte der Räder als [x0, y0, x1, y1, …] – car.hw ist die halbe Länge, car.hh die halbe Breite (car.js)
+export function wheels(c) {
+  const ca = Math.cos(c.angle), sa = Math.sin(c.angle), r = c.hw * TRAILS.rear, f = c.hw * TRAILS.front;
+  if (TWO.has(c.kind)) return [c.x - ca * r, c.y - sa * r, c.x + ca * f, c.y + sa * f];
+  const off = Math.max(1, c.hh - TRAILS.inset), ox = -sa * off, oy = ca * off;
+  const rx = c.x - ca * r, ry = c.y - sa * r, fx = c.x + ca * f, fy = c.y + sa * f;
+  return [rx + ox, ry + oy, rx - ox, ry - oy, fx + ox, fy + oy, fx - ox, fy - oy];
 }
 
 function push(tr, ax, ay, bx, by, t) {
@@ -22,18 +28,21 @@ function push(tr, ax, ay, bx, by, t) {
   tr.head = (i + 1) % TRAILS.max; tr.n = Math.min(TRAILS.max, tr.n + 1);
 }
 
-// Einmal je Bild: neue Stücke für alle Autos, die seit dem letzten Stück weit genug gefahren sind.
+// Einmal je Bild: neue Stücke für alle Autos am Boden (Ebene 0 – Brücken liegen darüber), die seit dem letzten Stück
+// weit genug gefahren sind. Liegende Zweiräder und Wracks ohne Fahrt ziehen nichts (Stillstand).
 export function recordTrails(tr, cars, t, depth) {
   const gen = ++tr.gen;
   if (!(depth >= TRAILS.minDepth)) { tr.last.clear(); return; }
   for (const c of cars) {
     if (c.hw === undefined || c.hh === undefined) continue;
+    if ((c.lvl ?? 0) !== 0) { tr.last.delete(c.id); continue; }
     const w = wheels(c), p = tr.last.get(c.id);
-    if (!p) { tr.last.set(c.id, { w, gen }); continue; }
+    if (!p || p.w.length !== w.length) { tr.last.set(c.id, { w, gen }); continue; }
     p.gen = gen;
-    const d = Math.hypot(w[0] - p.w[0], w[1] - p.w[1]);
+    let d = 0;
+    for (let k = 0; k < w.length; k += 2) d = Math.max(d, Math.hypot(w[k] - p.w[k], w[k + 1] - p.w[k + 1]));
     if (d < TRAILS.step) continue;
-    if (d < TRAILS.jump) { push(tr, p.w[0], p.w[1], w[0], w[1], t); push(tr, p.w[2], p.w[3], w[2], w[3], t); }
+    if (d < TRAILS.jump) for (let k = 0; k < w.length; k += 2) push(tr, p.w[k], p.w[k + 1], w[k], w[k + 1], t);
     p.w = w;
   }
   if (gen % 60 === 0) for (const [id, p] of tr.last) if (p.gen !== gen) tr.last.delete(id); // verschwundene Autos

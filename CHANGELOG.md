@@ -4,6 +4,30 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.45.0] – 2026-09-30
+
+### Neu
+- **19 neue Pkw nach echten Vorbildern** (Namen erfunden, keine Marken), jeder mit eigener Technik, eigenem Umriss und
+  Motorklang: Supersportwagen (V10-Mittelmotor, Allrad, 640 PS), GT-Coupé mit Front-Mittelmotor, leichter
+  Mittelmotor-Zweisitzer, Elektro-Sportlimousine (760 PS), Sportcoupé, leichtes Drift-Coupé, Business-, Sport- und
+  Luxuslimousine, Familien- und Power-Kombi (600 PS), Großraumtransporter, Hochdachkombi, kantiger V8-Geländewagen,
+  Expeditions-Geländewagen, kleiner Geländewagen ohne Fahrhilfen, Kompakt-, Sport- und großes SUV. Jetzt 37 Pkw-Modelle.
+- **Fahrzeugnamen:** Jedes Modell hat einen Namen („Oberbaum Furia“, „Spree Ronda“, „Tegel Blitz 1000“ …). Beim
+  Einsteigen blendet das HUD Name und Technik ein – ohne Kasten, Schrift mit Kontur, blendet nach ≈ 4 s aus.
+- **Drehzahlmesser:** runder Tacho mit Drehzahlbogen (Striche je 1000 U/min, roter Bereich), km/h in der Mitte, Gang
+  (R rückwärts, D beim Elektroauto), Schaden als dünner Bogen.
+
+### Geändert
+- **HUD neu gestaltet:** kleiner und ohne dunkle Kästen – Ort, Geld, Uhr, Auftrag, Waffe und Hinweise als Schrift mit
+  schwarzer Kontur (schmale Schrift: Bahnschrift auf Xbox/Windows, DIN auf dem Mac), Minikarte kleiner mit Lebensleiste
+  darunter, Waffenanzeige mit Symbol und Magazin, Hinweise auf weichem Schleier.
+- Leistung in **PS** statt kW, Antrieb als **FWD/RWD/AWD**.
+
+### Behoben
+- **Reifenspuren im Schnee:** lagen eine Wagenlänge auseinander vor und hinter dem Auto (halbe Länge und halbe Breite
+  vertauscht). Jetzt vier Spuren genau unter den Rädern – in Kurven und beim Driften laufen Vorder- und Hinterräder
+  auseinander –, Zweiräder ziehen eine Spur, auf Brücken keine Spur am Boden; die Rille hat einen dunkleren Kern.
+
 ## [0.44.0] – 2026-09-30
 
 ### Geändert

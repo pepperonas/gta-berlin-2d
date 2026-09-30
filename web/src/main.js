@@ -20,7 +20,7 @@ import { prepareTransit } from './transit.js';
 import { loadSprites } from './assets.js';
 import { idleInput } from './idle.js';
 import { cursorCss, cursorKind } from './cursor.js';
-import { stepEngine, tireState, carVoices, stepsBetween, footstepKind } from './soundscape.js';
+import { stepEngine, engineFor, tireState, carVoices, stepsBetween, footstepKind } from './soundscape.js';
 import { parseBarFeed, attachBars, NIGHT } from './nightlife.js';
 import { geoToPx } from './projection.js';
 
@@ -472,6 +472,8 @@ function draw() {
   if (car && car.id !== engCar) { engSt = {}; engCar = car.id; }
   if (car) stepEngine(engSt, car, fdt);
   const onBike = !!car && isBikeKind(car.kind); // Rad/E-Roller: kein Motor, keine Karosserie – nur Reifen und Fahrtwind
+  // Drehzahlmesser im HUD: Stand des Motorklangs (rpm, Gang), Abregeldrehzahl des Modells; R beim Rückwärtsfahren
+  game.engine = car && !onBike ? { rpm: engSt.rpm ?? 0, gear: (car.vx * Math.cos(car.angle) + car.vy * Math.sin(car.angle)) < -5 ? 'R' : engSt.gear ?? 1, red: engineFor(car).red, electric: !!engSt.electric } : null;
   sound.setVehicle(!!car && !car.wrecked, car && !onBike ? engSt : null, car ? tireState(game.world, car) : null, { inCar: !!car && !isOpenKind(car.kind), rain: game.world?.weather?.rain ?? 0 });
   // Schritte zu Fuß (Schnee knirscht, Nässe platscht)
   const pl = game.world?.player;

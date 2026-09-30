@@ -139,7 +139,7 @@ test('Nur das gefahrene Auto: Verkehr bleibt bei der Arcade-Physik, alles determ
     assert.ok(['fwd', 'rwd', 'awd'].includes(s.drive) && s.front > 0.3 && s.front < 0.7 && s.h > 0.3 && s.wb <= 4.2, m);
   }
   const c = createCar({ x: 0, y: 0 }); c.model = 'sportwagen';
-  assert.equal(specLine(c), 'Sportwagen · Mittelmotor · Heckantrieb · 320 kW');
+  assert.equal(specLine(c), 'Sportwagen · Mittelmotor · RWD · 435 PS');
   assert.equal(carModel(createCar({ x: 0, y: 0, kind: 'bus' })), 'bus');
   for (const k of Object.keys(SPECS)) if (k.startsWith('test')) delete SPECS[k];
 });

@@ -123,7 +123,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   berechnet der Karten-Build aus der kürzesten Route (derzeit 8,7 km → 930 s). Scheitern bei Zeitablauf oder wenn das
   Auto mit der Ware zum Wrack wird. Lohn mit Zeitbonus und Schadensabzug, Bestzeit. Die Orte stehen in
   [`data/places.json`](data/places.json) und lassen sich austauschen.
-- HUD: echter Straßenname (an Kreuzungen „A / B“, sonst Kiez oder Bezirk), Geld, Auftrag und Timer, Minikarte, Richtungspfeil mit Entfernung, Tempo und Fahrzeugzustand,
+- HUD (schlank, ohne Kästen, Schrift mit Kontur): echter Straßenname (an Kreuzungen „A / B“, sonst Kiez oder Bezirk), Geld, Auftrag und Timer, Minikarte mit Lebensleiste, Richtungspfeil mit Entfernung, runder Tacho mit Drehzahl und Gang, Fahrzeugname beim Einsteigen,
   Stadtplan von ganz Berlin auf der Ansicht-Taste (Mausrad zoomt bis auf Straßenebene, Ziehen verschiebt). Die
   Beschriftung folgt dem Maßstab wie bei kiez-finder: ganz Berlin mit den 12 Bezirken, näher die Ortsteile (Tegel,
   Prenzlauer Berg …), dann die Kiez-Namen aus OSM (Flughafenkiez, Reuterkiez … – 568 Kieze) und Bahnhöfe, ab etwa 3 m
@@ -399,12 +399,22 @@ dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). 
 
 ## Fahrzeuge und Fahrgefühl
 
-18 Pkw-Modelle fahren durch Berlin, jedes mit eigener Technik: Zweitakter (Front, 19 kW), Kleinwagen, Kompakt und Hot
-Hatch (Frontantrieb), Limousine, Taxi, Streifenwagen, Roadster, Muscle-Car, Oldtimer und Pick-up (Heckantrieb), Kombi,
-Elektro-SUV, Geländewagen und Rallye-Kompakt (Allrad), Transporter, Kleinbus mit Heckmotor, Sportwagen mit Mittelmotor
-und Heckmotor-Coupé. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderrad, zu hartes Bremsen das Hinterrad
-(deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab. Beim Einsteigen zeigt eine Zeile Modell, Motorlage,
-Antrieb und Leistung; der Tacho nennt Modell und Antrieb. `auto sportwagen` (oder ein anderes Modell, `auto motorrad`, `auto roller`) stellt eines neben
+37 Pkw-Modelle fahren durch Berlin, jedes mit eigenem (erfundenem) Namen und eigener Technik – die neueren nach echten
+Vorbildern: Supersportwagen mit V10-Mittelmotor und Allrad („Oberbaum Tempesta“, 640 PS), GT-Coupé mit Front-Mittelmotor
+(„Tempelhof GT 40“), leichter Mittelmotor-Zweisitzer („Adlershof Flèche“), Elektro-Sportlimousine („Voltwerk Blitz GT“,
+760 PS), Sportwagen mit Mittelmotor („Oberbaum Furia“) und Heckmotor-Coupé („Wannsee Boxer 6“); Sportcoupé („Wannsee Coupé
+240“) und leichtes Drift-Coupé („Lausitz Hachi“); Limousinen vom Taxi über die Businesslimousine („Teltower T5“) und
+Sportlimousine („Teltower T3 RS“) bis zur Luxuslimousine („Grunewald Senator“); Kombis („Märker Allwetter“, „Teltower T4
+Tourer“, Power-Kombi „Märker RS Avant“ mit 600 PS); Transporter, Großraumtransporter („Spree Großraum 316“),
+Hochdachkombi und Kleinbus mit Heckmotor; Geländewagen („Grunewald Keiler“, kantiger „Grunewald Kommandant“, „Grunewald
+Förster 110“, kleiner „Lausitz Taiga“ ohne Fahrhilfen) und SUVs („Spree Tiga“, „Oberbaum Cayo“, „Teltower TX7“,
+„Voltwerk E-Terra“); dazu Kleinwagen, Kompakt, Hot Hatch, Zweitakter, Roadster, Muscle-Car, Oldtimer, Pick-up und
+Rallye-Kompakt. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderrad, zu hartes Bremsen das Hinterrad
+(deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab.
+Beim Einsteigen blendet das HUD Name und Technik ein (ohne Kasten, Schrift mit Kontur), z. B. „Oberbaum Furia –
+Sportwagen · Mittelmotor · RWD · 435 PS“ (Antrieb FWD/RWD/AWD, Leistung in PS). Der Tacho unten rechts zeigt km/h,
+die Drehzahl als Bogen mit rotem Bereich, den Gang (R rückwärts, D beim Elektroauto), Antrieb und ESP-Leuchte.
+`auto sportwagen` (oder ein anderes Modell, `auto motorrad`, `auto roller`) stellt eines neben
 dich.
 
 Das selbst gefahrene Auto fährt mit echter Fahrdynamik (Einspurmodell mit Reifenkräften und Lastverschiebung): Mit
@@ -455,7 +465,7 @@ etwa 70 km/h durch eine der sichtbaren **Pfützen** fährt (gut die Hälfte lieg
 Spritzwasser). **Sturmböen** versetzen Autos quer, auf Brücken stärker, leichte Autos mehr als Transporter. Der
 **KI-Verkehr** fährt bei schlechtem Wetter langsamer, bremst sanfter und hält mehr Abstand. Als **Zugführer** bremst
 man auf nassen oder vereisten Schienen schlechter (im Tunnel ist es trocken), die Zwangsbremsung hält trotzdem vor
-jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee, Sturm, Nässe. Im **Schnee** hinterlassen alle Autos Reifenspuren; sie verblassen nach einigen Minuten, bei Schneefall schneller.
+jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee, Sturm, Nässe. Im **Schnee** hinterlassen alle Autos Reifenspuren – vier Räder genau unter der Karosserie (in Kurven und beim Driften laufen Vorder- und Hinterräder auseinander), Zweiräder eine Spur; sie verblassen nach einigen Minuten, bei Schneefall schneller.
 
 ## Klang und Nachtleben
 
@@ -532,7 +542,12 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 450 automatischen Tests grün, darunter:
+- Alle 451 automatischen Tests grün, darunter:
+  - 0.45.0: alle 37 Pkw erreichen ihr Höchsttempo (± 6 %) und bremsen aus 100 km/h in 18–36 m; alle Modelle kommen im
+    Verkehr vor; Schneespuren: Räder eines echten Autos liegen unter der Karosserie an den Flanken (vier Spuren, Spurweite
+    = Wagenbreite), Zweirad eine Spur, Drift trennt Vorder- und Hinterradspuren, auf der Brücke keine Spur am Boden;
+    HUD in 11 Fenstergrößen (Tacho, Minikarte mit Lebensleiste, Auftrag, Waffe) im Bild und ohne Überlappung.
+    Im Browser: Fahrzeug-Einblendung, Drehzahlbogen bei Fahrt, Spuren im Schnee unter den Rädern, Umrisse aller Modelle.
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,

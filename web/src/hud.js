@@ -3,8 +3,7 @@
 // wächst die virtuelle Fläche mit (vw ≥ 1280, vh ≥ 720). Das Spiel-HUD hängt an den Fensterrändern (5 % Title-Safe-Rand,
 // TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
 import { makeCanvas } from './lighting.js';
-import { specOf } from './carmodels.js';
-const DRIVE_SHORT = { fwd: 'FRONT', rwd: 'HECK', awd: 'ALLRAD' };
+import { specOf, specLine, vehicleName, DRIVE_LABEL } from './carmodels.js';
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { stationById, boardable, entranceNear, STATION } from './station.js';
 import { locationName, nearestPoi } from './map.js';
@@ -22,7 +21,7 @@ import { pathOf, ringPath, POI_STYLE } from './render.js';
 import { AREA_KIND } from './citycodes.js';
 import { VERSION } from './version.js';
 import { missionObjective, BRIEFING } from './mission.js';
-import { playerCar, speedOf } from './world.js';
+import { playerCar, speedOf, VEH_INFO_S } from './world.js';
 import { vehicleState } from './ride.js';
 import { roadWarning } from './traction.js';
 
@@ -30,6 +29,8 @@ const MINI_AREA = { [AREA_KIND.rail]: '#4a4640', [AREA_KIND.allotments]: '#35602
 const POI_LABEL = { ubahn: 'U-Bahnhof', sbahn: 'S-Bahnhof', bahn: 'Bahnhof', bus: 'Bushaltestelle', mall: 'Einkaufszentrum',
   supermarket: 'Markt', shop: 'Laden', food: 'Essen', drink: 'Bar', cafe: 'Café', service: 'Service', culture: 'Kultur', hotel: 'Hotel' };
 const FONT = 'Segoe UI, system-ui, -apple-system, sans-serif';
+// Spiel-HUD: schmale technische Schrift (Xbox/Windows: Bahnschrift, Mac: DIN Alternate), sonst die Systemschrift
+const HUD_FONT = `Bahnschrift, 'DIN Alternate', 'Roboto Condensed', 'Arial Narrow', ${FONT}`;
 const YELLOW = '#ffd33d';
 const GLYPH = { A: '#3fb54a', B: '#e2383f', X: '#2f7fe0', Y: '#f2b705' };
 // Grundformat 16:9 in virtuellen HUD-Punkten
@@ -88,6 +89,51 @@ export class Hud {
     return c.measureText(str).width;
   }
 
+  // Spiel-HUD-Schrift ohne Kasten: schwarze, runde Kontur unter der Füllung – auf jedem Hintergrund lesbar
+  otext(str, x, y, { size = 18, color = '#fff', align = 'left', weight = 700, base = 'alphabetic', italic = false, spacing = 0, outline = 0.85 } = {}) {
+    const c = this.ctx;
+    c.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${HUD_FONT}`; c.textAlign = align; c.textBaseline = base;
+    const sp = spacing && 'letterSpacing' in c;
+    if (sp) c.letterSpacing = `${spacing}px`;
+    c.lineJoin = 'round'; c.miterLimit = 2;
+    c.lineWidth = Math.max(2.5, size * 0.2); c.strokeStyle = `rgba(0,0,0,${outline})`; c.strokeText(str, x, y);
+    c.fillStyle = color; c.fillText(str, x, y);
+    const w = c.measureText(str).width;
+    if (sp) c.letterSpacing = '0px';
+    return w;
+  }
+
+  // weicher dunkler Schleier hinter Schrift (Verlauf zu allen Seiten, keine Kante) – nur wo Text auf hellem Grund steht
+  haze(x, y, w, h, a = 0.4) {
+    const c = this.ctx, g = c.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.18, `rgba(0,0,0,${a})`); g.addColorStop(0.82, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(x, y, w, h);
+  }
+
+  // Waffensymbol mit Kontur als zwischengespeichertes Bild (je Waffe und Maßstab); ohne Zeichenfläche direkt
+  weaponIcon(id, x, y, size) {
+    const c = this.ctx, s = this.s ?? 1, key = `${id}|${size}|${s}`;
+    this._icons ??= new Map();
+    let img = this._icons.get(key);
+    if (img === undefined) {
+      img = null;
+      try {
+        const N = Math.ceil(size * 1.3 * s), mk = () => { const cv = makeCanvas(N, N); return [cv, cv.getContext('2d')]; };
+        const [a, ga] = mk(), [b, gb] = mk(), [o, go] = mk();
+        if (ga?.drawImage) {
+          drawWeaponIcon(ga, id, N / 2, N / 2, size * s, '#fff');
+          gb.drawImage(a, 0, 0); gb.globalCompositeOperation = 'source-in'; gb.fillStyle = 'rgba(0,0,0,0.85)'; gb.fillRect(0, 0, N, N);
+          const d = Math.max(1.5, 2 * s);
+          for (let i = 0; i < 8; i++) go.drawImage(b, Math.cos(i * Math.PI / 4) * d, Math.sin(i * Math.PI / 4) * d);
+          go.drawImage(a, 0, 0);
+          img = { canvas: o, N };
+        }
+      } catch { img = null; }
+      this._icons.set(key, img);
+    }
+    if (img) { const h = img.N / s; c.drawImage(img.canvas, x - h / 2, y - h / 2, h, h); } else drawWeaponIcon(c, id, x, y, size, '#fff');
+  }
+
   panel(x, y, w, h, alpha = 0.62) {
     const c = this.ctx;
     c.fillStyle = `rgba(12,14,20,${alpha})`;
@@ -118,15 +164,15 @@ export class Hud {
   prompt(str, cx, y) {
     const mt = /^([ABXY]) ?(gedrückt halten)?: ?(.*)$/.exec(str);
     const c = this.ctx;
-    c.font = `600 22px ${FONT}`;
+    c.font = `700 19px ${HUD_FONT}`;
     const body = mt ? (mt[2] ? `halten: ${mt[3]}` : mt[3]) : str;
     const tw = c.measureText(body).width;
-    const gw = mt ? (this.device === 'keyboard' ? 44 : 30) : 0;
-    const w = tw + gw + 36;
-    this.panel(cx - w / 2, y - 22, w, 44, 0.72);
-    let x = cx - w / 2 + 18;
-    if (mt) { this.glyph(mt[1], x + gw / 2 - 2, y); x += gw + 6; }
-    this.text(body, x, y + 8, { size: 22 });
+    const gw = mt ? (this.device === 'keyboard' ? 40 : 26) : 0;
+    const w = tw + gw + (mt ? 10 : 0);
+    this.haze(cx - w / 2 - 70, y - 19, w + 140, 38, 0.42);
+    let x = cx - w / 2;
+    if (mt) { this.glyph(mt[1], x + gw / 2, y, 11); x += gw + 10; }
+    this.otext(body, x, y + 7, { size: 19 });
   }
 
   // Stadtplan (ganz Berlin) aus overview.json: je Schicht ein Pfad in Weltkoordinaten, einmal gebaut.
@@ -322,36 +368,116 @@ export class Hud {
     this.layout = { ...(this.layout ?? {}), wheel: { cx, cy, R, r0, hover } };
   }
 
+  // Unten rechts zu Fuß (ohne Kasten): Waffenname, Magazin, Symbol mit Kontur, Waffenleiste
   drawWeaponPanel(p) {
     const c = this.ctx, m = this.m;
-    const w = 250, h = 104, x = this.vw - m.x - w, y = this.vh - m.y - h;
+    const w = 220, h = 70, x = this.vw - m.x - w, y = this.vh - m.y - h;
     this.layout = { ...(this.layout ?? {}), weapon: { x, y, w, h } };
-    const wp = WEAPONS[p.weapon ?? 0];
-    this.panel(x, y, w, h);
-    this.text(wp.name.toUpperCase(), x + 18, y + 28, { size: 16, weight: 800, color: YELLOW });
-    drawWeaponIcon(c, wp.id, x + w - 42, y + 62, 46, 'rgba(255,255,255,0.8)'); // Symbol wie im Waffenrad
-    // Waffenleiste: 6 Punkte, der gewählte hell
-    for (let i = 0; i < WEAPONS.length; i++) {
-      c.fillStyle = i === p.weapon ? YELLOW : 'rgba(255,255,255,0.25)';
-      c.beginPath(); c.arc(x + w - 18 - (WEAPONS.length - 1 - i) * 13, y + 22, 4, 0, Math.PI * 2); c.fill();
-    }
-    if (wp.melee) this.text('Nahkampf', x + 18, y + 64, { size: 22, weight: 700 });
+    const wp = WEAPONS[p.weapon ?? 0], right = x + w - 70;
+    this.weaponIcon(wp.id, x + w - 30, y + 34, 50);
+    this.otext(wp.name.toUpperCase(), right, y + 16, { size: 13, weight: 700, color: YELLOW, align: 'right', spacing: 1.5 });
+    if (wp.melee) this.otext('NAHKAMPF', right, y + 46, { size: 20, weight: 800, align: 'right', color: '#e8e8e8' });
     else if (p.reloadT > 0) {
       const u = 1 - p.reloadT / wp.reload;
-      this.text('NACHLADEN', x + 18, y + 56, { size: 13, weight: 800, color: '#bbb' });
-      c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x + 18, y + 64, w - 36, 9, 4.5); c.fill();
-      c.fillStyle = YELLOW; rr(c, x + 18, y + 64, (w - 36) * u, 9, 4.5); c.fill();
+      this.otext('NACHLADEN', right, y + 40, { size: 14, weight: 800, align: 'right', color: '#ddd', spacing: 1 });
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(right - 111, y + 47, 112, 6);
+      c.fillStyle = YELLOW; c.fillRect(right - 110, y + 48, 110 * u, 4);
     } else {
       const mag = p.mag?.[p.weapon] ?? 0;
-      const tw = this.text(`${mag}`, x + 18, y + 68, { size: 34, weight: 800, color: mag <= wp.mag * 0.25 ? '#ff8080' : '#fff' });
-      this.text(`/ ${wp.mag}   ∞`, x + 26 + tw, y + 68, { size: 17, color: '#bbb', weight: 600 });
+      const tw = this.otext(`/ ${wp.mag}`, right, y + 48, { size: 15, weight: 700, align: 'right', color: '#c8c8c8' });
+      this.otext(`${mag}`, right - tw - 5, y + 48, { size: 32, weight: 800, align: 'right', color: mag <= wp.mag * 0.25 ? '#ff7a70' : '#fff' });
     }
-    // Lebenspunkte
-    const hp = Math.max(0, (p.hp ?? PLAYER_HP) / PLAYER_HP);
-    c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x + 18, y + 84, w - 36, 9, 4.5); c.fill();
-    c.fillStyle = hp > 0.6 ? '#4cd964' : hp > 0.3 ? '#ffcc00' : '#ff3b30';
-    if (hp > 0) { rr(c, x + 18, y + 84, (w - 36) * hp, 9, 4.5); c.fill(); }
-    this.text('♥', x + w - 16, y + 94, { size: 12, align: 'right', color: '#ff8a8a', weight: 800, shadow: false });
+    // Waffenleiste: kleine Striche, der gewählte gelb
+    for (let i = 0; i < WEAPONS.length; i++) {
+      const bx = right - (WEAPONS.length - 1 - i) * 14 - 10;
+      c.fillStyle = 'rgba(0,0,0,0.7)'; c.fillRect(bx - 1, y + 59, 12, 5);
+      c.fillStyle = i === p.weapon ? YELLOW : 'rgba(255,255,255,0.45)'; c.fillRect(bx, y + 60, 10, 3);
+    }
+  }
+
+  // Lebensleiste unter der Minikarte (wie im Genre üblich): schmal, grün → gelb → rot, blinkt bei wenig Leben
+  drawHealth(p, x, y, w, t) {
+    const c = this.ctx, hp = Math.max(0, Math.min(1, (p.hp ?? PLAYER_HP) / PLAYER_HP));
+    c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(x, y, w, 6);
+    c.fillStyle = 'rgba(70,160,80,0.25)'; c.fillRect(x + 1, y + 1, w - 2, 4);
+    const low = hp < 0.25 && Math.floor(t * 3) % 2 === 0;
+    c.fillStyle = low ? '#ff6a5a' : hp > 0.6 ? '#5fd35f' : hp > 0.3 ? '#e8c440' : '#e8483c';
+    if (hp > 0) c.fillRect(x + 1, y + 1, (w - 2) * hp, 4);
+  }
+
+  // Tacho unten rechts: Drehzahlbogen (270°, roter Bereich, Striche je 1000/2000 U/min), km/h groß in der Mitte,
+  // Gang in der Lücke unten; links daneben kleine Anzeigen (Antrieb, ESP, Kisten, Schrott). Ohne Kasten.
+  drawSpeedo(world, car, eng) {
+    const c = this.ctx, m = this.m, R = 54;
+    const cx = this.vw - m.x - R - 2, cy = this.vh - m.y - R - 14;
+    const x = cx - R - 84, y = cy - R - 6, w = this.vw - m.x - x, h = 2 * R + 20;
+    this.layout = { ...(this.layout ?? {}), car: { x, y, w, h } };
+    const kmh = Math.round(speedOf(car) * SPEED_TO_KMH);
+    const a0 = Math.PI * 0.75, span = Math.PI * 1.5, arc = (r, f0, f1) => { c.beginPath(); c.arc(cx, cy, r, a0 + span * f0, a0 + span * f1); c.stroke(); };
+    // weicher dunkler Grund für die Lesbarkeit, ohne Kante
+    const bg = c.createRadialGradient(cx, cy, R * 0.3, cx, cy, R * 1.3);
+    bg.addColorStop(0, 'rgba(0,0,0,0.42)'); bg.addColorStop(0.75, 'rgba(0,0,0,0.3)'); bg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bg; c.beginPath(); c.arc(cx, cy, R * 1.3, 0, Math.PI * 2); c.fill();
+    c.lineCap = 'butt';
+    const red = eng?.red ?? 0, redFrom = eng?.electric ? 1.01 : 0.86;
+    let f = eng && red > 0 ? Math.max(0, Math.min(1, eng.rpm / red)) : Math.min(1, kmh / (car.top ? car.top * SPEED_TO_KMH : 60));
+    c.lineWidth = 5; c.strokeStyle = 'rgba(255,255,255,0.14)'; arc(R, 0, 1);
+    if (eng && redFrom < 1) { c.strokeStyle = 'rgba(255,70,55,0.6)'; arc(R, redFrom, 1); }
+    // Striche und Zahlen (×1000 U/min)
+    if (eng && red > 0) {
+      const step = red > 9500 ? 2000 : 1000;
+      c.lineWidth = 1.5;
+      c.font = `700 9px ${HUD_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (let r = 0; r <= red + 1; r += step) {
+        const q = r / red, a = a0 + span * q, ca = Math.cos(a), sa = Math.sin(a), hot = q >= redFrom;
+        c.strokeStyle = hot ? 'rgba(255,110,95,0.9)' : 'rgba(255,255,255,0.55)';
+        c.beginPath(); c.moveTo(cx + ca * (R - 9), cy + sa * (R - 9)); c.lineTo(cx + ca * (R - 4), cy + sa * (R - 4)); c.stroke();
+        c.fillStyle = hot ? 'rgba(255,120,105,0.9)' : 'rgba(255,255,255,0.55)'; c.fillText(`${r / 1000}`, cx + ca * (R - 17), cy + sa * (R - 17));
+      }
+    }
+    // Füllung: dezenter Schein + heller Bogen, im roten Bereich rot
+    const hot = f >= redFrom, col = hot ? '#ff5040' : '#ffffff';
+    c.lineWidth = 11; c.strokeStyle = hot ? 'rgba(255,70,50,0.18)' : 'rgba(255,255,255,0.1)'; arc(R, 0, f);
+    c.lineWidth = 5; c.strokeStyle = col; arc(R, 0, f);
+    const ae = a0 + span * f;
+    c.lineWidth = 3; c.strokeStyle = hot ? '#ff5040' : YELLOW;
+    c.beginPath(); c.moveTo(cx + Math.cos(ae) * (R - 11), cy + Math.sin(ae) * (R - 11)); c.lineTo(cx + Math.cos(ae) * (R + 4), cy + Math.sin(ae) * (R + 4)); c.stroke();
+    // Tempo und Gang
+    this.otext(`${kmh}`, cx, cy + 9, { size: 32, weight: 800, align: 'center' });
+    this.otext('KM/H', cx, cy + 23, { size: 9, weight: 700, align: 'center', color: '#bdbdbd', spacing: 1.5 });
+    if (eng) this.otext(eng.electric && eng.gear !== 'R' ? 'D' : `${eng.gear}`, cx, cy + R - 2, { size: 17, weight: 800, align: 'center', color: eng.gear === 'R' ? '#9ad0ff' : hot ? '#ff6a5a' : YELLOW });
+    // Fahrzeugzustand: dünner Bogen innen (unten links → unten rechts), nur wenn beschädigt
+    const hp = Math.max(0, car.health / CAR.health);
+    if (hp < 0.999) {
+      c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,0.5)'; c.beginPath(); c.arc(cx, cy, R + 8, a0, a0 + span * 0.25); c.stroke();
+      c.strokeStyle = hp > 0.6 ? '#5fd35f' : hp > 0.3 ? '#e8c440' : '#e8483c';
+      if (hp > 0) { c.beginPath(); c.arc(cx, cy, R + 8, a0, a0 + span * 0.25 * hp); c.stroke(); }
+    }
+    // kleine Anzeigen links vom Tacho
+    const lx = cx - R - 14, tags = [];
+    if (car.wrecked) tags.push(['SCHROTT', '#ff6a5a']);
+    if (car.cargo) tags.push(['▣ KISTEN', '#e6b460']);
+    if (car.dyn) {
+      const sp = specOf(car), off = world.esp === false || sp.noAids, on = car.dyn.esp && Math.floor((world.time ?? 0) * 8) % 2 === 0;
+      if (off || on) tags.push([off ? 'ESP AUS' : 'ESP', '#ffb020']);
+      tags.push([DRIVE_LABEL[sp.drive], 'rgba(255,255,255,0.7)']);
+    }
+    tags.forEach(([t, col], i) => this.otext(t, lx, cy + R - 4 - (tags.length - 1 - i) * 17, { size: 13, weight: 800, align: 'right', color: col, spacing: 1 }));
+  }
+
+  // Nach dem Einsteigen: Modellname groß, Bauart/Technik klein darüber dem Tacho – blendet ein und wieder aus
+  drawVehInfo(world, car) {
+    const vi = world.vehInfo;
+    if (!vi || vi.carId !== car.id) return;
+    const t = vi.t, a = Math.max(0, Math.min(1, t / 0.35, (VEH_INFO_S - t) / 0.9));
+    if (a <= 0.01) return;
+    const c = this.ctx, L = this.layout ?? {}, top = Math.min(L.car?.y ?? this.vh, L.roadWarn?.y ?? Infinity);
+    const x = this.vw - this.m.x + (1 - Math.min(1, t / 0.35)) * 24, y = top - 12;
+    c.save(); c.globalAlpha = a;
+    const nm = vehicleName(car);
+    this.otext(specLine(car).toUpperCase(), x, y, { size: 12, weight: 700, align: 'right', color: '#d8d8d8', spacing: 1.2 });
+    this.otext(nm.full, x, y - 20, { size: 30, weight: 800, align: 'right', italic: true, outline: 0.9 });
+    c.restore();
   }
 
   // Treffer: roter Rand, K. o.: Bild dunkelrot mit Schrift
@@ -375,82 +501,67 @@ export class Hud {
     const ctx = { places: world.city.places, player: world.player, cars: world.cars };
     const obj = missionObjective(world.mission, ctx);
 
-    // Oben links: Ort + Geld
+    // Oben links: Ort, Geld, Tag/Uhrzeit/Wetter, Ort in der Nähe – Schrift mit Kontur, ohne Kasten
     const stn = world.player.inside && stationById(world.city, world.player.inside.id);
-    this.text(stn ? `${stn.sbahn ? 'S' : 'U'}-Bahnhof ${stn.name} · ${stn.lines.join(' ')}` : locationName(world.city, world.player.x, world.player.y), m.x, m.y + 22, { size: 22, weight: 700 });
-    const mw = this.text(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 52, { size: 26, color: '#8fe388', weight: 800 });
+    this.otext(stn ? `${stn.sbahn ? 'S' : 'U'}-Bahnhof ${stn.name} · ${stn.lines.join(' ')}` : locationName(world.city, world.player.x, world.player.y), m.x, m.y + 16, { size: 19, weight: 700 });
+    const mw = this.otext(`${world.money.toLocaleString('de-DE')} €`, m.x, m.y + 42, { size: 22, color: '#7fe07a', weight: 800 });
     const night = world.clock >= 1230 || world.clock < SUNRISE;
     const wx = world.weather, icon = wx && wx.kind !== 'clear' && (wx.cloud > 0.3 || wx.fog > 0.3) ? WX_ICON[wx.kind] : night ? '☾' : '☀';
-    this.text(`${icon} ${dayName(world.day ?? 4)} ${formatClock(world.clock)} · ${Math.round(world.temp ?? 0) || 0} °C`, m.x + mw + 18, m.y + 52, { size: 20, color: night ? '#b9c6ff' : '#ffe08a', weight: 700 });
+    this.otext(`${icon} ${dayName(world.day ?? 4)} ${formatClock(world.clock)} · ${Math.round(world.temp ?? 0) || 0} °C`, m.x + mw + 14, m.y + 41, { size: 15, color: night ? '#c3cdff' : '#ffe39a', weight: 700 });
     // Geschäft/Lokal/Haltestelle in unmittelbarer Nähe
     const here = playerCar(world) ?? world.player;
     const poi = nearestPoi(world.city, here.x, here.y, car ? 120 : 180);
-    if (poi) this.text(`${POI_LABEL[poi.cat]}: ${poi.name}`, m.x, m.y + 78, { size: 16, color: '#d8d8d8', weight: 600 });
+    if (poi) this.otext(`${POI_LABEL[poi.cat]}: ${poi.name}`, m.x, m.y + 62, { size: 13, color: '#d4d4d4', weight: 600 });
 
-    // Oben rechts: Missionsziel + Zeit
+    // Oben rechts: Missionsziel + Zeit, rechtsbündig, gelbe Kennung mit Strich
     const ms = world.mission.state;
     if (obj.text) {
-      const w = 420;
-      this.layout = { ...(this.layout ?? {}), mission: { x: vw - m.x - w, y: m.y, w, h: ms === 'toPickup' || ms === 'toDropoff' ? 92 : 58 } };
-      this.panel(vw - m.x - w, m.y, w, ms === 'toPickup' || ms === 'toDropoff' ? 92 : 58);
-      this.text('AUFTRAG', vw - m.x - w + 16, m.y + 22, { size: 13, color: YELLOW, weight: 800 });
-      this.text(obj.text, vw - m.x - w + 16, m.y + 46, { size: 19 });
-      if (ms === 'toPickup' || ms === 'toDropoff') {
-        const tm = world.mission.timer;
-        const urgent = tm < 15;
-        const blink = urgent && Math.floor(world.time * 4) % 2 === 0;
-        this.text(fmtTime(tm), vw - m.x - 16, m.y + 80, { size: 26, align: 'right', weight: 800, color: blink ? '#ff4d4d' : urgent ? '#ff8080' : '#fff' });
-        this.text(ms === 'toDropoff' ? 'Kisten geladen ✓' : 'Zeit bis Ladenschluss', vw - m.x - w + 16, m.y + 78, { size: 15, color: '#c8c8c8', weight: 500 });
+      const timed = ms === 'toPickup' || ms === 'toDropoff', R = vw - m.x;
+      c.font = `700 18px ${HUD_FONT}`;
+      const w = Math.min(vw / 2 - m.x, Math.max(340, c.measureText(obj.text).width + 8)), h = timed ? 76 : 44;
+      this.layout = { ...(this.layout ?? {}), mission: { x: R - w, y: m.y, w, h } };
+      const lw = this.otext('AUFTRAG', R, m.y + 11, { size: 11, color: YELLOW, weight: 800, align: 'right', spacing: 2.5 });
+      c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(R - lw - 37, m.y + 5, 28, 4);
+      c.fillStyle = YELLOW; c.fillRect(R - lw - 36, m.y + 6, 26, 2);
+      this.otext(obj.text, R, m.y + 34, { size: 18, align: 'right' });
+      if (timed) {
+        const tm = world.mission.timer, urgent = tm < 15, blink = urgent && Math.floor(world.time * 4) % 2 === 0;
+        const tw = this.otext(fmtTime(tm), R, m.y + 66, { size: 26, align: 'right', weight: 800, color: blink ? '#ff4d4d' : urgent ? '#ff8080' : '#fff' });
+        this.otext(ms === 'toDropoff' ? 'Kisten geladen ✓' : 'Zeit bis Ladenschluss', R - tw - 12, m.y + 64, { size: 13, align: 'right', color: '#cfcfcf', weight: 600 });
       }
     }
 
     // Oben mittig: Fahrgast-/Fahrerleiste (Linie, Ziel, nächster Halt; als Fahrer Tempo und Türen)
     this.drawRideBar(world);
 
-    // Unten links: Minikarte (beim Briefing ausgeblendet; unter Tage gedämpft)
+    // Unten links: Minikarte mit Lebensleiste darunter (beim Briefing ausgeblendet; unter Tage gedämpft)
     if (ms !== 'briefing') {
-      const dim = (world.underground ?? 0) > 0.5;
+      const dim = (world.underground ?? 0) > 0.5, S = 176, my = vh - m.y - S - 10;
       if (dim) { c.save(); c.globalAlpha = 0.6; }
-      this.drawMinimap(world, obj.target, m.x, vh - m.y - 200, 200);
+      this.drawMinimap(world, obj.target, m.x, my, S);
       if (dim) c.restore();
+      this.drawHealth(world.player, m.x, my + S + 4, S, world.time ?? 0);
+      this.layout.minimap = { x: m.x, y: my, w: S, h: S + 10 };
     }
 
-    // Unten rechts: Fahrzeugzustand
-    if (car) {
-      const w = 250, h = 106, x = vw - m.x - w, y = vh - m.y - h;
-      this.layout = { ...(this.layout ?? {}), car: { x, y, w, h } };
-      this.panel(x, y, w, h);
-      const kmh = Math.round(speedOf(car) * SPEED_TO_KMH);
-      this.text(`${kmh}`, x + 20, y + 52, { size: 44, weight: 800 });
-      this.text('km/h', x + 26 + c.measureText(`${kmh}`).width, y + 52, { size: 16, color: '#bbb', weight: 500 });
-      const hp = car.health / CAR.health;
-      this.text(car.wrecked ? 'ZUSTAND: SCHROTT' : 'ZUSTAND', x + 20, y + 76, { size: 12, color: car.wrecked ? '#ff6b6b' : '#bbb', weight: 800 });
-      c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x + 20, y + 84, w - 40, 10, 5); c.fill();
-      c.fillStyle = hp > 0.6 ? '#4cd964' : hp > 0.3 ? '#ffcc00' : '#ff3b30';
-      if (hp > 0) { rr(c, x + 20, y + 84, (w - 40) * hp, 10, 5); c.fill(); }
-      if (car.cargo) this.text('▣ Kisten', x + w - 20, y + 30, { size: 16, align: 'right', color: '#e0b060', weight: 700 });
-      else if (car.dyn) { // Fahrdynamik: Modell und Antrieb, ESP-Leuchte blinkt beim Eingreifen, „ESP AUS“ dauerhaft gelb
-        const sp = specOf(car);
-        this.text(sp.label, x + w - 20, y + 22, { size: 12, align: 'right', color: '#ddd', weight: 700 }); // über der km/h-Zeile
-        this.text(DRIVE_SHORT[sp.drive], x + w - 20, y + 36, { size: 12, align: 'right', color: '#9aa', weight: 700 });
-        const off = world.esp === false || sp.noAids, on = car.dyn.esp && Math.floor(performance.now() / 120) % 2 === 0;
-        if (off || on) this.text(off ? 'ESP AUS' : 'ESP', x + w - 20, y + 60, { size: 12, align: 'right', color: '#ffb020', weight: 800 });
-      }
-    }
+    // Unten rechts: Tacho mit Drehzahl, darüber beim Einsteigen Name und Technik
+    if (car) this.drawSpeedo(world, car, g.engine ?? null);
 
-    // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte
     // Warnschild (Wetter an der Stelle): über dem Tacho, als Zugführer unter der Fahrerleiste
     const warn = roadWarning(world);
     if (warn) {
-      const L = this.layout ?? {}, w = 250, h = 30;
+      const L = this.layout ?? {};
+      c.font = `800 14px ${HUD_FONT}`;
+      const w = Math.max(150, c.measureText(warn).width + 44), h = 26;
       const x = car ? vw - m.x - w : (L.rideBar ? L.rideBar.x + L.rideBar.w - w : vw - m.x - w);
-      const y = car ? vh - m.y - 106 - h - 10 : (L.rideBar ? L.rideBar.y + L.rideBar.h + 8 : m.y);
+      const y = car ? L.car.y - h - 8 : (L.rideBar ? L.rideBar.y + L.rideBar.h + 8 : m.y);
       const blink = warn === 'Aquaplaning!' && Math.floor(world.time * 6) % 2 === 0;
       this.layout = { ...L, roadWarn: { x, y, w, h } };
-      c.fillStyle = blink ? 'rgba(255,80,60,0.85)' : 'rgba(255,190,40,0.85)'; rr(c, x, y, w, h, 8); c.fill();
-      this.text('⚠', x + 14, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
-      this.text(warn, x + 38, y + 21, { size: 16, weight: 800, color: '#1a1a1a', shadow: false });
+      c.fillStyle = blink ? 'rgba(255,80,60,0.88)' : 'rgba(255,190,40,0.88)'; rr(c, x, y, w, h, 4); c.fill();
+      this.text('⚠', x + 12, y + 19, { size: 14, weight: 800, color: '#1a1a1a', shadow: false });
+      this.text(warn, x + 32, y + 18, { size: 14, weight: 800, color: '#1a1a1a', shadow: false });
     } else if (this.layout?.roadWarn) { const { roadWarn, ...rest } = this.layout; this.layout = rest; }
+    if (car) this.drawVehInfo(world, car);
     if (!car && !world.player.ride) this.drawWeaponPanel(world.player); // im Zug keine Waffe
     this.drawHurt(world.player);
 
@@ -459,9 +570,9 @@ export class Hud {
 
     // Hinweise unten mittig
     const mission = world.mission;
-    let hint = mission.prompt, hintY = vh - m.y - 40;
+    let hint = mission.prompt, hintY = vh - m.y - 24;
     // längere Meldungen über den Eckfeldern (Waffe/Tacho unten rechts), damit sie nicht überlappen
-    if (!hint && world.notice) { hint = world.notice.text; hintY = vh - m.y - 140; }
+    if (!hint && world.notice) { hint = world.notice.text; hintY = vh - m.y - 120; }
     if (!hint && stn) { // im U-Bahnhof: Einsteigen am Bahnsteig, sonst Hinweis auf die Treppen
       const b = boardable(world, stn, world.player.x, world.player.y);
       hint = b ? `G: Einsteigen ${b.train.line} → ${b.train.dest}` : null;
@@ -480,9 +591,9 @@ export class Hud {
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
     if (hint && !g.console?.open) this.prompt(hint, vw / 2, hintY); // offene Befehlszeile verdeckt sonst den Hinweis
     if (mission.load > 0 && mission.state === 'toPickup') {
-      const w = 300, x = vw / 2 - w / 2, y = vh - m.y - 92;
-      c.fillStyle = 'rgba(0,0,0,0.6)'; rr(c, x, y, w, 14, 7); c.fill();
-      c.fillStyle = YELLOW; rr(c, x, y, w * Math.min(1, mission.load / MISSION.loadTime), 14, 7); c.fill();
+      const w = 260, x = vw / 2 - w / 2, y = vh - m.y - 66;
+      c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(x - 1, y - 1, w + 2, 8);
+      c.fillStyle = YELLOW; c.fillRect(x, y, w * Math.min(1, mission.load / MISSION.loadTime), 6);
     }
     if (mission.state === 'briefing') this.drawBriefing();
     if (world.loading) this.drawLoading(world);
@@ -533,7 +644,7 @@ export class Hud {
     const zoom = size / 4000; // Minikarte zeigt ~400 m
     const R = 2200;
     c.save();
-    rr(c, x, y, size, size, 12); c.fillStyle = '#3a3d44'; c.fill(); c.clip();
+    rr(c, x, y, size, size, 6); c.fillStyle = '#3a3d44'; c.fill(); c.clip();
     // Kartengrund (Flächen, Häuser, Wasser, Straßen, Grenze): aus einem selten neu gezeichneten Vorrat doppelter Größe
     // kopiert – statt in jedem Bild hunderte Formen zu füllen
     const base = this.miniBase(world, p, size);
@@ -580,8 +691,9 @@ export class Hud {
     c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5;
     c.beginPath(); c.moveTo(8, 0); c.lineTo(-6, -5.5); c.lineTo(-3, 0); c.lineTo(-6, 5.5); c.closePath(); c.fill(); c.stroke();
     c.restore();
-    c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 2; rr(c, x, y, size, size, 12); c.stroke();
-    this.text('N', x + size / 2, y + 16, { size: 13, align: 'center', weight: 800, color: '#ddd' });
+    c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 3; rr(c, x - 1, y - 1, size + 2, size + 2, 7); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,0.18)'; c.lineWidth = 1; rr(c, x + 0.5, y + 0.5, size - 1, size - 1, 6); c.stroke();
+    this.otext('N', x + size / 2, y + 15, { size: 12, align: 'center', weight: 800, color: '#e6e6e6' });
   }
 
   // Vorrat für den Kartengrund der Minikarte: ±MINI_HALF Welt-px um (cx, cy), neu bei Bewegung über MINI_MOVE, anderer

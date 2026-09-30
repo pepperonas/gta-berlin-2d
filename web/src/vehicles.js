@@ -1,4 +1,4 @@
-// Autos in der Draufsicht: elf Pkw-Modelle (carmodels.js) innerhalb derselben Kollisionsbox (42 × 20 px = 4,2 × 2,0 m).
+// Autos in der Draufsicht: 37 Pkw-Modelle (carmodels.js) innerhalb derselben Kollisionsbox (42 × 20 px = 4,2 × 2,0 m).
 // Karosserie, Scheiben und Dach werden je Modell × Farbe einmal doppelt aufgelöst gezeichnet (Sprite-Cache),
 // was sich bewegt – Räder (Vorderräder lenken), Licht, Blinker – kommt jedes Bild dazu.
 // Das Modell (und seine Technik) kommt aus carmodels.js; gefahrene Autos nicken und wanken mit ihrem Schwerpunkt.
@@ -28,6 +28,26 @@ const SHAPES = {
   pickup: { len: 0, inset: 0, r: 3.5, back: 18, front: 11, cut: [2, 0.5], bed: true },
   kleinbus: { len: 3, inset: 0, r: 6, back: 3, front: 5, cut: [1.2, 0.5], twoTone: '#efeee8' },
   rallye: { len: 2, inset: 0, r: 5, back: 6, front: 10, cut: [3.5, 1.2], wing: true, vents: 'hood' },
+  transporter: { len: 0, inset: 0, r: 3, van: true },
+  supersport: { len: 0, inset: 0, r: 7, back: 18, front: 15, cut: [5.5, 3], vents: 'mid' },
+  gtcoupe: { len: 0, inset: 0, r: 7, back: 8, front: 19, cut: [4.5, 4] },
+  leichtbau: { len: 4, inset: 0.5, r: 7, back: 15, front: 12, cut: [4.5, 3], vents: 'mid' },
+  elektrosport: { len: 0, inset: 0, r: 7, back: 9, front: 13, cut: [5, 3.5], glassRoof: true },
+  sprinter: { len: 0, inset: 0, r: 3, van: true, high: true },
+  hochdach: { len: 2, inset: 0, r: 4, back: 3, front: 9, cut: [2.5, 0.4], rails: true },
+  powerkombi: { len: 0, inset: 0, r: 5, back: 5, front: 12, cut: [3.5, 0.8], vents: 'hood', rails: true },
+  familienkombi: { len: 0, inset: 0, r: 5.5, back: 5, front: 12, cut: [3.5, 0.8], rails: true },
+  business: { len: 0, inset: 0, r: 5.5, back: 9, front: 13, cut: [3.5, 2.8] },
+  sportlimo: { len: 0, inset: 0, r: 5, back: 9, front: 13, cut: [3.5, 2.8], vents: 'hood' },
+  luxus: { len: 0, inset: 0, r: 6, back: 10, front: 13, cut: [4, 3], chrome: true },
+  coupe: { len: 3, inset: 0, r: 6, back: 10, front: 13, cut: [4, 3.5] },
+  leichtcoupe: { len: 3, inset: 0.5, r: 6.5, back: 10, front: 14, cut: [4, 3.5] },
+  gklasse: { len: 1, inset: 0, r: 1.5, back: 4, front: 10, cut: [1, 0.3], spare: true, rails: true },
+  defender: { len: 0, inset: 0, r: 2.5, back: 3, front: 10, cut: [1.5, 0.3], rails: true, spare: true, twoTone: '#f2f2ee' },
+  niva: { len: 6, inset: 0.5, r: 3, back: 5, front: 9, cut: [2, 0.5], rails: true },
+  kompaktsuv: { len: 2, inset: 0, r: 5, back: 5, front: 10, cut: [3, 0.8], rails: true },
+  sportsuv: { len: 0, inset: 0, r: 6, back: 5, front: 11, cut: [3.5, 1.4], rails: true },
+  grosssuv: { len: 0, inset: 0, r: 5, back: 5, front: 11, cut: [3, 1], rails: true, glassRoof: true },
 };
 export const bodyLength = (model, L) => L - (SHAPES[model]?.len ?? 0);
 export const carColor = (car) => (car.wrecked ? '#3b332d' : carModel(car) === 'taxi' ? TAXI_COLOR : car.color);
@@ -49,7 +69,7 @@ function paintBody(g, model, body, L, W, wrecked) {
   // Querverlauf: Kanten dunkler, Mitte heller → Wölbung
   const gr = g.createLinearGradient(0, y0, 0, y0 + W);
   gr.addColorStop(0, shade(body, -0.28)); gr.addColorStop(0.5, shade(body, 0.1)); gr.addColorStop(1, shade(body, -0.34));
-  g.fillStyle = gr; rr(g, x0, y0, len, W, model === 'transporter' ? 3 : sh.r); g.fill();
+  g.fillStyle = gr; rr(g, x0, y0, len, W, sh.r); g.fill();
   g.strokeStyle = shade(body, -0.5); g.lineWidth = 0.9; g.stroke();
   const glass = wrecked ? '#1c1916' : '#1f2a36';
   const glassG = g.createLinearGradient(0, y0, 0, y0 + W);
@@ -60,11 +80,12 @@ function paintBody(g, model, body, L, W, wrecked) {
     g.moveTo(xs + rearCut, y0 + 2.2); g.lineTo(xe - frontCut, y0 + 2.2); g.lineTo(xe, y0 + 4); g.lineTo(xe, y0 + W - 4);
     g.lineTo(xe - frontCut, y0 + W - 2.2); g.lineTo(xs + rearCut, y0 + W - 2.2); g.lineTo(xs, y0 + W - 4); g.lineTo(xs, y0 + 4); g.closePath(); g.fill();
   };
-  if (model === 'transporter') {
+  if (sh.van) { // Kastenwagen: kurze Front mit Scheibe, dahinter der Kastenaufbau (Hochdach: heller, mit Dachluke)
     cabin(len / 2 - 11, len / 2 - 5, 1.5, 0);
-    g.fillStyle = roof; rr(g, x0 + 1.5, y0 + 1.8, len - 13, W - 3.6, 2); g.fill();          // Kastenaufbau
+    g.fillStyle = sh.high ? shade(body, 0.2) : roof; rr(g, x0 + 1.5, y0 + 1.8, len - 13, W - 3.6, 2); g.fill();          // Kastenaufbau
     g.strokeStyle = shade(body, -0.12); g.lineWidth = 0.7;
-    for (let x = x0 + 6; x < len / 2 - 13; x += 5) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
+    for (let x = x0 + 6; x < len / 2 - 13; x += sh.high ? 3.5 : 5) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
+    if (sh.high) { g.fillStyle = 'rgba(30,40,52,0.7)'; rr(g, x0 + (len - 13) / 2 - 2, -2.5, 5, 5, 1); g.fill(); }
   } else {
     const back = x0 + sh.back, front = len / 2 - sh.front;
     if (sh.vents === 'mid') { // Mittelmotor: Motorabdeckung mit Lüftungsschlitzen hinter der Kabine, Lufteinlässe an den Flanken

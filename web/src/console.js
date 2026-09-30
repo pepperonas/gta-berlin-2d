@@ -9,7 +9,7 @@ import { WEATHER_KINDS, WX_LABEL, temperatureAt } from './weather.js';
 import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
 import { KINDS } from './fleet.js';
-import { CAR_MODELS, SPECS, specLine } from './carmodels.js';
+import { CAR_MODELS, SPECS, specLine, vehicleName } from './carmodels.js';
 import { createCar } from './car.js';
 import { findTeleportSpot, openSpot, playerCar, endRide } from './world.js';
 import { PLAYER_HP } from './combat.js';
@@ -183,7 +183,7 @@ export const COMMANDS = [
         const car = createCar({ x: spot.x, y: spot.y, angle: spot.angle ?? 0, role: 'parked', kind: 'car' });
         car.model = model; car.driver = null; car.lvl = p.lvl;
         ctx.world.cars.push(car);
-        return `${specLine(car)} steht bereit`;
+        return `${vehicleName(car).full} (${specLine(car)}) steht bereit`;
       }
       const kind = v ? (KINDS[norm(v)] ? norm(v) : Object.keys(KIND_LABEL).find((k) => norm(KIND_LABEL[k]) === norm(v)) ?? norm(v)) : 'car'; // auch „fahrrad“, „polizei“
       if (!KINDS[kind]) return { ok: false, msg: `Art: ${Object.keys(KINDS).join(', ')}` };

@@ -193,6 +193,8 @@ change in `web/`.
   (`geoToPx(meta)`), re-exported by `tools/osm/geo.mjs`.
 - **Snow tracks:** `snowtracks.js` (pure, presentation only): `render.js drawSnowTrails` records rear-wheel segments of
   all `world.cars` per frame into a ring buffer (world time, reset per world), fades them (`trailAlpha`: age, snowfall).
+  Tyre tracks use `car.hw` = half **length**, `car.hh` = half **width** (as everywhere): four wheels as drawn in
+  `drawCarBody`, one line for two-wheelers, only at lvl 0.
   Note that `npm run map:build` wipes `web/data/berlin/` — rerun `npm run map:transit` afterwards.
 - **Windows:** `windows.js` (pure) decides per window (flat hash + room hash vs. `windowsLit`) whether it is lit and in
   which colour; `render.js drawLitWindows` draws them per face, cached per building and game minute.
@@ -275,6 +277,11 @@ change in `web/`.
   `soundscape.js engineFor` picks `MODEL_ENGINES` when `car.dyn || car.model` (electric = whine in `audio.js`).
   The mission bot (`tests/helpers/bot.js`) drives with pure pursuit (curvature → steering angle), corner look-ahead
   braking (`cornerCap`), loop skipping and stuck/orbit recovery – keep it player-like when tuning the physics.
+  0.45.0: 19 more Pkw modelled on real cars (37 total, `SHARE` sums to 1, fictional names only: `NAMES`/`vehicleName`),
+  `specLine` in PS (`psOf`) with FWD/RWD/AWD; `vehicles.js SHAPES` `van`/`high` for box vans. Entering sets
+  `w.vehInfo = {carId, t}` (cleared after `VEH_INFO_S`), drawn by `hud.drawVehInfo`; `main.js` passes `game.engine`
+  (`rpm/gear/red/electric` from the engine sound state) to `hud.drawSpeedo`. Game HUD uses `hud.otext` (outlined text,
+  `HUD_FONT`) instead of panels; health bar under the minimap (`drawHealth`, part of `layout.minimap`).
   0.43.0 added 7 more Pkw (`hothatch`, `roadster`, `musclecar`, `oldtimer`, `pickup`, `kleinbus`, `rallye`; `brakeK`
   = weaker brakes, `open` roadster) and two-wheelers: `fleet.js KINDS.motorcycle/scooter` (`moto: true`,
   `isMotoKind`, `isOpenKind` = bike or moto: unmuffled, no cargo, never `playerCarId`), specs with `twoWheel`
