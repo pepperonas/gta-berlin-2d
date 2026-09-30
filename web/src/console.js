@@ -9,6 +9,7 @@ import { WEATHER_KINDS, WX_LABEL, temperatureAt } from './weather.js';
 import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
 import { KINDS } from './fleet.js';
+import { CAR_MODELS, SPECS, specLine } from './carmodels.js';
 import { createCar } from './car.js';
 import { findTeleportSpot, openSpot, playerCar, endRide } from './world.js';
 import { PLAYER_HP } from './combat.js';
@@ -169,10 +170,21 @@ export const COMMANDS = [
     run(ctx) { const p = ctx.world.player; p.hp = PLAYER_HP; p.dead = false; p.stun = 0; return 'Gesundheit voll'; } },
   { name: 'munition', aliases: ['ammo'], cheat: true, help: 'alle Magazine voll', args: [],
     run(ctx) { const p = ctx.world.player; p.mag = WEAPONS.map((w) => w.mag ?? 0); p.reloadT = 0; return 'Magazine voll'; } },
+  { name: 'esp', aliases: ['asr', 'fahrhilfen'], help: 'ASR/ESP im Auto an/aus (aus: Heckantrieb driftet)', args: [{ name: 'an|aus', optional: true, values: () => ONOFF.map((l) => ({ label: l, hint: '' })) }],
+    run(ctx, [v]) { const on = onOff(v, ctx.world.esp !== false); if (on === null) return { ok: false, msg: 'esp an|aus' }; ctx.world.esp = on; return `ASR/ESP ${on ? 'an' : 'aus'}`; } },
   { name: 'gott', aliases: ['god'], cheat: true, help: 'unverwundbar an/aus', args: [{ name: 'an|aus', optional: true, values: () => ONOFF.map((l) => ({ label: l, hint: '' })) }],
     run(ctx, [v]) { const on = onOff(v, ctx.world.god); if (on === null) return { ok: false, msg: 'gott an|aus' }; ctx.world.god = on; return `Gottmodus ${on ? 'an' : 'aus'}`; } },
-  { name: 'auto', aliases: ['car', 'fahrzeug'], cheat: true, help: 'Fahrzeug neben dir abstellen', args: [{ name: 'art', optional: true, values: () => Object.keys(KINDS).map((k) => ({ label: k, hint: KIND_LABEL[k] ?? '' })) }],
+  { name: 'auto', aliases: ['car', 'fahrzeug'], cheat: true, help: 'Fahrzeug neben dir abstellen (Modell oder Art)', args: [{ name: 'art', optional: true, values: () => [...CAR_MODELS.map((m) => ({ label: m, hint: SPECS[m].label })), ...Object.keys(KINDS).map((k) => ({ label: k, hint: KIND_LABEL[k] ?? '' }))] }],
     run(ctx, [v]) {
+      const model = v && (CAR_MODELS.includes(norm(v)) ? norm(v) : CAR_MODELS.find((m) => norm(SPECS[m].label) === norm(v)));
+      if (model) { // Pkw-Modell mit eigener Technik (carmodels.js)
+        const p = ctx.world.player, spot = openSpot(ctx.world, p.x + Math.cos(p.angle ?? 0) * 60, p.y + Math.sin(p.angle ?? 0) * 60, true);
+        if (!spot) return { ok: false, msg: 'Kein Platz für ein Fahrzeug' };
+        const car = createCar({ x: spot.x, y: spot.y, angle: spot.angle ?? 0, role: 'parked', kind: 'car' });
+        car.model = model; car.driver = null; car.lvl = p.lvl;
+        ctx.world.cars.push(car);
+        return `${specLine(car)} steht bereit`;
+      }
       const kind = v ? (KINDS[norm(v)] ? norm(v) : Object.keys(KIND_LABEL).find((k) => norm(KIND_LABEL[k]) === norm(v)) ?? norm(v)) : 'car'; // auch „fahrrad“, „polizei“
       if (!KINDS[kind]) return { ok: false, msg: `Art: ${Object.keys(KINDS).join(', ')}` };
       const p = ctx.world.player, spot = openSpot(ctx.world, p.x + Math.cos(p.angle ?? 0) * 60, p.y + Math.sin(p.angle ?? 0) * 60, true);

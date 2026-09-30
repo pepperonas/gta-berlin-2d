@@ -18,7 +18,9 @@ export const TRACTION = {
 };
 export const DRY = Object.freeze({ brake: 1, accel: 1, lat: 1, steer: 1 });
 export const AQUA = { speed: 70 / 0.36, time: 0.35, lat: 0.15, steer: 0.2, brake: 0.3, yaw: 0.6 };
-export const GUST = { push: 45, threshold: 0.9, bridge: 1.6, warn: 8 };
+// dynamic: Anteil für das selbst gefahrene Auto (dynamics.js) – dort giert eine Böe das Auto auch (echte Reifen), ein
+// kleinerer Stoß gibt denselben Versatz wie im Verkehr: ein spürbarer Schubs, kein Wegdriften
+export const GUST = { push: 45, threshold: 0.9, bridge: 1.6, warn: 8, dynamic: 0.35 };
 const KEYS = ['brake', 'accel', 'lat', 'steer'];
 const q = [], qr = [];
 const clamp01 = (v) => Math.min(1, Math.max(0, v ?? 0));
@@ -96,7 +98,7 @@ export function gustPush(world, car, lvl = 0) {
   const g = gustAt(wx, world.time) - GUST.threshold;
   if (g <= 0) return null;
   const wl = Math.hypot(wx.wind.x, wx.wind.y) || 1;
-  const a = GUST.push * storm * g * (lvl >= 1 ? GUST.bridge : 1) / ((car.hw * car.hh) / (21 * 10));
+  const a = GUST.push * storm * g * (lvl >= 1 ? GUST.bridge : 1) / ((car.hw * car.hh) / (21 * 10)) * (car.driver === 'player' && !car.top ? GUST.dynamic : 1);
   return { ax: (wx.wind.x / wl) * a, ay: (wx.wind.y / wl) * a };
 }
 

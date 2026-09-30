@@ -5,6 +5,7 @@ import { obbVsRect, obbVsObb, circleVsObb, obbVsSegment, obbBounds } from './col
 import { T, surfaceAt } from './map.js';
 import { sizeOf } from './fleet.js';
 import { DRY, AQUA } from './traction.js';
+import { stepDynamics } from './dynamics.js';
 
 let nextId = 1;
 export const CAR_COLORS = ['#c0392b', '#2e86de', '#f1c40f', '#27ae60', '#ecf0f1', '#8e44ad', '#34495e', '#e67e22', '#16a085', '#7f8c8d'];
@@ -46,6 +47,13 @@ export function stepCar(car, dt, city) {
   const tr = car.traction ?? DRY, aq = (car.aqua ?? 0) > 0;
   const kBrake = tr.brake * (aq ? AQUA.brake : 1), kLat = tr.lat * (aq ? AQUA.lat : 1), kSteer = tr.steer * (aq ? AQUA.steer : 1);
   car.spin = 0;
+  // Der Spieler fährt mit echter Fahrdynamik (Antrieb, Motorlage, Schwerpunkt: dynamics.js); Verkehr, geparkte und
+  // geschobene Autos sowie Räder mit der einfachen Arcade-Physik unten (die Verkehrsregeln sind darauf abgestimmt).
+  if (car.driver === 'player' && !car.top && !car.wrecked) {
+    stepDynamics(car, dt, surf, tr, ctl);
+    if (car.aqua > 0) car.aqua = Math.max(0, car.aqua - dt);
+    return;
+  }
 
   const pw = car.power ?? 1, top = (car.top ?? CAR.maxSpeed * (0.55 + 0.45 * pw)) * surf.top; // Räder: eigenes Höchsttempo
   if (ctl.throttle > 0 && vf < top) {

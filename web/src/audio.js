@@ -103,6 +103,8 @@ export class Sound {
     const am = osc('square'), amg = c.createGain(); amg.gain.value = 0; am.connect(amg); amg.connect(ex.g.gain);
     // Diesel-Nageln: hohes Rauschen, im Zündtakt geschaltet
     const cl = this.noiseLayer('highpass', 2800, 0.7, bus);
+    // Elektromotor: Summen, das mit der Drehzahl steigt (statt Zündtakt)
+    const wh = osc('triangle'), whg = c.createGain(); whg.gain.value = 0; wh.connect(whg); whg.connect(bus);
     const clm = c.createGain(); clm.gain.value = 0; am.connect(clm); clm.connect(cl.g.gain);
     const tires = {
       roll: this.noiseLayer('lowpass', 300, 0.6, bus), cobble: this.noiseLayer('lowpass', 140, 1.5, bus),
@@ -117,7 +119,7 @@ export class Sound {
     const vib = osc('sine'), vibg = c.createGain(); vib.frequency.value = 9; vibg.gain.value = 25; vib.connect(vibg);
     for (const o of sq) { vibg.connect(o.frequency); o.connect(sqg); }
     sqg.connect(bus);
-    this.engine = { o1, o2, o3, f, g, bus, ex, am, amg, cl, clm, tires, sqg, sq };
+    this.engine = { o1, o2, o3, f, g, bus, ex, am, amg, cl, clm, tires, sqg, sq, wh, whg };
   }
 
   // eng: soundscape.js stepEngine-Zustand (rpm, fire, load, norm, diesel); tires: soundscape.js tireState
@@ -125,16 +127,21 @@ export class Sound {
     if (!this.ready) return;
     const e = this.engine, t = this.ctx.currentTime, set = (p, v, tc = 0.08) => p.setTargetAtTime(v, t, tc);
     set(e.bus.gain, active || inCar ? 1 : 0, 0.15);
-    if (active && eng) {
+    if (active && eng?.electric) { // Elektro: kein Verbrenner, nur Summen und Umrichter-Pfeifen
+      set(e.g.gain, 0, 0.1); set(e.amg.gain, 0, 0.1); set(e.clm.gain, 0, 0.1);
+      set(e.wh.frequency, 90 + (eng.rpm ?? 0) / 16000 * 1500, 0.05);
+      set(e.whg.gain, Math.min(0.05, 0.004 + (eng.norm ?? 0) * 0.02 + (eng.load ?? 0) * 0.02), 0.08);
+    } else if (active && eng) {
+      set(e.whg.gain, 0, 0.1);
       const fire = Math.max(12, eng.fire), load = eng.load ?? 0, n = eng.norm ?? 0;
       set(e.o1.frequency, fire, 0.03); set(e.o2.frequency, fire * 0.5, 0.03); set(e.o3.frequency, fire * 2.01, 0.03);
       set(e.am.frequency, fire, 0.03);
-      set(e.f.frequency, (eng.diesel ? 220 : 320) + n * (eng.diesel ? 700 : 1500) + load * 900, 0.06);
+      set(e.f.frequency, (eng.diesel ? 220 : eng.twoStroke ? 700 : 320) + n * (eng.diesel ? 700 : 1500) + load * 900, 0.06); // Zweitakter: hell, knatternd
       set(e.g.gain, 0.05 + load * 0.07 + n * 0.05, 0.06);
       set(e.ex.f.frequency, fire * 2.2, 0.05);
       set(e.amg.gain, 0.012 + load * 0.03, 0.06);
       set(e.clm.gain, eng.diesel ? 0.006 + load * 0.01 : 0, 0.1);
-    } else { set(e.g.gain, 0, 0.12); set(e.amg.gain, 0, 0.12); set(e.clm.gain, 0, 0.12); }
+    } else { set(e.g.gain, 0, 0.12); set(e.amg.gain, 0, 0.12); set(e.clm.gain, 0, 0.12); set(e.whg.gain, 0, 0.12); }
     const T = e.tires, tr = active && tires ? tires : null;
     set(T.roll.g.gain, tr ? 0.05 * tr.roll : 0, 0.1); set(T.roll.f.frequency, 250 + (tr?.roll ?? 0) * 900, 0.1);
     set(T.cobble.g.gain, tr ? 0.12 * tr.cobble * (0.6 + 0.4 * Math.random()) : 0, 0.05);

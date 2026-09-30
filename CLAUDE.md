@@ -255,6 +255,19 @@ change in `web/`.
   touching one of its `samplePoints`): tree crowns, buildings (incl. passages), viaducts. `render.js` collects
   `this._covered` for all cars/peds/bikes/tram cars and the player, sets `stats.cover` (player) / `stats.silhouettes`,
   and `drawCovered` masks the outline with the union of occluders on two scratch canvases (`destination-in`) after the lightmap.
+- **Car models and driving (0.41.0):** `carmodels.js` (pure): `CAR_MODELS` (11 Pkw), `SPECS` (drive fwd/rwd/awd, engine
+  front/mid/rear/floor, mass, front weight share, CG height `h`, wheelbase, track, kW, vmax, tyre `mu`, yaw inertia factor,
+  `noAids`), `carModel(car)` (fixed `car.model` or id hash, kind for special vehicles, player car = limousine), `specOf`,
+  `specLine`. `dynamics.js stepDynamics` = single-track model (substeps 4, SI inside): slip angles in the wheel frame,
+  tyre curve `sin(C·atan(Bα))`, friction circle per axle, longitudinal load transfer (suspension-lagged `dyn.ax`), lateral
+  load sensitivity by `h/track`, ASR + ESP (drive cut by slip angle, yaw-rate damping), ABS, handbrake drift, kinematic
+  blend below 1–4 m/s. `DYN.fun` is the fun layer (grip, brakes, power, steering, handbrake) – tune there, keep the
+  physics honest. Only the player's car (`car.driver === 'player'`, not bikes) uses it; AI/parked cars stay on the
+  arcade model in `car.js` (traffic tests depend on it). `car.dyn` = state for HUD/tests (`delta`, `ax/ay`, `alphaF/R`,
+  `esp`, `understeer`); `car.esp` set from `w.esp` (console `esp`). `vehicles.js bodyShift` = pitch/roll offset;
+  `soundscape.js engineFor` picks `MODEL_ENGINES` when `car.dyn || car.model` (electric = whine in `audio.js`).
+  The mission bot (`tests/helpers/bot.js`) drives with pure pursuit (curvature → steering angle), corner look-ahead
+  braking (`cornerCap`), loop skipping and stuck/orbit recovery – keep it player-like when tuning the physics.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.

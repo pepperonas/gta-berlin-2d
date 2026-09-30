@@ -2,6 +2,8 @@
 // Fläche in jedes Fenster ganz hineinpasst (Maßstab = min(Breite/1280, Höhe/720)); ist das Fenster breiter oder höher,
 // wächst die virtuelle Fläche mit (vw ≥ 1280, vh ≥ 720). Das Spiel-HUD hängt an den Fensterrändern (5 % Title-Safe-Rand,
 // TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
+import { specOf } from './carmodels.js';
+const DRIVE_SHORT = { fwd: 'FRONT', rwd: 'HECK', awd: 'ALLRAD' };
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
 import { stationById, boardable } from './station.js';
 import { locationName, nearestPoi } from './map.js';
@@ -409,6 +411,13 @@ export class Hud {
       c.fillStyle = hp > 0.6 ? '#4cd964' : hp > 0.3 ? '#ffcc00' : '#ff3b30';
       if (hp > 0) { rr(c, x + 20, y + 84, (w - 40) * hp, 10, 5); c.fill(); }
       if (car.cargo) this.text('▣ Kisten', x + w - 20, y + 30, { size: 16, align: 'right', color: '#e0b060', weight: 700 });
+      else if (car.dyn) { // Fahrdynamik: Modell und Antrieb, ESP-Leuchte blinkt beim Eingreifen, „ESP AUS“ dauerhaft gelb
+        const sp = specOf(car);
+        this.text(sp.label, x + w - 20, y + 26, { size: 12, align: 'right', color: '#ddd', weight: 700 });
+        this.text(DRIVE_SHORT[sp.drive], x + w - 20, y + 42, { size: 12, align: 'right', color: '#9aa', weight: 700 });
+        const off = world.esp === false || sp.noAids, on = car.dyn.esp && Math.floor(performance.now() / 120) % 2 === 0;
+        if (off || on) this.text(off ? 'ESP AUS' : 'ESP', x + w - 20, y + 60, { size: 12, align: 'right', color: '#ffb020', weight: 800 });
+      }
     }
 
     // Unten rechts zu Fuß: Waffe, Magazin, Nachladen, Lebenspunkte

@@ -1,0 +1,173 @@
+// Fahrdynamik des gefahrenen Autos (rein rechnerisch, deterministisch): Einspurmodell mit Reifenkräften an Vorder- und
+// Hinterachse. Ziel: fühlt sich echt an, spielt sich gut. Der Charakter jedes Autos folgt aus der Physik (unten); eine
+// Spielspaß-Schicht (DYN.fun) macht es großzügiger als die Wirklichkeit – mehr Grip, viel kräftigere Bremsen, etwas
+// mehr Leistung bei echtem Höchsttempo, engerer Wendekreis, flinke Lenkung, ESP fängt ein ausbrechendes Heck ab
+// (statt es nur abzuwürgen), Handbremse zum Driften (Heck verliert Seitenhalt, der Schwung bleibt). „esp aus“ = roh.
+// - Schräglaufwinkel je Achse → Seitenkraft über eine Reifenkennlinie (steigt, erreicht bei ≈ 8° ihr Maximum, fällt im
+//   Rutschen auf ≈ 80 %): über dem Grenzbereich schiebt das Auto oder bricht aus.
+// - Kammscher Kreis je Achse: Antriebs- oder Bremskraft verbraucht Haftung, die dann seitlich fehlt. Frontantrieb schiebt
+//   unter Last über die Vorderräder (Untersteuern), Heckantrieb drückt das Heck herum (Übersteuern), Allrad verteilt.
+// - Dynamische Achslast: Beschleunigen lädt die Hinterachse (Heckantrieb zieht besser an, Front dreht durch), Bremsen
+//   die Vorderachse (Heck wird leicht, Lastwechsel). Je höher der Schwerpunkt, desto stärker; dazu verliert ein hoher
+//   Schwerpunkt in schnellen Kurven Haftung (Querlastverschiebung).
+// - Motorlage: Gewichtsverteilung und Gierträgheit – Mittelmotor dreht spontan ein, Heckmotor pendelt (schweres Heck).
+// - Handbremse blockiert die Hinterräder: Gleitreibung entgegen der Rutschrichtung, das Heck kommt.
+// - ABS an der Fußbremse; Durchdrehen und Rutschen sind sichtbar (car.spin, car.skid) und hörbar.
+// Einheiten innen SI (m, s, N, kg), außen px (10 px = 1 m). car.dyn hält den Zustand für Anzeige und Tests.
+import { specOf } from './carmodels.js';
+import { AQUA } from './traction.js';
+
+export const DYN = {
+  substeps: 4,
+  g: 9.81,
+  peak: 1.4,          // Formfaktor der Reifenkennlinie (sin(C·atan(Bα)); Gleiten ≈ sin(C·π/2) ≈ 0,8 des Maximums)
+  stiff: [17, 19],    // Schräglaufsteifigkeit je Radlast (1/rad) vorn/hinten
+  steerRate: 4,       // rad/s Lenkeinschlag (Lenkrad drehen), zurück zur Mitte schneller
+  centerRate: 6,
+  steerAssist: 1.3,   // Einschlag höchstens so weit, dass das Auto knapp (×1,3) über die Haftgrenze kann
+  locked: 0.78,       // Gleitreibung durchdrehender Räder relativ zur Haftung
+  abs: 0.95,          // ABS nutzt 95 % der Haftung zum Bremsen, der Rest bleibt zum Lenken
+  esp: [0.9, 0.07, 0.14, 0.85], // ASR/ESP: Antrieb je Achse ≤ 90 % der Haftung, ab 4° Schräglauf zurückgenommen (bis −85 % bei 12°)
+  espYaw: 5,          // 1/s: ESP bremst die Gierrate zurück, sobald sie über der gelenkten liegt (Heck kommt → abgefangen)
+  // Spielspaß: grip (Reifen), brake (Bremsen zusätzlich zum Grip), power (Anzug; Höchsttempo bleibt echt),
+  // steer (Wendekreis), handbrake: [Seitenhalt hinten, Bremskraft hinten] relativ zur Haftung
+  lowLock: [0.95, 3, 9], // Rangieren: bis 3 m/s darf die Lenkung bis 0,95 rad einschlagen, bis 9 m/s auf den Normalwert
+  fun: { grip: 1.4, brake: 1.25, power: 1.2, steer: 1.2, handbrake: [0.4, 0.3] },
+  roll: 0.015,        // Rollwiderstand
+  engineBrake: 0.9,   // m/s² Schleppmoment am Antrieb ohne Gas
+  reverse: 8.3,       // m/s (30 km/h)
+  suspension: 0.12,   // s Zeitkonstante für Nicken/Wanken
+  kinematic: [1, 4],   // m/s: darunter rollt das Auto rein geometrisch, darüber mit Reifenkräften (weich überblendet)
+  espFrom: 4,          // m/s: ESP regelt erst oberhalb (Rangieren, Anfahren mit Einschlag)
+};
+
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+
+// Reifenkennlinie: Kraftanteil (−1…1) bei Schräglauf α für Steifigkeit B (je Radlast)
+export const tireCurve = (alpha, stiff) => Math.sin(DYN.peak * Math.atan(stiff / DYN.peak * alpha));
+
+// Achsgeometrie aus den Daten: a = Schwerpunkt → Vorderachse, b = → Hinterachse, Gierträgheit
+export function geometry(spec) {
+  const a = spec.wb * (1 - spec.front), b = spec.wb * spec.front;
+  return { a, b, Iz: spec.mass * a * b * spec.yaw * spec.yaw };
+}
+
+// Ein Schritt dt. surf = { grip, drag } (Untergrund), tr = Wetterfaktoren (traction.js), ctl = Bedienung.
+export function stepDynamics(car, dt, surf, tr, ctl) {
+  const spec = specOf(car), geo = geometry(spec), m = spec.mass, g = DYN.g;
+  const d = car.dyn ??= { esp: 0, delta: 0, ax: 0, ay: 0, alphaF: 0, alphaR: 0, spinF: 0, spinR: 0, lockR: 0, understeer: 0 };
+  const aq = (car.aqua ?? 0) > 0;
+  const F = DYN.fun, muBase = spec.mu * (surf.grip ?? 1) * F.grip;
+  const P = spec.kW * 1000 * F.power, vmax = spec.vmax / 3.6;
+  const roll = DYN.roll * m * g * (surf.drag ?? 1);
+  const cd = Math.max(0.05, (P * 0.92 / vmax - DYN.roll * m * g) / (vmax * vmax)); // Höchsttempo aus Leistung und Luftwiderstand
+  const steerMax0 = Math.min(0.8, spec.steerMax * F.steer), [lockLow, v0, v1] = DYN.lowLock;
+  // Körperfeste Geschwindigkeiten (m/s): u längs, v quer (+ = rechts), w Gierrate (+ = im Uhrzeigersinn)
+  let c = Math.cos(car.angle), s = Math.sin(car.angle);
+  let u = (car.vx * c + car.vy * s) / 10, v = (-car.vx * s + car.vy * c) / 10, w = car.angVel;
+  const h = dt / DYN.substeps;
+  let spinAny = 0, skid = 0;
+  for (let k = 0; k < DYN.substeps; k++) {
+    const speed = Math.hypot(u, v), [k0, k1] = DYN.kinematic, qs = clamp((speed - k0) / (k1 - k0), 0, 1);
+    // Lenkung: Einschlag folgt der Eingabe mit endlicher Geschwindigkeit; bei Tempo begrenzt auf knapp über die Haftgrenze
+    const steerMax = steerMax0 + (lockLow - steerMax0) * (1 - clamp((Math.abs(u) - v0) / (v1 - v0), 0, 1)); // Spielspaß: enger Wendekreis
+    const lim = Math.min(steerMax, Math.max(0.05, Math.atan(DYN.steerAssist * spec.wb * muBase * tr.lat * g / Math.max(1, u * u))));
+    const target = clamp(ctl.steer, -1, 1) * lim * (tr.steer ?? 1);
+    const rate = Math.abs(target) < Math.abs(d.delta) ? DYN.centerRate : DYN.steerRate;
+    d.delta += clamp(target - d.delta, -rate * h, rate * h);
+    const delta = d.delta;
+    // Achslasten mit Längslastverschiebung (Beschleunigung d.ax aus dem letzten Teilschritt, gefedert)
+    const dF = m * d.ax * spec.h / spec.wb;
+    const Fzf = clamp(m * g * spec.front - dF, 0.1 * m * g, 0.9 * m * g), Fzr = m * g - Fzf;
+    // Querlastverschiebung: hoher Schwerpunkt + schmale Spur → weniger Seitenhaftung in schnellen Kurven
+    const mu = muBase * (1 - 0.22 * clamp(spec.h / spec.track * Math.abs(d.ay) / g, 0, 1));
+    const muX = mu * (tr.accel ?? 1), muB = mu * F.brake * (tr.brake ?? 1) * (aq ? AQUA.brake : 1), muY = mu * (tr.lat ?? 1) * (aq ? AQUA.lat : 1);
+    // --- Längskräfte je Achse ---
+    let Fxf = 0, Fxr = 0, spinF = 0, spinR = 0, lockR = 0, esp = 0;
+    const fwd = u > -0.5;
+    if (ctl.throttle > 0 && fwd) {
+      const Fd = ctl.throttle * Math.min(P / spec.vLow, P / Math.max(0.5, u)) * (u < vmax ? 1 : 0);
+      const share = spec.drive === 'fwd' ? 1 : spec.drive === 'rwd' ? 0 : spec.awdFront;
+      let want = [Fd * share, Fd * (1 - share)];
+      if (spec.drive === 'awd') { // Mittendifferenzial mit Sperre: was eine Achse nicht übertragen kann, bekommt die andere
+        const cap = [muX * Fzf, muX * Fzr];
+        for (const [i, j] of [[0, 1], [1, 0]]) if (want[i] > cap[i]) { want[j] += want[i] - cap[i]; want[i] = cap[i]; }
+      }
+      if (car.esp !== false && !spec.noAids) { // ASR: nie durchdrehen; ESP (ab Rangiertempo): Gas weg, sobald eine Achse rutscht
+        const [k, a0, span, cut] = DYN.esp, esc = speed > DYN.espFrom ? 1 : 0;
+        const lim = (al, Fz) => muX * Fz * k * (1 - esc * cut * clamp((Math.abs(al) - a0) / span, 0, 1));
+        const lf = lim(d.alphaF, Fzf), lr = lim(d.alphaR, Fzr);
+        if (want[0] > lf || want[1] > lr) esp = 1;
+        want = [Math.min(want[0], lf), Math.min(want[1], lr)];
+      }
+      const drive = (F, Fz) => (F > muX * Fz ? [muX * Fz * DYN.locked, 1] : [F, 0]); // mehr als die Haftung → Räder drehen durch
+      [Fxf, spinF] = drive(want[0], Fzf); [Fxr, spinR] = drive(want[1], Fzr);
+    } else if (ctl.throttle <= 0 && Math.abs(u) > 0.3 && !ctl.brake) { // Schleppmoment am Antrieb
+      const Fe = -sgn(u) * DYN.engineBrake * m * Math.min(1, Math.abs(u) / 4);
+      if (spec.drive === 'fwd') Fxf += Fe; else if (spec.drive === 'rwd') Fxr += Fe; else { Fxf += Fe * spec.awdFront; Fxr += Fe * (1 - spec.awdFront); }
+    }
+    if (ctl.brake > 0) {
+      if (u > 0.5) { // Fußbremse mit ABS: je Achse höchstens bis an die Haftgrenze
+        const Fb = ctl.brake * muB * m * g;
+        Fxf -= Math.min(Fb * spec.bias, muB * Fzf * DYN.abs); Fxr -= Math.min(Fb * (1 - spec.bias), muB * Fzr * DYN.abs);
+      } else if (u > -DYN.reverse) { // rückwärts
+        const Fr = ctl.brake * Math.min(P / spec.vLow, m * 3.5);
+        if (spec.drive === 'fwd') Fxf -= Math.min(Fr, muX * Fzf); else Fxr -= Math.min(Fr, muX * Fzr);
+      }
+    }
+    // --- Querkräfte: Schräglaufwinkel an den Achsen (bei Schritttempo gegen Division durch 0 gesichert) ---
+    // Schräglauf aus der Radgeschwindigkeit im eigenen Radsystem (quer zur Laufrichtung des gelenkten Rades): im Stand
+    // null (kein Schräglauf, auch bei vollem Einschlag), rückwärts richtig herum
+    const vfa = v + w * geo.a, cd0 = Math.cos(delta), sd0 = Math.sin(delta);
+    const alphaF = Math.atan2(vfa * cd0 - u * sd0, Math.max(Math.abs(u * cd0 + vfa * sd0), 1.5));
+    const alphaR = Math.atan2(v - w * geo.b, Math.max(Math.abs(u), 1.5));
+    const lat = (alpha, Fz, Fx, stiffK, slipping) => {
+      const cap = Math.sqrt(Math.max(0, (muY * Fz) ** 2 - Fx * Fx)) * (slipping ? 0.8 : 1);
+      return -cap * tireCurve(alpha, stiffK);
+    };
+    // bei Schritttempo übernimmt die Geometrie (unten): Reifenquerkräfte dort ausgeblendet, sonst bremsen sie das Anfahren
+    let Fyf = lat(alphaF, Fzf, Fxf, DYN.stiff[0], spinF) * qs;
+    let Fyr = lat(alphaR, Fzr, Fxr, DYN.stiff[1], spinR) * qs;
+    if (ctl.handbrake && speed > 0.3) { // Handbremse: Heck verliert Seitenhalt (Gleiten), bremst nur mäßig – driften
+      const [side, drag] = F.handbrake, vy = v - w * geo.b;
+      Fyr = -muY * side * Fzr * clamp(vy / 1.5, -1, 1) * qs;
+      Fxr = -sgn(u) * muB * drag * Fzr; lockR = 1;
+    }
+    // --- Bewegungsgleichungen (Körperfest) ---
+    const cs = Math.cos(delta), sn = Math.sin(delta);
+    const FfX = Fxf * cs - Fyf * sn, FfY = Fxf * sn + Fyf * cs;
+    const drag = cd * u * Math.abs(u) + (Math.abs(u) > 0.05 ? roll * sgn(u) : 0);
+    const ax = (FfX + Fxr - drag) / m, ay = (FfY + Fyr) / m;
+    let dw = (geo.a * FfY - geo.b * Fyr) / geo.Iz;
+    const du = ax + v * w, dv = ay - u * w;
+    // ESP-Gierregelung: dreht das Auto schneller, als die Lenkung verlangt (Übersteuern), bremst es die Drehung ab –
+    // das Heck kommt, wird aber gefangen. Nicht bei Handbremse (gewollter Drift) und nicht ohne ESP.
+    if (car.esp !== false && !spec.noAids && !ctl.handbrake && speed > DYN.espFrom && u > 0) {
+      const wRef = u * Math.tan(delta) / spec.wb, over = Math.abs(w) - Math.abs(wRef);
+      if (over > 0.05 && Math.abs(d.alphaR) > 0.06) { dw -= sgn(w) * DYN.espYaw * over; esp = 1; }
+    }
+    u += du * h; v += dv * h; w += dw * h;
+    if (aq) w += (car.aquaYaw ?? 0) * h * 4; // Aquaplaning: das schwimmende Auto giert
+    // Schritttempo: rein geometrisch rollen (Reifenmodell ist dort singulär); dazwischen weich überblenden
+    const sp = Math.hypot(u, v), q = clamp((sp - k0) / (k1 - k0), 0, 1);
+    if (q < 1) {
+      const wk = u * Math.tan(delta) / spec.wb; // Hinterachse rollt ohne Querrutschen: im Schwerpunkt v = ω·b
+      w = q * w + (1 - q) * wk; v = q * v + (1 - q) * wk * geo.b;
+      if (!(ctl.throttle > 0) && !(ctl.brake > 0) && sp < 0.25) { u = 0; v = 0; w = 0; } // steht
+    }
+    const tau = h / DYN.suspension;
+    d.ax += (ax - d.ax) * Math.min(1, tau); d.ay += (ay - d.ay) * Math.min(1, tau);
+    d.alphaF = alphaF * qs; d.alphaR = alphaR * qs; d.spinF = spinF; d.spinR = spinR; d.lockR = lockR; d.esp = esp;
+    spinAny = Math.max(spinAny, spinF, spinR);
+    if (sp > 3) skid = Math.max(skid, clamp((Math.max(Math.abs(alphaF), Math.abs(alphaR)) - 0.12) / 0.2, 0, 1), lockR * 0.8, (spinF || spinR) ? 0.6 : 0);
+    car.angle += w * h;
+    c = Math.cos(car.angle); s = Math.sin(car.angle);
+    car.x += (u * c - v * s) * 10 * h; car.y += (u * s + v * c) * 10 * h;
+  }
+  // Untersteuern (+) / Übersteuern (−): Schräglauf vorn minus hinten (Fahrtrichtung beachtet)
+  d.understeer = (Math.abs(d.alphaF) - Math.abs(d.alphaR));
+  car.vx = (u * c - v * s) * 10; car.vy = (u * s + v * c) * 10; car.angVel = w;
+  car.spin = spinAny;
+  car.skid = skid;
+}

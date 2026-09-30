@@ -32,6 +32,7 @@ import { pointOn, tramTrackNear, TRAIN } from './transit.js';
 import { vehicleState, transitNear, alightSpot, stationExit, spotFreeHere, RIDE, elevated } from './ride.js';
 import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from './playertrain.js';
 import { stepLevel, initialLevel, touch } from './levels.js';
+import { specLine } from './carmodels.js';
 import { stationsNear, stationById, keepInside, stairAt, arrivalAt, boardable, toLocal, toWorld, STATION, stationName } from './station.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
@@ -438,6 +439,8 @@ function tryEnter(w, only = null, { quiet = false } = {}) {
   }
   best.driver = 'player'; best.ai = null;
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+  best.dyn = null; // Fahrdynamik (dynamics.js) beginnt mit geradem Lenkrad
+  if (!isBikeKind(best.kind) && !quiet) w.notice = { text: specLine(best), t: 3 }; // „Sportwagen · Mittelmotor · Heckantrieb · 320 kW“
   p.inCar = best.id;
   if (best.role !== 'player' && !isBikeKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id;
   if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
@@ -831,6 +834,7 @@ export function updateWorld(w, input, dt) {
   if (pc) {
     if (pc.wrecked) applyDriverInput(pc, { throttle: 0, brake: 0, steer: 0, handbrake: false, horn: false });
     else applyDriverInput(pc, input);
+    pc.esp = w.esp !== false; // ASR/ESP (Befehl „esp aus“ schaltet ab)
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
   } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) { updatePlayerOnFoot(w, input, dt); updateStationPresence(w); } }

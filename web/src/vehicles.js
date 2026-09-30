@@ -1,22 +1,28 @@
-// Autos in der Draufsicht: fünf Modelle innerhalb derselben Kollisionsbox (42 × 20 px = 4,2 × 2,0 m).
+// Autos in der Draufsicht: elf Pkw-Modelle (carmodels.js) innerhalb derselben Kollisionsbox (42 × 20 px = 4,2 × 2,0 m).
 // Karosserie, Scheiben und Dach werden je Modell × Farbe einmal doppelt aufgelöst gezeichnet (Sprite-Cache),
 // was sich bewegt – Räder (Vorderräder lenken), Licht, Blinker – kommt jedes Bild dazu.
-// Das Modell ist reine Darstellung: aus der Autonummer abgeleitet, die Simulation merkt davon nichts.
+// Das Modell (und seine Technik) kommt aus carmodels.js; gefahrene Autos nicken und wanken mit ihrem Schwerpunkt.
 import { shade } from './assets.js';
+import { CAR_MODELS, SPECIAL_MODELS, carModel, specOf } from './carmodels.js';
 
-export const CAR_MODELS = ['kleinwagen', 'limousine', 'kombi', 'transporter', 'taxi'];
+export { CAR_MODELS, SPECIAL_MODELS, carModel };
 export const TAXI_COLOR = '#f1e9c8'; // Berliner Taxi: hellelfenbein
 
-const h01 = (n) => { const x = Math.sin(n * 91.345 + 12.9898) * 43758.5453; return x - Math.floor(x); };
-
-export const SPECIAL_MODELS = ['truck', 'delivery', 'garbage', 'police', 'ambulance', 'bus'];
-export function carModel(car) {
-  if (car.model) return car.model;
-  if (car.kind && car.kind !== 'car') return car.kind; // LKW, Paketwagen, Müllauto, Einsatzfahrzeuge (fleet.js)
-  if (car.role === 'player') return 'limousine';
-  const r = h01(car.id);
-  return r < 0.08 ? 'taxi' : r < 0.2 ? 'transporter' : r < 0.45 ? 'kleinwagen' : r < 0.7 ? 'kombi' : 'limousine';
-}
+// Umriss je Pkw-Modell: len = Verkürzung, inset = schmaler, r = Eckenradius, back/front = Scheibenkranz (vom Heck bzw.
+// von der Front gemessen), cut = Schräge der Front-/Heckscheibe, roof = Dachfarbe (null = Wagenfarbe heller)
+const SHAPES = {
+  kleinwagen: { len: 6, inset: 0, r: 5.5, back: 6, front: 9, cut: [3.5, 2.5] },
+  kompakt: { len: 3, inset: 0, r: 5.5, back: 6, front: 10, cut: [3.5, 1.2] },
+  limousine: { len: 0, inset: 0, r: 5.5, back: 9, front: 12, cut: [3.5, 2.5] },
+  taxi: { len: 0, inset: 0, r: 5.5, back: 9, front: 12, cut: [3.5, 2.5] },
+  kombi: { len: 0, inset: 0, r: 5.5, back: 5, front: 12, cut: [3.5, 0.8] },
+  elektro: { len: 0, inset: 0, r: 6, back: 6, front: 11, cut: [4, 1.5], glassRoof: true },
+  gelaende: { len: 0, inset: 0, r: 3, back: 4, front: 11, cut: [2, 0.5], rails: true, spare: true },
+  sportwagen: { len: 0, inset: 0, r: 7, back: 17, front: 14, cut: [5, 3], vents: 'mid' },
+  heckcoupe: { len: 2, inset: 0.5, r: 8, back: 11, front: 13, cut: [4, 5], vents: 'rear' },
+  zweitakter: { len: 9, inset: 1, r: 7, back: 6, front: 9, cut: [3, 2], roof: '#ecebe4' },
+};
+export const bodyLength = (model, L) => L - (SHAPES[model]?.len ?? 0);
 export const carColor = (car) => (car.wrecked ? '#3b332d' : carModel(car) === 'taxi' ? TAXI_COLOR : car.color);
 export const hasLightBar = (car) => car.kind === 'police' || car.kind === 'ambulance';
 
@@ -29,16 +35,19 @@ function rr(g, x, y, w, h, r) {
 // Karosserie in lokalen Koordinaten: +x = vorn, Mitte (0,0)
 function paintBody(g, model, body, L, W, wrecked) {
   if (SPECIAL_MODELS.includes(model)) return paintSpecial(g, model, body, L, W, wrecked);
-  const len = model === 'kleinwagen' ? L - 6 : L, x0 = -len / 2, y0 = -W / 2;
+  const sh = SHAPES[model] ?? SHAPES.limousine;
+  const len = L - sh.len, x0 = -len / 2;
+  W -= 2 * sh.inset;
+  const y0 = -W / 2;
   // Querverlauf: Kanten dunkler, Mitte heller → Wölbung
   const gr = g.createLinearGradient(0, y0, 0, y0 + W);
   gr.addColorStop(0, shade(body, -0.28)); gr.addColorStop(0.5, shade(body, 0.1)); gr.addColorStop(1, shade(body, -0.34));
-  g.fillStyle = gr; rr(g, x0, y0, len, W, model === 'transporter' ? 3 : 5.5); g.fill();
+  g.fillStyle = gr; rr(g, x0, y0, len, W, model === 'transporter' ? 3 : sh.r); g.fill();
   g.strokeStyle = shade(body, -0.5); g.lineWidth = 0.9; g.stroke();
   const glass = wrecked ? '#1c1916' : '#1f2a36';
   const glassG = g.createLinearGradient(0, y0, 0, y0 + W);
   glassG.addColorStop(0, glass); glassG.addColorStop(0.45, wrecked ? '#2a2521' : '#4b6379'); glassG.addColorStop(1, glass);
-  const roof = shade(body, 0.14);
+  const roof = sh.roof ?? shade(body, 0.14);
   const cabin = (xs, xe, frontCut, rearCut) => { // Scheibenkranz mit abgeschrägter Front-/Heckscheibe
     g.fillStyle = glassG; g.beginPath();
     g.moveTo(xs + rearCut, y0 + 2.2); g.lineTo(xe - frontCut, y0 + 2.2); g.lineTo(xe, y0 + 4); g.lineTo(xe, y0 + W - 4);
@@ -50,10 +59,24 @@ function paintBody(g, model, body, L, W, wrecked) {
     g.strokeStyle = shade(body, -0.12); g.lineWidth = 0.7;
     for (let x = x0 + 6; x < len / 2 - 13; x += 5) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
   } else {
-    const back = model === 'kombi' ? x0 + 5 : model === 'kleinwagen' ? x0 + 6 : x0 + 9;
-    const front = model === 'kleinwagen' ? len / 2 - 9 : len / 2 - 12;
-    cabin(back, front, 3.5, model === 'kombi' ? 0.8 : 2.5);
-    g.fillStyle = roof; rr(g, back + (model === 'kombi' ? 1.5 : 3.5), y0 + 3.4, front - back - 7.5, W - 6.8, 2.2); g.fill();
+    const back = x0 + sh.back, front = len / 2 - sh.front;
+    if (sh.vents === 'mid') { // Mittelmotor: Motorabdeckung mit Lüftungsschlitzen hinter der Kabine, Lufteinlässe an den Flanken
+      g.fillStyle = shade(body, -0.18); rr(g, x0 + 4, y0 + 4, back - x0 - 5, W - 8, 2); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 0.6;
+      for (let x = x0 + 6; x < back - 2; x += 1.8) { g.beginPath(); g.moveTo(x, y0 + 5.5); g.lineTo(x, y0 + W - 5.5); g.stroke(); }
+      g.fillStyle = '#15181c'; g.fillRect(back - 2, y0 + 0.4, 4, 1.4); g.fillRect(back - 2, y0 + W - 1.8, 4, 1.4);
+      g.fillStyle = shade(body, -0.35); g.fillRect(x0 + 0.6, y0 + 2, 1.6, W - 4);                         // Heckflügel
+    }
+    if (sh.vents === 'rear') { // Heckmotor: Lüftungsgitter im Motordeckel ganz hinten
+      g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 0.6;
+      for (let x = x0 + 2.5; x < x0 + 8; x += 1.4) { g.beginPath(); g.moveTo(x, y0 + 5); g.lineTo(x, y0 + W - 5); g.stroke(); }
+    }
+    cabin(back, front, sh.cut[0], sh.cut[1]);
+    const rx = back + Math.max(1.5, sh.cut[1] + 1), rw = front - rx - sh.cut[0] - 1;
+    if (sh.glassRoof) { g.fillStyle = '#1a2330'; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); g.fillStyle = 'rgba(160,190,220,0.25)'; g.fillRect(rx + 1, y0 + 4.2, rw - 2, 1.6); }
+    else { g.fillStyle = roof; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); }
+    if (sh.rails) { g.fillStyle = '#2b2e33'; g.fillRect(rx, y0 + 3.6, rw, 0.9); g.fillRect(rx, y0 + W - 4.5, rw, 0.9); }
+    if (sh.spare) { g.fillStyle = '#1c1d20'; g.beginPath(); g.arc(x0 - 0.6, 0, 3.4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#55585e'; g.beginPath(); g.arc(x0 - 0.6, 0, 1.4, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = shade(body, -0.1); g.fillRect(front + 1.5, y0 + 2.5, 0.8, W - 5);            // Haubenkante
     if (model === 'taxi' && !wrecked) { // Dachschild
       g.fillStyle = '#ffd400'; rr(g, -3.5, -2.2, 7, 4.4, 1); g.fill();
@@ -62,7 +85,7 @@ function paintBody(g, model, body, L, W, wrecked) {
   }
   // Außenspiegel
   g.fillStyle = shade(body, -0.2);
-  const mx = model === 'transporter' ? len / 2 - 11 : model === 'kleinwagen' ? len / 2 - 10 : len / 2 - 13;
+  const mx = model === 'transporter' ? len / 2 - 11 : len / 2 - (SHAPES[model]?.front ?? 12) - 1;
   g.fillRect(mx, y0 - 1.6, 2.2, 1.8); g.fillRect(mx, y0 + W - 0.2, 2.2, 1.8);
   if (wrecked) { // Ruß und Beulen
     g.fillStyle = 'rgba(0,0,0,0.45)';
@@ -180,15 +203,19 @@ export function drawCarBody(ctx, car, t) {
   const spr = carSprite(model, body, L, W, car.wrecked);
   if (!spr) return false;
   // Räder (unter der Karosserie, an den Ecken sichtbar); Vorderräder lenken mit
-  const steer = (car.controls?.steer ?? 0) * 0.45, wx = L / 2 - 8, wy = W / 2 - 1.2;
+  const steer = car.dyn ? car.dyn.delta : (car.controls?.steer ?? 0) * 0.45, wx = L / 2 - 8, wy = W / 2 - 1.2;
   ctx.fillStyle = '#16171a';
   for (const [x, y, front] of [[wx, -wy, 1], [wx, wy, 1], [-wx + 1, -wy, 0], [-wx + 1, wy, 0]]) {
     ctx.save(); ctx.translate(x, y); if (front) ctx.rotate(steer); ctx.fillRect(-3.8, -1.7, 7.6, 3.4); ctx.restore();
   }
+  // Nicken und Wanken (gefahrenes Auto, dynamics.js): die Karosserie weicht der Beschleunigung aus, je höher der
+  // Schwerpunkt, desto weiter – Bremsen taucht vorn ein, Anfahren hinten, Kurven drücken nach außen
+  const [bx, by] = bodyShift(car);
+  if (bx || by) ctx.translate(bx, by);
   ctx.drawImage(spr, -L / 2 - 4, -W / 2 - 4, L + 8, W + 8);
-  if (car.wrecked) return true;
+  if (car.wrecked) { if (bx || by) ctx.translate(-bx, -by); return true; }
   drawDuty(ctx, car, t, L, W);
-  const len = model === 'kleinwagen' ? L - 6 : L;
+  const len = bodyLength(model, L);
   // Scheinwerfer, Rück-, Brems-, Rückfahrlicht, Blinker
   ctx.fillStyle = '#fff6c8';
   ctx.fillRect(len / 2 - 2.2, -W / 2 + 2, 2.2, 3.6); ctx.fillRect(len / 2 - 2.2, W / 2 - 5.6, 2.2, 3.6);
@@ -203,5 +230,15 @@ export function drawCarBody(ctx, car, t) {
     ctx.fillStyle = '#ffa31a';
     for (const y of car.hazard ? [W / 2 - 1.8, -W / 2 + 0.2] : [blink > 0 ? W / 2 - 1.8 : -W / 2 + 0.2]) { ctx.fillRect(len / 2 - 3, y, 3, 1.6); ctx.fillRect(-len / 2, y, 3, 1.6); }
   }
+  if (bx || by) ctx.translate(-bx, -by);
   return true;
+}
+
+// Versatz der Karosserie (px, Fahrzeugkoordinaten) aus der gefederten Beschleunigung: 0,35 px je m/s² und Meter
+// Schwerpunkthöhe, höchstens 6 px (bewusst etwas übertrieben: man soll den Schwerpunkt sehen). Ohne Fahrdynamik (Verkehr, geparkt) keiner.
+export function bodyShift(car) {
+  const d = car.dyn;
+  if (!d || car.wrecked) return [0, 0];
+  const k = specOf(car).h * 0.35, cl = (x) => Math.max(-6, Math.min(6, x));
+  return [cl(-d.ax * k), cl(-d.ay * k)];
 }

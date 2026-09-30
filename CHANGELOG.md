@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.41.0] – 2026-09-30
+
+### Neu
+- **Sechs neue Pkw-Modelle:** Kompaktwagen, Elektro-SUV, Geländewagen, Sportwagen (Mittelmotor), Heckmotor-Coupé und
+  Zweitakter – mit eigener Zeichnung (Lüftungsschlitze, Panoramadach, Reserverad, zweifarbiges Dach …) und eigenem
+  Motorklang (Zweitakter knattert, Elektro summt, Achtzylinder dreht hoch). `auto <modell>` stellt eines bereit.
+- **Echte Fahrdynamik für das eigene Auto:** Antrieb (Front/Heck/Allrad), Motorlage, Gewichtsverteilung,
+  Schwerpunkthöhe, Leistung und Reifen je Modell; Lastverschiebung, Kammscher Kreis, Reifenkennlinie. Heckantrieb
+  übersteuert unter Last, Frontantrieb untersteuert, Allrad zieht heraus, Mittelmotor ist agil, hoher Schwerpunkt wankt.
+- **Spielspaß vor Simulation:** mehr Grip, kräftige Bremsen, etwas mehr Anzug, enger Wendekreis, ASR/ESP fängt
+  Ausbrecher ab (Leuchte im Tacho, `esp aus` für rohes Fahren), Handbremse für kontrollierte Drifts.
+- Karosserie nickt und wankt sichtbar mit dem Schwerpunkt; Tacho zeigt Modell und Antrieb; Einsteigen nennt die Technik.
+
 ## [0.40.0] – 2026-09-30
 
 ### Geändert

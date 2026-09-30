@@ -113,7 +113,7 @@ test('Böen in der Welt: Pkw versetzt 0,5–1 m, auf der Brücke mehr, geparkte 
     const a = Math.atan2(w.weather.wind.y, w.weather.wind.x) + Math.PI / 2;
     // stärkste Böe der ersten 10 min suchen, dort 3 s messen
     let best = 0, bt = 0; for (let t = 0; t < 600; t += 0.1) { const g = gustPushProbe(w, t); if (g > best) { best = g; bt = t; } }
-    const c = createCar({ x: 0, y: 0 }); c.angle = a; c.vx = Math.cos(a) * 139; c.vy = Math.sin(a) * 139; c.lvl = lvl; c.driver = 'player';
+    const c = createCar({ x: 0, y: 0 }); c.angle = a; c.vx = Math.cos(a) * 139; c.vy = Math.sin(a) * 139; c.lvl = lvl; c.driver = 'player'; c.model = 'kompakt'; // festes Modell: gefahrene Autos haben echte Fahrdynamik
     let side = 0;
     for (let t = bt - 1.5; t < bt + 1.5; t += 1 / 60) {
       w.time = t;

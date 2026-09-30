@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 432 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 441 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -397,6 +397,24 @@ Gehtempo. Alle – auch der Spieler – laufen mit echtem Gangbild: Schritte und
 Vorlage und langen Schritten, weiches Anlaufen und Anhalten, Atmen im Stand. Der Spieler läuft in Laufrichtung und
 dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). Prüfseite: `http://localhost:8080/lab/figures.html`.
 
+## Fahrzeuge und Fahrgefühl
+
+Elf Pkw-Modelle fahren durch Berlin, jedes mit eigener Technik: Zweitakter (Front, 19 kW), Kleinwagen und Kompakt
+(Frontantrieb), Limousine, Taxi und Streifenwagen (Heckantrieb), Kombi, Elektro-SUV und Geländewagen (Allrad),
+Transporter, Sportwagen mit Mittelmotor und Heckmotor-Coupé. Beim Einsteigen zeigt eine Zeile Modell, Motorlage,
+Antrieb und Leistung; der Tacho nennt Modell und Antrieb. `auto sportwagen` (oder ein anderes Modell) stellt eines neben
+dich.
+
+Das selbst gefahrene Auto fährt mit echter Fahrdynamik (Einspurmodell mit Reifenkräften und Lastverschiebung): Mit
+Heckantrieb drängt das Heck beim Gasgeben in der Kurve, Frontantrieb schiebt über die Vorderräder, Allrad zieht sauber
+heraus; der Mittelmotor lenkt spontan ein, der Heckmotor hat viel Traktion und ein schweres Heck; ein hoher Schwerpunkt
+(Transporter, Geländewagen, Lkw) wankt und nickt sichtbar und hat weniger Kurvengrip. Das Ganze ist bewusst großzügiger
+als die Wirklichkeit, damit es Spaß macht: mehr Grip, sehr kräftige Bremsen (100–0 km/h in ≈ 25 m), etwas mehr
+Anzug, enger Wendekreis beim Rangieren. ASR/ESP ist an – es verhindert Durchdrehen und fängt ein ausbrechendes Heck ab
+(die ESP-Leuchte im Tacho blinkt); **Handbremse** (Leertaste/B) lässt das Heck kontrolliert herumkommen. Befehl `esp aus`
+schaltet die Fahrhilfen ab (der Zweitakter hat keine). Motorklang je Modell: Drei-, Vier-, Fünf-, Sechs-, Achtzylinder,
+Diesel, knatternder Zweitakter, summender Elektromotor. Der übrige Verkehr fährt weiter mit der einfachen Physik.
+
 ## Nahverkehr
 
 Busse, Straßenbahnen, S- und U-Bahnen fahren nach dem echten VBB-Fahrplan. **Mitfahren:** neben einem Wagen **G**
@@ -511,7 +529,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 432 automatischen Tests grün, darunter:
+- Alle 441 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -592,6 +610,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
     und Fahrer in jedem Fensterformat ohne Überlappung mit dem Auftrag; Statistik und Töne. Jede Schutzprüfung mit
     Mutationsprobe (über 30, alle erkannt); im Browser geprüft: U8 unter Kottbusser Tor (Tunnelansicht), M10 mit F am
     Führerstand übernommen und angefahren;
+  - Fahrdynamik: Spielgefühl (0–100 in der Reihenfolge der Datenblätter, echtes Höchsttempo, Bremsweg 100–0 unter 36 m),
+    Anfahren auf Schnee Allrad vor Heck vor Front, ASR verhindert Durchdrehen; Vollgas in der Kurve ohne ESP: Heck
+    übersteuert, Front untersteuert, Allrad dazwischen; ESP fängt den Heckantrieb ab; Mittelmotor lenkt schneller ein,
+    Heckmotor zieht auf Schnee besser an; hoher Schwerpunkt: weniger Kurvengrip, stärkeres Nicken, Kurve drückt die
+    Karosserie nach außen; Handbremse dreht das Auto und lässt den Schwung, enger Wendekreis; Verkehr ohne
+    Fahrdynamik, deterministisch; sechs Mutationsproben (Lastverschiebung, Antriebsachse, Gierträgheit, Kammscher
+    Kreis, Handbremse, Querlast) werden alle erkannt; Missions-Autopilot fährt mit der Fahrdynamik (Pure Pursuit,
+    vorausschauendes Bremsen);
   - Gebrauchsspuren: Schmutz nur in Senken, Ausbleichen nur auf Kuppen (dazwischen unverändert), Ölband in jeder
     Spurmitte innerhalb der Fahrbahn, nicht auf Pflaster; Zeichnen mit Schmutz, Ölband, Kontaktschatten, Vignette,
     Schnee deckt den Schmutz zu;

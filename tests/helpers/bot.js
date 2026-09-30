@@ -1,5 +1,7 @@
 // Autopilot für Tests: steuert den Spieler über abstrakte Eingaben (dieselben wie ein Mensch).
 // Routen über den echten Straßengraphen (A*, Straßen bis „service“ innerhalb des Gebiets).
+import { specOf } from '../../web/src/carmodels.js';
+import { DYN } from '../../web/src/dynamics.js';
 import { playerCar, speedOf } from '../../web/src/world.js';
 import { nearestEdge } from '../../web/src/map.js';
 import { wrapAngle, clamp } from '../../web/src/math.js';
@@ -77,19 +79,42 @@ export function driveTo(w, target, input, opts = {}) {
   const dx = target.x - car.x, dy = target.y - car.y, d = Math.hypot(dx, dy);
   const diff = wrapAngle(Math.atan2(dy, dx) - car.angle);
   const sp = speedOf(car);
-  input.steer = clamp(diff * 2.5, -1, 1);
+  // Mit Fahrdynamik (dynamics.js): Pure Pursuit – Krümmung 2·sin(Winkel)/Abstand, Lenkwinkel über den Radstand;
+  // ohne (Arcade): Winkelfehler × Verstärkung
+  if (car.dyn || car.driver === 'player') {
+    const wb = specOf(car).wb * 10, kappa = 2 * Math.sin(diff) / Math.max(d, 20);
+    input.steer = Math.abs(diff) > Math.PI / 2 ? Math.sign(diff) : clamp(Math.atan(kappa * wb) / (specOf(car).steerMax * DYN.fun.steer), -1, 1); // Ziel hinter dem Auto: voller Einschlag
+  } else input.steer = clamp(diff * 2.5, -1, 1);
   let want = opts.stop ? clamp((d - 6) * 1.2, 0, 200) : Math.abs(diff) > 0.7 ? 70 : opts.cruise ?? 160;
   if (opts.next && !opts.stop) { // vor Kurven abbremsen: Winkel am nächsten Wegpunkt
     const turn = Math.abs(wrapAngle(Math.atan2(opts.next.y - target.y, opts.next.x - target.x) - Math.atan2(dy, dx)));
     if (turn > 0.35) want = Math.min(want, 60 + d * 0.9 - turn * 20);
   }
-  if (sp < want) { input.throttle = 1; input.brake = 0; } else { input.throttle = 0; input.brake = sp - want > 30 ? 1 : 0.3; }
+  if (opts.cap !== undefined) want = Math.min(want, opts.cap); // vorausschauend: Kurve im Bremsweg (followRoute)
+  if (sp < want) { input.throttle = 1; input.brake = 0; } else { input.throttle = 0; input.brake = sp - want > 30 || (opts.cap !== undefined && sp > opts.cap + 6) ? 1 : 0.3; }
   if (Math.abs(diff) > (opts.reverseAt ?? (d < 60 ? 1.8 : 2.4))) { input.throttle = 0; input.brake = 1; input.steer = -input.steer; } // rückwärts rangieren (auch Wenden in engen Gassen)
   return d;
 }
 
 // Folgt einer Wegpunktliste per Pure Pursuit (Zielpunkt 45 px voraus auf der Linie) und hält am letzten Punkt.
 // Liefert true, sobald das Auto am Ziel steht. state wird zwischen Aufrufen weitergereicht.
+// Tempo, mit dem man die Kurven voraus (bis 70 m) mit echter Bremsleistung (4,5 m/s²) noch schafft:
+// √(v_Kurve² + 2·a·Abstand); scharfe Ecken ≈ 20 km/h, sanfte schneller.
+const BRAKE_PX = 45;
+function cornerCap(car, pts, i0) {
+  let cap = Infinity, dist = Math.hypot(pts[Math.min(i0 + 1, pts.length - 1)].x - car.x, pts[Math.min(i0 + 1, pts.length - 1)].y - car.y);
+  for (let i = i0 + 1; i < pts.length - 1 && dist < 700; i++) {
+    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+    const turn = Math.abs(wrapAngle(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x)));
+    if (turn > 0.3) {
+      const vc = turn > 1.2 ? 45 : turn > 0.7 ? 75 : 120;
+      cap = Math.min(cap, Math.sqrt(vc * vc + 2 * BRAKE_PX * dist));
+    }
+    dist += Math.hypot(c.x - b.x, c.y - b.y);
+  }
+  return cap;
+}
+
 export function followRoute(w, pts, input, state) {
   const car = playerCar(w);
   state.i ??= 0;
@@ -99,10 +124,12 @@ export function followRoute(w, pts, input, state) {
     if (((car.x - a.x) * dx + (car.y - a.y) * dy) / L2 < 1) break;
     state.i++;
   }
+  // Schleifen und Zacken in der Linie (Spurversatz an Knoten) überspringen: ist ein späterer Punkt schon nah, dorthin
+  for (let j = Math.min(pts.length - 2, state.i + 8); j > state.i; j--) if (Math.hypot(pts[j].x - car.x, pts[j].y - car.y) < 22) { state.i = j; break; }
   const a = pts[state.i], b = pts[Math.min(state.i + 1, pts.length - 1)];
   const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
   const t = Math.max(0, ((car.x - a.x) * dx + (car.y - a.y) * dy) / (L * L));
-  let rest = 28 + speedOf(car) * 0.12, px = a.x + dx * Math.min(1, t), py = a.y + dy * Math.min(1, t), k = state.i + 1;
+  let rest = 36 + speedOf(car) * 0.2, px = a.x + dx * Math.min(1, t), py = a.y + dy * Math.min(1, t), k = state.i + 1;
   let aim = { x: px, y: py };
   while (k < pts.length) {
     const seg = Math.hypot(pts[k].x - px, pts[k].y - py);
@@ -113,6 +140,14 @@ export function followRoute(w, pts, input, state) {
   const dGoal = Math.hypot(goal.x - car.x, goal.y - car.y);
   const last = k >= pts.length || dGoal < 60;
   const next = pts[Math.min(k + 2, pts.length - 1)];
-  driveTo(w, last ? goal : aim, input, { stop: last, next: last ? null : next, reverseAt: last ? undefined : 2.6 });
-  return last && dGoal < 20 && speedOf(car) < 10;
+  driveTo(w, last ? goal : aim, input, { stop: last, next: last ? null : next, reverseAt: last ? undefined : 2.6, cruise: state.cruise ?? 200, cap: last ? undefined : cornerCap(car, pts, state.i) });
+  // Festgefahren (Gas, aber kein Tempo – Nase an Wand oder Bordstein, echter Wendekreis): kurz mit Gegenlenkung zurück
+  const sp = speedOf(car);
+  if (state.back > 0) { state.back -= 1 / 60; input.throttle = 0; input.brake = 1; input.handbrake = false; input.steer = -state.backSteer; }
+  else if (input.throttle > 0 && sp < 8) { if ((state.stuck = (state.stuck ?? 0) + 1 / 60) > 1.2) { state.back = 1; state.backSteer = input.steer || 1; state.stuck = 0; } }
+  else if (sp > 20) state.stuck = 0;
+  // Kreisen ohne Fortschritt (Ziel liegt im Wendekreis): nach 4 s auf demselben Wegstück zurücksetzen
+  if (state.i !== state.lastI) { state.lastI = state.i; state.sameT = 0; }
+  else if (!last && (state.sameT = (state.sameT ?? 0) + 1 / 60) > 4 && !(state.back > 0)) { state.back = 1.5; state.backSteer = -(input.steer || 1); state.sameT = 0; }
+  return last && dGoal < 20 && sp < 10;
 }

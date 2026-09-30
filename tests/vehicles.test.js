@@ -9,13 +9,13 @@ import { placeOnLane, blinkFor, BLINK_AHEAD } from '../web/src/traffic.js';
 import { createWorld, updateWorld } from '../web/src/world.js';
 import { idle } from './helpers/bot.js';
 
-test('Automodelle: je Auto fest, alle fünf kommen vor, Spielerauto ist eine Limousine, Taxis sind elfenbein', () => {
-  const cars = Array.from({ length: 400 }, () => createCar({ x: 0, y: 0, color: '#2e86de' }));
+test('Automodelle: je Auto fest, alle elf kommen vor, Spielerauto ist eine Limousine, Taxis sind elfenbein', () => {
+  const cars = Array.from({ length: 1500 }, () => createCar({ x: 0, y: 0, color: '#2e86de' }));
   const seen = new Set(cars.map(carModel));
   for (const m of CAR_MODELS) assert.ok(seen.has(m), `Modell ${m} kommt vor`);
   assert.deepEqual(cars.map(carModel), cars.map(carModel), 'deterministisch');
   const taxis = cars.filter((c) => carModel(c) === 'taxi');
-  assert.ok(taxis.length > 5 && taxis.length < 80, `${taxis.length} Taxis von 400`);
+  assert.ok(taxis.length > 50 && taxis.length < 180, `${taxis.length} Taxis von 1500`);
   assert.ok(taxis.every((c) => carColor(c) === TAXI_COLOR));
   assert.equal(carModel(createCar({ x: 0, y: 0, role: 'player' })), 'limousine');
   const w = { ...cars[0], wrecked: true };
@@ -52,7 +52,7 @@ test('Auto-Sprites: Cache bleibt begrenzt; ohne Canvas null (flacher Rückfall)'
     getContext() { return new Proxy({}, { get: (t, k) => (k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {}) }); }
   };
   for (let i = 0; i < SPRITE_CACHE_MAX * 2; i++) {
-    carSprite(CAR_MODELS[i % 5], `#${(i * 7919 % 0xffffff).toString(16).padStart(6, '0')}`, 42, 20, i % 3 === 0);
+    carSprite(CAR_MODELS[i % CAR_MODELS.length], `#${(i * 7919 % 0xffffff).toString(16).padStart(6, '0')}`, 42, 20, i % 3 === 0);
     assert.ok(spriteCacheSize() <= SPRITE_CACHE_MAX, `Cache wächst über ${SPRITE_CACHE_MAX}`);
   }
   const a = carSprite('taxi', TAXI_COLOR, 42, 20, false);
