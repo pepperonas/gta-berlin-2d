@@ -21,6 +21,13 @@ const SHAPES = {
   sportwagen: { len: 0, inset: 0, r: 7, back: 17, front: 14, cut: [5, 3], vents: 'mid' },
   heckcoupe: { len: 2, inset: 0.5, r: 8, back: 11, front: 13, cut: [4, 5], vents: 'rear' },
   zweitakter: { len: 9, inset: 1, r: 7, back: 6, front: 9, cut: [3, 2], roof: '#ecebe4' },
+  hothatch: { len: 3, inset: 0, r: 5, back: 6, front: 10, cut: [3.5, 1.2], stripes: true, vents: 'hood' },
+  roadster: { len: 5, inset: 0.5, r: 7, back: 12, front: 15, cut: [4, 0], open: true },
+  musclecar: { len: 0, inset: 0, r: 4, back: 11, front: 17, cut: [3, 3], stripes: true, vents: 'hood' },
+  oldtimer: { len: 0, inset: 0.5, r: 8, back: 11, front: 13, cut: [2.5, 2.5], chrome: true },
+  pickup: { len: 0, inset: 0, r: 3.5, back: 18, front: 11, cut: [2, 0.5], bed: true },
+  kleinbus: { len: 3, inset: 0, r: 6, back: 3, front: 5, cut: [1.2, 0.5], twoTone: '#efeee8' },
+  rallye: { len: 2, inset: 0, r: 5, back: 6, front: 10, cut: [3.5, 1.2], wing: true, vents: 'hood' },
 };
 export const bodyLength = (model, L) => L - (SHAPES[model]?.len ?? 0);
 export const carColor = (car) => (car.wrecked ? '#3b332d' : carModel(car) === 'taxi' ? TAXI_COLOR : car.color);
@@ -71,11 +78,30 @@ function paintBody(g, model, body, L, W, wrecked) {
       g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 0.6;
       for (let x = x0 + 2.5; x < x0 + 8; x += 1.4) { g.beginPath(); g.moveTo(x, y0 + 5); g.lineTo(x, y0 + W - 5); g.stroke(); }
     }
+    if (sh.bed) { // Pick-up: offene Ladefläche hinter der Kabine
+      g.fillStyle = shade(body, -0.35); rr(g, x0 + 1.5, y0 + 2, back - x0 - 3, W - 4, 1.5); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.6;
+      for (let x = x0 + 4; x < back - 2; x += 3) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
+    }
+    if (sh.vents === 'hood') { // Lufthutze auf der Haube
+      g.fillStyle = shade(body, -0.3); rr(g, front + 3, -2.2, Math.max(3, len / 2 - front - 7), 4.4, 1); g.fill();
+    }
+    if (sh.open) { // Roadster: offen – Sitze, Überrollbügel und Frontscheibe statt Dach
+      g.fillStyle = glassG; g.fillRect(front - 1.5, y0 + 2.4, 2, W - 4.8);
+      g.fillStyle = '#2b2522'; rr(g, back + 1, y0 + 3, front - back - 3, W - 6, 2); g.fill();
+      g.fillStyle = '#5a4034'; for (const s of [-1, 1]) { rr(g, back + 3, s * W / 4 - 2.4, 6, 4.8, 1.5); g.fill(); }
+      g.fillStyle = shade(body, -0.4); g.fillRect(back + 0.5, y0 + 3, 1.2, W - 6);
+    } else {
     cabin(back, front, sh.cut[0], sh.cut[1]);
     const rx = back + Math.max(1.5, sh.cut[1] + 1), rw = front - rx - sh.cut[0] - 1;
     if (sh.glassRoof) { g.fillStyle = '#1a2330'; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); g.fillStyle = 'rgba(160,190,220,0.25)'; g.fillRect(rx + 1, y0 + 4.2, rw - 2, 1.6); }
     else { g.fillStyle = roof; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); }
     if (sh.rails) { g.fillStyle = '#2b2e33'; g.fillRect(rx, y0 + 3.6, rw, 0.9); g.fillRect(rx, y0 + W - 4.5, rw, 0.9); }
+    if (sh.twoTone) { g.fillStyle = sh.twoTone; rr(g, rx + 1, y0 + 4, rw - 2, W - 8, 2); g.fill(); }
+    }
+    if (sh.stripes) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.fillRect(x0 + 1, -2.4, len - 2, 1.4); g.fillRect(x0 + 1, 1, len - 2, 1.4); } // Rennstreifen
+    if (sh.wing) { g.fillStyle = shade(body, -0.35); g.fillRect(x0 + 0.5, y0 + 1.5, 2, W - 3); }                                          // Heckflügel
+    if (sh.chrome) { g.fillStyle = '#d9dde2'; g.fillRect(len / 2 - 1.2, y0 + 1.5, 1.2, W - 3); g.fillRect(x0, y0 + 1.5, 1.2, W - 3); }     // Chromstoßstangen
     if (sh.spare) { g.fillStyle = '#1c1d20'; g.beginPath(); g.arc(x0 - 0.6, 0, 3.4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#55585e'; g.beginPath(); g.arc(x0 - 0.6, 0, 1.4, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = shade(body, -0.1); g.fillRect(front + 1.5, y0 + 2.5, 0.8, W - 5);            // Haubenkante
     if (model === 'taxi' && !wrecked) { // Dachschild
@@ -241,4 +267,61 @@ export function bodyShift(car) {
   if (!d || car.wrecked || car.driver !== 'player') return [0, 0];
   const k = specOf(car).h * 0.35, cl = (x) => Math.max(-6, Math.min(6, x));
   return [cl(-d.ax * k), cl(-d.ay * k)];
+}
+
+// Motorrad und Motorroller in der Draufsicht (Kontext NICHT gedreht; zeichnet selbst am Ort des Fahrzeugs).
+// Reifen, Lenker (lenkt mit), Tank/Sitzbank bzw. Rollerverkleidung mit Trittbrett, Licht, Fahrer mit Helm, der sich in
+// die Kurve legt (Schräglage aus der Fahrdynamik) und beim Wheelie das Vorderrad anhebt; umgefallen liegt es ohne Fahrer.
+const MOTO_JACKETS = ['#2b2d33', '#5b3a29', '#1f3b5c', '#6b1f1f', '#3c4a2b', '#8a8f96'];
+export function drawMoto(ctx, car, t, sun, { player = false } = {}) {
+  const scooter = car.kind === 'scooter', L = car.hw * 2, W = car.hh * 2, body = car.wrecked ? '#3b332d' : car.color;
+  const d = car.driver === 'player' ? car.dyn : null, lean = d?.lean ?? 0, steer = d ? d.delta : (car.controls?.steer ?? 0) * 0.3;
+  const rider = !!car.driver && !car.fallen, lift = d?.wheelie ?? 0;
+  const sl = Math.hypot(sun?.dx ?? 1, sun?.dy ?? 1) || 1;
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  // Schatten (umgefallen breit, sonst schmal und in Sonnenrichtung)
+  ctx.save(); ctx.rotate(car.angle);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse((sun?.dx ?? 1) / sl * 3, (sun?.dy ?? 1) / sl * 3, L / 2 + 1, car.fallen ? W : W / 2 + (rider ? 2 : 0), 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.rotate(car.angle + (car.fallen ? 0.2 : 0));
+  const side = car.fallen ? 1.9 : 1; // liegend: breiter (von der Seite gesehen)
+  // Hinterrad, Vorderrad (lenkt; beim Wheelie leicht angehoben = heller und kürzer)
+  ctx.fillStyle = '#141518';
+  ctx.fillRect(-L / 2, -1.6 * side, scooter ? 5 : 7, 3.2 * side);
+  ctx.save(); ctx.translate(L / 2 - (scooter ? 3 : 4), 0); ctx.rotate(car.fallen ? 0 : steer * 0.8);
+  ctx.fillStyle = lift > 0.3 ? '#2a2c31' : '#141518'; ctx.fillRect(-3.2 + lift, -1.4 * side, 6.4 - lift, 2.8 * side);
+  ctx.restore();
+  if (scooter) { // Verkleidung, Trittbrett, Beinschild
+    ctx.fillStyle = shade(body, -0.25); ctx.fillRect(-L / 2 + 3, -W / 2 * side * 0.8, L - 7, W * side * 0.8);
+    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(-L / 2 + 6, 0, 5, W / 2 * side, 0, 0, Math.PI * 2); ctx.fill(); // Heckverkleidung
+    ctx.beginPath(); ctx.ellipse(L / 2 - 6, 0, 2.6, W / 2 * side * 0.95, 0, 0, Math.PI * 2); ctx.fill();               // Beinschild
+    ctx.fillStyle = '#2a2a2a'; ctx.fillRect(-L / 2 + 3.5, -1.8 * side, 6.5, 3.6 * side);                                   // Sitzbank
+  } else { // Motorblock, Tank, Sitzbank, Heck
+    ctx.fillStyle = '#4a4d53'; ctx.fillRect(-2.5, -W / 2 * side * 0.9, 6, W * side * 0.9);
+    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(3.5, 0, 4.4, 2.7 * side, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shade(body, 0.25); ctx.fillRect(2.5, -0.7 * side, 3, 1.4 * side);                                      // Glanz
+    ctx.fillStyle = '#1e1f23'; ctx.fillRect(-7, -1.7 * side, 6, 3.4 * side);
+    ctx.fillStyle = body; ctx.fillRect(-L / 2 + 2, -1.3 * side, 5, 2.6 * side);
+  }
+  // Lenker und Lichter
+  ctx.save(); ctx.translate(L / 2 - (scooter ? 6 : 6.5), 0); ctx.rotate(car.fallen ? 0 : steer * 0.8);
+  ctx.fillStyle = '#26272b'; ctx.fillRect(-0.6, -W / 2 - 0.8, 1.2, W + 1.6);
+  ctx.restore();
+  if (!car.wrecked && !car.fallen) {
+    ctx.fillStyle = '#fff6c8'; ctx.fillRect(L / 2 - 1.4, -1, 1.4, 2);
+    ctx.fillStyle = car.controls?.brake > 0.1 ? '#ff3b30' : '#8a1c1c'; ctx.fillRect(-L / 2 - 0.6, -0.8, 1.2, 1.6);
+  }
+  if (rider) { // Fahrer: Oberkörper legt sich in die Kurve (nach innen), Helm mit Visier
+    const jacket = player ? '#ff7a1a' : MOTO_JACKETS[(car.id * 7) % MOTO_JACKETS.length];
+    const lx = 0, ly = Math.max(-3, Math.min(3, Math.sin(lean) * 7)); // rechts positiv
+    ctx.fillStyle = shade(jacket, -0.3); ctx.fillRect(scooter ? -3 : -4, -3.2 + ly * 0.3, 3, 6.4);                              // Oberschenkel
+    ctx.fillStyle = jacket; ctx.beginPath(); ctx.ellipse(lx - (scooter ? 1.5 : 0.5), ly * 0.6, 3.2, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = jacket; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(lx + 0.5, ly * 0.6 + s * 3); ctx.lineTo(L / 2 - 6.5, s * (W / 2 + 0.2)); ctx.stroke(); } // Arme zum Lenker
+    ctx.fillStyle = player ? '#e9e9ea' : '#16171a'; ctx.beginPath(); ctx.arc(lx + 1, ly, 2.6, 0, Math.PI * 2); ctx.fill();   // Helm
+    ctx.fillStyle = 'rgba(120,170,220,0.7)'; ctx.fillRect(lx + 2.3, ly - 1.4, 1.2, 2.8);                                        // Visier
+  }
+  ctx.restore();
 }

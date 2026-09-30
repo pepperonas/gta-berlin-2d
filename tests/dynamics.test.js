@@ -34,7 +34,7 @@ test('Spielgefühl: Anzug etwas kräftiger als echt (Reihenfolge wie im Datenbla
     const b = car(m, { v0: 100 }); const x0 = b.x;
     run(b, 6, { throttle: 0, brake: 1 }, (q) => { if (q.vx < 0) q.vx = 0; });
     const d = (b.x - x0) / 10;
-    assert.ok(d > 18 && d < 36, `${m}: Bremsweg ${d.toFixed(1)} m (echt ≈ 36–45 m)`);
+    assert.ok(d > 18 && d < 36 / (SPECS[m].brakeK ?? 1), `${m}: Bremsweg ${d.toFixed(1)} m (echt ≈ 36–45 m; alte Trommelbremsen länger)`);
   }
 });
 

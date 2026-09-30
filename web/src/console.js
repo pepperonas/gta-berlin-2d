@@ -224,7 +224,7 @@ export const COMMANDS = [
   { name: 'stats', aliases: ['statistik'], help: 'Statistik anzeigen', args: [],
     run(ctx) { ctx.game.returnTo = 'playing'; ctx.game.screen = 'stats'; ctx.game.console.open = false; return 'Statistik'; } },
 ];
-const KIND_LABEL = { car: 'Pkw', truck: 'Lkw', delivery: 'Lieferwagen', garbage: 'Müllauto', police: 'Polizei', ambulance: 'Rettungswagen', bus: 'Bus', bicycle: 'Fahrrad', escooter: 'E-Roller' };
+const KIND_LABEL = { car: 'Pkw', truck: 'Lkw', delivery: 'Lieferwagen', garbage: 'Müllauto', police: 'Polizei', ambulance: 'Rettungswagen', bus: 'Bus', bicycle: 'Fahrrad', escooter: 'E-Roller', motorcycle: 'Motorrad', scooter: 'Roller' };
 
 export function findCommand(name) {
   const n = norm(name ?? '');

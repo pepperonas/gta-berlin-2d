@@ -15,8 +15,14 @@ export const KINDS = {
   // gekaperte Räder und E-Roller (bikes.js): fahren mit der Autophysik, aber klein, leise und langsam (top in px/s)
   bicycle: { L: 18, W: 7, power: 0.45, top: 72, accel: 0.55, bike: true },                         // ≈ 26 km/h
   escooter: { L: 14, W: 6, power: 0.4, top: 56, accel: 0.5, bike: true },                          // ≈ 20 km/h (Grenze)
+  // motorisierte Zweiräder: im Verkehr mit der einfachen Physik, selbst gefahren mit Fahrdynamik (Wheelie, Stoppie)
+  motorcycle: { L: 22, W: 8, power: 1.15, moto: true, colors: ['#b3261e', '#1d1f24', '#e8e6e1', '#2d5da8', '#f0a202'] },
+  scooter: { L: 18, W: 7, power: 0.6, moto: true, colors: ['#8fc1b5', '#e9e4d6', '#c0392b', '#3d3f45', '#f2c14e'] },
 };
 export const isBikeKind = (kind) => !!KINDS[kind]?.bike;
+export const isMotoKind = (kind) => !!KINDS[kind]?.moto;
+// offenes Zweirad (Rad, E-Roller, Motorrad, Roller): keine Kabine – Stadt ungedämpft, keine Kisten, kein Missionsauto
+export const isOpenKind = (kind) => isBikeKind(kind) || isMotoKind(kind);
 export const EMERGENCY = new Set(['police', 'ambulance']);
 export const kindOf = (car) => car.kind ?? 'car';
 export const sizeOf = (kind) => KINDS[kind] ?? KINDS.car;
@@ -33,6 +39,10 @@ export function pickKind(minutes, day, cls, r) {
   if ((p += delivery) > r) return 'delivery';
   const garbage = !we && inHours(m, 360, 720) && cls >= 5 && cls <= 8 ? 0.05 : 0;
   if ((p += garbage) > r) return 'garbage';
+  // Zweiräder: tagsüber, am Wochenende mehr (Ausflug), nachts kaum
+  const moto = inHours(m, 420, 1260) ? (we ? 0.05 : 0.03) : 0.005;
+  if ((p += moto * 0.55) > r) return 'motorcycle';
+  if ((p += moto * 0.45) > r) return 'scooter';
   return 'car';
 }
 

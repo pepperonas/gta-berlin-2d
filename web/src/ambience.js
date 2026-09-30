@@ -6,7 +6,7 @@ import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { sirenHigh } from './fleet.js';
 import { positionAt, pointOn } from './transit.js';
 import { nightlifeAt } from './nightlife.js';
-import { isBikeKind } from './fleet.js';
+import { isOpenKind } from './fleet.js';
 import { frontOf } from './life.js';
 
 export const AMB = { hear: 1200, siren: 3000, bells: 1800, hochbahnHear: 450, trainEvery: 150, trainLen: 14 };
@@ -69,7 +69,7 @@ export function ambienceAt(world) {
   // Nachtleben: Stimmengewirr und gedämpfte Musik vor Bars, Kneipen und Clubs (nightlife.js, mit Auslastungs-Feed)
   const nl = nightlifeAt(city, cam.x, cam.y, world.clock ?? 0, world.day ?? 0, { front: (q) => frontOf(city, q), now: Date.now() / 1000, weather: world.weather });
   const veh = world.player?.inCar != null ? world.cars?.find((c) => c.id === world.player.inCar) : null;
-  const inCar = world.player?.inCar != null && !(veh && isBikeKind(veh.kind)); // auf dem Rad hört man die Stadt ungedämpft
+  const inCar = world.player?.inCar != null && !(veh && isOpenKind(veh.kind)); // auf Rad und Motorrad hört man die Stadt ungedämpft
   const night = wrap(world.clock) < 360 || wrap(world.clock) > 1260;
   // Schnee schluckt den Stadtlärm (Schneedecke und fallender Schnee dämpfen), Sturm heult in Böen
   const wx = world.weather, hush = 1 - 0.45 * clamp01(world.snow ?? 0) - 0.2 * clamp01(wx?.snow ?? 0);

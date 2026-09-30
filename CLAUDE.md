@@ -275,6 +275,12 @@ change in `web/`.
   `soundscape.js engineFor` picks `MODEL_ENGINES` when `car.dyn || car.model` (electric = whine in `audio.js`).
   The mission bot (`tests/helpers/bot.js`) drives with pure pursuit (curvature → steering angle), corner look-ahead
   braking (`cornerCap`), loop skipping and stuck/orbit recovery – keep it player-like when tuning the physics.
+  0.43.0 added 7 more Pkw (`hothatch`, `roadster`, `musclecar`, `oldtimer`, `pickup`, `kleinbus`, `rallye`; `brakeK`
+  = weaker brakes, `open` roadster) and two-wheelers: `fleet.js KINDS.motorcycle/scooter` (`moto: true`,
+  `isMotoKind`, `isOpenKind` = bike or moto: unmuffled, no cargo, never `playerCarId`), specs with `twoWheel`
+  (`stepDynamics` caps drive at the wheelie force `m·g·front·wb/h` and braking at the stoppie force, `dyn.wheelie/
+  stoppie/lean`, no lateral load term). `pickKind` spawns them by day. `vehicles.js drawMoto` (rider leans, front
+  lifts, `car.fallen` lies); `world.js throwRider` on a player crash with `strength ≥ MOTO.throwAt`; camera closer.
 - **Collision** is wall *segments* (building rings, quays cut open at bridges, rail lines, bridge railings, the district
   border) plus tree circles and crate rects, via `circleVsSegment` / `obbVsSegment` in `collision.js`. The SAT depth is the
   shortest escape distance (`min(a1-b0, b1-a0)`), which matters for zero-thickness walls.

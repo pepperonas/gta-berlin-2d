@@ -458,7 +458,7 @@ export class Hud {
       const ne = entranceNear(world._stNear, world.player.x, world.player.y, STATION.reach);
       if (ne) hint = `A: Hinunter zur ${ne.stn.sbahn ? 'S' : 'U'}-Bahn ${ne.stn.name}`;
     }
-    if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = car.top ? 'Y: Absteigen' : 'Y: Aussteigen';
+    if (!hint && car && speedOf(car) < 20 && !car.wrecked && g.hintT < 12) hint = car.top || car.hw < 15 ? 'Y: Absteigen' : 'Y: Aussteigen'; // Rad, Motorrad, Roller
     if (!hint && car && car.wrecked) hint = 'Y: Aussteigen – das Auto ist Schrott';
     if (hint && !g.console?.open) this.prompt(hint, vw / 2, hintY); // offene Befehlszeile verdeckt sonst den Hinweis
     if (mission.load > 0 && mission.state === 'toPickup') {

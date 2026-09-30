@@ -6,7 +6,8 @@ import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawTree, shade, drawDog } from './assets.js';
 import { drawPerson } from './people.js';
 import { drawBike, drawBird, drawParkedScooter } from './critters.js';
-import { isBikeKind } from './fleet.js';
+import { isBikeKind, isMotoKind } from './fleet.js';
+import { drawMoto } from './vehicles.js';
 import { stationsNear, stationById } from './station.js';
 import { drawStation, drawEntrance } from './stationview.js';
 import { parkedScooters, riderShirt } from './bikes.js';
@@ -1451,6 +1452,7 @@ export class Renderer {
         drawBike(ctx, { x: c.x, y: c.y, angle: c.angle, kind: c.kind === 'escooter' ? 'scooter' : 'bike', seed: c.seed ?? c.id, pedal: c._pedal, state: c.driver ? 'ride' : 'parked' }, mine ? '#ff7a1a' : '#555', L.sun, t);
         return;
       }
+      if (isMotoKind(c.kind)) { drawMoto(ctx, c, t, L.sun, { player: c.id === world.player.inCar }); return; } // Motorrad, Roller
       if (sp > 120 && (wet > 0.3 || snow > 0.2)) drawSpray(ctx, c, sp, wet, snow);
       drawCar(ctx, c, t, L.sun);
       if (snow > 0.05) drawCarSnow(ctx, c, snow, sp);

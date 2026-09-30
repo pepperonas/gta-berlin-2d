@@ -20,7 +20,7 @@ import { initCombat, updatePlayerCombat, clickIntent, CLICK, WEAPONS, GUNSHOT_SC
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
-import { pickKind, KINDS, isBikeKind } from './fleet.js';
+import { pickKind, KINDS, isBikeKind, isMotoKind, isOpenKind } from './fleet.js';
 import { pickKind as pickPersonKind, KINDS as PERSON_KINDS } from './figure.js';
 import { updateService, manageEmergency } from './services.js';
 import { createBike, updateBike, bikeSpawn, BIKE, riderShirt, dismount } from './bikes.js';
@@ -441,10 +441,10 @@ function tryEnter(w, only = null, { quiet = false } = {}) {
   }
   best.driver = 'player'; best.ai = null;
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
-  best.dyn = null; // Fahrdynamik (dynamics.js) beginnt mit geradem Lenkrad
+  best.dyn = null; best.fallen = false; // Fahrdynamik beginnt mit geradem Lenkrad; ein umgefallenes Zweirad wird aufgerichtet
   if (!isBikeKind(best.kind) && !quiet) w.notice = { text: specLine(best), t: 3 }; // „Sportwagen · Mittelmotor · Heckantrieb · 320 kW“
   p.inCar = best.id;
-  if (best.role !== 'player' && !isBikeKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id;
+  if (best.role !== 'player' && !isOpenKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id; // Zweiräder nie
   if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
   return true;
 }
@@ -453,6 +453,19 @@ function sideSpot(car, side, extra) {
   const rx = -Math.sin(car.angle), ry = Math.cos(car.angle);
   const d = car.hh + PLAYER.radius + extra;
   return { x: car.x + rx * d * side, y: car.y + ry * d * side };
+}
+
+// Abwurf vom Zweirad: die Maschine fällt um und rutscht aus, der Fahrer landet daneben, benommen und verletzt
+export const MOTO = { throwAt: 0.25, stun: 1.2, hurt: [8, 45] };
+function throwRider(w, car, strength) {
+  const p = w.player, a = car.angle + Math.PI / 2 * (car.id % 2 ? 1 : -1);
+  car.driver = null; car.dyn = null; car.fallen = true; car.controls = { throttle: 0, brake: 0, steer: 0, handbrake: true };
+  p.inCar = null; p.lvl = car.lvl; p.angle = car.angle;
+  p.x = car.x + Math.cos(a) * (car.hh + PLAYER.radius + 4); p.y = car.y + Math.sin(a) * (car.hh + PLAYER.radius + 4);
+  pushCircleOutOfWorld(w, p, PLAYER.radius);
+  p.stun = MOTO.stun + strength;
+  w.events.push({ type: 'thrown', x: p.x, y: p.y, carId: car.id, player: true });
+  hurtPlayer(w, MOTO.hurt[0] + strength * MOTO.hurt[1], car.x, car.y);
 }
 
 function tryExit(w) {
@@ -860,6 +873,11 @@ export function updateWorld(w, input, dt) {
     const a = w.cars[i], b = w.cars[j];
     const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r && touch(w.city, a, b)) collideCars(a, b, w.events);
   }
+  // Motorrad/Roller: ein harter Aufprall wirft den Fahrer ab (ab ≈ 27 km/h frontal)
+  if (pc && isMotoKind(pc.kind) && w.player.inCar === pc.id) {
+    const hit = w.events.find((e) => e.type === 'crash' && e.carId === pc.id && e.strength >= MOTO.throwAt);
+    if (hit) throwRider(w, pc, hit.strength);
+  }
 
   updateTransit(w, dt); // Fahrplan-Fahrzeuge, Busse als KI, Straßenbahnen als Hindernisse
   updatePlayerTrain(w, trainInput, dt); // vom Spieler geführter Zug (playertrain.js)
@@ -1009,7 +1027,9 @@ export function updateCamera(w, dt) {
   let tx = p.x, ty = p.y, zoom = w.footZoom ?? FOOT_ZOOM;
   if (car) {
     tx = car.x + car.vx * 0.45; ty = car.y + car.vy * 0.45;
-    zoom = isBikeKind(car.kind) ? (w.footZoom ?? FOOT_ZOOM) * 0.8 : 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28; // Rad: fast so nah wie zu Fuß
+    zoom = isBikeKind(car.kind) ? (w.footZoom ?? FOOT_ZOOM) * 0.8 // Rad: fast so nah wie zu Fuß
+      : isMotoKind(car.kind) ? 1.45 - clamp(speedOf(car) / 500, 0, 1) * 0.45 // Motorrad/Roller: näher (klein), bei Tempo weiter weg
+      : 1 - clamp(speedOf(car) / 330, 0, 1) * 0.28;
   }
   if (p.ride) { const ahead = p.ride.kind === 'driver' ? (p.ride.speed ?? 0) * 0.6 : 0; tx = p.x + Math.cos(p.angle) * ahead; ty = p.y + Math.sin(p.angle) * ahead; zoom = 1 - clamp((p.ride.speed ?? 0) / 330, 0, 1) * 0.28; }
   cam.x = damp(cam.x, tx, 5, dt);

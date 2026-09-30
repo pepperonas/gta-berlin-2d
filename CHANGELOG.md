@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.43.0] – 2026-09-30
+
+### Neu
+- **Motorrad und Motorroller:** im Verkehr (tagsüber, am Wochenende mehr) und mit `auto motorrad` / `auto roller`.
+  Echte Zweirad-Physik: zu viel Gas hebt das Vorderrad (Wheelie-Grenze begrenzt den Anzug), zu hartes Bremsen das
+  Hinterrad (Stoppie-Grenze) – deshalb bremst ein Motorrad länger als ein Auto. In Kurven legt sich der Fahrer hinein.
+  Ein Aufprall ab ≈ 27 km/h wirft ihn ab: benommen, verletzt, die Maschine liegt; aufsteigen richtet sie wieder auf.
+  Offen wie ein Rad (Stadt ungedämpft hörbar, keine Kisten, nie Missionsauto), Kamera näher, eigener Motorklang
+  (kreischender Vierzylinder, Einzylinder-Roller).
+- **Sieben neue Pkw:** Hot Hatch (starker Fronttriebler), Roadster (offen, leicht, 50:50), Muscle-Car (V8, schwere Nase,
+  keine Fahrhilfen, schwächere Bremsen – quertreibt am Gas), Oldtimer (Trommelbremsen, Diagonalreifen, kein ESP),
+  Pick-up (leere Ladefläche → wenig Traktion hinten), Kleinbus mit Heckmotor, Rallye-Kompakt (Allrad) – jeweils mit
+  eigener Zeichnung und eigenem Motorklang.
+
 ## [0.42.0] – 2026-09-30
 
 ### Neu

@@ -15,6 +15,8 @@ export const ENGINES = {
   truck: { idle: 600, red: 2600, cyl: 6, gears: [18, 30, 45, 62, 80, 100, 120], diesel: true },
   garbage: { idle: 600, red: 2400, cyl: 6, gears: [16, 27, 40, 55, 72, 90], diesel: true },
   bus: { idle: 600, red: 2500, cyl: 6, gears: [22, 38, 56, 78, 100, 122], diesel: true },
+  motorcycle: { idle: 1200, red: 13000, cyl: 4, gears: [14, 20, 27, 34, 42, 52], diesel: false }, // Reihenvierer, kreischt hoch
+  scooter: { idle: 1600, red: 9000, cyl: 1, gears: [30], diesel: false },                         // Einzylinder mit Variomatik
 };
 // Motoren der Pkw-Modelle (carmodels.js), hörbar im selbst gefahrenen Auto: Drei-/Vier-/Sechs-/Achtzylinder, Diesel,
 // Zweitakter (zündet jede Umdrehung: strokes 2), Elektromotor (kein Zünden, nur Summen: electric, ein Gang)
@@ -30,6 +32,13 @@ export const MODEL_ENGINES = {
   elektro: { idle: 0, red: 16000, cyl: 0, gears: [38], diesel: false, electric: true },
   sportwagen: { idle: 950, red: 8500, cyl: 8, gears: [14, 23, 33, 45, 58, 74, 98], diesel: false },
   heckcoupe: { idle: 900, red: 7800, cyl: 6, gears: [15, 25, 36, 49, 63, 80, 104], diesel: false },
+  hothatch: { idle: 850, red: 6800, cyl: 4, gears: [14, 24, 35, 48, 62, 82], diesel: false },
+  roadster: { idle: 850, red: 7200, cyl: 4, gears: [13, 22, 32, 43, 56, 80], diesel: false },
+  musclecar: { idle: 650, red: 6000, cyl: 8, gears: [18, 30, 44, 60, 78, 118], diesel: false },     // V8, tief und bollernd
+  oldtimer: { idle: 700, red: 5200, cyl: 6, gears: [16, 30, 48, 80], diesel: false },               // Viergang
+  pickup: { idle: 700, red: 4500, cyl: 4, gears: [17, 29, 43, 57, 75, 111], diesel: true },
+  kleinbus: { idle: 850, red: 4500, cyl: 4, gears: [14, 26, 42, 71], diesel: false },               // luftgekühlter Boxer
+  rallye: { idle: 900, red: 7000, cyl: 3, gears: [13, 22, 32, 43, 56, 92], diesel: false },         // Dreizylinder-Turbo
 };
 export const engineOf = (kind) => ENGINES[kind] ?? ENGINES.car;
 // Motor eines Autos: im selbst gefahrenen Pkw (mit Fahrdynamik) oder fest gewählten Modell nach Modell, sonst nach Art

@@ -3,7 +3,7 @@
 //                                 ↘ failed (Zeit abgelaufen / Ware zerstört)
 import { MISSION } from './config.js';
 import { speedOf } from './car.js';
-import { isBikeKind } from './fleet.js';
+import { isOpenKind } from './fleet.js';
 
 export const BRIEFING = [
   'Kalle vom Späti „Zum Kiez“:',
@@ -27,7 +27,7 @@ export function updateMission(m, ctx, dt) {
   const events = [];
   const { places, player, input } = ctx;
   const veh = player.inCar ? ctx.cars.find((c) => c.id === player.inCar) : null;
-  const car = veh && !isBikeKind(veh.kind) ? veh : null; // aufs Rad passen keine Kisten
+  const car = veh && !isOpenKind(veh.kind) ? veh : null; // auf Rad und Motorrad passen keine Kisten
   m.prompt = null;
 
   switch (m.state) {

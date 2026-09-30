@@ -9,13 +9,13 @@ import { placeOnLane, blinkFor, BLINK_AHEAD } from '../web/src/traffic.js';
 import { createWorld, updateWorld } from '../web/src/world.js';
 import { idle } from './helpers/bot.js';
 
-test('Automodelle: je Auto fest, alle elf kommen vor, Spielerauto ist eine Limousine, Taxis sind elfenbein', () => {
-  const cars = Array.from({ length: 1500 }, () => createCar({ x: 0, y: 0, color: '#2e86de' }));
+test('Automodelle: je Auto fest, alle kommen vor, Spielerauto ist eine Limousine, Taxis sind elfenbein', () => {
+  const cars = Array.from({ length: 5000 }, () => createCar({ x: 0, y: 0, color: '#2e86de' }));
   const seen = new Set(cars.map(carModel));
   for (const m of CAR_MODELS) assert.ok(seen.has(m), `Modell ${m} kommt vor`);
   assert.deepEqual(cars.map(carModel), cars.map(carModel), 'deterministisch');
   const taxis = cars.filter((c) => carModel(c) === 'taxi');
-  assert.ok(taxis.length > 50 && taxis.length < 180, `${taxis.length} Taxis von 1500`);
+  assert.ok(taxis.length > 200 && taxis.length < 550, `${taxis.length} Taxis von 5000`);
   assert.ok(taxis.every((c) => carColor(c) === TAXI_COLOR));
   assert.equal(carModel(createCar({ x: 0, y: 0, role: 'player' })), 'limousine');
   const w = { ...cars[0], wrecked: true };

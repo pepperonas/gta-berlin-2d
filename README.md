@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 446 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 449 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -399,10 +399,12 @@ dreht den Oberkörper zum Ziel (entgegen der Zielrichtung geht er rückwärts). 
 
 ## Fahrzeuge und Fahrgefühl
 
-Elf Pkw-Modelle fahren durch Berlin, jedes mit eigener Technik: Zweitakter (Front, 19 kW), Kleinwagen und Kompakt
-(Frontantrieb), Limousine, Taxi und Streifenwagen (Heckantrieb), Kombi, Elektro-SUV und Geländewagen (Allrad),
-Transporter, Sportwagen mit Mittelmotor und Heckmotor-Coupé. Beim Einsteigen zeigt eine Zeile Modell, Motorlage,
-Antrieb und Leistung; der Tacho nennt Modell und Antrieb. `auto sportwagen` (oder ein anderes Modell) stellt eines neben
+18 Pkw-Modelle fahren durch Berlin, jedes mit eigener Technik: Zweitakter (Front, 19 kW), Kleinwagen, Kompakt und Hot
+Hatch (Frontantrieb), Limousine, Taxi, Streifenwagen, Roadster, Muscle-Car, Oldtimer und Pick-up (Heckantrieb), Kombi,
+Elektro-SUV, Geländewagen und Rallye-Kompakt (Allrad), Transporter, Kleinbus mit Heckmotor, Sportwagen mit Mittelmotor
+und Heckmotor-Coupé. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderrad, zu hartes Bremsen das Hinterrad
+(deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab. Beim Einsteigen zeigt eine Zeile Modell, Motorlage,
+Antrieb und Leistung; der Tacho nennt Modell und Antrieb. `auto sportwagen` (oder ein anderes Modell, `auto motorrad`, `auto roller`) stellt eines neben
 dich.
 
 Das selbst gefahrene Auto fährt mit echter Fahrdynamik (Einspurmodell mit Reifenkräften und Lastverschiebung): Mit
@@ -530,7 +532,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 446 automatischen Tests grün, darunter:
+- Alle 449 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -622,6 +624,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
   - Gebrauchsspuren: Schmutz nur in Senken, Ausbleichen nur auf Kuppen (dazwischen unverändert), Ölband in jeder
     Spurmitte innerhalb der Fahrbahn, nicht auf Pflaster; Zeichnen mit Schmutz, Ölband, Kontaktschatten, Vignette,
     Schnee deckt den Schmutz zu;
+  - Neue Fahrzeuge: Motorrad-Anzug nie über der Wheelie-, Bremse nie über der Stoppie-Grenze (Rad hebt sichtbar), bremst
+    länger als eine Limousine, Roller-Spitze 95 km/h, Schräglage in der Kurve; Oldtimer bremst deutlich länger,
+    Muscle-Car ohne ESP bricht unter Gas aus, Hot Hatch mit ESP nicht, Pick-up zieht auf Schnee schlechter an als der
+    Allrad; Aufprall wirft den Fahrer ab (benommen, verletzt, Maschine liegt, aufsteigen richtet auf), Zweirad kein
+    Missionsauto und ungedämpft, Zweiräder im Verkehr tags häufiger als nachts;
   - U-Bahnhöfe, Fehlerfälle: Eingang höchstens 20 m vom U-/S-Symbol (Bahnart passend, nicht im Haus), E in Reichweite
     führt hinunter, weiter weg nicht; Ostkreuz/Plänterwald nicht begehbar; gleiche Bahnsteige egal von wo man kommt
     (Yorckstraße S/U7); Neustart und Teleport holen heraus bzw. lassen nicht hineinfallen; Straßenbahn hält nicht für die
