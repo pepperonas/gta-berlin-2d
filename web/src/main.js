@@ -1,4 +1,5 @@
 // Browser-Einstieg: Canvas, Hauptschleife (fester 60-Hz-Takt), Eingabequellen, Xbox-Hüllen-Brücke.
+import { RES, stepResolution } from './perf.js';
 import { DT } from './config.js';
 import { createGame, updateGame, setCity, requestTeleport, confirmTeleport, applyStoredStats } from './game.js';
 import { openCity } from './map.js';
@@ -329,11 +330,16 @@ function updateCursor() {
 }
 
 let W = 0, H = 0, dpr = 1;
+// Dynamische Auflösung (perf.js): Stufe aus den Bildabständen, oder fest per Befehl „aufloesung“ (game.debug.resScale)
+const resState = { gaps: [] };
+let resLevel = 0, resApplied = 1;
+const resScale = () => game.debug?.resScale ?? RES.steps[resLevel];
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   const cw = window.innerWidth, ch = window.innerHeight;
-  // Höchstens 1920×1080 Pixel rendern (Xbox-Ausgabe, Leistung).
-  const k = Math.min(dpr, 1920 / cw, 1080 / ch) || 1;
+  // Höchstens 1920×1080 Pixel rendern (Xbox-Ausgabe, Leistung), dazu die dynamische Auflösung
+  resApplied = resScale();
+  const k = (Math.min(dpr, 1920 / cw, 1080 / ch) || 1) * resApplied;
   W = canvas.width = Math.round(cw * k); H = canvas.height = Math.round(ch * k);
   canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
 }
@@ -367,7 +373,10 @@ function padWheelState() {
 
 let last = performance.now(), acc = 0, hintT = 0, timeScale = 1, padHold = false, swallowB = false;
 function frame(now) {
-  const elapsed = Math.min(0.1, (now - last) / 1000); last = now;
+  const gap = now - last;
+  const elapsed = Math.min(0.1, gap / 1000); last = now;
+  if (game.debug?.resScale === undefined || game.debug.resScale === null) resLevel = stepResolution(resState, resLevel, gap);
+  if (resScale() !== resApplied) resize(); // Stufe gewechselt: Zeichenfläche neu bemessen
   renderer.debug = game.debug;
   if ((statsFlushT += elapsed) > 5) { statsFlushT = 0; flushStats(); }
   // Waffenrad: öffnet nach dem Halten, schließt, wenn man nicht mehr zu Fuß spielt; solange offen, läuft die Welt langsam
@@ -453,7 +462,7 @@ function draw() {
     else if (game.screen === 'controls') hud.drawControls(game);
     else if (game.screen === 'stats') hud.drawStats(game.stats, true);
   }
-  if (game.debug.fps) hud.drawFps(fpsMeter(), renderer.stats.ms, renderer.quality);
+  if (game.debug.fps) hud.drawFps(fpsMeter(), renderer.stats.ms, renderer.quality, resApplied);
   hud.toast(game.toast);
   updateCursor();
   const car = game.world && game.screen === 'playing' ? playerCar(game.world) : null;

@@ -2,6 +2,7 @@
 // wählen an Kreuzungen die nächste Spur, bremsen vor Kurven und Hindernissen, lösen Blockaden,
 // fahren sich frei und suchen nach einem Unfall die nächste passende Spur.
 import { touch } from './levels.js';
+import { near } from './grid.js';
 import { clamp, wrapAngle } from './math.js';
 import { forwardSpeed } from './car.js';
 import { buildLaneGraph, chooseNext, connector, turnAngle, nearestLane, laneDir } from './roadgraph.js';
@@ -208,13 +209,25 @@ export function replan(car, city, rng) {
   if (keep) Object.assign(car.ai, { cruiseK: keep.cruiseK, field: keep.field ?? null, follow: keep.follow ?? null, urgent: keep.urgent, hold: keep.hold });
 }
 
+// Zebrastreifen um (x, y) (Obermenge des 400-px-Felds): je 200-px-Zelle einmal aus dem Zeichen-Index gesucht und bis zum
+// nächsten Kachelwechsel (city.gen) gemerkt – statt für jedes Auto in jedem Schritt alle Kartenobjekte abzufragen
+function zebrasNear(world, x, y) {
+  const city = world.city, c = world._zebra?.gen === city.gen ? world._zebra : (world._zebra = { gen: city.gen, cells: new Map() });
+  const cx = Math.floor(x / 200), cy = Math.floor(y / 200), key = cx * 65536 + cy;
+  let list = c.cells.get(key);
+  if (!list) {
+    list = [];
+    for (const z of city.render.query({ x: cx * 200 - 200, y: cy * 200 - 200, w: 600, h: 600 }, world._zq ??= [])) if (z.layer === 'crossing' && z.kind === 'zebra') list.push(z);
+    c.cells.set(key, list);
+  }
+  return list;
+}
+
 // Abstand zum nächsten Zebrastreifen voraus, an dem ein Fußgänger steht oder geht (Infinity = keiner).
 function zebraAhead(car, world) {
   const c = Math.cos(car.angle), s = Math.sin(car.angle);
-  const box = { x: car.x - 200, y: car.y - 200, w: 400, h: 400 };
   let best = Infinity;
-  for (const z of world.city.render.query(box, world._zq ??= [])) {
-    if (z.layer !== 'crossing' || z.kind !== 'zebra') continue;
+  for (const z of zebrasNear(world, car.x, car.y)) {
     const rx = z.x - car.x, ry = z.y - car.y, along = rx * c + ry * s;
     if (along <= 0 || along > 200 || Math.abs(-rx * s + ry * c) > z.edge.w / 2 + 20) continue;
     const reach = z.edge.w / 2 + 25;
@@ -234,10 +247,10 @@ export function obstacleAhead(car, world) {
   // Längere/breitere Fahrzeuge (LKW, Müllauto): Abstände gelten zwischen den Stoßstangen wie bei zwei Pkw (42 × 20 px)
   const myL = car.hw - 21, myW = car.hh - 10;
   const check = (ox, oy, lat, isAiCar, isPlayer, obj = null, isPed = false) => {
-    if (obj && !touch(world.city, car, obj)) return; // auf der Brücke bremst niemand für den Verkehr darunter
     const rx = ox - car.x, ry = oy - car.y;
     const oL = obj?.hw !== undefined ? obj.hw - 21 : 0, ext = myL + oL;
-    if (rx * rx + ry * ry > (110 + ext) ** 2) return;
+    if (rx * rx + ry * ry > (110 + ext) ** 2) return; // zuerst der billige Abstandstest, dann die Ebenen
+    if (obj && !touch(world.city, car, obj)) return; // auf der Brücke bremst niemand für den Verkehr darunter
     lat += myW + (obj?.hh !== undefined ? obj.hh - 10 : 0);
     let along, side;
     if (path) {
@@ -256,13 +269,18 @@ export function obstacleAhead(car, world) {
     if (isAiCar) { if (along < dCar) { dCar = along; blocker = obj; } }
     else { if (along < dOther) { dOther = along; pedBlock = isPed; } if (isPlayer) playerBlock = true; }
   };
-  for (const o of world.cars) {
+  // Kandidaten: mit Raster (world.js während der KI-Schleife) nur die Nachbarn – in derselben Reihenfolge wie die Listen
+  const R = 110 + myL + 60, grid = world._gridOn && world._gCars?.list === world.cars && world._gPeds?.list === world.peds;
+  const cars = grid ? near(world._gCars, car.x, car.y, R, world._nbC ??= []) : null, peds = grid ? near(world._gPeds, car.x, car.y, R, world._nbP ??= []) : null;
+  const nc = cars ? cars.length : world.cars.length, np = peds ? peds.length : world.peds.length;
+  for (let k = 0; k < nc; k++) {
+    const o = cars ? world.cars[cars[k]] : world.cars[k];
     if (o === car) continue;
     // Stehende Autos ohne Fahrer (Parker, abgestelltes Spielerauto, Missionsauto) wie Parker: nur wenn sie wirklich in der Spur stehen
     const parkedLike = o.driver === null && Math.abs(o.vx) + Math.abs(o.vy) < 10;
     check(o.x, o.y, parkedLike ? 18 : 22, o.driver === 'npc' && !o.wrecked, o.driver === 'player', o);
   }
-  for (const p of world.peds) if (p.state !== 'gone' && p.state !== 'dead') check(p.x, p.y, 16, false, false, p, true); // über Tote fahren (sonst stünde der Verkehr ewig)
+  for (let k = 0; k < np; k++) { const p = peds ? world.peds[peds[k]] : world.peds[k]; if (p.state !== 'gone' && p.state !== 'dead') check(p.x, p.y, 16, false, false, p, true); } // über Tote fahren (sonst stünde der Verkehr ewig)
   for (const b of world.bikes ?? []) if (b.state === 'ride') check(b.x, b.y, 14, false, false, b, true); // Radfahrer: dahinter bleiben
   for (const o of world.railObs ?? []) check(o.x, o.y, 22, false, false, o); // Straßenbahnwagen: warten, bis sie vorbei sind
   const pl = world.player;

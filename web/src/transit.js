@@ -5,7 +5,7 @@
 // aus ihrer Fahrzeit τ bestehen – so laufen sie auch dort, wo die Karte gerade nicht geladen ist. Busse werden in der
 // Nähe zu echten KI-Fahrzeugen (world.js/services.js), Straßenbahnen und Züge bleiben an ihrem Linienweg.
 import { SpatialHash } from './collision.js';
-import { undelta, pointAlong, segDist2 } from './geom.js';
+import { undelta, pointAlong, pointAlongCum, cumLengths, segDist2 } from './geom.js';
 import { hash01 } from './map.js';
 
 export const TRANSIT = { track: 12000, every: 1, busLive: 2200, dwell: { bus: 12, tram: 15, sbahn: 25, ubahn: 20 } };
@@ -51,11 +51,15 @@ export function prepareTransit(json) {
 export const dayType = (day) => (day === 5 ? 1 : day === 6 ? 2 : 0);
 
 // Abfahrten je Stunde um die Uhrzeit (±30 min; Fahrten nach Mitternacht zählen zum Vortag, GTFS-Zeiten > 24:00)
+// Je Muster zwischengespeichert pro Spielminute und Tag (wird jeden Schritt für alle verfolgten Muster gefragt)
 export function departuresPerHour(p, minutes, day) {
-  const m = ((minutes % 1440) + 1440) % 1440, dt = dayType(day), prev = dayType((day + 6) % 7);
+  const m = ((minutes % 1440) + 1440) % 1440, key = Math.floor(m) * 8 + day;
+  if (p._dphKey === key) return p._dph;
+  const dt = dayType(day), prev = dayType((day + 6) % 7);
   let n = 0;
   for (const d of p.deps[dt]) if (d >= m - 30 && d < m + 30) n++;
   for (const d of p.deps[prev]) if (d - 1440 >= m - 30 && d - 1440 < m + 30) n++;
+  p._dphKey = key; p._dph = n;
   return n;
 }
 
@@ -74,8 +78,10 @@ export function positionAt(p, tau) {
 }
 
 const tmp = { x: 0, y: 0, ux: 1, uy: 0 };
+// Linienwege sind lang (hunderte Punkte): Bogenlängen einmal aufsummieren, dann binär suchen statt linear laufen
 export function pointOn(p, s, out = {}) {
-  pointAlong(p.shape.pts, Math.max(0, Math.min(p.shape.len, s)), tmp);
+  const sh = p.shape;
+  pointAlongCum(sh.pts, sh._cum ??= cumLengths(sh.pts), Math.max(0, Math.min(sh.len, s)), tmp);
   out.x = tmp.x; out.y = tmp.y; out.angle = Math.atan2(tmp.uy, tmp.ux);
   return out;
 }

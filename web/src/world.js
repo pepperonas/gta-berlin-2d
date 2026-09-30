@@ -34,6 +34,7 @@ import { takeTrain, updatePlayerTrain, leaveTrain, turnAround, atTerminus } from
 import { stepLevel, initialLevel, touch } from './levels.js';
 import { specLine } from './carmodels.js';
 import { entranceNear } from './station.js';
+import { buildGrid, near } from './grid.js';
 import { stationsNear, stationById, keepInside, stairAt, arrivalAt, boardable, toLocal, toWorld, STATION, stationName } from './station.js';
 
 // city: dekodierte Karte (map.js decodeCity). cars/pedestrians: Zielbevölkerung um die Kamera.
@@ -455,6 +456,10 @@ function sideSpot(car, side, extra) {
   return { x: car.x + rx * d * side, y: car.y + ry * d * side };
 }
 
+// Raster für Nachbarschaftsfragen (grid.js): Zelle 128 px; ein Passant kann nur Autos berühren, deren Mitte näher als
+// halbe Länge + halbe Breite + Radius liegt – beim Bus (12 m) ≈ 80 px
+const GRID_CELL = 128, GRID_REACH = 90;
+
 // Abwurf vom Zweirad: die Maschine fällt um und rutscht aus, der Fahrer landet daneben, benommen und verletzt
 export const MOTO = { throwAt: 0.25, stun: 1.2, hurt: [8, 45] };
 function throwRider(w, car, strength) {
@@ -860,7 +865,10 @@ export function updateWorld(w, input, dt) {
   if (!p.ride) updatePlayerCombat(w, input, dt);
   if (p.dead) updateKnockout(w, dt);
 
+  // Nachbarschaftsraster für die Hinderniserkennung der KI (während dieser Schleife bewegt sich nichts)
+  w._gCars = buildGrid(w.cars, GRID_CELL, w._gCars); w._gPeds = buildGrid(w.peds, GRID_CELL, w._gPeds); w._gridOn = true;
   for (const c of w.cars) if (c.driver === 'npc') { driveAi(c, w, dt); updateService(w, c, dt); }
+  w._gridOn = false; // danach haben sich Autos bewegt – das Raster gilt nicht mehr
   for (const c of w.cars) {
     if (c.driver === null && !c.wrecked && c !== pc) { c.controls.throttle = 0; c.controls.brake = 0; c.controls.steer = 0; c.controls.handbrake = true; }
     // Unberührte geparkte Autos schlafen (spart die Weltkollision für hunderte Autos).
@@ -869,9 +877,16 @@ export function updateWorld(w, input, dt) {
     stepCar(c, dt, w.city);
     collideCarWorld(c, w, w.events);
   }
-  for (let i = 0; i < w.cars.length; i++) for (let j = i + 1; j < w.cars.length; j++) {
-    const a = w.cars[i], b = w.cars[j];
-    const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r && touch(w.city, a, b)) collideCars(a, b, w.events);
+  // Auto gegen Auto: nur Nachbarn aus dem Raster, Paare in derselben Reihenfolge wie die volle Doppelschleife (i < j
+  // aufsteigend). Radius großzügig über der größten Summe halber Längen (Bus + Bus ≈ 124 px) plus Wegschieben.
+  const pairGrid = w._gPairs = buildGrid(w.cars, GRID_CELL, w._gPairs), nb = w._pairBuf ??= [];
+  for (let i = 0; i < w.cars.length; i++) {
+    const a = w.cars[i];
+    for (const j of near(pairGrid, a.x, a.y, 170, nb)) {
+      if (j <= i) continue;
+      const b = w.cars[j];
+      const r = a.hw + b.hw + 4; if (Math.abs(a.x - b.x) < r && Math.abs(a.y - b.y) < r && touch(w.city, a, b)) collideCars(a, b, w.events);
+    }
   }
   // Motorrad/Roller: ein harter Aufprall wirft den Fahrer ab (ab ≈ 27 km/h frontal)
   if (pc && isMotoKind(pc.kind) && w.player.inCar === pc.id) {
@@ -930,6 +945,7 @@ export function updateWorld(w, input, dt) {
     if (e.type === 'shot' && !w.player.inside) threats.push({ x: e.x, y: e.y, r: GUNSHOT_SCARE, always: true }); // unten hört oben keiner
     if ((e.type === 'blood' || e.type === 'swing') && !e.npc) threats.push({ x: e.x, y: e.y, r: e.type === 'blood' ? 220 : 90, always: true, melee: e.type === 'swing' });
   }
+  const carGrid = w._gCarsPed = buildGrid(w.cars, GRID_CELL, w._gCarsPed); // Autos stehen während der Passanten-Schleife
   for (const ped of w.peds) {
     if (ped.state === 'dead') { updatePed(ped, w, dt); continue; }
     if (ped.state !== 'down' && ped.state !== 'flee' && ped.state !== 'fight') {
@@ -941,7 +957,8 @@ export function updateWorld(w, input, dt) {
         if (toward) { scare(ped, t.x, t.y); break; }
       }
     }
-    for (const c of w.cars) {
+    for (const ci of near(carGrid, ped.x, ped.y, GRID_REACH, w._nearBuf ??= [])) { // nur Autos in der Nähe (Reihenfolge wie w.cars)
+      const c = w.cars[ci];
       if (ped.state === 'down') break;
       const mm = circleVsObb(ped.x, ped.y, PED.radius, c);
       if (!mm || !touch(w.city, ped, c)) continue;

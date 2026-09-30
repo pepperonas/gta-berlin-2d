@@ -2,6 +2,7 @@
 // Fläche in jedes Fenster ganz hineinpasst (Maßstab = min(Breite/1280, Höhe/720)); ist das Fenster breiter oder höher,
 // wächst die virtuelle Fläche mit (vw ≥ 1280, vh ≥ 720). Das Spiel-HUD hängt an den Fensterrändern (5 % Title-Safe-Rand,
 // TV), Menübildschirme liegen in einem zentrierten 1280 × 720-Rahmen (inFrame) – so wird nichts abgeschnitten.
+import { makeCanvas } from './lighting.js';
 import { specOf } from './carmodels.js';
 const DRIVE_SHORT = { fwd: 'FRONT', rwd: 'HECK', awd: 'ALLRAD' };
 import { SPEED_TO_KMH, MISSION, CAR, PLAYER } from './config.js';
@@ -35,6 +36,23 @@ const GLYPH = { A: '#3fb54a', B: '#e2383f', X: '#2f7fe0', Y: '#f2b705' };
 export const BASE = { w: 1280, h: 720 };
 
 const KEYS = { A: 'E', B: 'Esc', X: 'H', Y: 'F', RB: 'Leer', LT: 'S', RT: 'W', MENU: 'Esc', VIEW: 'M' };
+
+// Minikarte: Vorrat ±4000 Welt-px (±400 m, doppelt so groß wie der Ausschnitt), neu gezeichnet, wenn der Spieler
+// 160 m vom Vorratsmittelpunkt weg ist (dann ist der Ausschnitt noch ganz im Vorrat)
+const MINI_HALF = 4000, MINI_MOVE = 1600;
+function drawMiniLayers(c, city, x, y, R, q) {
+  city.render.query({ x: x - R, y: y - R, w: 2 * R, h: 2 * R }, q);
+  for (const f of q) if (f.layer === 'area' && f.kind !== AREA_KIND.plaza) { c.fillStyle = MINI_AREA[f.kind] ?? '#2f5a2a'; c.fill(pathOf(f), 'evenodd'); }
+  c.fillStyle = '#2b2d33';
+  for (const f of q) if (f.layer === 'building') c.fill(pathOf(f), 'evenodd');
+  c.fillStyle = '#1f4f78';
+  for (const f of q) if (f.layer === 'water') c.fill(pathOf(f), 'evenodd');
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const f of q) if (f.layer === 'edge' && f.cls <= 9) {
+    c.strokeStyle = f.cls <= 4 ? '#b9a66a' : '#8d919a'; c.lineWidth = Math.max(f.w, 28); c.stroke(pathOf(f));
+  }
+  c.strokeStyle = '#ffd33d'; c.lineWidth = 30; c.stroke(city._borderPath ??= ringPath(city.border));
+}
 
 export class Hud {
   constructor(ctx) { this.ctx = ctx; this.overview = null; this.device = 'gamepad'; }
@@ -199,10 +217,10 @@ export class Hud {
   }
 
   // Bildrate, Zeichenzeit und Qualitätsstufe oben in der Mitte (Konsole: fps)
-  drawFps(fps, ms, quality) {
-    const x = this.vw / 2 - 110, y = 10;
-    this.panel(x, y, 220, 30, 0.7);
-    this.text(`${Math.round(fps)} fps · ${ms.toFixed(1)} ms · ${quality === 'high' ? 'hoch' : 'niedrig'}`, this.vw / 2, y + 21, { size: 14, weight: 700, align: 'center', color: fps >= 50 ? '#8f8' : fps >= 30 ? YELLOW : '#f88', shadow: false });
+  drawFps(fps, ms, quality, res = 1) {
+    const x = this.vw / 2 - 140, y = 10;
+    this.panel(x, y, 280, 30, 0.7);
+    this.text(`${Math.round(fps)} fps · ${ms.toFixed(1)} ms · ${quality === 'high' ? 'hoch' : 'niedrig'} · ${Math.round(res * 100)} %`, this.vw / 2, y + 21, { size: 14, weight: 700, align: 'center', color: fps >= 50 ? '#8f8' : fps >= 30 ? YELLOW : '#f88', shadow: false });
   }
 
   // Statistik: Abschnitte in drei Spalten (Unterwegs + Verkehr | Kampf + Aufträge | Nahverkehr), je Zeile „dieses Spiel“ und „insgesamt“; darunter die Waffen
@@ -513,23 +531,21 @@ export class Hud {
     this.layout = { ...(this.layout ?? {}), minimap: { x, y, w: size, h: size } };
     const c = this.ctx, p = playerCar(world) ?? world.player, city = world.city;
     const zoom = size / 4000; // Minikarte zeigt ~400 m
+    const R = 2200;
     c.save();
     rr(c, x, y, size, size, 12); c.fillStyle = '#3a3d44'; c.fill(); c.clip();
-    c.save();
-    c.transform(zoom, 0, 0, zoom, x + size / 2 - p.x * zoom, y + size / 2 - p.y * zoom);
-    const R = 2200;
-    const q = city.render.query({ x: p.x - R, y: p.y - R, w: 2 * R, h: 2 * R }, this._mq ??= []);
-    for (const f of q) if (f.layer === 'area' && f.kind !== AREA_KIND.plaza) { c.fillStyle = MINI_AREA[f.kind] ?? '#2f5a2a'; c.fill(pathOf(f), 'evenodd'); }
-    c.fillStyle = '#2b2d33';
-    for (const f of q) if (f.layer === 'building') c.fill(pathOf(f), 'evenodd');
-    c.fillStyle = '#1f4f78';
-    for (const f of q) if (f.layer === 'water') c.fill(pathOf(f), 'evenodd');
-    c.lineCap = 'round'; c.lineJoin = 'round';
-    for (const f of q) if (f.layer === 'edge' && f.cls <= 9) {
-      c.strokeStyle = f.cls <= 4 ? '#b9a66a' : '#8d919a'; c.lineWidth = Math.max(f.w, 28); c.stroke(pathOf(f));
+    // Kartengrund (Flächen, Häuser, Wasser, Straßen, Grenze): aus einem selten neu gezeichneten Vorrat doppelter Größe
+    // kopiert – statt in jedem Bild hunderte Formen zu füllen
+    const base = this.miniBase(world, p, size);
+    if (base) {
+      const k = base.px / (2 * MINI_HALF); // Vorrat-Pixel je Welt-px
+      c.drawImage(base.canvas, (p.x - 2000 - (base.cx - MINI_HALF)) * k, (p.y - 2000 - (base.cy - MINI_HALF)) * k, 4000 * k, 4000 * k, x, y, size, size);
+    } else {
+      c.save();
+      c.transform(zoom, 0, 0, zoom, x + size / 2 - p.x * zoom, y + size / 2 - p.y * zoom);
+      drawMiniLayers(c, city, p.x, p.y, R, this._mq ??= []);
+      c.restore();
     }
-    c.strokeStyle = '#ffd33d'; c.lineWidth = 30; c.stroke(city._borderPath ??= ringPath(city.border));
-    c.restore();
     // Bahnhöfe auf der Minikarte
     for (const q of city.poiHash.query({ x: p.x - R, y: p.y - R, w: 2 * R, h: 2 * R }, [])) {
       if (q.cat !== 'ubahn' && q.cat !== 'sbahn') continue;
@@ -566,6 +582,26 @@ export class Hud {
     c.restore();
     c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 2; rr(c, x, y, size, size, 12); c.stroke();
     this.text('N', x + size / 2, y + 16, { size: 13, align: 'center', weight: 800, color: '#ddd' });
+  }
+
+  // Vorrat für den Kartengrund der Minikarte: ±MINI_HALF Welt-px um (cx, cy), neu bei Bewegung über MINI_MOVE, anderer
+  // Skalierung oder (höchstens alle 30 Bilder) nachgeladenen Kacheln. null ohne Zeichenfläche (Tests) → direkt zeichnen.
+  miniBase(world, p, size) {
+    const city = world.city, s = this.s ?? 1, m = this._mini;
+    this._miniT = (this._miniT ?? 0) + 1;
+    const stale = !m || m.city !== city || m.s !== s || m.size !== size || Math.abs(p.x - m.cx) > MINI_MOVE || Math.abs(p.y - m.cy) > MINI_MOVE
+      || (m.gen !== city.gen && this._miniT - m.t > 30);
+    if (!stale) return m;
+    const px = Math.ceil(2 * MINI_HALF * (size / 4000) * s);
+    let canvas = m?.canvas?.width === px ? m.canvas : null;
+    try { canvas ??= makeCanvas(px, px); } catch { canvas = null; }
+    const g = canvas?.getContext?.('2d');
+    if (!g || !g.drawImage) return (this._mini = null);
+    const k = px / (2 * MINI_HALF), cx = Math.round(p.x), cy = Math.round(p.y);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#3a3d44'; g.fillRect(0, 0, px, px);
+    g.setTransform(k, 0, 0, k, -(cx - MINI_HALF) * k, -(cy - MINI_HALF) * k);
+    drawMiniLayers(g, city, cx, cy, MINI_HALF + 200, this._mq ??= []);
+    return (this._mini = { city, s, size, cx, cy, px, canvas, gen: city.gen, t: this._miniT });
   }
 
   stationIcon(cat, x, y, r) {

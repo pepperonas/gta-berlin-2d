@@ -65,6 +65,26 @@ export function pointAlong(pts, s, out = { x: 0, y: 0, ux: 1, uy: 0 }) {
   return out;
 }
 
+// Aufsummierte Bogenlängen je Punkt (cum[k] = Länge bis Punkt k) – für pointAlongCum auf langen Polylinien
+export function cumLengths(pts) {
+  const n = pts.length / 2, cum = new Float64Array(n);
+  for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + Math.hypot(pts[2 * k] - pts[2 * k - 2], pts[2 * k + 1] - pts[2 * k - 1]);
+  return cum;
+}
+// Wie pointAlong, aber mit binärer Suche über cum (O(log n) statt O(n))
+export function pointAlongCum(pts, cum, s, out = { x: 0, y: 0, ux: 1, uy: 0 }) {
+  const n = cum.length;
+  if (n < 2) { out.x = pts[0]; out.y = pts[1]; return out; }
+  if (s <= 0) s = 0;
+  let lo = 0, hi = n - 2; // Segment k: Punkte k … k+1
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (cum[mid] <= s) lo = mid; else hi = mid - 1; }
+  const i = 2 * lo, dx = pts[i + 2] - pts[i], dy = pts[i + 3] - pts[i + 1], L = cum[lo + 1] - cum[lo];
+  const t = L ? Math.min(1, (s - cum[lo]) / L) : 0;
+  out.x = pts[i] + dx * t; out.y = pts[i + 1] + dy * t;
+  out.ux = L ? dx / L : 1; out.uy = L ? dy / L : 0;
+  return out;
+}
+
 // Nächster Punkt auf einer Polylinie: { s (Bogenlänge), d2, x, y, ux, uy }.
 export function projectOnPolyline(pts, x, y) {
   let best = null, acc = 0;

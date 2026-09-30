@@ -234,7 +234,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 449 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # 450 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -532,7 +532,7 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 **Funktioniert und ist geprüft (auf dem Mac):**
 
-- Alle 449 automatischen Tests grün, darunter:
+- Alle 450 automatischen Tests grün, darunter:
   - 0.38.0: Radfahrer als Ziel – Strahl trifft den fahrenden Radfahrer (nicht das liegende Rad), Schuss holt ihn vom Rad
     (stürzt, Treffer zählt, Statistik), Tritt ebenso; Kapern mit F neben dem Rad (Fahrer runter, Rad aus dem
     Radverkehr, kein Auftragsauto), Vollgas bis höchstens ≈ 26 km/h, absteigen/aufsteigen, E-Roller bleibt E-Roller,
@@ -624,7 +624,11 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
   - Gebrauchsspuren: Schmutz nur in Senken, Ausbleichen nur auf Kuppen (dazwischen unverändert), Ölband in jeder
     Spurmitte innerhalb der Fahrbahn, nicht auf Pflaster; Zeichnen mit Schmutz, Ölband, Kontaktschatten, Vignette,
     Schnee deckt den Schmutz zu;
-  - Neue Fahrzeuge: Motorrad-Anzug nie über der Wheelie-, Bremse nie über der Stoppie-Grenze (Rad hebt sichtbar), bremst
+  - Leistung: dynamische Auflösung (langsam → herunter bis 70 %, schnell → hinauf, Hysterese, Pausen zählen nicht);
+    die Beschleunigungen der Simulation (Raster, Zwischenspeicher, binäre Suche) ändern nichts am Ergebnis –
+    geprüft mit einem Positions-Fingerabdruck über 40 s Stadtverkehr (alt = neu) und der unveränderten Missionszeit des
+    Autopiloten; im Browser: 70 % Auflösung steigern die Bildrate im Software-Rendering von 8 auf 14 Bilder/s;
+ nie über der Wheelie-, Bremse nie über der Stoppie-Grenze (Rad hebt sichtbar), bremst
     länger als eine Limousine, Roller-Spitze 95 km/h, Schräglage in der Kurve; Oldtimer bremst deutlich länger,
     Muscle-Car ohne ESP bricht unter Gas aus, Hot Hatch mit ESP nicht, Pick-up zieht auf Schnee schlechter an als der
     Allrad; Aufprall wirft den Fahrer ab (benommen, verletzt, Maschine liegt, aufsteigen richtet auf), Zweirad kein

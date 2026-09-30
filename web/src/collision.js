@@ -100,8 +100,9 @@ export function obbVsObb(a, b) {
 
 // Normale zeigt von der Box zum Kreis (der Kreis wird herausgeschoben).
 export function circleVsObb(cx, cy, r, o) {
-  const [fx, fy, rx, ry] = obbAxes(o);
-  const dx = cx - o.x, dy = cy - o.y;
+  const dx = cx - o.x, dy = cy - o.y, R = o.hw + o.hh + r; // grob vorab: außerhalb des Umkreises → nichts (ohne Winkelrechnung)
+  if (dx > R || dx < -R || dy > R || dy < -R) return null;
+  const fx = Math.cos(o.angle), fy = Math.sin(o.angle), rx = -fy, ry = fx;
   const lx = dx * fx + dy * fy, ly = dx * rx + dy * ry;
   const qx = Math.max(-o.hw, Math.min(lx, o.hw));
   const qy = Math.max(-o.hh, Math.min(ly, o.hh));

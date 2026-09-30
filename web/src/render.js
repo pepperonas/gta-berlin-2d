@@ -1654,23 +1654,22 @@ export class Renderer {
     if (!wins.length) return;
     this.stats.litWindows = (this.stats.litWindows ?? 0) + wins.length;
     const t = this._time ?? 0;
+    // Pfade je Lichtfarbe und für die Sprossen einmal bauen (die Fenster stehen fest, solange der Zwischenspeicher gilt –
+    // eine Spielminute) statt in jedem Bild tausende Rechtecke einzeln zu übergeben
+    const paths = wins._paths ??= windowPaths(wins);
     for (const type of WIN_TYPES) {
-      let any = false;
-      ctx.beginPath();
-      for (const w of wins) if (w.type === type) { ctx.rect(w.x, w.y, w.w, w.h); any = true; }
-      if (!any) continue;
+      const p = paths[type];
+      if (!p) continue;
       ctx.fillStyle = (forLight ? WIN_LIGHT : WIN_COLOR)[type];
       // im Nebel dringt das Fensterlicht nur gedämpft durch
       const fogK = forLight ? 1 - 0.65 * Math.min(1, (this._fog ?? 0) / 1.4) : 1;
       ctx.globalAlpha = fogK * (type === 'tv' ? tvFlicker(b.cx + f.ei, b.cy + f.ri, t) : 1);
-      ctx.fill();
+      fillPath(ctx, p);
       ctx.globalAlpha = 1;
     }
     if (!forLight) { // Fensterkreuz: dunkle Sprossen über den hellen Scheiben
       ctx.fillStyle = 'rgba(40,32,24,0.45)';
-      ctx.beginPath();
-      for (const w of wins) { ctx.rect(w.x + w.w / 2 - 0.35, w.y, 0.7, w.h); ctx.rect(w.x, w.y + w.h * 0.55, w.w, 0.6); }
-      ctx.fill();
+      fillPath(ctx, paths.bars);
     }
   }
 
@@ -1691,7 +1690,7 @@ export class Renderer {
         pat: facadePatterns(ctx)[roof.facade][(b.seed >> 7) % 3] };
     }
     const col = b._col;
-    const faces = this._faces ??= [];
+    const faces = this._faces ??= [], pool = this._facePool ??= []; // Fassaden-Objekte wiederverwenden (kein Müll je Bild)
     faces.length = 0;
     for (let ri = 0; ri < b.rings.length; ri++) {
       const r = b.rings[ri], n = r.length;
@@ -1702,7 +1701,9 @@ export class Renderer {
         if (L < 1) continue;
         const nx = out * ey / L, ny = -out * ex / L;
         if (nx * dx + ny * dy >= 0) continue;
-        faces.push({ x0, y0, ex, ey, L, nx, ny, ri, ei: i / 2, depth: -((x0 + x1) * dx + (y0 + y1) * dy) });
+        const f = pool[faces.length] ??= {};
+        f.x0 = x0; f.y0 = y0; f.ex = ex; f.ey = ey; f.L = L; f.nx = nx; f.ny = ny; f.ri = ri; f.ei = i / 2; f.depth = -((x0 + x1) * dx + (y0 + y1) * dy);
+        faces.push(f);
       }
     }
     faces.sort((a, c) => a.depth - c.depth);
@@ -1724,24 +1725,23 @@ export class Renderer {
         if (lit > 0.02) { ctx.fillStyle = `rgba(255,236,200,${0.22 * lit})`; ctx.fill(); }
         else if (lit < -0.02) { ctx.fillStyle = `rgba(10,14,30,${-0.2 * lit})`; ctx.fill(); }
       }
-      if (f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small && (winPat || winCache)) {
-        ctx.save();
-        ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
-        if (winPat) { ctx.fillStyle = winPat; ctx.fillRect(4, 2, f.L - 8, H - 4); }
-        if (winCache) this.drawLitWindows(ctx, winCache, b, f, H, lightMode);
-        ctx.restore();
-      }
-      if (lightMode) continue;
-      // Kontaktschatten am Fuß der Fassade, darüber Spritzwasser-/Straßenschmutz, der nach oben ausläuft
+      // Fassadenrahmen (Achsen: Kante, Höhe) einmal setzen: Fenster, dann Kontaktschatten und Sockelschmutz
+      const wins = f.L > 24 && H > 24 && b.kind !== BUILDING_KIND.small && (winPat || winCache);
+      if (!wins && lightMode) continue;
       ctx.save();
       ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
-      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, f.L, 2.5);
-      ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, 2.5, f.L, 3);
-      if (this.quality === 'high' && ctx.createLinearGradient) {
-        ctx.scale(1, H);
-        ctx.fillStyle = this._soil ??= soilGradient(ctx); ctx.fillRect(0, 0, f.L, 0.5);
+      if (wins) {
+        if (winPat) { ctx.fillStyle = winPat; ctx.fillRect(4, 2, f.L - 8, H - 4); }
+        if (winCache) this.drawLitWindows(ctx, winCache, b, f, H, lightMode);
+      }
+      if (!lightMode) {
+        // Kontaktschatten am Fuß der Fassade, darüber Straßenschmutz, der nach oben ausläuft: ein Verlauf je Hausöhe
+        const g = this.quality === 'high' ? this.baseGradient(ctx, H) : null;
+        if (g) { ctx.fillStyle = g; ctx.fillRect(0, 0, f.L, H * 0.5); }
+        else { ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, f.L, 2.5); ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, 2.5, f.L, 3); }
       }
       ctx.restore();
+      if (lightMode) continue;
       if (b.doors) for (const [dr, de, dt] of b.doors) if (dr === f.ri && de === f.ei) { // Hauseingang
         ctx.save();
         ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
@@ -1793,12 +1793,41 @@ function silhouettePath(g, o) {
   } else g.arc(0, 0, 7, 0, Math.PI * 2);
 }
 
-// Fassadenschmutz: vom Sockel (y = 0) bis zur halben Höhe (y = 0.5 nach ctx.scale(1, H)) auslaufend
-function soilGradient(ctx) {
-  const g = ctx.createLinearGradient(0, 0, 0, 0.5);
-  if (!g?.addColorStop) return 'rgba(0,0,0,0)';
-  g.addColorStop(0, 'rgba(52,42,32,0.2)'); g.addColorStop(0.35, 'rgba(52,42,32,0.06)'); g.addColorStop(1, 'rgba(52,42,32,0)');
+// Fassadenfuß als ein Verlauf (0 = Sockel … H/2): Kontaktschatten 0–2,5 px (22 %), 2,5–5,5 px (10 %), darüber
+// Straßenschmutz, der zur halben Höhe ausläuft. Je gerundeter Höhe einmal (die Pixelmaße hängen von H ab).
+Renderer.prototype.baseGradient = function (ctx, H) {
+  if (!ctx.createLinearGradient) return null;
+  const m = this._baseGrads ??= new Map(), key = Math.round(H);
+  let g = m.get(key);
+  if (g === undefined) {
+    const h = key * 0.5, k = (px) => Math.min(0.999, px / h);
+    g = ctx.createLinearGradient(0, 0, 0, h);
+    if (!g?.addColorStop) g = null;
+    else {
+      g.addColorStop(0, 'rgba(8,6,4,0.36)'); g.addColorStop(k(2.5), 'rgba(12,10,8,0.3)'); g.addColorStop(k(2.6), 'rgba(24,19,14,0.24)');
+      g.addColorStop(k(5.5), 'rgba(40,32,24,0.2)'); g.addColorStop(Math.max(k(5.6), 0.35), 'rgba(52,42,32,0.06)'); g.addColorStop(1, 'rgba(52,42,32,0)');
+    }
+    m.set(key, g);
+  }
   return g;
+};
+
+// Fensterpfade einer Fassade: je Lichtfarbe ein Pfad, dazu die Sprossen. Ohne Path2D (Tests) Rechtecklisten, die
+// fillPath dann einzeln übergibt.
+function windowPaths(wins) {
+  const P = typeof Path2D !== 'undefined', out = {};
+  const add = (key, x, y, w, h) => { const p = out[key] ??= P ? new Path2D() : []; if (P) p.rect(x, y, w, h); else p.push(x, y, w, h); };
+  for (const w of wins) {
+    add(w.type, w.x, w.y, w.w, w.h);
+    add('bars', w.x + w.w / 2 - 0.35, w.y, 0.7, w.h); add('bars', w.x, w.y + w.h * 0.55, w.w, 0.6);
+  }
+  return out;
+}
+function fillPath(ctx, p) {
+  if (!Array.isArray(p)) { ctx.fill(p); return; }
+  ctx.beginPath();
+  for (let i = 0; i < p.length; i += 4) ctx.rect(p[i], p[i + 1], p[i + 2], p[i + 3]);
+  ctx.fill();
 }
 
 function drawCrate(ctx, c) {

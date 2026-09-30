@@ -212,6 +212,14 @@ export const COMMANDS = [
       if (q === undefined) return { ok: false, msg: 'qualitaet hoch|niedrig|auto' };
       ctx.game.debug.quality = q; return `Qualität ${v}`;
     } },
+  { name: 'aufloesung', aliases: ['auflösung', 'resolution'], help: 'Interne Auflösung (auto = nach Bildrate)', args: [{ name: 'prozent', values: () => [{ label: 'auto', hint: 'nach Bildrate' }, { label: '100', hint: '' }, { label: '85', hint: '' }, { label: '70', hint: '' }] }],
+    run(ctx, [v]) {
+      const n = norm(v ?? '');
+      if (n === 'auto') { ctx.game.debug.resScale = null; return 'Auflösung automatisch'; }
+      const p = Number(n);
+      if (!(p >= 40 && p <= 100)) return { ok: false, msg: 'aufloesung auto|100|85|70' };
+      ctx.game.debug.resScale = p / 100; return `Auflösung ${p} %`;
+    } },
   { name: 'bars', aliases: ['nachtleben'], help: 'Bar-Auslastung (Feed-URL setzen, neu laden, aus)', args: [{ name: 'URL|neu|aus', optional: true, values: () => [{ label: 'neu', hint: 'Feed neu laden' }, { label: 'aus', hint: 'nur OSM-Lokale' }] }],
     run(ctx, [v]) {
       const B = ctx.city?.bars;

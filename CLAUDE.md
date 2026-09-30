@@ -310,6 +310,17 @@ change in `web/`.
   centre offsets, cached `e._wear`) + `drawLaneWear` (oil band, high quality), `drawContactShadows` (AO strokes around
   footprints before the depth-sorted objects), `roofGrime`, `waterGlint`, `drawVignette` (screen space). Facade soil
   gradient in `drawBuilding` (`soilGradient`). Pure colour mapping `grimeRGBA(kind, n)`.
+- **Performance (0.44.0):** simulation speedups must stay bit-identical (check with a position hash over a few thousand
+  steps against the previous commit). `grid.js buildGrid/near` = neighbour grid returning indices in list order (so loop
+  order and results don't change); `world.js` builds `_gCars/_gPeds` right before the AI loop (`w._gridOn`, nothing
+  moves there; `obstacleAhead` uses it only then), a car grid for the ped loop and for car↔car pairs (`j > i`, radius 170).
+  `traffic.js zebrasNear` caches zebra crossings per 200-px cell per `city.gen`; `transit.js departuresPerHour` memo per
+  game minute + day; `pointOn` uses `geom.js cumLengths/pointAlongCum` (binary search, `shape._cum`); `circleVsObb`
+  rejects by bounding box first. Rendering: lit windows as cached `Path2D`s per face (`wins._paths`, `windowPaths`/
+  `fillPath` with a rect-list fallback without Path2D), one facade frame per face with `Renderer.baseGradient(ctx, H)`
+  (cached per rounded height), pooled face objects, minimap ground from `hud.miniBase` (offscreen, ±4000 px, rebuilt on
+  160 m movement or city.gen after 30 frames; falls back to direct drawing without a canvas). `perf.js stepResolution`
+  (pure) picks the internal resolution step from rAF gaps (`RES`), applied in `main.js resize`; console `aufloesung`.
 - **Tree shadows:** `lighting.js treeShadowGeom` (pure) + `addTrunkShadow` (trunk strip in the opaque shadow path) +
   `crownShadowSprite` (crown sprite as black silhouette with gaps and blurred edge, stretched along the sun).
 - **Mission** (`mission.js`) is a state machine; save (`save.js`) is one `localStorage` slot, auto-written after a

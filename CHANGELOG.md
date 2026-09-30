@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [0.44.0] – 2026-09-30
+
+### Geändert
+- **Schneller:** Die Simulation braucht pro Schritt nur noch die Hälfte der Zeit (Stadtverkehr 2,6 → 1,4 ms) –
+  bitgleiche Ergebnisse: Nachbarschaftsraster für Passant↔Auto, Auto↔Auto und die Hindernissuche der KI, Zebrastreifen
+  je Zelle gemerkt, Takt der Fahrpläne je Spielminute gemerkt, Positionen auf Linienwegen per binärer Suche, grobe
+  Vorabprüfung bei Kreis↔Auto-Kollisionen.
+- **Weniger Zeichenbefehle:** nachts halb so viele (erleuchtete Fenster als fertige Pfade je Spielminute), Fassaden mit
+  einem Verlauf statt drei Flächen und einem statt zwei Rahmenwechseln, Minikarte aus einem selten neu gezeichneten
+  Vorrat (730 → 170 Befehle für das HUD).
+
+### Neu
+- **Dynamische Auflösung:** Fällt die Bildrate unter ≈ 48 Bilder/s (z. B. wenn die Grafikkarte der Engpass ist), rendert
+  das Spiel intern mit 85 % bzw. 70 % der Auflösung und schaltet wieder hoch, wenn Luft ist. Befehl
+  `aufloesung auto|100|85|70`; die FPS-Anzeige (`fps an`) zeigt die Stufe.
+
 ## [0.43.0] – 2026-09-30
 
 ### Neu
