@@ -1,11 +1,12 @@
 // Fahrzeug- und Schrittklang (soundscape.js): Drehzahl und Gänge, Reifen, Stimmen fremder Autos mit Doppler, Schritte.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stepEngine, engineOf, tireState, carVoices, stepsBetween, strideOf, footstepKind, ENGINES } from '../web/src/soundscape.js';
+import { stepEngine, tireState, carVoices, stepsBetween, strideOf, footstepKind, ENGINES, MODEL_ENGINES } from '../web/src/soundscape.js';
 import { createCar } from '../web/src/car.js';
 
 const drive = (kind, speeds, throttle = 1) => {
   const car = createCar({ x: 0, y: 0, kind }), st = {}, out = [];
+  if (kind === 'car') car.model = 'kompakt'; // Modellklang darf nicht vom ID-Hash abhängen.
   car.driver = 'player'; car.controls.throttle = throttle;
   for (const v of speeds) { car.vx = v; for (let i = 0; i < 30; i++) stepEngine(st, car, 1 / 60); out.push({ ...st }); }
   return out;
@@ -14,7 +15,7 @@ const drive = (kind, speeds, throttle = 1) => {
 test('Motor: Gänge schalten hoch, Drehzahl bleibt zwischen Leerlauf und Abregelung, Diesel dreht niedriger', () => {
   const speeds = Array.from({ length: 34 }, (_, i) => i * 10);
   const car = drive('car', speeds), truck = drive('truck', speeds);
-  const E = engineOf('car');
+  const E = MODEL_ENGINES.kompakt;
   assert.equal(car[0].gear, 1);
   assert.ok(car.at(-1).gear >= 5, `Vollgas 330 px/s im ${car.at(-1).gear}. Gang`);
   for (let i = 1; i < car.length; i++) assert.ok(car[i].gear >= car[i - 1].gear, 'beim Beschleunigen nie zurück');

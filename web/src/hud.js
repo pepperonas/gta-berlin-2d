@@ -948,38 +948,40 @@ export class Hud {
 
   drawControls(g) {
     this.fillScreen('rgba(5,6,10,0.9)');
-    this.inFrame(() => this.controlsContent(g?.settings?.controls ?? 'diablo'));
+    this.inFrame(() => this.controlsContent(g?.settings?.controls ?? 'diablo', !!g?.settings?.mouseSwapped));
   }
 
-  controlsContent(scheme = 'diablo') {
+  controlsContent(scheme = 'diablo', mouseSwapped = false) {
     const c = this.ctx, vw = this.vw, d = scheme === 'diablo';
     this.text('STEUERUNG', vw / 2, 110, { size: 44, align: 'center', weight: 900, color: YELLOW });
     this.text(`Zu Fuß am PC:  ‹ ${d ? 'Diablo (Klick)' : 'Klassisch (WASD)'} ›   ← / → wechselt`, vw / 2, 146, { size: 18, align: 'center', weight: 700, color: '#ddd' });
+    this.text(`Maus: ${mouseSwapped ? 'Links angreifen · Rechts laufen' : 'Links laufen · Rechts angreifen'}   ↓ zum Umkehren`, vw / 2, 174, { size: 17, align: 'center', weight: 700, color: '#ddd' });
     const rows = [
-      ['Laufen / Lenken', 'Linker Stick', d ? 'Linksklick (Boden) · WASD' : 'WASD / Pfeile'],
-      ['Angreifen · Tritt (zu Fuß)', 'RT · B', d ? 'Linksklick (Person) · Strg + Klick · rechte Maus tippen' : 'linke Maus · V'],
+      ['Laufen / Lenken', 'Linker Stick', mouseSwapped ? 'Rechte Maus · WASD' : 'Linke Maus · WASD'],
+      ['Angreifen · Tritt (zu Fuß)', 'RT · B', mouseSwapped ? 'Linke Maus' : 'Rechte Maus'],
       ['Sprinten · langsam gehen', 'A halten · Stick halb', 'Umschalt · Alt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
       ['ESP umschalten (im Auto)', '–', 'X'],
       ['ABS umschalten (im Auto)', '–', 'Y'],
-      ['Einsteigen / Aussteigen', 'Y', d ? 'Linksklick (Auto) · F' : 'F / rechte Maus tippen'],
+      ['Einsteigen / Aussteigen · U-Bahn', 'Y', 'F'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
-      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
+      ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'Linke + rechte Maus halten'],
       ['Aktion (Auftrag, Einladen, Türen/Wenden)', 'A', 'E'],
       ['Befehlszeile (Zeit, Wetter, Teleport …)', '–', 'Enter'],
       ['Zoom (zu Fuß) · Hupe', '– · X', d ? 'Mausrad · H' : '– · H'],
-      ['Stadtplan', 'Ansicht-Taste', 'M'],
+      ['Ton umschalten', '–', 'M'],
+      ['Stadtplan', 'Ansicht-Taste', 'Tab'],
       ['Pause', 'Menü-Taste', 'Esc / P'],
       ['Menüs · Stadtplan', 'Steuerkreuz, A / B', 'Maus: zeigen + klicken'],
     ];
     const x0 = vw / 2 - 460;
-    this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
-    this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
-    // Die 16 Zeilen enden bei y=615; darunter bleibt Luft zur Fußzeile (Fuß-Klickfläche beginnt bei 654).
-    const rowH = 27;
+    this.text('Controller', x0 + 470, 202, { size: 18, color: '#aaa', weight: 800 });
+    this.text('Tastatur', x0 + 740, 202, { size: 18, color: '#aaa', weight: 800 });
+    // Die Zeilen enden bei y=610; darunter bleibt Luft zur Fußzeile.
+    const rowH = 24;
     rows.forEach(([a, b, k], i) => {
-      const y = 210 + i * rowH;
+      const y = 226 + i * rowH;
       if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - (rowH - 12), 920, rowH); }
       this.text(a, x0 + 16, y, { size: 20, weight: 600 });
       this.text(b, x0 + 470, y, { size: 20, weight: 500, color: '#ddd' });

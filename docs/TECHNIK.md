@@ -3,6 +3,20 @@
 Stand der Recherche: **27.09.2026**. Alle Quellen am selben Tag geprüft. Ein Teil der Microsoft-Seiten zu „UWP auf Xbox“ ist
 inzwischen ins Archiv verschoben (Texte von 2017–2023). Sie sind trotzdem die aktuellste offizielle Beschreibung.
 
+## Aktuelle Implementierungsdokumentation
+
+Die Plattformrecherche unten ist ein historischer Stand vom 27.09.2026 und wurde
+für das Update vom 01.10.2026 nicht erneut recherchiert. Den aktuellen Spielstand
+beschreiben die [Update-Dokumentation](SPIEL-UPDATE-2026-10-01.md) und der
+[Beschleunigungsbericht](FAHRZEUG-BESCHLEUNIGUNG.md) mit Messwerten und Herstellerquellen.
+
+Neue Modulaufteilung: `vehicleart.js` zeichnet die Pkw-Oberflächen;
+`enginevoice.js` definiert Motorprofile und Zündimpuls-Spektren;
+`dynamics.js` enthält die abgestimmte Zugkrafthüllkurve. Die Enter-Konsole
+in `console.js` setzt Wochentag und Wetterwerte direkt im Weltzustand.
+Der aktuelle Teststatus ist im Updatebericht dokumentiert; ältere grüne
+Prüfstände gelten nicht automatisch für den gesamten heutigen Arbeitsstand.
+
 ## Ausgangslage
 
 - Das Repository war leer (kein Rust/Bevy, kein Bestand). Die Entscheidung konnte also frei fallen.

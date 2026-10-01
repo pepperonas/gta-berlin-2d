@@ -34,6 +34,12 @@ export const DYN = {
   // steer (Wendekreis), handbrake: [Seitenhalt hinten, Bremskraft hinten] relativ zur Haftung
   lowLock: [0.95, 3, 9], // Rangieren: bis 3 m/s darf die Lenkung bis 0,95 rad einschlagen, bis 9 m/s auf den Normalwert
   fun: { grip: 1.4, brake: 1.25, power: 1.2, steer: 1.2, handbrake: [0.4, 0.3] },
+  // Zugkraftverlauf: kräftiger Stadt-Antritt, auslaufend bis 90 km/h. Allrad hat bereits
+  // sehr viel Starttraktion; Zweiräder bleiben durch Wheelie/Stoppie begrenzt.
+  launch: { gain: 0.28, awd: 0.35, maxAccel: 10, from: 20 / 3.6, to: 90 / 3.6 },
+  // Oberhalb des Stadtbereichs zählt die mittlere Radleistung statt ständig Spitzenleistung.
+  // Die 14 % sind eine Spielabstimmung für Antriebsverluste/Leistungsband, kein Messwert.
+  wheelPower: { high: 0.86, from: 50 / 3.6, to: 120 / 3.6 },
   roll: 0.015,        // Rollwiderstand
   engineBrake: 0.9,   // m/s² Schleppmoment am Antrieb ohne Gas
   reverse: 8.3,       // m/s (30 km/h)
@@ -46,6 +52,28 @@ export const DYN = {
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+const smooth = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+
+// Hüllkurve der automatischen Übersetzung: unten drehmomentbegrenzt, oben P/v.
+// Sanfte Übergänge vermeiden einen künstlichen Schub bei 50/70 km/h. Die
+// Anfahrhilfe erhöht Zugkraft UND übertragbare Längskraft, sonst würde ASR sie abschneiden.
+export function driveEnvelope(spec, speed, grip = 1, steer = 0) {
+  const v = Math.max(0, speed), L = DYN.launch, W = DYN.wheelPower;
+  const launch = 1 - smooth((v - L.from) / (L.to - L.from));
+  const surface = smooth((grip - 0.45) / 0.55);
+  const straight = 1 - smooth(Math.abs(steer) / 0.5);
+  const gain = spec.twoWheel ? 0 : L.gain * (spec.drive === 'awd' ? L.awd : 1);
+  // Bereits extrem schnelle Sport-/Allradautos erhalten keinen weiteren Gripbonus.
+  // Achslast am Zielwert, inklusive Lasttransfer: verhindert eine Verstärkungsschleife
+  // aus mehr Grip → mehr Beschleunigung → mehr Hinterachslast → noch mehr Grip.
+  const transfer = L.maxAccel / DYN.g * spec.h / spec.wb;
+  const share = spec.drive === 'awd' ? 1 : spec.drive === 'fwd' ? spec.front - transfer : 1 - spec.front + transfer;
+  const atLimit = spec.mu * DYN.fun.grip * DYN.esp[0] * DYN.g * Math.max(0.1, share);
+  const headroom = Math.max(0, L.maxAccel / atLimit - 1);
+  const traction = 1 + Math.min(gain, headroom) * launch * surface * straight;
+  const power = spec.kW * 1000 * DYN.fun.power * (1 - (1 - W.high) * smooth((v - W.from) / (W.to - W.from)));
+  return { force: Math.min(power / spec.vLow, power / Math.max(0.5, v)) * traction, traction };
+}
 
 // Reifenkennlinie: Kraftanteil (−1…1) bei Schräglauf α für Steifigkeit B (je Radlast)
 export const tireCurve = (alpha, stiff) => Math.sin(DYN.peak * Math.atan(stiff / DYN.peak * alpha));
@@ -65,7 +93,9 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
   const F = DYN.fun, muBase = spec.mu * (surf.grip ?? 1) * F.grip;
   const P = spec.kW * 1000 * F.power, vmax = spec.vmax / 3.6 * (surf.top ?? 1); // Wiese, Wasser, Pflaster: langsamer
   const roll = DYN.roll * m * g * (surf.drag ?? 1);
-  const cd = Math.max(0.05, (P * 0.92 / vmax - DYN.roll * m * g) / (vmax * vmax)); // Höchsttempo aus Leistung und Luftwiderstand
+  // Widerstand und Radleistung müssen denselben Maßstab verwenden, sonst sinkt die Spitze.
+  const topForce = driveEnvelope(spec, vmax).force;
+  const cd = Math.max(0.05, (topForce * 0.92 - DYN.roll * m * g) / (vmax * vmax));
   const steerMax0 = Math.min(0.8, spec.steerMax * F.steer), [lockLow, v0, v1] = DYN.lowLock;
   // Körperfeste Geschwindigkeiten (m/s): u längs, v quer (+ = rechts), w Gierrate (+ = im Uhrzeigersinn)
   let c = Math.cos(car.angle), s = Math.sin(car.angle);
@@ -99,7 +129,9 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     // Querlastverschiebung: hoher Schwerpunkt + schmale Spur → weniger Seitenhaftung in schnellen Kurven
     // (Zweiräder legen sich in die Kurve – dort gibt es keine Querlastverschiebung)
     const mu = muBase * (1 - (spec.twoWheel ? 0 : 0.22 * clamp(spec.h / spec.track * Math.abs(d.ay) / g, 0, 1)));
-    const muX = mu * (tr.accel ?? 1), muB = mu * F.brake * (tr.brake ?? 1) * (aq ? AQUA.brake : 1), muY = mu * (tr.lat ?? 1) * (aq ? AQUA.lat : 1);
+    const driveCurve = driveEnvelope(spec, Math.abs(u), aq ? 0 : (surf.grip ?? 1) * (tr.accel ?? 1), ctl.steer);
+    const launchTraction = ctl.throttle > 0 && u >= -0.5 && !ctl.handbrake && driftBlend <= 0 ? driveCurve.traction : 1;
+    const muX = mu * (tr.accel ?? 1) * launchTraction, muB = mu * F.brake * (tr.brake ?? 1) * (aq ? AQUA.brake : 1), muY = mu * (tr.lat ?? 1) * (aq ? AQUA.lat : 1);
     // --- Längskräfte je Achse ---
     let Fxf = 0, Fxr = 0, spinF = 0, spinR = 0, lockF = 0, lockR = 0, esp = 0, wheelie = 0, stoppie = 0;
     const fwd = u > -0.5;
@@ -108,7 +140,7 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
       Fxf += Math.min(Fb * spec.bias, muB * Fzf * abs); Fxr += Math.min(Fb * (1 - spec.bias), muB * Fzr * abs);
     }
     if (ctl.throttle > 0 && fwd) {
-      const Fd = ctl.throttle * Math.min(P / spec.vLow, P / Math.max(0.5, u)) * (u < vmax ? 1 : 0);
+      const Fd = ctl.throttle * driveCurve.force / driveCurve.traction * launchTraction * (u < vmax ? 1 : 0);
       const share = spec.drive === 'fwd' ? 1 : spec.drive === 'rwd' ? 0 : spec.awdFront;
       let want = [Fd * share, Fd * (1 - share)];
       if (spec.drive === 'awd') { // Mittendifferenzial mit Sperre: was eine Achse nicht übertragen kann, bekommt die andere
@@ -160,7 +192,10 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     const alphaF = Math.atan2(vfa * cd0 - u * sd0, Math.max(Math.abs(u * cd0 + vfa * sd0), 1.5));
     const alphaR = Math.atan2(v - w * geo.b, Math.max(Math.abs(u), 1.5));
     const lat = (alpha, Fz, Fx, stiffK, slipping) => {
-      const cap = Math.sqrt(Math.max(0, (muY * Fz) ** 2 - Fx * Fx)) * (slipping ? 0.8 : 1);
+      // Die Anfahrhilfe erweitert nur die Längsachse der Reibellipse. Ohne diese
+      // Normierung würde zusätzliche Starttraktion den gesamten Seitenhalt auffressen.
+      const longitudinal = Fx > 0 ? Fx / launchTraction : Fx;
+      const cap = Math.sqrt(Math.max(0, (muY * Fz) ** 2 - longitudinal * longitudinal)) * (slipping ? 0.8 : 1);
       return -cap * tireCurve(alpha, stiffK);
     };
     // bei Schritttempo übernimmt die Geometrie (unten): Reifenquerkräfte dort ausgeblendet, sonst bremsen sie das Anfahren

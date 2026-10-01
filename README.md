@@ -16,12 +16,17 @@ steht unter der ODbL; bei einer Veröffentlichung gilt Share-Alike für diese Da
 > Hinweis zum Titel: „GTA“ ist eine Marke von Take-Two/Rockstar. Für ein privates Projekt auf der eigenen Konsole ist das
 > unkritisch; vor einer Veröffentlichung sollte das Spiel umbenannt werden.
 
-Technische Entscheidung, Quellen und offene Punkte: [`docs/TECHNIK.md`](docs/TECHNIK.md).
+Dokumentation:
+
+- [Architektur, Plattformentscheidung und Quellen](docs/TECHNIK.md)
+- [Bedienung und technische Änderungen vom 01.10.2026](docs/SPIEL-UPDATE-2026-10-01.md)
+- [Beschleunigung: Recherche, Messverfahren und alle 45 Fahrzeugwerte](docs/FAHRZEUG-BESCHLEUNIGUNG.md)
+- [Versionsverlauf](CHANGELOG.md)
 
 ## Version
 
-Aktuell **0.38.0** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
-Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
+Aktuelle Paketversion **0.46.0**, ergänzt um den Entwicklungsstand vom **01.10.2026** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Version und noch nicht versionierte Änderungen stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
 
@@ -77,7 +82,7 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   kann sie auch übernehmen: der Fahrer flieht. Verkehr und Passanten leben im Umkreis um die Kamera (ca. 75–180 m) und
   werden dahinter abgebaut.
 - Passanten gehen die Gehwege entlang der echten Straßen, biegen ab, überqueren Straßen (und warten auf fahrende Autos),
-  fliehen vor Rasern, Hupen und Unfällen, stehen nach einem Anfahren wieder auf.
+  fliehen vor Rasern, Hupen und Unfällen. Verletzte bleiben auf den Beinen; erst tödlicher Schaden lässt sie umfallen.
 - **Tagesrhythmus und Stadtleben:** Die Uhr kennt Wochentage (neues Spiel: Freitag, 16:00; im HUD „Fr 16:00“). Wie viel
   Verkehr fährt, folgt Werktag (Berufsverkehr morgens und abends) und Wochenende (später, flacher) und dem Ort: gezählte
   Kfz je Werktag auf den Hauptstraßen (Verkehrsmengen 2019) und die Einwohnerdichte (Umweltatlas 2022) samt Läden in der
@@ -151,20 +156,19 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
   sonst aus Paletten je Stil und Bezirk (Ziegel, Schiefer, Kupfer, Gründach; Stuck im Altbau, Putzvillen, farbige
   Platte in Marzahn-Hellersdorf und Lichtenberg); Fassaden als Altbau, Plattenbau, Neubau oder Industriebau;
   Kontaktschatten am Fassadenfuß.
-- **Autos und Menschen:** fünf Automodelle (Kleinwagen, Limousine, Kombi, Transporter, Berliner Taxi) mit Scheiben,
+- **Autos und Menschen:** 37 Pkw-Modelle sowie Nutzfahrzeuge und Zweiräder mit detaillierten Karosserien, Scheiben,
   Spiegeln und lenkenden Vorderrädern, Blinker der KI vor dem Abbiegen, Rückfahrlicht; Passanten mit Armen und Beinen
   im Gang, verschiedener Kleidung und Haarfarbe, manche mit Rucksack oder Tasche.
 - **Kämpfen:** zu Fuß Fäuste, Tritte, Baseballschläger, Messer, Pistole, Maschinenpistole und Schrotflinte (alle von
   Anfang an, Munition unbegrenzt mit Nachladen). Zielen in Blickrichtung mit Zielhilfe, mit der Maus auf den Zeiger.
-  Kugeln stoppen an Hauswänden, beschädigen Autos bis zum Wrack (der Fahrer flieht); Getroffene fallen um, nach genug
-  Treffern bleiben sie liegen, mit Blut. Schüsse vertreiben die Passanten ringsum. Etwa jeder siebte Passant wehrt
+  Kugeln stoppen an Hauswänden, beschädigen Autos bis zum Wrack (der Fahrer flieht). Verletzte NPCs bleiben auf den
+  Beinen, fliehen oder wehren sich; ein Lebensbalken zeigt ihren Zustand. Erst tödlicher Schaden lässt sie umfallen. Schüsse vertreiben die Passanten ringsum. Etwa jeder siebte Passant wehrt
   sich mit den Fäusten. Die Spielfigur hat 100 Lebenspunkte (heilen nach einer Pause); bei 0 wacht man im nächsten
   echten Krankenhaus auf, 10 % des Geldes sind weg, ein laufender Auftrag scheitert.
-- **Radfahrer:** Schüsse, Schläge und Tritte holen Radfahrer und E-Roller-Fahrer vom Rad (sie stürzen und nehmen den
-  Treffer, das Rad bleibt liegen); die Zielhilfe erfasst sie. **Kapern** mit F/Y direkt neben dem Rad (fahrende sind
-  schnell – im Sprint einholen) oder per Doppelklick: der Fahrer wird heruntergezogen und flieht, man fährt selbst
-  (Fahrrad ≈ 26 km/h, E-Roller ≈ 20 km/h, ohne Motor, die Kamera bleibt nah). Liegende Räder hebt man einfach auf,
-  absteigen mit F/Y; das Rad bleibt stehen. Mit der Maus: Klick auf einen Radfahrer greift an, Doppelklick kapert.
+- **Radfahrer:** Radfahrer und E-Roller-Fahrer können getroffen und vom Fahrzeug geholt werden; die Zielhilfe erfasst
+  sie. Nicht tödlich verletzte Fahrer fliehen, statt aufgrund des Treffers liegenzubleiben. **Kapern** mit F/Y direkt
+  neben dem Rad (fahrende sind schnell – im Sprint einholen). Man fährt selbst mit bis zu etwa 26 km/h auf dem
+  Fahrrad bzw. 20 km/h auf dem E-Roller; die Kamera bleibt nah. Absteigen ebenfalls mit F/Y, das Rad bleibt stehen.
   Kisten passen nicht aufs Rad. `auto fahrrad` / `auto e-roller` stellt eines bereit.
 - **Jedes Fensterformat:** Grundformat ist 16:9 (1280 × 720). Es wird so skaliert, dass es ganz ins Fenster passt;
   breitere oder höhere Fenster zeigen mehr Stadt, das HUD hängt an den Rändern, Menüs liegen mittig im 16:9-Rahmen.
@@ -176,23 +180,20 @@ Version stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten r
 
 ## Steuerung
 
-Zu Fuß am PC gibt es zwei Schemata; gewählt wird im Menü „Steuerung“ mit ← / → (gespeichert):
+Im Menü **Steuerung** wählst du mit **←/→** das Schema (Diablo/Klassisch).
+Mit **↓** vertauschst du die Maustasten für Bewegung und Angriff. Beide Einstellungen werden lokal gespeichert.
 
-- **Diablo (Standard):** Linksklick auf den Boden läuft dorthin (Wegfindung um Häuser und Hindernisse; ein kurzer
-  Ring bestätigt den Klick, sonst läuft keine Animation). Nur wenn ein Klick mehr als laufen täte und der Zeiger kurz
-  darauf ruht, zeigt er es: **rotes Fadenkreuz** über einer Person (hinlaufen bis in Reichweite, angreifen; sie wird
-  rot umkreist), **Auto-Symbol** über einem Auto direkt neben der Figur (einsteigen; gelb umrandet). Ein Klick auf ein
-  **entferntes Auto läuft nur hin** und bleibt daneben stehen – eingestiegen wird mit einem weiteren Klick, per
-  **Doppelklick** gleich aus der Ferne oder mit F; an der Tür hält die Figur kurz an. Auf Autos wird per Klick nie
-  geschossen. Was der Klick bedeutet, entscheidet
-  der Moment des Drückens: gehalten läuft man nach einem Bodenklick dem Zeiger nach, ohne anzugreifen, was man dabei
-  überstreicht, und ein Angriff bleibt bei der angeklickten Person, bis sie liegt. **Strg + Klick** greift auf der
-  Stelle an, wohin gezeigt wird (auch Autos; dann erscheint das Fadenkreuz vor der Figur). Rechte Maustaste tippen
-  tritt, halten öffnet das **Waffenrad direkt am Mauszeiger**: gewählt ist die Waffe, auf die der Zeiger zeigt (ein
-  kleiner Ruck in ihre Richtung reicht), Loslassen oder Linksklick nimmt sie. Mausrad zoomt (1,5–2,6), Umschalt
-  sprintet, Alt geht langsam. WASD läuft weiterhin und bricht einen Klick ab. Im Auto gilt die normale Steuerung.
-- **Klassisch:** wie in der Tabelle unten (WASD laufen, Maus zielen, linke Maustaste schießen, rechte Maustaste
-  Waffenrad/Einsteigen).
+- **Standard:** linke Maustaste zum Laufen, rechte Maustaste zum Angreifen mit der gewählten Waffe.
+- **Vertauscht:** rechte Maustaste zum Laufen, linke Maustaste zum Angreifen.
+- **Einsteigen:** am Fahrzeug **F** drücken. Ein einfacher oder doppelter Mausklick steigt nicht ein.
+- **Bahnhof betreten:** nahe einem unterirdischen Bahnhofseingang **F** drücken. Hineinlaufen allein genügt nicht.
+- **Waffenrad:** linke und rechte Maustaste gleichzeitig gedrückt halten; eine Taste allein öffnet es nicht.
+  Mit dem Zeiger die Waffe wählen, Loslassen übernimmt. **Esc** bricht ab. Am Controller bleibt **LB halten**.
+- **WASD/Pfeiltasten**, **Umschalt** zum Sprinten, **Alt** zum langsamen Gehen und **V** zum Treten bleiben verfügbar.
+- **M** schaltet den gesamten Spielton stumm bzw. wieder ein; der große Stadtplan liegt jetzt auf **Tab**.
+
+Die Mausumstellung ist im Code umgesetzt; der aktuelle automatisierte Prüflauf enthält noch alte Erwartungen an
+Klick-Einstieg und Mauskampf. Siehe [Prüfstatus](docs/SPIEL-UPDATE-2026-10-01.md#prüfstatus-und-grenzen).
 
 Zu Fuß: Joggen 3,5 m/s, Gehen 1,5 m/s (Alt oder Stick halb), Sprint 7 m/s mit Ausdauer (reicht etwa 8 s, erholt sich
 nach 1 s Pause). Die Kamera zoomt zu Fuß näher heran (2,0); ab Zoom 1,7 zeigt die Detailstufe Berliner Gehwege
@@ -208,23 +209,24 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Handbremse | RB oder B | Leertaste |
 | ESP im Auto umschalten | – | X |
 | ABS im Auto umschalten | – | Y |
-| Ein-/Aussteigen | Y | F oder rechte Maustaste (tippen) |
+| Ein-/Aussteigen | Y | F |
 | Aktion (Auftrag, Einladen, Abliefern) | A | E |
 | Mitfahren / Aussteigen (Bus, Straßenbahn, S-, U-Bahn) | Steuerkreuz unten | G |
-| Bahn führen (am Führerstand vorn) / aussteigen | Y | F oder rechte Maustaste (tippen) |
+| Bahn führen (am Führerstand vorn) / aussteigen | Y | F |
 | Als Zugführer: Fahrt / Bremse / Notbremse | RT / LT / B | W / S / Leertaste |
 | Als Zugführer: Türen auf/zu, am Endhalt wenden | A | E |
 | Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
 | Hupe | X | H |
-| Stadtplan | Ansicht-Taste | M |
+| Stadtplan | Ansicht-Taste | Tab |
+| Gesamten Ton an/aus | – | M |
 | Menüs | Steuerkreuz, A / B | Maus: zeigen wählt aus, Klick bestätigt; Tastenhinweise (A/B) sind anklickbar |
 | Stadtplan zoomen / verschieben | – | Mausrad / Ziehen |
 | Teleport (auf dem Stadtplan) | – | Mausklick auf die Karte, dann Ja/Nein (Maus, A/Enter, B/Esc) |
-| Angreifen / Schießen (zu Fuß) | RT | linke Maustaste oder Strg |
+| Angreifen / Schießen (zu Fuß) | RT | rechte Maustaste (vertauscht: linke), oder Strg |
 | Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
 | Treten (zu Fuß) | B | V |
 | Waffe wechseln / wählen | LB tippen (zurück) / RB (vor) | Q, Mausrad / 1–6 |
-| Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | rechte Maustaste halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–6 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
+| Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | linke und rechte Maustaste gleichzeitig halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–6 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
 | Statistik | Menü „Statistik“ (Titel und Pause) | dito, oder Befehl `stats` |
@@ -236,7 +238,7 @@ Voraussetzung: Node.js ≥ 20. Keine weiteren Abhängigkeiten, kein `npm install
 
 ```bash
 npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=9000 npm start)
-npm test           # 450 Tests: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
+npm test           # Gesamtsuite; aktuellen Prüfstatus unten beachten: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
 ### Karte neu erzeugen
@@ -425,18 +427,34 @@ Rallye-Kompakt. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderra
 (deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab.
 Beim Einsteigen blendet das HUD Name und Technik ein (ohne Kasten, Schrift mit Kontur), z. B. „Oberbaum Furia –
 Sportwagen · Mittelmotor · RWD · 435 PS“ (Antrieb FWD/RWD/AWD, Leistung in PS). Der Tacho unten rechts zeigt km/h,
-die Drehzahl als Bogen mit rotem Bereich, den Gang (R rückwärts, D beim Elektroauto), Antrieb und ESP-Leuchte.
+die Drehzahl als Bogen mit rotem Bereich, den Gang (R rückwärts, D beim Elektroauto), Antrieb sowie ESP- und ABS-Status.
 `auto sportwagen` (oder ein anderes Modell, `auto motorrad`, `auto roller`) stellt eines neben
 dich.
 
 Das selbst gefahrene Auto nutzt ein zugängliches, arcadiges Fahrmodell: Mit Heckantrieb lässt sich das Heck beim Gasgeben
-in der Kurve leichter zum Driften bringen; Frontantrieb schiebt eher über die Vorderräder, Allrad zieht stabil heraus.
-Mittelmotoren lenken spontan ein, hohe Fahrzeuge wanken sichtbar. **X** schaltet ASR/ESP während der Fahrt um; mit ESP
+in der Kurve bei ausgeschaltetem ESP leichter zum Driften bringen; Frontantrieb schiebt eher über die Vorderräder, Allrad zieht stabil heraus.
+Mittelmotoren lenken spontan ein, hohe Fahrzeuge wanken sichtbar. **Alle Fahrzeuge haben ESP und ABS; beide sind standardmäßig aktiv.** **X** schaltet ASR/ESP während der Fahrt um; mit ESP
 an wird das Auto leichter abgefangen, aus schaltet es freier und driftet stärker (die ESP-Leuchte zeigt den Eingriff bzw.
 den abgeschalteten Zustand). **Y** schaltet ABS um; ohne ABS können die Räder bei starkem Bremsen blockieren und das Auto
 lenkt schlechter. Ein kurzer Druck auf die **Handbremse** (Leertaste/B) leitet einen Drift ein; mit Gegenlenken steuerst
-und beendest du ihn. ESP kann auch über `esp an` oder `esp aus` in der Befehlszeile gesteuert werden. Motorklang je Modell: Drei-, Vier-, Fünf-, Sechs-, Achtzylinder,
-Diesel, knatternder Zweitakter, summender Elektromotor. Der übrige Verkehr fährt weiter mit der einfachen Physik.
+und beendest du ihn. ESP kann auch über `esp an` oder `esp aus` in der Befehlszeile gesteuert werden. Der übrige Verkehr fährt weiter mit der einfachen Physik.
+
+**Kräftiger Antritt:** Die neue Abstimmung verstärkt den Start insbesondere bei Front- und Hecktrieblern und lässt
+den Bonus zwischen 20 und 90 km/h weich auslaufen. Bereits sehr schnell startende Sport-/Allradautos erhalten keinen
+zusätzlichen Gripbonus. Schnee, Eis, Lenkeinschlag und Drifts begrenzen die Hilfe. Beispiel Musclecar: 0–50 km/h
+**2,19 → 1,62 s**, 0–70 km/h **3,08 → 2,38 s** (Simulation, trocken, ESP an). Oberhalb des Stadtbereichs nimmt der
+Schub stärker ab; die Höchstgeschwindigkeiten bleiben modellabhängig erhalten. Herstellerquellen, bewusste
+Arcade-Abweichungen und sämtliche Messwerte: [Beschleunigungsbericht](docs/FAHRZEUG-BESCHLEUNIGUNG.md).
+
+**Detailliertere Fahrzeuge:** modellabhängige Karosseriekonturen, lackierte Flächen mit Lichtverläufen, Fenster,
+Dachsäulen, Tür- und Haubenfugen, Spiegel, Griffe, Grill, Stoßfänger, Leuchten und Varianten wie Streifen,
+Lufteinlässe oder Dachreling. Der Sprite-Cache rechnet die Bilder in vierfacher Auflösung; die Kollisionsmaße bleiben gleich.
+
+**Dunklerer Motorklang:** eigene Syntheseprofile für Drei- bis Zehnzylinder, Boxer, Diesel, Zweitakter, Motorräder und
+Elektroantriebe. Zündimpulse, Ansaugung, Lastwechsel, Turbogeräusch, Rückwärtsgang und Innenraumdämmung prägen den
+Klang. Mehr tiefe Anteile, weniger scharfe Obertöne und zurückgenommene Pfeifgeräusche. Auch die Verkehrsautos
+verwenden das Profil ihres Modells samt Dopplereffekt. Es sind synthetische Klänge, keine Originalaufnahmen.
+Elektroautos haben keinen Verbrennertakt und bleiben im Stand ohne Motorgeräusch.
 
 ## Nahverkehr
 
@@ -456,8 +474,7 @@ Straßenbahnen haben Vorrang: Wo ihr Linienweg in der Gegenspur liegt (vor allem
 setzen entgegenkommende Autos und Busse zurück, bis die Bahn vorbei ist. Grenzen: keine Signale und Weichen.
 
 **U-Bahnhöfe betreten:** An jedem unterirdischen U- und S-Bahnhof führen Treppenabgänge (blaues U- bzw. grünes
-S-Schild) am Gehweg nach unten: je einer über den Enden des Bahnsteigs und einer am U-/S-Symbol der Station. Einfach
-hineinlaufen oder in der Nähe **E** drücken (Hinweis „Hinunter zur U-Bahn …“); die Minikarte zeigt die Eingänge. Wer hineinläuft, sieht statt der Stadt den
+S-Schild) am Gehweg nach unten: je einer über den Enden des Bahnsteigs und einer am U-/S-Symbol der Station. In der Nähe **F** drücken (Hinweis „Hinunter zur U-Bahn …“); die Minikarte zeigt die Eingänge. Nach dem Betreten sieht man statt der Stadt den
 Bahnhof: Mittelbahnsteig mit Treppen, Säulen, gefliesten Wänden in der Farbe des Bahnhofs, Namensschildern,
 Fahrgastanzeigen (Linie, Ziel, Minuten) und wartenden Fahrgästen. Die Züge kommen nach dem echten Fahrplan, halten und
 fahren weiter. An der Bahnsteigkante neben einem haltenden Zug steigt man mit **G** ein; **G** am nächsten
@@ -517,7 +534,7 @@ Vorschläge – Befehle, erlaubte Werte, bei `tp` alle Orte Berlins (Bezirke, Or
 erste steht grau hinter dem Getippten und kommt mit **Tab**, **→** oder per Mausklick in die Zeile. `hilfe` listet alles.
 
 Sie arbeitet wie eine Befehlspalette:
-- **Ohne Befehlswort:** `22:30`, `nacht`, `regen`, `schneesturm` oder ein Ort wie `alexanderplatz` genügen.
+- **Ohne Befehlswort:** `22:30`, `nacht`, `Freitag`, `regen`, `schneesturm` oder ein Ort wie `alexanderplatz` genügen.
 - **Tippfehler** werden verziehen (`wetter schneestrum`, `tp kotbusser tor`). Bei einem vertippten Befehl kommt ein
   Hinweis „meintest du …“.
 - **Enter** führt aus. Ist die Eingabe unvollständig (`wetter gewit`), nimmt Enter den besten Vorschlag.
@@ -531,6 +548,7 @@ Sie arbeitet wie eine Befehlspalette:
 | Befehl | Wirkung |
 |---|---|
 | `zeit 21:30` · `zeit 7` · `zeit abend` | Uhrzeit (auch `21.30`, `2130`, `9h`; Wörter: morgen, mittag, nachmittag, abend, daemmerung, nacht, mitternacht) |
+| `tag Freitag` · `wochentag Sonntag` · `tag Mo` | Wochentag wählen, mit Vorschlägen für alle sieben Tage. Auch `tag 1` bis `tag 7` (Montag bis Sonntag); `tag` zeigt den aktuellen Tag. Uhrzeit bleibt erhalten. |
 | `tempo 10` · `tempo 0` | Tempo der Spieluhr (0 = Uhr steht) |
 | `wetter schneesturm` · `wetter auto` | Wetter festlegen bzw. wieder natürlich |
 | `schnee 0.5` · `nass 1` · `glaette 0.8` | Schneedecke / Nässe / Glätte der Straßen 0–1 (Glätte taut über 0 °C) |
@@ -544,7 +562,17 @@ Sie arbeitet wie eine Befehlspalette:
 
 **`wetter` + Enter** öffnet eine übersichtliche Wettertafel. Mit **↑/↓** wählst du Wettertyp, Temperatur, Schneedecke,
 Straßennässe oder Glätte; **←/→** ändert den Wert direkt. **Enter** übernimmt und schließt die Tafel, **Esc** geht zurück.
-Natürliches Wetter bzw. natürliche Temperatur stehen jeweils als eigener Wert zur Auswahl.
+Natürliches Wetter ist über `auto` erreichbar, die Temperatur über `temp auto`. Die Tafel verändert Werte sofort; Esc ist kein Rückgängig.
+
+### Wochentag wählen
+
+**Enter → `tag Freitag` → Enter** setzt den Wochentag. Die Argumentvorschläge zeigen alle sieben Tage.
+`tag` allein zeigt den aktuellen Tag. Alternativen: `wochentag Sonntag`, `day Montag`, `tag Mo`, `tag Mo.`,
+`tag 1` bis `tag 7` (Montag bis Sonntag); `Sonnabend` wird als Samstag verstanden. Auch `Freitag` allein funktioniert.
+Groß-/Kleinschreibung spielt keine Rolle. Eine Zahl allein bleibt eine Uhrzeit: `7` bedeutet 07:00, `tag 7` Sonntag.
+Die Uhrzeit, der Wetterverlauf und die Wetter-Tagnummer werden nicht vor-/zurückgespult. Verkehr und Nachtleben
+lesen den neuen Wochentag beim Weiterlaufen; die Bevölkerung passt sich über ihre normale Verwaltung an.
+Der gewählte Tag wird mit dem vorhandenen Spielstand gespeichert. Nach Mitternacht folgt regulär der nächste Tag.
 
 Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
 Brücken, Teleports, Aquaplaning, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, gekaperte Räder, vom Rad geholte Radfahrer, Tote (erschossen
@@ -555,9 +583,18 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 ## Stand und Prüfumfang
 
-**Funktioniert und ist geprüft (auf dem Mac):**
+**Aktueller Prüfstand vom 01.10.2026:** 33 gezielte Tests für Beschleunigung, Fahrdynamik, Fahrzeugbasis und
+Motorklang-Zustand bestanden. Im zuvor ausgeführten vollständigen Lauf: 461 Tests, 444 bestanden, 17 fehlgeschlagen.
+Alle 17 Fehler sind auch mit der alten Fahrphysik reproduzierbar. Die Suite ist daher **nicht insgesamt grün**.
+Der danach ergänzte Wochentag-Befehl wurde nicht erneut automatisiert getestet. Einzelheiten und Grenzen stehen
+im [Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md#prüfstatus-und-grenzen).
 
-- Alle 452 automatischen Tests grün, darunter:
+### Historische Prüfungen früherer Versionen
+
+Die folgende Liste dokumentiert frühere Prüfungen und damalige Bedienregeln. Sie ist kein Nachweis, dass alle
+Einträge im aktuellen Entwicklungsstand unverändert gelten; insbesondere Maussteuerung und NPC-Stürze wurden geändert.
+
+- Frühere automatisierte und manuelle Prüfungen, darunter:
   - 0.46.0: Figuren – jeder Typ in allen Haltungen ohne ungültige Werte, Typen verschieden, Rumpf und Kopf als Bild
     gerechnet und beim Gehen wiederverwendet, Bildspeicher begrenzt (älteste zuerst), gleiche Köpfe/Rümpfe geteilt,
     niedrige Detailstufe zeichnet weniger Striche. Im Browser: Prüfseite aller Typen und Haltungen, Spiel bei normalem

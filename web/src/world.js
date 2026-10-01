@@ -6,7 +6,7 @@ import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage, blocks } from './car.js';
 import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
-import { createPed, updatePed, scare, knockDown, nearestSpot, pedSpawnSpot } from './pedestrians.js';
+import { createPed, updatePed, scare, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
 import { insideBorder, inBuilding, locationName, hash01, surfaceAt, bezirkAt, T } from './map.js';
 import { parkingStrip } from './street.js';
@@ -16,7 +16,7 @@ import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { sidewalkPoint } from './pedestrians.js';
 import { resolveSave } from './save.js';
 import { findFootPath } from './footpath.js';
-import { initCombat, updatePlayerCombat, clickIntent, CLICK, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
+import { initCombat, updatePlayerCombat, clickIntent, CLICK, WEAPONS, GUNSHOT_SCARE, BODY_KEEP, hurtPlayer, hurtPed, isFighter, startFight, RESPAWN_DELAY, HOSPITAL_FEE, PLAYER_HP } from './combat.js';
 import { failMission } from './mission.js';
 import { populationTargets, START_DAY } from './rhythm.js';
 import { lifeSpots, walkerStyle, LIFE } from './life.js';
@@ -555,7 +555,7 @@ function clickControl(w, input, dt) {
     p.clickT = 0.15;
     if (it.kind === 'force') p.click = { force: true, x: at.x, y: at.y, obj: it.obj };
     else if (it.kind === 'attack') p.click = { target: it.obj };
-    else if (it.kind === 'enter' || it.kind === 'approach') p.click = { enter: it.obj, approach: it.kind === 'approach' };
+    else if (it.kind === 'enter' || it.kind === 'approach') { const c = walk({ x: it.obj.x, y: it.obj.y }); p.click = c && { ...c, follow: true }; }
     else { const c = walk(at); p.click = c && { ...c, follow: true }; }
   } else if (at && input.clickHeld && p.click?.follow && (p.clickT = (p.clickT ?? 0) - dt) <= 0) {
     p.clickT = 0.15; // gehalten: dem Zeiger nachlaufen (Weg alle 0,15 s neu)
@@ -743,8 +743,8 @@ function updateStationPresence(w, input = {}) {
   if ((p.lvl ?? 0) !== 0) return;
   // hineinlaufen (Eingang betreten) oder E in der Nähe eines Eingangs (nicht, wenn E gerade etwas anderes meint)
   const near = entranceNear(w._stNear, p.x, p.y, STATION.reach);
-  const walkIn = near && near.d <= STATION.entrance && !p.entryGuard;
-  const byKey = near && input.action && !w.mission.prompt;
+  const walkIn = false;
+  const byKey = near && input.enterExit && !w.mission.prompt;
   for (const { stn, ex } of walkIn || byKey ? [near] : []) {
     const at = arrivalAt(stn, ex.e);
     p.x = at.x; p.y = at.y; p.angle = at.angle; p.lvl = -2; p.click = null;
@@ -841,12 +841,13 @@ export function updateWorld(w, input, dt) {
   }
 
   const p = w.player;
+  if (input.enterExit && !p.dead && !p.inCar && !p.inside && !p.ride) updateStationPresence(w, input);
   if (input.ride && !p.dead && !p.inCar && p.ride?.kind !== 'driver') { if (p.ride) alightTransit(w); else if (p.inside) boardAtPlatform(w); else boardTransit(w); }
   else if (input.enterExit && !p.dead && !p.inside) {
     if (p.ride?.kind === 'driver') leaveTrain(w);
     else if (!p.ride) {
       if (p.inCar) tryExit(w);
-      else { // am Führerstand einer Bahn (Spitze ≤ RIDE.cab): übernehmen, sonst wie immer ein Auto
+      else if (!p.inside) { // am Führerstand einer Bahn (Spitze ≤ RIDE.cab): übernehmen, sonst wie immer ein Auto
         const cab = transitNear(w, p.x, p.y, RIDE.cab + 10).find((h) => h.car === 0 && h.front <= RIDE.cab && h.mode !== 'bus');
         if (!(cab && takeTrain(w, cab))) tryEnter(w);
       }
@@ -971,13 +972,18 @@ export function updateWorld(w, input, dt) {
     }
     for (const ci of near(carGrid, ped.x, ped.y, GRID_REACH, w._nearBuf ??= [])) { // nur Autos in der Nähe (Reihenfolge wie w.cars)
       const c = w.cars[ci];
-      if (ped.state === 'down') break;
       const mm = circleVsObb(ped.x, ped.y, PED.radius, c);
       if (!mm || !touch(w.city, ped, c)) continue;
       if (speedOf(c) > 55) {
-        knockDown(ped, c.x, c.y);
-        w.events.push({ type: 'hit', x: ped.x, y: ped.y, carId: c.id, player: c.id === p.inCar, speed: speedOf(c) });
-        for (const o of w.peds) if (o !== ped && Math.hypot(o.x - ped.x, o.y - ped.y) < 110) scare(o, ped.x, ped.y);
+        if ((ped.carHitCd ?? 0) <= 0) {
+          const speed = speedOf(c);
+          hurtPed(w, ped, speed * 0.32, c.x, c.y, false, { player: c.id === p.inCar, weapon: 'vehicle' });
+          ped.carHitCd = 1.1;
+          w.events.push({ type: 'hit', x: ped.x, y: ped.y, carId: c.id, player: c.id === p.inCar, speed });
+          for (const o of w.peds) if (o !== ped && Math.hypot(o.x - ped.x, o.y - ped.y) < 110) scare(o, ped.x, ped.y);
+        }
+        // Der Aufprall versetzt den Passanten seitlich; er bleibt dabei auf den Beinen.
+        ped.x += mm.nx * (mm.depth + 1); ped.y += mm.ny * (mm.depth + 1);
       } else { ped.x += mm.nx * mm.depth; ped.y += mm.ny * mm.depth; }
     }
     updatePed(ped, w, dt);

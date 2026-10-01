@@ -160,8 +160,8 @@ addEventListener('pointerdown', () => sound.unlock());
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
 const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
 const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0, enterExit: false, slot: 0, prevWeapon: false,
-  lmb: false, lmbPressed: false, lmbDouble: false, lastPress: null, kick: false }; // lmb/kick: Diablo-Schema zu Fuß (Klick = laufen/angreifen, rechts = Tritt)
-// Rechte Maustaste: tippen = ein-/aussteigen, halten = Waffenrad (weaponwheel.js); das Kontextmenü des Browsers bleibt aus
+  lmb: false, lmbPressed: false, lmbDouble: false, lastPress: null, kick: false, rmb: false, rmbPressed: false };
+// Waffenrad öffnet nur bei gleichzeitig gedrückter linker und rechter Maustaste.
 // Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt (padBtn).
 // Diablo-Schema zu Fuß: rechte Maus tippen = Tritt (statt Einsteigen), halten = Waffenrad wie gehabt
 const rightBtn = createRightButton(), padBtn = createRightButton();
@@ -171,7 +171,7 @@ addEventListener('contextmenu', (e) => e.preventDefault());
 // sonst risse sie herum, weil der Zeiger beim Auswählen weitergewandert ist
 let aimLock = null;
 const wheelResult = (r, btn = rightBtn) => {
-  if (r.tap) { if (btn === padBtn) pointer.prevWeapon = true; else if (btn === rightBtn) { if (diabloOnFoot()) pointer.kick = true; else pointer.enterExit = true; } }
+  if (r.tap && btn === padBtn) pointer.prevWeapon = true;
   if (r.pick !== undefined) { pointer.slot = r.pick + 1; sound.play('weapon'); }
   if (r.opened && btn === rightBtn) btn.place(...wheelCenter()); // Rad am Zeiger, ganz im Bild
   if (r.opened) { sound.play('ui-move'); aimLock = pointer.vx >= 0 ? { vx: pointer.vx, vy: pointer.vy, at: null } : null; pointer.fire = false; }
@@ -213,23 +213,28 @@ canvas.addEventListener('pointerleave', () => { pointer.vx = pointer.vy = -1; })
 // Rechte Taste über mousedown/mouseup: Zeigerereignisse melden eine zweite Taste auf demselben Zeiger nicht als
 // pointerdown/pointerup – wer beim Schießen (links gedrückt) rechts drückt, bekam sonst kein Rad und kein Loslassen.
 canvas.addEventListener('mousedown', (e) => {
-  if (e.button !== 2 || !hud.s || game.screen !== 'playing' || !game.world || game.showBigMap || game.teleport || game.resultMenu || game.console.open) return;
+  if (e.button !== 2) return;
+  pointer.rmb = true; pointer.rmbPressed = true;
+  if (!pointer.lmb || !hud.s || game.screen !== 'playing' || !game.world || game.showBigMap || game.teleport || game.resultMenu || game.console.open) return;
   const [vx, vy] = toHud(e);
   rightBtn.press(performance.now() / 1000, vx, vy);
 });
-addEventListener('mouseup', (e) => { if (e.button === 2) wheelResult(rightBtn.release(performance.now() / 1000)); }); // auch außerhalb der Leinwand
+addEventListener('mouseup', (e) => { if (e.button === 2) { pointer.rmb = false; if (rightBtn.down) wheelResult(rightBtn.release(performance.now() / 1000)); } });
 canvas.addEventListener('pointerdown', (e) => {
   if (!hud.s || e.button !== 0) return;
   if (rightBtn.open) { wheelResult(rightBtn.choose(rightBtn.state.hover)); return; } // Klick ins Rad nimmt die gezeigte Waffe
   const [vx, vy] = toHud(e);
   const h = hitAt(vx, vy);
   if (!h) { // im Spiel zu Fuß: linke Maustaste feuert (Klassisch) bzw. läuft/greift an (Diablo)
-    if (diabloOnFoot()) {
+    const swapped = !!game.settings.mouseSwapped;
+    if (swapped && playingOnFoot()) { pointer.fire = true; pointer.firePressed = true; pointer.kick = true; return; }
+    if (!swapped && playingOnFoot()) {
       // Doppelklick: zweiter Druck kurz danach an fast derselben Stelle (steigt in ein entferntes Auto)
       const now = performance.now() / 1000, last = pointer.lastPress;
       pointer.lmbDouble = !!last && now - last.t < CLICK.double && Math.hypot(vx - last.vx, vy - last.vy) < 14;
       pointer.lastPress = pointer.lmbDouble ? null : { t: now, vx, vy };
       pointer.lmb = true; pointer.lmbPressed = true;
+      if (pointer.rmb && !rightBtn.down) rightBtn.press(performance.now() / 1000, vx, vy);
       // Klick-Rückmeldung wie in Diablo: ein kurzer Ring, wo man hingeklickt hat (nur beim Laufen, einmal, keine Dauerschleife)
       const at = currentAim(vx, vy), it = at && clickIntent(game.world, at.x, at.y, keys.has('ControlLeft') || keys.has('ControlRight'), { double: pointer.lmbDouble });
       if (it && (it.kind === 'move' || it.kind === 'approach')) renderer.clickFx = { x: at.x, y: at.y, t0: performance.now() };
@@ -276,15 +281,15 @@ function applyPointer(inp) {
   if (pointer.hover) { if (pointer.hover.menu === menu) inp.menuHover = pointer.hover.i; pointer.hover = null; }
   if (pointer.pick) { if (pointer.pick.menu === menu) inp.menuPick = pointer.pick.i; pointer.pick = null; }
   // Kampf mit der Maus: zielen auf den Zeiger (solange die Maus zuletzt benutzt wurde), linke Taste, Mausrad
-  if (pointer.enterExit) { inp.enterExit = true; pointer.enterExit = false; }
+  // Ein-/Aussteigen und U-Bahn-Zugang sind ausschließlich an F gebunden.
   if (pointer.slot) { inp.weaponSlot = pointer.slot; pointer.slot = 0; }
   if (pointer.prevWeapon) { inp.weaponPrev = true; pointer.prevWeapon = false; }
   if (swallowB) { inp.kick = false; inp.back = false; inp.handbrake = false; }
-  if (openWheel()) { inp.fire = false; inp.firePressed = false; inp.kick = false; inp.back = false; inp.aimX = 0; inp.aimY = 0; if (aimLock) { const a = currentAim(aimLock.vx, aimLock.vy); if (a) inp.aimWorld = a; } } // bei offenem Rad kein Schuss, Ziel steht
+  if (openWheel()) { inp.fire = false; inp.firePressed = false; inp.kick = false; inp.clickWorld = null; inp.clickHeld = false; inp.clickPressed = false; inp.clickDouble = false; inp.back = false; inp.aimX = 0; inp.aimY = 0; if (aimLock) { const a = currentAim(aimLock.vx, aimLock.vy); if (a) inp.aimWorld = a; } } // bei offenem Rad kein Schuss oder Laufen
   else if (playingOnFoot()) {
     inp.walkSlow = keys.has('AltLeft') || keys.has('AltRight');
     if (game.world.footZoom === undefined) { const z = +(localStorage.getItem?.('gta-foot-zoom') ?? NaN); if (z > 0) setFootZoom(game.world, z); }
-    if (game.settings.controls === 'diablo') {
+    if (game.settings.controls === 'diablo' || !game.settings.mouseSwapped) {
       // Diablo: Klick = laufen/angreifen (die Simulation entscheidet, world.js clickControl), Strg (+ Klick) = am Platz
       // angreifen, Umschalt = sprinten (wie klassisch), rechte Maus tippen = Tritt, halten = Waffenrad
       const at = aimLock ? currentAim(aimLock.vx, aimLock.vy) : currentAim();
@@ -293,13 +298,17 @@ function applyPointer(inp) {
       if (pointer.kick) { inp.kick = true; pointer.kick = false; }
       if (at) inp.aimWorld = at;
     }
-    inp.fire = inp.fire || pointer.fire;
+    if (game.settings.mouseSwapped && pointer.rmb) { const at = currentAim(); inp.clickWorld = at; inp.clickHeld = true; inp.clickPressed = pointer.rmbPressed; inp.clickDouble = false; }
+    if (pointer.kick) { inp.kick = true; pointer.kick = false; }
+    const attackHeld = game.settings.mouseSwapped ? pointer.lmb : pointer.rmb;
+    inp.fire = inp.fire || pointer.fire || attackHeld;
+    inp.firePressed = inp.firePressed || (attackHeld && (game.settings.mouseSwapped ? pointer.lmbPressed : pointer.rmbPressed));
     inp.firePressed = inp.firePressed || pointer.firePressed;
     if (pointer.wheel > 0) inp.weaponNext = true; else if (pointer.wheel < 0) inp.weaponPrev = true;
     const aim = aimLock ? currentAim(aimLock.vx, aimLock.vy) : currentAim();
     if (aim) inp.aimWorld = aim;
   }
-  pointer.firePressed = false; pointer.wheel = 0; pointer.lmbPressed = false;
+  pointer.firePressed = false; pointer.wheel = 0; pointer.lmbPressed = false; pointer.rmbPressed = false;
   if (pointer.key === 'A') inp.confirm = true;
   if (pointer.key === 'B') inp.back = true;
   pointer.key = null;
@@ -396,6 +405,10 @@ function frame(now) {
     acc -= DT;
     const inp = input.frame(readRaw(), DT);
     applyPointer(inp);
+    if (inp.muteToggle) {
+      const muted = sound.toggleMute();
+      game.toast = { text: muted ? 'Ton aus' : 'Ton an', t: 1.4 };
+    }
     const events = updateGame(game, inp, DT);
     if ((forcedClock !== null || forcedWeather || forcedSnow !== null) && game.world && game.world !== clockSetFor) {
       const gw = game.world;

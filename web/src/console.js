@@ -29,6 +29,13 @@ export function clockArg(v) {
   return r ? parseClock(`${r[1]}:${r[2] ?? '00'}`) : null;
 }
 const TIME_WORDS = { morgen: '07:30', mittag: '12:00', nachmittag: '15:30', abend: '19:30', daemmerung: '20:45', nacht: '23:30', mitternacht: '00:00' };
+const WEEKDAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+const weekdayArg = (v) => {
+  const k = norm(v ?? '').trim().replace(/\.$/, '');
+  if (/^[1-7]$/.test(k)) return Number(k) - 1;
+  if (k === 'sonnabend') return 5;
+  return WEEKDAYS.findIndex((day) => norm(day) === k || norm(day).slice(0, 2) === k);
+};
 const ONOFF = ['an', 'aus'];
 
 // --- Orte für „tp“: aus dem Stadtplan (overview.json) und dem Index, einmal je Stadt gebaut --------------------------
@@ -117,6 +124,16 @@ export const COMMANDS = [
       const m = clockArg(TIME_WORDS[norm(v ?? '')] ?? v);
       if (m === null) return { ok: false, msg: 'Zeit als HH:MM, z. B. zeit 21:30 – oder morgen, mittag, abend, nacht' };
       ctx.world.clock = m; return `Uhrzeit ${formatClock(m)}`;
+    } },
+  { name: 'tag', aliases: ['wochentag', 'day'], help: 'Wochentag zeigen oder wählen (Mo–So, 1 = Montag, 7 = Sonntag)', args: [{ name: 'wochentag', optional: true, values: () => WEEKDAYS.map((day, i) => ({ label: day, hint: `${day.slice(0, 2)} · ${i + 1}` })) }],
+    run(ctx, [v]) {
+      if (v === undefined) return `Wochentag: ${WEEKDAYS[ctx.world.day]}`;
+      const day = weekdayArg(v);
+      if (day < 0) return { ok: false, msg: 'tag Montag bis Sonntag, z. B. tag Freitag (auch Fr oder 5)' };
+      // Kalenderauswahl: Uhrzeit und Wetter-Tagnummer bleiben erhalten. Der bestehende
+      // Tagesrhythmus für Verkehr/Nachtleben liest world.day im nächsten Weltschritt.
+      ctx.world.day = day;
+      return `Wochentag: ${WEEKDAYS[day]}`;
     } },
   { name: 'wetter', aliases: ['weather'], help: 'Enter öffnet die Wettertafel; Wert festlegen (auto = natürliches Wetter)', args: [{ name: 'wetter', values: () => [{ label: 'auto', hint: 'natürlich' }, ...Object.entries(WX_NAMES).map(([n, k]) => ({ label: n, hint: WX_LABEL[k] }))] }],
     run(ctx, [v]) {
@@ -254,6 +271,7 @@ export function smartLine(line, ctx) {
   const t = line.trim(), k = norm(t);
   if (!t) return null;
   if (clockArg(t) !== null || TIME_WORDS[k]) return `zeit ${t}`;
+  if (weekdayArg(t) >= 0) return `tag ${t}`;
   if (WX_NAMES[k] || WX_ALIAS[k]) return `wetter ${t}`;
   if (ctx?.city && k.length >= 3) {
     const hit = rankMatches(placeIndex(ctx.city), t)[0];
@@ -267,6 +285,7 @@ function smartItems(query, ctx, n) {
   if (!q) return out;
   const m = clockArg(query) ?? clockArg(TIME_WORDS[q] ?? '');
   if (m !== null) out.push({ label: `Uhrzeit ${formatClock(m)}`, hint: 'zeit', insert: `zeit ${query.trim()}`, full: true });
+  for (const day of WEEKDAYS) if (norm(day).startsWith(q)) out.push({ label: day, hint: 'Wochentag', insert: `tag ${day}`, full: true });
   for (const [w, kind] of Object.entries(WX_NAMES)) if (w.startsWith(q) || (q.length >= 4 && fuzzyHit(w, q))) out.push({ label: w, hint: `Wetter: ${WX_LABEL[kind]}`, insert: `wetter ${w}`, full: true });
   if (ctx?.city && q.length >= 3) for (const p of rankMatches(placeIndex(ctx.city), query).slice(0, 4)) out.push({ label: p.name, hint: `tp · ${p.kind}`, insert: `tp ${p.name}`, full: true });
   return out.slice(0, n);

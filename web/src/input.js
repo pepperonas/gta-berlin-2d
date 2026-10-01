@@ -47,7 +47,7 @@ export function readKeys(k) {
     lx, ly,
     rt: any('KeyW', 'ArrowUp') ? 1 : 0, lt: any('KeyS', 'ArrowDown') ? 1 : 0,
     a: any('KeyE'), b: any('Escape', 'Backspace'), x: any('KeyH'), y: any('KeyF'),
-    lb: false, rb: any('Space'), view: any('KeyM'), menu: any('Escape', 'KeyP'),
+    lb: false, rb: any('Space'), view: any('Tab'), mute: any('KeyM'), menu: any('Escape', 'KeyP'),
     up: any('ArrowUp', 'KeyW'), down: any('ArrowDown', 'KeyS'), left: any('ArrowLeft', 'KeyA'), right: any('ArrowRight', 'KeyD'),
     sprint: any('ShiftLeft', 'ShiftRight'), confirmKey: any('Enter', 'Space'),
     fire: any('ControlLeft', 'ControlRight'), kick: any('KeyV'), reload: any('KeyR'), wpnNext: any('KeyQ'),
@@ -56,7 +56,7 @@ export function readKeys(k) {
   };
 }
 
-const EMPTY = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, a: false, b: false, x: false, y: false, lb: false, rb: false, view: false, menu: false, up: false, down: false, left: false, right: false, sprint: false, confirmKey: false,
+const EMPTY = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, a: false, b: false, x: false, y: false, lb: false, rb: false, view: false, mute: false, menu: false, up: false, down: false, left: false, right: false, sprint: false, confirmKey: false,
   fire: false, kick: false, reload: false, wpnNext: false, wpnPrev: false, slot: 0, rideBtn: false, espToggle: false, absToggle: false };
 
 export function merge(a, b) {
@@ -87,7 +87,7 @@ export class InputState {
       moveX: clamp(raw.lx, -1, 1), moveY: clamp(raw.ly, -1, 1),
       steer: clamp(raw.lx, -1, 1), throttle: raw.rt, brake: raw.lt,
       handbrake: raw.rb || raw.b, sprint: raw.sprint || raw.a, horn: raw.x || raw.ls,
-      action: edge('a'), actionHeld: raw.a, enterExit: edge('y'), ride: edge('rideBtn'), espToggle: edge('espToggle'), absToggle: edge('absToggle'), pause: edge('menu'), mapToggle: edge('view'),
+      action: edge('a'), actionHeld: raw.a, enterExit: edge('y'), ride: edge('rideBtn'), espToggle: edge('espToggle'), absToggle: edge('absToggle'), pause: edge('menu'), mapToggle: edge('view'), muteToggle: edge('mute'),
       menuUp: menuDir === 'up', menuDown: menuDir === 'down', menuLeft: menuDir === 'left', menuRight: menuDir === 'right',
       confirm: edge('a') || edge('confirmKey'), back: edge('b'),
       menuHover: null, menuPick: null, // Maus (setzt main.js)

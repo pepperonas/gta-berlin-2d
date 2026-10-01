@@ -68,7 +68,7 @@ export function createPed(city, spot, rng) {
     state: 'walk', t: 0, nextIdle: 4 + rng() * 10,
     shirt: SHIRTS[Math.floor(rng() * SHIRTS.length)],
     skin: SKIN[Math.floor(rng() * SKIN.length)],
-    threat: null, target: null, step: 0,
+    threat: null, target: null, step: 0, carHitCd: 0,
   };
 }
 
@@ -110,9 +110,8 @@ export function scare(ped, fromX, fromY, duration = 2.5) {
 
 export function knockDown(ped, fromX, fromY) {
   if (ped.state === 'dead') return;
-  ped.state = 'down';
-  ped.t = 3;
-  ped.threat = { x: fromX, y: fromY };
+  // Beibehaltener API-Name für Kollisionsaufrufer: ein Anstoß wirft lebende Passanten nicht mehr um.
+  ped.state = 'flee'; ped.t = 3; ped.threat = { x: fromX, y: fromY };
 }
 
 const tmp = [];
@@ -176,6 +175,7 @@ function carComing(world, ped, next) {
 
 export function updatePed(ped, world, dt) {
   const rng = world.rng, city = world.city;
+  ped.carHitCd = Math.max(0, (ped.carHitCd ?? 0) - dt);
   const prevX = ped.x, prevY = ped.y;
   switch (ped.state) {
     case 'walk': {
@@ -266,4 +266,3 @@ export function updatePed(ped, world, dt) {
   const mx = ped.x - prevX, my = ped.y - prevY;
   if (mx * mx + my * my > 0.01) { ped.facing = Math.atan2(my, mx); ped.step += Math.hypot(mx, my); }
 }
-

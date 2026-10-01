@@ -4,6 +4,52 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
+## [Unreleased] – Entwicklungsstand 2026-10-01
+
+### Neu
+
+- Enter-Befehl `tag` mit Alias `wochentag`/`day`: Wochentag anzeigen oder setzen, deutsche Namen,
+  Zweibuchstaben-Kürzel, 1–7 (Montag–Sonntag), `Sonnabend`, Autovervollständigung und direkte Eingabe wie `Freitag`.
+- Fahrzeug-Klangprofile in `enginevoice.js`: Zylinder-/Zündimpulse, Boxer und V8-Bänke, Diesel, Zweitakter,
+  Elektroantriebe; Ansaugung, Turbo, Lastwechsel und Innenraumdämmung.
+- Wiederholbare Messung aller 45 motorisierten Modelle über `tools/benchmark-vehicles.mjs` und Regressionstests
+  für Beschleunigung, Kraftverlauf, Wetter, Lenken beim Start, Zeitschritte und Höchsttempo.
+- Lebensbalken über verletzten, noch lebenden NPCs.
+- **M** schaltet den gesamten Ton an/aus; Stadtplan auf **Tab**.
+
+### Geändert
+
+- Stadt-Antritt insbesondere für Front-/Hecktriebler kräftiger; Bonus läuft bis 90 km/h aus. Oberhalb 50 km/h
+  beginnt die Anpassung auf mittlere Radleistung. Bestehende Starttraktion extremer Sport-/Allradfahrzeuge wird
+  nicht zusätzlich erhöht. Höchstgeschwindigkeiten bleiben erhalten; Wetter, ESP und Drift werden berücksichtigt.
+- Fahrzeugzeichnung über `vehicleart.js`: mehr Karosseriedetails, differenzierte Silhouetten und Oberflächen,
+  vierfache Sprite-Auflösung, überarbeitete Sonderfahrzeuge und Wracks.
+- Motorklang dunkler: breitere Impulse, tieferer Grundton und Bassanhebung, weniger Verzerrung,
+  dezentere Ansaug-/Turbohöhen; dieselben Modellprofile im Verkehr.
+- Mausbelegung: links Bewegung, rechts Angriff, im Steuerungsmenü mit ↓ vertauschbar und lokal gespeichert.
+  Fahrzeuge und unterirdische Bahnhofseingänge werden per F betreten; Waffenrad über beide Maustasten gemeinsam.
+- NPCs bleiben bei nicht tödlichem Schaden stehen bzw. fliehen oder kämpfen. Fahrzeugtreffer verursachen
+  geschwindigkeitsabhängigen Schaden mit 1,1 s Schutz vor wiederholten Kontakt-Treffern.
+- Poller und Hütchen geben ab etwa 3 km/h Aufpralltempo nach; geringerer Tempo- und Gesundheitsverlust.
+- Kompakter Fahrzeugstatus mit sichtbaren ESP-/ABS-Anzeigen.
+
+### Behoben
+
+- Zaunkollisionssegmente werden beim Laden zusätzlich sichtbar gezeichnet; abgeleitete Abschnitte sollen
+  nicht mehr nur als unsichtbare Barriere existieren. Gilt für alle geladenen Kartenkacheln.
+- Gangpendeln in der Klang-/Drehzahllogik reduziert; Reifenquietschen mit Fahrdynamik folgt tatsächlichem
+  Schlupf statt allein dem Bremspedal.
+- Soundtest legt das Pkw-Modell explizit fest statt zufällig einen Diesel als Benziner zu erwarten.
+
+### Dokumentation und Prüfstatus
+
+- README-Steuerung, Wochentag, Wettertafel, Fahrzeugdarstellung, Klang und Tests aktualisiert.
+- [Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md) und
+  [Beschleunigungsbericht mit Herstellerquellen und 45 Messreihen](docs/FAHRZEUG-BESCHLEUNIGUNG.md).
+- 33 gezielte Tests bestanden; vollständiger vorheriger Lauf 444/461 bestanden. Die 17 Fehler lassen sich
+  auch mit der alten Fahrphysik reproduzieren. Keine Behauptung einer vollständig grünen Suite.
+- Paketversion bleibt 0.46.0; dieser Abschnitt beschreibt noch keinen eigenständigen Versionsrelease.
+
 ## [0.46.0] – 2026-09-30
 
 ### Geändert

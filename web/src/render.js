@@ -38,7 +38,7 @@ import { litWindows, houseFraction, tvFlicker, WIN_TYPES, WIN_COLOR, WIN_LIGHT }
 import { occludersOf, samplePoints, levelSurfaces, surfacesOver, trackLevel } from './occlusion.js';
 import { isStreet } from './signs.js';
 import { wallColor, roofColors } from './buildcolors.js';
-import { WEAPONS } from './combat.js';
+import { WEAPONS, PED_HP } from './combat.js';
 import { benchAngle } from './life.js';
 import { FURN_KIND } from './citycodes.js';
 
@@ -1469,6 +1469,13 @@ export class Renderer {
       add(p, p.y, p.y, () => {
         if (dog) drawDog(ctx, p, t);
         drawPerson(ctx, p, { shirt: p.shirt, skin: p.skin, down, dead: p.state === 'dead', sun: L.sun, attack: p.punch > 0 ? { kind: 'swing', t: p.punch } : null, act, time: t });
+        if (p.state !== 'dead' && p.hp < PED_HP) {
+          const hp = Math.max(0, Math.min(1, p.hp / PED_HP)), x = p.x - 12, y = p.y - 18;
+          ctx.fillStyle = 'rgba(8,10,13,0.9)'; ctx.fillRect(x - 1, y - 1, 26, 5);
+          ctx.fillStyle = hp > 0.6 ? '#55d66b' : hp > 0.3 ? '#f0c447' : '#ef5149';
+          if (hp > 0) ctx.fillRect(x, y, 24 * hp, 3);
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.6; ctx.strokeRect(x - 1, y - 1, 26, 5);
+        }
         if (umbrella) drawUmbrella(ctx, p, t);
       }, 0, 0, 0, { skipCover: p.state === 'dead' });
     }
@@ -1535,6 +1542,20 @@ export class Renderer {
     ctx.lineCap = 'round';
     for (const f of fences) {
       const st = FENCE_STYLE[f.kind] ?? FENCE_STYLE[0];
+      if (f.collision) {
+        // Dunkler Saum und helle Mittelspur markieren exakt die Zaunsegmente, die wirklich blockieren.
+        ctx.strokeStyle = 'rgba(20,22,24,0.82)'; ctx.lineWidth = Math.max(5, st[1] + 3); ctx.setLineDash([]); ctx.stroke(pathOf(f));
+        ctx.strokeStyle = '#d4bd82'; ctx.lineWidth = Math.max(2.4, st[1]); ctx.stroke(pathOf(f));
+        // Pfostenabstände geben langen, dünnen Linien auch beim Herauszoomen eine erkennbare Kontur.
+        ctx.fillStyle = '#292b2c';
+        let carry = 0;
+        for (let i = 0; i < f.pts.length - 2; i += 2) {
+          const ax = f.pts[i], ay = f.pts[i + 1], dx = f.pts[i + 2] - ax, dy = f.pts[i + 3] - ay, len = Math.hypot(dx, dy);
+          for (let d = 70 - carry; d < len; d += 140) { ctx.beginPath(); ctx.arc(ax + dx * d / len, ay + dy * d / len, 2.5, 0, Math.PI * 2); ctx.fill(); }
+          carry = (carry + len) % 140;
+        }
+        continue;
+      }
       ctx.strokeStyle = st[0]; ctx.lineWidth = st[1]; ctx.setLineDash(st[2]); ctx.stroke(pathOf(f)); ctx.setLineDash([]);
     }
     for (const b of barriers) {

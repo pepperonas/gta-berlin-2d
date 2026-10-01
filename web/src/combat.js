@@ -255,8 +255,10 @@ export function hurtPed(w, ped, dmg, fromX, fromY, melee = false, src = null) {
     ped.state = 'dead'; ped.deadT = 0; ped.threat = { x: fromX, y: fromY }; ped.fall = a;
     w.events.push({ type: 'kill', x: ped.x, y: ped.y, id: ped.id, weapon: src?.weapon ?? null, player: !!src?.player });
   } else {
-    ped.state = 'down'; ped.t = melee ? 1.4 : 2.2; ped.threat = { x: fromX, y: fromY }; ped.fall = a;
-    if (isFighter(ped)) ped.angry = true; // steht auf und schlägt zurück
+    // Verletzte bleiben auf den Beinen. Zivilisten fliehen, Kämpfer gehen direkt in den Gegenangriff.
+    ped.threat = { x: fromX, y: fromY };
+    if (isFighter(ped)) { ped.angry = true; ped.state = 'fight'; ped.fightT = 0; ped.hitCd = 0.5; }
+    else { ped.state = 'flee'; ped.t = melee ? 1.4 : 2.2; }
     if (melee) { ped.x += Math.cos(a) * 6; ped.y += Math.sin(a) * 6; }
   }
 }

@@ -15,8 +15,9 @@ export const CAR = {
   restitution: 0.3,
 };
 
-// Poller und Schranken: ab dieser Aufprallgeschwindigkeit (px/s, ≈ 16 km/h) fährt ein Auto sie um
-export const KNOCK = { speed: 45, slow: 0.9, damage: 3 };
+// Poller und Verkehrshütchen geben schon bei langsamem Anstoßen nach.
+// Geschwindigkeit ist in Weltpixeln/s; 8 entspricht ungefähr 3 km/h.
+export const KNOCK = { speed: 8, slow: 0.96, damage: 1.5 };
 
 // Tempo in px/s (10 px = 1 m): langsam gehen 1,5 m/s, joggen 3,5 m/s (Standard), sprinten 7 m/s
 export const PLAYER = { radius: 7, walk: 15, jog: 35, sprint: 70, enterDist: 40 };

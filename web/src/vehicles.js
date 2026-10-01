@@ -1,9 +1,10 @@
 // Autos in der Draufsicht: 37 Pkw-Modelle (carmodels.js) innerhalb derselben Kollisionsbox (42 × 20 px = 4,2 × 2,0 m).
-// Karosserie, Scheiben und Dach werden je Modell × Farbe einmal doppelt aufgelöst gezeichnet (Sprite-Cache),
+// Karosserie, Scheiben und Dach werden je Modell × Farbe einmal vierfach aufgelöst gezeichnet (Sprite-Cache),
 // was sich bewegt – Räder (Vorderräder lenken), Licht, Blinker – kommt jedes Bild dazu.
 // Das Modell (und seine Technik) kommt aus carmodels.js; gefahrene Autos nicken und wanken mit ihrem Schwerpunkt.
 import { shade } from './assets.js';
 import { CAR_MODELS, SPECIAL_MODELS, carModel, specOf } from './carmodels.js';
+import { paintPassenger, paintLamps } from './vehicleart.js';
 
 export { CAR_MODELS, SPECIAL_MODELS, carModel };
 export const TAXI_COLOR = '#f1e9c8'; // Berliner Taxi: hellelfenbein
@@ -54,98 +55,31 @@ export const carColor = (car) => (car.wrecked ? '#3b332d' : carModel(car) === 't
 export const hasLightBar = (car) => car.kind === 'police' || car.kind === 'ambulance';
 
 function rr(g, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
   g.beginPath();
   g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }
 
-// Karosserie in lokalen Koordinaten: +x = vorn, Mitte (0,0)
+// Karosserie in lokalen Koordinaten: +x = vorn, Mitte (0,0).
 function paintBody(g, model, body, L, W, wrecked) {
   if (SPECIAL_MODELS.includes(model)) return paintSpecial(g, model, body, L, W, wrecked);
   const sh = SHAPES[model] ?? SHAPES.limousine;
-  const len = L - sh.len, x0 = -len / 2;
-  W -= 2 * sh.inset;
-  const y0 = -W / 2;
-  // Querverlauf: Kanten dunkler, Mitte heller → Wölbung
-  const gr = g.createLinearGradient(0, y0, 0, y0 + W);
-  gr.addColorStop(0, shade(body, -0.28)); gr.addColorStop(0.5, shade(body, 0.1)); gr.addColorStop(1, shade(body, -0.34));
-  g.fillStyle = gr; rr(g, x0, y0, len, W, sh.r); g.fill();
-  g.strokeStyle = shade(body, -0.5); g.lineWidth = 0.9; g.stroke();
-  const glass = wrecked ? '#1c1916' : '#1f2a36';
-  const glassG = g.createLinearGradient(0, y0, 0, y0 + W);
-  glassG.addColorStop(0, glass); glassG.addColorStop(0.45, wrecked ? '#2a2521' : '#4b6379'); glassG.addColorStop(1, glass);
-  const roof = sh.roof ?? shade(body, 0.14);
-  const cabin = (xs, xe, frontCut, rearCut) => { // Scheibenkranz mit abgeschrägter Front-/Heckscheibe
-    g.fillStyle = glassG; g.beginPath();
-    g.moveTo(xs + rearCut, y0 + 2.2); g.lineTo(xe - frontCut, y0 + 2.2); g.lineTo(xe, y0 + 4); g.lineTo(xe, y0 + W - 4);
-    g.lineTo(xe - frontCut, y0 + W - 2.2); g.lineTo(xs + rearCut, y0 + W - 2.2); g.lineTo(xs, y0 + W - 4); g.lineTo(xs, y0 + 4); g.closePath(); g.fill();
-  };
-  if (sh.van) { // Kastenwagen: kurze Front mit Scheibe, dahinter der Kastenaufbau (Hochdach: heller, mit Dachluke)
-    cabin(len / 2 - 11, len / 2 - 5, 1.5, 0);
-    g.fillStyle = sh.high ? shade(body, 0.2) : roof; rr(g, x0 + 1.5, y0 + 1.8, len - 13, W - 3.6, 2); g.fill();          // Kastenaufbau
-    g.strokeStyle = shade(body, -0.12); g.lineWidth = 0.7;
-    for (let x = x0 + 6; x < len / 2 - 13; x += sh.high ? 3.5 : 5) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
-    if (sh.high) { g.fillStyle = 'rgba(30,40,52,0.7)'; rr(g, x0 + (len - 13) / 2 - 2, -2.5, 5, 5, 1); g.fill(); }
-  } else {
-    const back = x0 + sh.back, front = len / 2 - sh.front;
-    if (sh.vents === 'mid') { // Mittelmotor: Motorabdeckung mit Lüftungsschlitzen hinter der Kabine, Lufteinlässe an den Flanken
-      g.fillStyle = shade(body, -0.18); rr(g, x0 + 4, y0 + 4, back - x0 - 5, W - 8, 2); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 0.6;
-      for (let x = x0 + 6; x < back - 2; x += 1.8) { g.beginPath(); g.moveTo(x, y0 + 5.5); g.lineTo(x, y0 + W - 5.5); g.stroke(); }
-      g.fillStyle = '#15181c'; g.fillRect(back - 2, y0 + 0.4, 4, 1.4); g.fillRect(back - 2, y0 + W - 1.8, 4, 1.4);
-      g.fillStyle = shade(body, -0.35); g.fillRect(x0 + 0.6, y0 + 2, 1.6, W - 4);                         // Heckflügel
-    }
-    if (sh.vents === 'rear') { // Heckmotor: Lüftungsgitter im Motordeckel ganz hinten
-      g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 0.6;
-      for (let x = x0 + 2.5; x < x0 + 8; x += 1.4) { g.beginPath(); g.moveTo(x, y0 + 5); g.lineTo(x, y0 + W - 5); g.stroke(); }
-    }
-    if (sh.bed) { // Pick-up: offene Ladefläche hinter der Kabine
-      g.fillStyle = shade(body, -0.35); rr(g, x0 + 1.5, y0 + 2, back - x0 - 3, W - 4, 1.5); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.6;
-      for (let x = x0 + 4; x < back - 2; x += 3) { g.beginPath(); g.moveTo(x, y0 + 2.5); g.lineTo(x, y0 + W - 2.5); g.stroke(); }
-    }
-    if (sh.vents === 'hood') { // Lufthutze auf der Haube
-      g.fillStyle = shade(body, -0.3); rr(g, front + 3, -2.2, Math.max(3, len / 2 - front - 7), 4.4, 1); g.fill();
-    }
-    if (sh.open) { // Roadster: offen – Sitze, Überrollbügel und Frontscheibe statt Dach
-      g.fillStyle = glassG; g.fillRect(front - 1.5, y0 + 2.4, 2, W - 4.8);
-      g.fillStyle = '#2b2522'; rr(g, back + 1, y0 + 3, front - back - 3, W - 6, 2); g.fill();
-      g.fillStyle = '#5a4034'; for (const s of [-1, 1]) { rr(g, back + 3, s * W / 4 - 2.4, 6, 4.8, 1.5); g.fill(); }
-      g.fillStyle = shade(body, -0.4); g.fillRect(back + 0.5, y0 + 3, 1.2, W - 6);
-    } else {
-    cabin(back, front, sh.cut[0], sh.cut[1]);
-    const rx = back + Math.max(1.5, sh.cut[1] + 1), rw = front - rx - sh.cut[0] - 1;
-    if (sh.glassRoof) { g.fillStyle = '#1a2330'; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); g.fillStyle = 'rgba(160,190,220,0.25)'; g.fillRect(rx + 1, y0 + 4.2, rw - 2, 1.6); }
-    else { g.fillStyle = roof; rr(g, rx, y0 + 3.4, rw, W - 6.8, 2.2); g.fill(); }
-    if (sh.rails) { g.fillStyle = '#2b2e33'; g.fillRect(rx, y0 + 3.6, rw, 0.9); g.fillRect(rx, y0 + W - 4.5, rw, 0.9); }
-    if (sh.twoTone) { g.fillStyle = sh.twoTone; rr(g, rx + 1, y0 + 4, rw - 2, W - 8, 2); g.fill(); }
-    }
-    if (sh.stripes) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.fillRect(x0 + 1, -2.4, len - 2, 1.4); g.fillRect(x0 + 1, 1, len - 2, 1.4); } // Rennstreifen
-    if (sh.wing) { g.fillStyle = shade(body, -0.35); g.fillRect(x0 + 0.5, y0 + 1.5, 2, W - 3); }                                          // Heckflügel
-    if (sh.chrome) { g.fillStyle = '#d9dde2'; g.fillRect(len / 2 - 1.2, y0 + 1.5, 1.2, W - 3); g.fillRect(x0, y0 + 1.5, 1.2, W - 3); }     // Chromstoßstangen
-    if (sh.spare) { g.fillStyle = '#1c1d20'; g.beginPath(); g.arc(x0 - 0.6, 0, 3.4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#55585e'; g.beginPath(); g.arc(x0 - 0.6, 0, 1.4, 0, Math.PI * 2); g.fill(); }
-    g.fillStyle = shade(body, -0.1); g.fillRect(front + 1.5, y0 + 2.5, 0.8, W - 5);            // Haubenkante
-    if (model === 'taxi' && !wrecked) { // Dachschild
-      g.fillStyle = '#ffd400'; rr(g, -3.5, -2.2, 7, 4.4, 1); g.fill();
-      g.fillStyle = '#222'; g.fillRect(-2, -0.5, 4, 1);
-    }
-  }
-  // Außenspiegel
-  g.fillStyle = shade(body, -0.2);
-  const mx = model === 'transporter' ? len / 2 - 11 : len / 2 - (SHAPES[model]?.front ?? 12) - 1;
-  g.fillRect(mx, y0 - 1.6, 2.2, 1.8); g.fillRect(mx, y0 + W - 0.2, 2.2, 1.8);
-  if (wrecked) { // Ruß und Beulen
-    g.fillStyle = 'rgba(0,0,0,0.45)';
-    for (const [x, y, r] of [[-6, -3, 5], [8, 4, 4], [-14, 5, 3.5], [13, -4, 3]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
-    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 0.8;
-    g.beginPath(); g.moveTo(len / 2 - 3, y0 + 3); g.lineTo(len / 2 - 8, y0 + 8); g.lineTo(len / 2 - 4, y0 + 12); g.stroke();
-  }
+  paintPassenger(g, model, body, L - sh.len, W - sh.inset * 2, sh, wrecked);
 }
 
 // Nutzfahrzeuge und Einsatzwagen: Fahrerhaus vorn, Aufbau dahinter (Draufsicht)
 function paintSpecial(g, model, body, L, W, wrecked) {
   const x0 = -L / 2, y0 = -W / 2, glass = wrecked ? '#1c1916' : '#233140';
-  const box = (x, w, fill, r = 2) => { g.fillStyle = fill; rr(g, x, y0 + 0.6, w, W - 1.2, r); g.fill(); g.strokeStyle = shade(fill, -0.45); g.lineWidth = 0.9; g.stroke(); };
+  const box = (x, w, fill, r = 2) => {
+    g.fillStyle = fill; rr(g, x, y0 + 0.6, w, W - 1.2, r); g.fill();
+    g.save(); g.clip();
+    const light = g.createLinearGradient(0, y0, 0, -y0);
+    light.addColorStop(0, 'rgba(0,0,0,0.32)'); light.addColorStop(0.22, 'rgba(255,255,255,0.23)');
+    light.addColorStop(0.55, 'rgba(255,255,255,0)'); light.addColorStop(1, 'rgba(0,0,0,0.38)');
+    g.fillStyle = light; g.fillRect(x, y0, w, W); g.restore();
+    g.strokeStyle = '#303a3d'; g.lineWidth = 0.6; g.stroke();
+  };
   const ribs = (xa, xb, step, col) => { g.strokeStyle = col; g.lineWidth = 0.7; for (let x = xa; x < xb; x += step) { g.beginPath(); g.moveTo(x, y0 + 2); g.lineTo(x, y0 + W - 2); g.stroke(); } };
   const cabin = (xs, len, col) => { // Fahrerhaus mit Frontscheibe
     box(xs, len, col, 3.5);
@@ -168,10 +102,8 @@ function paintSpecial(g, model, body, L, W, wrecked) {
     box(x0, 10, wrecked ? '#333' : '#4b4f54', 2);                   // Schüttung / Presse hinten
     g.fillStyle = '#f5f5f0'; for (const y of [y0 + 2.5, y0 + W - 4.5]) g.fillRect(x0 + 12, y, L - cab - 16, 2); // Reflexstreifen
   } else if (model === 'police') {
-    const len = L, xs = x0; box(xs, len, body, 5.5);
-    g.fillStyle = glass; g.fillRect(len / 2 - 12, y0 + 2.2, 3.5, W - 4.4); g.fillRect(xs + 5, y0 + 2.2, 3, W - 4.4);
-    g.fillStyle = shade(body, 0.08); rr(g, xs + 9, y0 + 3.2, len - 22, W - 6.4, 2); g.fill();
-    g.fillStyle = '#1f4e9c'; g.fillRect(xs + 2, y0 + 0.7, len - 4, 2.2); g.fillRect(xs + 2, y0 + W - 2.9, len - 4, 2.2); // blaue Flanken
+    paintPassenger(g, model, body, L, W, SHAPES.limousine, wrecked);
+    g.fillStyle = '#1f4e9c'; g.fillRect(x0 + 5, y0 + 0.7, L - 10, 1.2); g.fillRect(x0 + 5, y0 + W - 1.9, L - 10, 1.2);
     g.fillStyle = '#1f4e9c'; g.fillRect(-4, -3, 6, 6);            // Dachkennung
   } else if (model === 'ambulance') {
     const cab = 13; cabin(L / 2 - cab, cab, body);
@@ -188,7 +120,40 @@ function paintSpecial(g, model, body, L, W, wrecked) {
     g.fillStyle = '#d8d8d2'; rr(g, -18, -6, 26, 12, 2); g.fill();                             // Klimaanlage
     g.fillStyle = '#b9b9b2'; g.fillRect(x0 + 6, -4, 14, 8);                                   // Motorklappe hinten
     g.fillStyle = shade(body, -0.2); for (const x of [-40, 22, 34]) g.fillRect(x, -3, 5, 6);   // Dachluken
+    // Zwei Lüfter unter Schutzgittern, Lamellen und einzelne Fensterfelder.
+    for (const x of [-11, 1]) {
+      g.fillStyle = '#555f62'; g.beginPath(); g.arc(x, 0, 4.2, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#a3afac'; g.lineWidth = 0.4;
+      for (let y = -3; y <= 3; y += 1) { g.beginPath(); g.moveTo(x - 2.7, y); g.lineTo(x + 2.7, y); g.stroke(); }
+      g.fillStyle = '#262e32'; g.beginPath(); g.arc(x, 0, 0.8, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#6d746f'; for (let x = x0 + 6; x < L / 2 - 8; x += 8) { g.fillRect(x, y0 + 0.7, 0.6, 2.3); g.fillRect(x, -y0 - 3, 0.6, 2.3); }
   }
+  if (model !== 'police') {
+    // Fahrerhaus: getönte Seitenscheiben, Spiegel, Scheibenreflex und Wischer.
+    const cx = L / 2 - 9;
+    for (const side of [-1, 1]) {
+      g.fillStyle = '#172b37'; g.fillRect(cx, side < 0 ? y0 + 1.4 : -y0 - 3.1, 4, 1.7);
+      g.fillStyle = '#242c31'; g.fillRect(cx + 2, side < 0 ? y0 - 2 : -y0, 1.5, 2.4);
+      g.fillStyle = '#9bb0b5'; g.fillRect(cx + 1.4, side < 0 ? y0 - 2.3 : -y0 + 0.8, 2.6, 1);
+      g.strokeStyle = '#141d22'; g.lineWidth = 0.4; g.beginPath(); g.moveTo(L / 2 - 4.7, side * W * 0.08); g.lineTo(L / 2 - 3.9, side * W * 0.3); g.stroke();
+    }
+    g.fillStyle = 'rgba(197,228,236,0.36)'; g.fillRect(L / 2 - 4.8, y0 + 3, 0.65, W * 0.45);
+    g.strokeStyle = 'rgba(255,255,255,0.3)'; g.lineWidth = 0.45;
+    g.beginPath(); g.moveTo(x0 + 3, y0 + 2); g.lineTo(L / 2 - 13, y0 + 2); g.stroke();
+    // Heckklappenverschluss und kleine Scharniere an Kofferaufbauten.
+    if (model === 'truck' || model === 'delivery' || model === 'ambulance') {
+      g.fillStyle = '#293237'; g.fillRect(x0 + 0.7, -0.25, 2, 0.5);
+      for (const y of [-W * 0.3, W * 0.3]) { g.fillStyle = '#9da9a8'; g.fillRect(x0 + 0.5, y, 0.8, 1.6); }
+    }
+  }
+  if (model === 'police' || model === 'ambulance') {
+    const x = model === 'police' ? -2 : L / 2 - 16;
+    g.fillStyle = '#374349'; rr(g, x - 1.8, -5.2, 3.6, 10.4, 0.7); g.fill();
+    g.fillStyle = wrecked ? '#253036' : '#245791'; g.fillRect(x - 1.2, -4.6, 2.4, 3.5); g.fillRect(x - 1.2, 1.1, 2.4, 3.5);
+    g.fillStyle = '#b7c7cc'; g.fillRect(x - 0.8, -1, 1.6, 2);
+  }
+  paintLamps(g, model, L, W, false, wrecked);
   if (wrecked) { g.fillStyle = 'rgba(0,0,0,0.45)'; for (const [x, y, r] of [[-L / 4, -3, 6], [L / 5, 4, 5]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); } }
 }
 
@@ -237,8 +202,8 @@ export function carSprite(model, body, L, W, wrecked) {
   if (cache.size >= SPRITE_CACHE_MAX) cache.clear();
   let c = null;
   try {
-    c = makeCanvas((L + 8) * 2, (W + 8) * 2);
-    if (c) { const g = c.getContext('2d'); g.scale(2, 2); g.translate(L / 2 + 4, W / 2 + 4); paintBody(g, model, body, L, W, wrecked); }
+    c = makeCanvas((L + 8) * 4, (W + 8) * 4);
+    if (c) { const g = c.getContext('2d'); g.scale(4, 4); g.translate(L / 2 + 4, W / 2 + 4); paintBody(g, model, body, L, W, wrecked); }
   } catch { c = null; }
   cache.set(key, c);
   return c;
@@ -250,10 +215,16 @@ export function drawCarBody(ctx, car, t) {
   const spr = carSprite(model, body, L, W, car.wrecked);
   if (!spr) return false;
   // Räder (unter der Karosserie, an den Ecken sichtbar); Vorderräder lenken mit
-  const steer = car.dyn && car.driver === 'player' ? car.dyn.delta : (car.controls?.steer ?? 0) * 0.45, wx = L / 2 - 8, wy = W / 2 - 1.2;
-  ctx.fillStyle = '#16171a';
+  const steer = car.dyn && car.driver === 'player' ? car.dyn.delta : (car.controls?.steer ?? 0) * 0.45;
+  const wx = Math.min(L / 2 - 8, bodyLength(model, L) / 2 - 6), wy = W / 2 - (SHAPES[model]?.inset ?? 0) - 1.2;
+  ctx.fillStyle = '#111317';
   for (const [x, y, front] of [[wx, -wy, 1], [wx, wy, 1], [-wx + 1, -wy, 0], [-wx + 1, wy, 0]]) {
-    ctx.save(); ctx.translate(x, y); if (front) ctx.rotate(steer); ctx.fillRect(-3.8, -1.7, 7.6, 3.4); ctx.restore();
+    ctx.save(); ctx.translate(x, y); if (front) ctx.rotate(steer);
+    rr(ctx, -4.2, -2.05, 8.4, 4.1, 1.5); ctx.fill();
+    // Felgenhorn und Nabe sitzen am außen sichtbaren Reifenrand.
+    ctx.fillStyle = '#9da5ac'; ctx.fillRect(-2.1, y < 0 ? -1.85 : 0.65, 4.2, 1.05);
+    ctx.fillStyle = '#d4d8da'; ctx.fillRect(-0.45, y < 0 ? -1.8 : 0.68, 0.9, 0.9);
+    ctx.restore();
   }
   // Nicken und Wanken (gefahrenes Auto, dynamics.js): die Karosserie weicht der Beschleunigung aus, je höher der
   // Schwerpunkt, desto weiter – Bremsen taucht vorn ein, Anfahren hinten, Kurven drücken nach außen
@@ -264,12 +235,9 @@ export function drawCarBody(ctx, car, t) {
   drawDuty(ctx, car, t, L, W);
   const len = bodyLength(model, L);
   // Scheinwerfer, Rück-, Brems-, Rückfahrlicht, Blinker
-  ctx.fillStyle = '#fff6c8';
-  ctx.fillRect(len / 2 - 2.2, -W / 2 + 2, 2.2, 3.6); ctx.fillRect(len / 2 - 2.2, W / 2 - 5.6, 2.2, 3.6);
   const braking = car.controls?.brake > 0.1;
   const vf = car.vx * Math.cos(car.angle) + car.vy * Math.sin(car.angle);
-  ctx.fillStyle = braking ? '#ff3b30' : '#8a1c1c';
-  ctx.fillRect(-len / 2, -W / 2 + 2, 1.8, 3.6); ctx.fillRect(-len / 2, W / 2 - 5.6, 1.8, 3.6);
+  paintLamps(ctx, model, len, W - 2 * (SHAPES[model]?.inset ?? 0), braking);
   if (braking) { ctx.fillStyle = 'rgba(255,40,30,0.25)'; ctx.fillRect(-len / 2 - 6, -W / 2, 6, W); }
   if (vf < -5) { ctx.fillStyle = '#f4f7ff'; ctx.fillRect(-len / 2, -1.6, 1.8, 3.2); }
   const blink = car.ai?.blink ?? 0;

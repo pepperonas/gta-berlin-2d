@@ -4,6 +4,7 @@
 import { speedOf } from './car.js';
 import { surfaceAt, T } from './map.js';
 import { carModel } from './carmodels.js';
+import { voiceFor } from './enginevoice.js';
 
 // Motoren: Leerlauf/Abregeldrehzahl, Zylinder (Zündfrequenz = U/min / 60 · Zylinder / 2), Gänge als Geschwindigkeit
 // (px/s) je 1000 U/min, Diesel nagelt. 10 px = 1 m, CAR.maxSpeed 330 px/s ≈ 119 km/h.
@@ -60,8 +61,8 @@ export const MODEL_ENGINES = {
   grosssuv: { idle: 700, red: 6500, cyl: 6, gears: [17, 23, 30, 39, 51, 66, 86, 113], diesel: false },
 };
 export const engineOf = (kind) => ENGINES[kind] ?? ENGINES.car;
-// Motor eines Autos: im selbst gefahrenen Pkw (mit Fahrdynamik) oder fest gewählten Modell nach Modell, sonst nach Art
-export const engineFor = (car) => ((car.dyn || car.model) && MODEL_ENGINES[carModel(car)]) || engineOf(car.kind);
+// Dasselbe Modell hat im Verkehr und beim Selbstfahren denselben Motor.
+export const engineFor = (car) => MODEL_ENGINES[carModel(car)] || engineOf(car.kind);
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 export const SOUND_SPEED = 3430; // px/s (343 m/s)
 
@@ -75,22 +76,30 @@ export function stepEngine(st, car, dt) {
   const rev = fwd < -5;
   const up = E.red * (0.62 + 0.3 * thr), down = E.red * 0.38;
   const rpmIn = (g) => (v / E.gears[g - 1]) * 1000;
-  if (!rev) {
-    while (st.gear < E.gears.length && rpmIn(st.gear) > up) { st.gear++; st.shiftT = 0.18; }
-    while (st.gear > 1 && rpmIn(st.gear) < down) { st.gear--; st.shiftT = 0.12; }
-  } else st.gear = 1;
+  const previousGear = st.gear;
+  if (!rev && st.shiftT === 0 && !E.electric) {
+    if (st.gear < E.gears.length && rpmIn(st.gear) > up && rpmIn(st.gear + 1) > down) { st.gear++; st.shiftT = 0.18; }
+    else if (st.gear > 1 && rpmIn(st.gear) < down && rpmIn(st.gear - 1) < up * 0.92) { st.gear--; st.shiftT = 0.12; }
+  } else if (rev || E.electric) st.gear = 1;
+  if (st.gear !== previousGear) st.shiftId = (st.shiftId ?? 0) + 1;
   // Kupplung schleift unten herum: im Ersten nie unter Leerlauf, mit Gas schon im Stand hochdrehen
   const wheel = rpmIn(st.gear) * (rev ? 1.3 : 1), slip = (car.spin ? 0.35 : 0) + (st.gear === 1 ? thr * 0.3 : 0);
   let target = E.electric ? wheel : Math.max(E.idle + thr * E.red * 0.12, wheel + slip * E.red * 0.5);
   if (car.wrecked) target = 0;
   target = Math.min(E.red, target);
-  const k = st.shiftT > 0 ? 0.25 : 1; // beim Schalten nicht mitziehen
+  const k = st.shiftT > 0 ? 1.8 : 1; // Drehzahl beim Gangwechsel zügig anpassen
   st.rpm += (target - st.rpm) * Math.min(1, dt * (target > st.rpm ? 7 : 5) * k);
   st.load = st.shiftT > 0 ? 0 : thr;
   st.fire = (st.rpm / 60) * (E.cyl / (E.strokes === 2 ? 1 : 2)); // Zündfrequenz in Hz (Zweitakter: jede Umdrehung)
   st.norm = clamp01((st.rpm - E.idle) / (E.red - E.idle));
   st.diesel = E.diesel;
   st.electric = !!E.electric; st.twoStroke = E.strokes === 2;
+  st.cyl = E.cyl; st.cycle = st.rpm / (st.twoStroke ? 60 : 120);
+  st.profile = voiceFor(carModel(car), E);
+  st.reverse = rev; st.speed = v; st.coast = thr < 0.07 && v > 40;
+  const boostTarget = st.profile.turbo * thr * clamp01((st.norm - 0.12) * 2);
+  st.boost = (st.boost ?? 0) + (boostTarget - (st.boost ?? 0)) * Math.min(1, dt * (boostTarget > (st.boost ?? 0) ? 2.8 : 8));
+  st.regen = E.electric && v > 10 ? clamp01((ctl.brake ?? 0) + (1 - thr) * 0.22) : 0;
   return st;
 }
 
@@ -101,7 +110,7 @@ export function tireState(world, car) {
   const c = Math.cos(car.angle), s = Math.sin(car.angle), lat = Math.abs(-car.vx * s + car.vy * c);
   const surf = world.city ? surfaceAt(world.city, car.x, car.y, car.lvl ?? null) : T.ROAD;
   const snow = clamp01((world.snow ?? 0) * 1.4), wet = clamp01((world.wet ?? 0) - snow * 0.5);
-  const brake = car.controls?.brake > 0.6 && v > 90 ? 0.6 : 0, hand = car.controls?.handbrake && v > 60 ? 0.8 : 0;
+  const brake = !car.dyn && car.controls?.brake > 0.6 && v > 90 ? 0.6 : 0, hand = !car.dyn && car.controls?.handbrake && v > 60 ? 0.8 : 0;
   // Auf Schnee und Nässe quietscht nichts, das Rutschen rauscht nur
   const grip = 1 - Math.max(snow, wet * 0.8);
   const skid = clamp01(Math.max((lat - 40) / 120, brake, hand, car.spin ? 0.7 : 0, car.dyn ? car.skid ?? 0 : 0)) * (v > 15 || car.spin ? 1 : 0); // Fahrdynamik: Schräglauf/Blockieren
@@ -113,22 +122,23 @@ export function tireState(world, car) {
 }
 
 // Die nächsten fremden Fahrzeuge als Stimmen: [{ id, kind, gain, pan, rate, fire, diesel }] – lauteste zuerst.
-// rate = Dopplerfaktor (> 1 kommt näher), fire = Zündfrequenz aus einer groben Drehzahl nach Tempo und Gang.
+// rate = Dopplerfaktor (> 1 kommt näher), fire = Zündfrequenz aus dem fortlaufenden Motorzustand mit Gangwechseln.
 export function carVoices(world, listener, n = 4, R = 500, exclude = null) {
   const out = [];
   for (const c of world.cars) {
-    if (c.id === exclude || c.wrecked || !c.driver) continue;
+    if (c.id === exclude || c.wrecked || !c.driver || c.kind === 'bicycle' || c.kind === 'escooter') continue;
     const dx = c.x - listener.x, dy = c.y - listener.y, d = Math.hypot(dx, dy);
     if (d >= R) continue;
     const E = engineFor(c), v = speedOf(c);
-    const gear = E.gears.findIndex((g) => v / g * 1000 < E.red * 0.7);
-    const rpm = Math.max(E.idle, v / E.gears[gear < 0 ? E.gears.length - 1 : gear] * 1000 + (c.controls?.throttle ?? 0) * 400);
+    const st = c._soundEngine ??= {};
+    const dt = st.at === undefined || world.time === undefined ? 0.05 : Math.max(0, Math.min(0.2, world.time - st.at));
+    stepEngine(st, c, dt); st.at = world.time;
     // Relativgeschwindigkeit entlang der Sichtlinie (positiv = nähert sich)
     const lvx = listener.vx ?? 0, lvy = listener.vy ?? 0, ux = dx / (d || 1), uy = dy / (d || 1);
     const vr = -((c.vx - lvx) * ux + (c.vy - lvy) * uy);
     const big = E.diesel && (c.kind === 'truck' || c.kind === 'bus' || c.kind === 'garbage') ? 1.6 : 1;
     const gain = (1 - d / R) ** 2 * (0.35 + 0.65 * clamp01(v / 200 + (c.controls?.throttle ?? 0) * 0.4)) * big;
-    out.push({ id: c.id, kind: c.kind ?? 'car', d, gain, pan: Math.max(-1, Math.min(1, dx / 300)), rate: SOUND_SPEED / (SOUND_SPEED - Math.max(-1500, Math.min(1500, vr))), fire: (rpm / 60) * (E.cyl / 2), diesel: E.diesel, tire: clamp01(v / 330) });
+    out.push({ id: c.id, kind: c.kind ?? 'car', d, gain, pan: Math.max(-1, Math.min(1, dx / 300)), rate: SOUND_SPEED / (SOUND_SPEED - Math.max(-1500, Math.min(1500, vr))), fire: st.fire, cycle: st.cycle, cyl: st.cyl, rpm: st.rpm, load: st.load, norm: st.norm, electric: st.electric, profile: st.profile, diesel: E.diesel, tire: clamp01(v / 330) });
   }
   return out.sort((a, b) => b.gain - a.gain).slice(0, n);
 }

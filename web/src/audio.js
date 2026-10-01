@@ -1,10 +1,12 @@
+import { engineSpectrum, voiceFor } from './enginevoice.js';
+
 // Selbst erzeugte Klänge (Web Audio, keine Fremd-Samples). Austauschbar: liegt in assets/manifest.json
 // unter "sounds" eine Datei für einen Schlüssel (crash, horn, pickup, success, fail, ui, uiMove, door, tick, hit),
 // wird diese statt der Synthese abgespielt.
 //
 // Signalweg: alles Draußen (Umgebung, fremde Autos, Nachtleben) läuft über den Bus „outside“ mit einem Tiefpass, der im
 // Auto (Karosserie) und bei Schneedecke die Höhen schluckt; das eigene Fahrzeug (Motor, Reifen, Fahrtwind, Regen aufs
-// Dach) hört man ungedämpft. Ein Kompressor vor dem Ausgang verhindert Übersteuern, wenn viel zugleich passiert.
+// Dach) erhält eine zum Modell passende Klangmischung. Ein Kompressor vor dem Ausgang verhindert Übersteuern, wenn viel zugleich passiert.
 // Was klingt, rechnen ambience.js, nightlife.js und soundscape.js rein aus; hier wird nur synthetisiert.
 export class Sound {
   constructor() { this.ctx = null; this.buffers = {}; this.master = null; this.engine = null; this.muted = false; this.manifest = {}; }
@@ -16,7 +18,7 @@ export class Sound {
       if (!AC) return;
       this.ctx = new AC();
       const c = this.ctx;
-      this.master = c.createGain(); this.master.gain.value = 0.55;
+      this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 0.55;
       if (c.createDynamicsCompressor) {
         const k = c.createDynamicsCompressor();
         k.threshold.value = -14; k.knee.value = 12; k.ratio.value = 4; k.attack.value = 0.005; k.release.value = 0.25;
@@ -35,6 +37,12 @@ export class Sound {
   }
 
   get ready() { return this.ctx && this.ctx.state === 'running'; }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.55, this.ctx.currentTime, 0.025);
+    return this.muted;
+  }
 
   setManifest(m) { this.manifest = m?.sounds ?? {}; }
 
@@ -83,9 +91,31 @@ export class Sound {
     return ws;
   }
 
-  // Eigenes Fahrzeug: Zündfrequenz als Grundton (Sägezahn), halbe Zündfrequenz (unrunder Lauf, Blubbern), doppelte
-  // (Obertöne), gesättigt und lastabhängig gefiltert; Auspuffrauschen im Takt, Nageln beim Diesel; dazu Reifen
-  // (Abrollen, Pflaster, Nässe, Schnee), Quietschen, Fahrtwind und Regen aufs Dach.
+  // Druckimpulse eines ganzen Arbeitszyklus statt generischer Sägezahn-Motoren.
+  engineWave(osc, profile, cylinders, intake = false) {
+    if (!this.ctx.createPeriodicWave || !osc.setPeriodicWave) return false;
+    this.engineWaves ??= new Map();
+    const key = `${profile.key}|${cylinders}|${intake}`;
+    if (!this.engineWaves.has(key)) {
+      const { real, imag } = engineSpectrum(profile, cylinders, intake);
+      this.engineWaves.set(key, this.ctx.createPeriodicWave(real, imag));
+    }
+    if (osc.voiceKey !== key) { osc.setPeriodicWave(this.engineWaves.get(key)); osc.voiceKey = key; }
+    return true;
+  }
+
+  // Kurzer Druckabbau des Turbos beziehungsweise dezentes Auspuff-Nachverbrennen.
+  engineRelease(boost, pop) {
+    const c = this.ctx, t = c.currentTime, s = c.createBufferSource(); s.buffer = this.noise;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = pop ? 130 : 1400; f.Q.value = pop ? 0.7 : 0.8;
+    const g = c.createGain(); g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(pop ? 0.055 : boost * 0.02, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (pop ? 0.12 : 0.26));
+    s.connect(f); f.connect(g); g.connect(this.engine.bus);
+    s.onended = () => { s.disconnect(); f.disconnect(); g.disconnect(); };
+    s.start(t); s.stop(t + 0.3);
+  }
+
   startEngine() {
     const c = this.ctx;
     const bus = c.createGain(); bus.gain.value = 0; bus.connect(this.master);
@@ -93,19 +123,24 @@ export class Sound {
     const o1 = osc('sawtooth'), o2 = osc('square'), o3 = osc('sawtooth');
     const g1 = c.createGain(), g2 = c.createGain(), g3 = c.createGain();
     g1.gain.value = 0.5; g2.gain.value = 0.35; g3.gain.value = 0.15;
-    const sh = this.shaper(2.2);
-    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380; f.Q.value = 1.1;
-    const body = c.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 140; body.Q.value = 1.2; body.gain.value = 6;
-    o1.connect(g1); o2.connect(g2); o3.connect(g3); g1.connect(sh); g2.connect(sh); g3.connect(sh); sh.connect(f); f.connect(body);
-    const g = c.createGain(); g.gain.value = 0; body.connect(g); g.connect(bus);
+    const sh = this.shaper(1.45);
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380; f.Q.value = 0.65;
+    const body = c.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 140; body.Q.value = 0.65; body.gain.value = 5;
+    const bass = c.createBiquadFilter(); bass.type = 'lowshelf'; bass.frequency.value = 220; bass.gain.value = 4;
+    o1.connect(g1); o2.connect(g2); o3.connect(g3); g1.connect(sh); g2.connect(body); g3.connect(sh); sh.connect(f); f.connect(body); body.connect(bass);
+    const g = c.createGain(); g.gain.value = 0; bass.connect(g); g.connect(bus);
     // Auspuff: Rauschen, im Zündtakt moduliert
     const ex = this.noiseLayer('bandpass', 220, 1.3, bus);
     const am = osc('square'), amg = c.createGain(); amg.gain.value = 0; am.connect(amg); amg.connect(ex.g.gain);
     // Diesel-Nageln: hohes Rauschen, im Zündtakt geschaltet
-    const cl = this.noiseLayer('highpass', 2800, 0.7, bus);
+    const cl = this.noiseLayer('bandpass', 1500, 0.6, bus);
     // Elektromotor: Summen, das mit der Drehzahl steigt (statt Zündtakt)
-    const wh = osc('triangle'), whg = c.createGain(); whg.gain.value = 0; wh.connect(whg); whg.connect(bus);
+    const wh = osc('sine'), whg = c.createGain(); whg.gain.value = 0; wh.connect(whg); whg.connect(bus);
     const clm = c.createGain(); clm.gain.value = 0; am.connect(clm); clm.connect(cl.g.gain);
+    const intake = this.noiseLayer('bandpass', 900, 0.8, bus);
+    const turboNoise = this.noiseLayer('bandpass', 2800, 0.6, bus);
+    const turbo = osc('sine'), turboG = c.createGain(); turboG.gain.value = 0; turbo.connect(turboG); turboG.connect(bus);
+    const reverse = osc('sine'), reverseG = c.createGain(); reverseG.gain.value = 0; reverse.connect(reverseG); reverseG.connect(bus);
     const tires = {
       roll: this.noiseLayer('lowpass', 300, 0.6, bus), cobble: this.noiseLayer('lowpass', 140, 1.5, bus),
       wet: this.noiseLayer('highpass', 2600, 0.5, bus), snow: this.noiseLayer('bandpass', 1500, 0.9, bus),
@@ -119,7 +154,7 @@ export class Sound {
     const vib = osc('sine'), vibg = c.createGain(); vib.frequency.value = 9; vibg.gain.value = 25; vib.connect(vibg);
     for (const o of sq) { vibg.connect(o.frequency); o.connect(sqg); }
     sqg.connect(bus);
-    this.engine = { o1, o2, o3, f, g, bus, ex, am, amg, cl, clm, tires, sqg, sq, wh, whg };
+    this.engine = { g1, g2, g3, body, bass, intake, turboNoise, turbo, turboG, reverse, reverseG, o1, o2, o3, f, g, bus, ex, am, amg, cl, clm, tires, sqg, sq, wh, whg };
   }
 
   // eng: soundscape.js stepEngine-Zustand (rpm, fire, load, norm, diesel); tires: soundscape.js tireState
@@ -127,21 +162,53 @@ export class Sound {
     if (!this.ready) return;
     const e = this.engine, t = this.ctx.currentTime, set = (p, v, tc = 0.08) => p.setTargetAtTime(v, t, tc);
     set(e.bus.gain, active || inCar ? 1 : 0, 0.15);
-    if (active && eng?.electric) { // Elektro: kein Verbrenner, nur Summen und Umrichter-Pfeifen
-      set(e.g.gain, 0, 0.1); set(e.amg.gain, 0, 0.1); set(e.clm.gain, 0, 0.1);
-      set(e.wh.frequency, 90 + (eng.rpm ?? 0) / 16000 * 1500, 0.05);
-      set(e.whg.gain, Math.min(0.05, 0.004 + (eng.norm ?? 0) * 0.02 + (eng.load ?? 0) * 0.02), 0.08);
-    } else if (active && eng) {
-      set(e.whg.gain, 0, 0.1);
-      const fire = Math.max(12, eng.fire), load = eng.load ?? 0, n = eng.norm ?? 0;
-      set(e.o1.frequency, fire, 0.03); set(e.o2.frequency, fire * 0.5, 0.03); set(e.o3.frequency, fire * 2.01, 0.03);
-      set(e.am.frequency, fire, 0.03);
-      set(e.f.frequency, (eng.diesel ? 220 : eng.twoStroke ? 700 : 320) + n * (eng.diesel ? 700 : 1500) + load * 900, 0.06); // Zweitakter: hell, knatternd
-      set(e.g.gain, 0.05 + load * 0.07 + n * 0.05, 0.06);
-      set(e.ex.f.frequency, fire * 2.2, 0.05);
-      set(e.amg.gain, 0.012 + load * 0.03, 0.06);
-      set(e.clm.gain, eng.diesel ? 0.006 + load * 0.01 : 0, 0.1);
-    } else { set(e.g.gain, 0, 0.12); set(e.amg.gain, 0, 0.12); set(e.clm.gain, 0, 0.12); set(e.whg.gain, 0, 0.12); }
+    const p = eng?.profile ?? voiceFor(undefined, eng ?? {}), load = eng?.load ?? 0, n = eng?.norm ?? 0;
+    const combustion = active && eng && !eng.electric;
+    const damping = inCar ? 1 - p.insulation * 0.4 : 1;
+    const boost = combustion ? eng.boost ?? 0 : 0;
+    set(e.turbo.frequency, 950 + boost * 2100, 0.16);
+    set(e.turboG.gain, boost * 0.003 * damping, 0.15);
+    set(e.turboNoise.g.gain, boost * 0.008 * damping, 0.12);
+    set(e.intake.g.gain, combustion ? load * n * 0.012 * damping : 0);
+    set(e.intake.f.frequency, 350 + n * 850);
+    set(e.reverse.frequency, 180 + (eng?.speed ?? 0) * 7, 0.1);
+    set(e.reverseG.gain, active && eng?.reverse && !eng.electric ? Math.min(0.018, (eng.speed ?? 0) * 0.0003) : 0);
+    if (active && eng?.electric) {
+      set(e.g.gain, 0); set(e.wh.frequency, 160 + (eng.rpm ?? 0) / 16000 * 2200, 0.08);
+      const moving = Math.min(1, (eng.speed ?? 0) / 25);
+      set(e.whg.gain, moving * (0.006 + load * 0.014 + (eng.regen ?? 0) * 0.009), 0.1);
+    } else if (combustion) {
+      set(e.whg.gain, 0);
+      const fire = Math.max(12, eng.fire), custom = !!eng.profile && this.engineWave(e.o1, p, eng.cyl);
+      if (custom) {
+        this.engineWave(e.o3, p, eng.cyl, true); e.o2.type = 'triangle';
+        const flutter = 1 + p.rough * 0.025 * (1 - n) * Math.sin(t * 13.7);
+        set(e.o1.frequency, Math.max(4, eng.cycle) * flutter, 0.035);
+        set(e.o3.frequency, Math.max(4, eng.cycle), 0.035);
+        set(e.o2.frequency, eng.rpm / 60, 0.035);
+      } else {
+        set(e.o1.frequency, fire, 0.035); set(e.o2.frequency, fire * 0.5, 0.035); set(e.o3.frequency, fire * 2, 0.035);
+      }
+      // Kurbelwellen-Grundton umgeht die Sättigung und trägt das tiefe Knurren unter Last.
+      set(e.g1.gain, 0.58); set(e.g2.gain, 0.2 + p.rough * 0.65 + load * 0.18); set(e.g3.gain, 0.04 + load * 0.1);
+      set(e.am.frequency, fire, 0.035);
+      set(e.body.frequency, p.resonance); set(e.body.gain, 4 + p.rough * 8);
+      set(e.bass.gain, 3 + load * 2);
+      set(e.f.frequency, (220 + p.brightness * (0.18 + n * 0.5 + load * 0.38)) * damping, 0.06);
+      set(e.g.gain, (0.04 + load * 0.07 + n * 0.018) * p.volume * damping, 0.045);
+      set(e.ex.f.frequency, Math.min(900, p.resonance + fire * 0.8), 0.05);
+      if (e.profileKey === p.key && e.previousLoad > 0.55 && load < 0.12 && !eng.shiftT && t > (e.releaseAt ?? 0)) {
+        if (e.previousBoost > 0.25) this.engineRelease(e.previousBoost, false);
+        else if (p.pops && n > 0.55) this.engineRelease(0, true);
+        e.releaseAt = t + 0.8;
+      }
+    } else { set(e.g.gain, 0, 0.12); set(e.whg.gain, 0, 0.12); }
+    // Positive Hüllkurven: Pulsieren ohne Phasenumkehr des Rauschens.
+    const exhaust = combustion ? (0.009 + load * 0.025) * p.volume * damping : 0;
+    const clatter = combustion && eng.diesel ? (0.004 + load * 0.006) * damping : 0;
+    set(e.ex.g.gain, exhaust); set(e.amg.gain, exhaust * 0.65);
+    set(e.cl.g.gain, clatter); set(e.clm.gain, clatter * 0.8);
+    e.previousLoad = active ? load : 0; e.previousBoost = boost; e.profileKey = active ? p.key : null;
     const T = e.tires, tr = active && tires ? tires : null;
     set(T.roll.g.gain, tr ? 0.05 * tr.roll : 0, 0.1); set(T.roll.f.frequency, 250 + (tr?.roll ?? 0) * 900, 0.1);
     set(T.cobble.g.gain, tr ? 0.12 * tr.cobble * (0.6 + 0.4 * Math.random()) : 0, 0.05);
@@ -177,7 +244,7 @@ export class Sound {
       const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; f.Q.value = 0.9;
       o.connect(f); o2.connect(og2); og2.connect(f); f.connect(g); o.start(); o2.start();
       const tire = this.noiseLayer('bandpass', 600, 0.5, pan);
-      this.voices.push({ id: null, g, o, o2, f, pan, tire });
+      this.voices.push({ id: null, g, o, o2, og2, f, pan, tire });
     }
   }
 
@@ -189,12 +256,23 @@ export class Sound {
     for (const v of list) if (!this.voices.some((s) => s.id === v.id)) { const free = this.voices.find((s) => s.id === null); if (free) free.id = v.id; }
     for (const s of this.voices) {
       const v = s.id === null ? null : want.get(s.id);
-      s.g.gain.setTargetAtTime(v ? 0.09 * v.gain : 0, t, 0.15);
+      s.g.gain.setTargetAtTime(v ? v.gain * (v.electric ? 0.025 * v.tire : 0.09 * (v.profile?.volume ?? 1)) : 0, t, 0.15);
       s.tire.g.gain.setTargetAtTime(v ? 0.05 * v.gain * v.tire : 0, t, 0.15);
       if (!v) continue;
       const fire = Math.max(10, v.fire * v.rate);
-      s.o.frequency.setTargetAtTime(fire, t, 0.12); s.o2.frequency.setTargetAtTime(fire * 0.5, t, 0.12);
-      s.f.frequency.setTargetAtTime((v.diesel ? 260 : 380) + v.tire * 900, t, 0.2);
+      if (v.electric) {
+        s.o.type = 'sine'; s.o.voiceKey = null;
+        s.o.frequency.setTargetAtTime((160 + v.rpm / 16000 * 2200) * v.rate, t, 0.12);
+        s.og2.gain.setTargetAtTime(0, t, 0.1);
+        s.f.frequency.setTargetAtTime(3500, t, 0.2);
+      } else {
+        const custom = v.profile && this.engineWave(s.o, v.profile, v.cyl);
+        s.o.frequency.setTargetAtTime(custom ? Math.max(4, v.cycle * v.rate) : fire, t, 0.12);
+        s.o2.type = custom ? 'triangle' : 'square';
+        s.o2.frequency.setTargetAtTime(custom ? v.rpm / 60 * v.rate : fire * 0.5, t, 0.12);
+        s.og2.gain.setTargetAtTime(custom ? 0.24 + v.profile.rough * 0.6 + v.load * 0.15 : 0.5, t, 0.1);
+        s.f.frequency.setTargetAtTime(v.profile ? 220 + v.profile.brightness * (0.18 + v.norm * 0.45 + v.load * 0.3) : (v.diesel ? 260 : 380) + v.tire * 900, t, 0.2);
+      }
       s.tire.f.frequency.setTargetAtTime(500 * v.rate + v.tire * 500, t, 0.2);
       this.setPan(s.pan, v.pan, t);
     }
