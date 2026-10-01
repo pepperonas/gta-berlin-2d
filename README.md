@@ -28,7 +28,7 @@ Dokumentation:
 
 ## Version
 
-Aktuelle Paketversion **0.46.0**, ergänzt um den Entwicklungsstand vom **01.10.2026** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
+Aktuelle Paketversion **0.46.0**, ergänzt um den Entwicklungsstand vom **02.10.2026** (Semantic Versioning; solange die Version mit `0.` beginnt, ist es ein Prototyp). Änderungen je
 Version und noch nicht versionierte Änderungen stehen in [`CHANGELOG.md`](CHANGELOG.md), die Version steht auch unten rechts im Titelbildschirm.
 
 ## Inhalt des Prototyps
@@ -557,7 +557,10 @@ Sie arbeitet wie eine Befehlspalette:
 - **Ohne Befehlswort:** `22:30`, `nacht`, `Freitag`, `regen`, `schneesturm` oder ein Ort wie `alexanderplatz` genügen.
 - **Tippfehler** werden verziehen (`wetter schneestrum`, `tp kotbusser tor`). Bei einem vertippten Befehl kommt ein
   Hinweis „meintest du …“.
-- **Enter** führt aus. Ist die Eingabe unvollständig (`wetter gewit`), nimmt Enter den besten Vorschlag.
+- **Enter** übernimmt zuerst einen abweichenden Vorschlag sichtbar; ein weiteres **Enter** führt die vervollständigte
+  Zeile aus. Mit **↑/↓** wählst du zuerst einen Vorschlag und übernimmst ihn mit **Enter**.
+- `leben` stellt die Spieler-Gesundheit wieder her und repariert das eigene Fahrzeug vollständig; `reparieren` repariert
+  das Fahrzeug separat.
 - Nach Erfolg **schließt** sich die Zeile, die Meldung bleibt kurz stehen; **Umschalt+Enter** lässt sie offen. Bei
   Fehlern bleibt sie mit Hinweis offen.
 - Über der Eingabe steht, wie der gerade getippte Befehl aufgebaut ist. Beim Öffnen stehen die **zuletzt benutzten**
@@ -575,7 +578,7 @@ Sie arbeitet wie eine Befehlspalette:
 | `temp` · `temp -5` · `temp auto` | Temperatur zeigen, erzwingen, wieder natürlich |
 | `verkehr 2` · `passanten 0` | Dichte von Autos / Fußgängern |
 | `tp kottbusser tor` | Teleport ohne Rückfrage (lädt den Stadtteil nach) |
-| `geld +1000` · `leben` · `munition` · `gott an` · `auto musclecar` (`spawn sportwagen`) · `reparieren` | Schummeln (wird in der Statistik gezählt) |
+| `geld +1000` · `leben` · `munition` · `gott an` · `auto musclecar` (`spawn sportwagen`) · `reparieren` | Schummeln (wird in der Statistik gezählt); `leben` heilt und repariert das eigene Auto, `reparieren` nur das Auto |
 | `fps` · `ebenen` · `silhouetten` · `qualitaet niedrig` | Anzeigen zum Prüfen: Bildrate, Brückenebenen, Umrisse, Zeichenqualität |
 | `bars` · `bars https://…` · `bars neu` · `bars aus` | Bar-Auslastungs-Feed zeigen, setzen, neu laden, abschalten |
 | `stats` | Statistik öffnen |

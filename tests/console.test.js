@@ -54,7 +54,7 @@ test('Vorschläge: Befehle, Werte und Orte mit grauer Ergänzung', () => {
   assert.deepEqual(suggest('blabla x', ctx).items, [], 'unbekannter Befehl: keine Werte');
 });
 
-test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und schließt (Umschalt: offen), Verlauf, Esc leert/schließt', () => {
+test('Tasten: Enter vervollständigt Vorschläge; erneutes Enter führt aus; Tab, Verlauf und Esc', () => {
   const g = newGame(), ctx = ctxOf(g), con = createConsole();
   openConsole(con, ctx);
   assert.ok(con.open && con.sugg.items.length);
@@ -65,6 +65,9 @@ test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und schlie�
   type(con, 'sch', ctx);
   assert.equal(consoleKey(con, 'ArrowDown', ctx), 'nav'); assert.equal(con.sel, 0);
   consoleKey(con, 'ArrowDown', ctx); assert.equal(con.sel, 1);
+  assert.equal(consoleKey(con, 'Enter', ctx, 5, { shift: true }), 'edit');
+  assert.equal(con.text, 'wetter schneesturm', 'Enter übernimmt die markierte Ergänzung');
+  assert.equal(w.forceWeather, null, 'Übernehmen führt noch nicht aus');
   assert.equal(consoleKey(con, 'Enter', ctx, 5, { shift: true }), 'run');
   assert.equal(g.world.forceWeather, 'heavysnow', 'gewählter Vorschlag ausgeführt');
   assert.ok(con.open, 'Umschalt+Enter: bleibt offen'); assert.equal(con.text, '');
@@ -93,7 +96,7 @@ test('Tasten: tippen, Tab ergänzt, Pfeile wählen, Enter führt aus und schlie�
   assert.ok(con.open, 'Fehler: bleibt offen'); assert.equal(con.log.at(-1).ok, false);
 });
 
-test('Wie eine Befehlspalette: ohne Befehlswort, Tippfehler, Enter nimmt den besten Vorschlag, Klick übernimmt', async () => {
+test('Wie eine Befehlspalette: ohne Befehlswort, Tippfehler, Enter ergänzt den besten Vorschlag, Klick übernimmt', async () => {
   const { consoleAccept, smartLine, editDistance } = await import('../web/src/console.js');
   const g = newGame(), w = g.world, ctx = ctxOf(g);
   assert.equal(editDistance('schneestrum', 'schneesturm'), 2);
@@ -115,10 +118,19 @@ test('Wie eine Befehlspalette: ohne Befehlswort, Tippfehler, Enter nimmt den bes
   assert.ok(sm.some((i) => i.insert === 'wetter nebel' && i.full), 'Wetter vorgeschlagen');
   assert.ok(suggest('alexanderpl', ctx).items.some((i) => i.insert.startsWith('tp Alexanderplatz')), 'Ort vorgeschlagen');
   assert.equal(suggest('21:15', ctx).items[0]?.insert, 'zeit 21:15');
-  // Enter mit unvollständigem Wert: bester Vorschlag
+  // Enter mit unvollständigem Wert: sichtbar ergänzen, das zweite Enter führt aus.
   const con = createConsole(); openConsole(con, ctx);
-  type(con, 'wetter gewit', ctx); consoleKey(con, 'Enter', ctx);
+  type(con, 'wetter gewit', ctx); assert.equal(consoleKey(con, 'Enter', ctx), 'edit');
+  assert.equal(con.text, 'wetter gewitter'); assert.equal(w.forceWeather, null);
+  consoleKey(con, 'Enter', ctx);
   assert.equal(w.forceWeather, 'thunder'); assert.equal(con.hist.at(-1), 'wetter gewitter', 'Verlauf mit der vollständigen Zeile');
+  openConsole(con, ctx); type(con, 'wet', ctx); consoleKey(con, 'Enter', ctx);
+  assert.equal(con.text, 'wetter ', 'Enter vervollständigt auch den Befehlsnamen'); assert.ok(con.open);
+  type(con, 'tp kotbusser tor', ctx); consoleKey(con, 'Enter', ctx);
+  assert.equal(con.text, 'tp Kottbusser Tor', 'unscharfer Ortsname wird erst vervollständigt');
+  assert.equal(g.teleport, null, 'die Ergänzung löst den Teleport noch nicht aus');
+  consoleKey(con, 'Enter', ctx);
+  assert.equal(g.teleport?.name, 'Kottbusser Tor', 'zweites Enter führt den Treffer aus');
   // Klick auf einen Vorschlag übernimmt ihn
   openConsole(con, ctx); type(con, 'wet', ctx);
   assert.ok(consoleAccept(con, 0, ctx)); assert.equal(con.text, 'wetter ');
@@ -157,7 +169,10 @@ test('Schummeln: Gesundheit, Munition, Gott, Geld, Fahrzeug – jeder erfolgreic
   const g = newGame(), w = g.world, ctx = ctxOf(g), p = w.player;
   press(g); // Zählung läuft schon (sonst gäbe es kein „vorher“ fürs Geld)
   p.hp = 5; p.mag = p.mag.map(() => 0);
+  const car = w.cars.find((o) => o.id === w.playerCarId);
+  car.health = 23; car.wrecked = true; car.vx = 100; car.vy = -20;
   assert.ok(execute('leben', ctx).ok); assert.ok(p.hp > 50);
+  assert.equal(car.health, 100); assert.equal(car.wrecked, false); assert.equal(car.vx, 0); assert.equal(car.vy, 0);
   assert.ok(execute('munition', ctx).ok); assert.ok(p.mag.some((n) => n > 0));
   assert.ok(execute('gott an', ctx).ok); assert.equal(w.god, true);
   const cars = w.cars.length;

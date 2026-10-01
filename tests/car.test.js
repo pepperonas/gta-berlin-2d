@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCar, stepCar, forwardSpeed, collideCarWorld, collideCars } from '../web/src/car.js';
+import { createCar, stepCar, forwardSpeed, collideCarWorld, collideCars, damage } from '../web/src/car.js';
 import { SpatialHash } from '../web/src/collision.js';
-import { CAR } from '../web/src/config.js';
+import { CAR, KNOCK } from '../web/src/config.js';
 
 const run = (car, secs, ctl) => { Object.assign(car.controls, ctl); for (let i = 0; i < secs * 60; i++) stepCar(car, 1 / 60, null); };
 
@@ -46,6 +46,13 @@ test('Aufprall auf Wand: herausgeschoben, abgebremst, beschädigt', () => {
   assert.ok(c.vx < 150);
   assert.ok(c.health < CAR.health);
   assert.ok(events.some((e) => e.type === 'crash'));
+});
+
+test('Fahrzeugschaden ist halbiert und verdoppelt so die Widerstandsfähigkeit', () => {
+  const c = createCar({ x: 0, y: 0 });
+  damage(c, 170); // (170 - 70) × 0,07 = 7 %
+  assert.equal(c.health, 93);
+  assert.equal(KNOCK.damage, 0.75, 'Poller und Schranken richten ebenfalls halb so viel Schaden an');
 });
 
 test('Totalschaden macht das Auto zum Wrack, das nicht mehr fährt', () => {

@@ -4,7 +4,7 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
-## [Unreleased] – Entwicklungsstand 2026-10-01
+## [Unreleased] – Entwicklungsstand 2026-10-02
 
 ### Neu
 
@@ -28,6 +28,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Enter in der Befehlszeile übernimmt zunächst die sichtbare Autovervollständigung; ein weiteres Enter führt sie aus.
+  Die Fahrzeugschadenswerte wurden halbiert, sodass Zusammenstöße und umgefahrene Poller doppelt so viel aushalten.
+- Der Befehl `leben` repariert jetzt auch das eigene Fahrzeug vollständig und setzt ein Wrack wieder fahrbereit.
 - Dächer werden in einem begrenzten Rastercache gehalten; außerhalb des Bildes liegende Hauskörper werden
   früher verworfen, Masken verdeckter Figuren bündeln Wandflächen. Niedrige Qualität reduziert zusätzlich
   Regen, Schneefall, Partikel und fremde Silhouetten; Nacht-Bloom und zusätzliche Spiegelungen entfallen.

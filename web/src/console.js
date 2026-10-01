@@ -3,8 +3,8 @@
 // Befehlsnamen, feste Werte je Argument und Orte (Straßen, Bahnhöfe, Ortsteile, Kieze, Bezirke) mit Vorschlagsliste;
 // Tab/→ übernimmt, ↑/↓ wählt (ohne Vorschläge: Verlauf), Enter führt aus, Esc leert bzw. schließt.
 // Wie eine Befehlspalette: Tippfehler werden verziehen, ohne Befehlswort versteht die Zeile Uhrzeit („22:30“, „nacht“),
-// Wetter („regen“) und Orte („alexanderplatz“); ist die Eingabe unvollständig, nimmt Enter den besten Vorschlag; nach
-// Erfolg schließt sie (Umschalt+Enter lässt sie offen), bei Fehlern bleibt sie mit Hinweis offen.
+// Wetter („regen“) und Orte („alexanderplatz“); Enter übernimmt zuerst abweichende Vorschläge, das nächste Enter führt
+// aus. Nach Erfolg schließt sie (Umschalt+Enter lässt sie offen), bei Fehlern bleibt sie mit Hinweis offen.
 import { WEATHER_KINDS, WX_LABEL, temperatureAt } from './weather.js';
 import { parseClock, formatClock } from './daylight.js';
 import { WEAPONS } from './combat.js';
@@ -13,6 +13,7 @@ import { CAR_MODELS, SPECS, specLine, vehicleName } from './carmodels.js';
 import { createCar } from './car.js';
 import { findTeleportSpot, openSpot, playerCar, endRide } from './world.js';
 import { PLAYER_HP } from './combat.js';
+import { CAR } from './config.js';
 
 export const CONSOLE = { maxSuggestions: 8, maxLog: 8, logTime: 8, history: 50 };
 
@@ -183,8 +184,13 @@ export const COMMANDS = [
       ctx.world.money = Math.round(plus ? ctx.world.money + n : n); ctx.game.tracker && (ctx.game.tracker.money = ctx.world.money); // Schummelgeld zählt nicht als verdient
       return `Geld: ${ctx.world.money.toLocaleString('de-DE')} €`;
     } },
-  { name: 'leben', aliases: ['heal'], cheat: true, help: 'volle Gesundheit', args: [],
-    run(ctx) { const p = ctx.world.player; p.hp = PLAYER_HP; p.dead = false; p.stun = 0; return 'Gesundheit voll'; } },
+  { name: 'leben', aliases: ['heal'], cheat: true, help: 'volle Gesundheit und eigenes Auto reparieren', args: [],
+    run(ctx) {
+      const p = ctx.world.player; p.hp = PLAYER_HP; p.dead = false; p.stun = 0;
+      const c = playerCar(ctx.world) ?? ctx.world.cars.find((o) => o.id === ctx.world.playerCarId);
+      if (c) { c.health = CAR.health; c.wrecked = false; c.wreckT = 0; c.vx = 0; c.vy = 0; c.angVel = 0; }
+      return c ? 'Gesundheit voll, Auto repariert' : 'Gesundheit voll';
+    } },
   { name: 'munition', aliases: ['ammo'], cheat: true, help: 'alle Magazine voll', args: [],
     run(ctx) { const p = ctx.world.player; p.mag = WEAPONS.map((w) => w.mag ?? 0); p.reloadT = 0; return 'Magazine voll'; } },
   { name: 'esp', aliases: ['asr', 'fahrhilfen'], help: 'ASR/ESP im Auto an/aus (aus: Heckantrieb driftet)', args: [{ name: 'an|aus', optional: true, values: () => ONOFF.map((l) => ({ label: l, hint: '' })) }],
@@ -215,7 +221,7 @@ export const COMMANDS = [
     run(ctx) {
       const c = playerCar(ctx.world) ?? ctx.world.cars.find((o) => o.id === ctx.world.playerCarId);
       if (!c) return { ok: false, msg: 'Kein Auto' };
-      c.health = 100; c.wrecked = false; c.wreckT = 0; return 'Auto repariert';
+      c.health = CAR.health; c.wrecked = false; c.wreckT = 0; c.vx = 0; c.vy = 0; c.angVel = 0; return 'Auto repariert';
     } },
   { name: 'fps', help: 'Bildrate und Zeichenzeit anzeigen', args: [{ name: 'an|aus', optional: true, values: () => ONOFF.map((l) => ({ label: l, hint: '' })) }],
     run(ctx, [v]) { const on = onOff(v, ctx.game.debug.fps); if (on === null) return { ok: false, msg: 'fps an|aus' }; ctx.game.debug.fps = on; return `FPS-Anzeige ${on ? 'an' : 'aus'}`; } },
@@ -422,19 +428,17 @@ export function consoleKey(con, key, ctx, now = 0, mods = {}) {
       con.text = con.hi < 0 ? '' : con.hist[con.hist.length - 1 - con.hi]; con.sel = -1; refresh(); return 'nav';
     }
     case 'Enter': {
-      if (con.sel >= 0) accept(con.sel);
+      // Enter übernimmt erst einen Vorschlag. Ein zweites Enter führt die vervollständigte Zeile aus.
+      if (con.sel >= 0) { accept(con.sel); return 'edit'; }
       let line = con.text.trim();
       if (!line) { con.open = false; return 'close'; }
       if (norm(line) === 'wetter' && ctx.world) { con.weatherPanel = true; con.weatherRow = 0; return 'nav'; }
-      let r = execute(line, ctx);
-      // unvollständig oder vertippt: mit dem besten Vorschlag noch einmal (nur wenn der dann klappt)
-      if (!r.ok) {
-        const s = suggest(con.text, ctx), it = s.items[0];
-        if (it) {
-          const alt = (it.full ? it.insert : con.text.slice(0, s.from) + (it.insert.includes(' ') && !s.spec?.rest ? `"${it.insert}"` : it.insert)).trim();
-          if (alt !== line) { const r2 = execute(alt, ctx); if (r2.ok) { r = r2; line = alt; } }
-        }
+      const s = suggest(con.text, ctx), it = s.items[0];
+      if (it) {
+        const candidate = it.full ? it.insert : con.text.slice(0, s.from) + (it.insert.includes(' ') && !s.spec?.rest ? `"${it.insert}"` : it.insert);
+        if (norm(candidate.trim()) !== norm(line) && consoleAccept(con, 0, ctx)) return 'edit';
       }
+      const r = execute(line, ctx);
       con.log.push({ text: `> ${line}`, ok: true, t: now }, ...(r.msg ? [{ text: r.msg, ok: r.ok, t: now }] : []));
       con.log.splice(0, Math.max(0, con.log.length - CONSOLE.maxLog));
       if (con.hist[con.hist.length - 1] !== line) con.hist.push(line);

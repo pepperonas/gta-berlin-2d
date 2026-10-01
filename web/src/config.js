@@ -11,13 +11,13 @@ export const CAR = {
   drag: 0.32, grip: 9, handbrakeGrip: 1.4,
   steerRate: 2.8,
   health: 100,
-  damageThreshold: 70, damageFactor: 0.14,
+  damageThreshold: 70, damageFactor: 0.07,
   restitution: 0.3,
 };
 
 // Poller und Verkehrshütchen geben schon bei langsamem Anstoßen nach.
 // Geschwindigkeit ist in Weltpixeln/s; 8 entspricht ungefähr 3 km/h.
-export const KNOCK = { speed: 8, slow: 0.96, damage: 1.5 };
+export const KNOCK = { speed: 8, slow: 0.96, damage: 0.75 };
 
 // Tempo in px/s (10 px = 1 m): langsam gehen 1,5 m/s, joggen 3,5 m/s (Standard), sprinten 7 m/s
 export const PLAYER = { radius: 7, walk: 15, jog: 35, sprint: 70, enterDist: 40 };
