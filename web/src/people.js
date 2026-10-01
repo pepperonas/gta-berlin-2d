@@ -463,6 +463,14 @@ export function drawPerson(ctx, p, { shirt, skin, hair, player = false, down = f
     ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.8; ctx.stroke();
   }
   ctx.rotate(face);
+  if (player && p.swimming) {
+    const stroke = Math.sin(time * 8) * 2.2;
+    ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.ellipse(-1, 0, 7.2, 3.2, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 2.2;
+    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-1, side * 1.7); ctx.lineTo(2 + stroke * side, side * 5); ctx.stroke(); }
+    ctx.fillStyle = '#e8b891'; ctx.beginPath(); ctx.arc(6, 0, 3, 0, TAU); ctx.fill();
+    ctx.restore(); return;
+  }
   const key = player ? 'player' : 'pedestrian';
   if (sprites[key]) { ctx.drawImage(sprites[key], -8, -8, 16, 16); ctx.restore(); return; }
   if (act === 'lie') down = true;

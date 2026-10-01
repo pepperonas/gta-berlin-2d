@@ -71,6 +71,26 @@ Schnee und Eis wieder weiter; beispielsweise taut Glätte bei Wärme.
 
 ## Steuerung und Anzeigen
 
+### Springen und Schwimmen zu Fuß
+
+- **Steuerung:** Leertaste löst am Boden einen Sprung aus. WASD/Pfeiltasten bewegen die Figur dabei weiter. Die
+  Leertaste bleibt in Fahrzeugen die Handbremse; der Sprung wird nur bei Fußsteuerung ausgewertet. Im Spiel ist
+  außerdem weiterhin Umschalt die Sprinttaste.
+- **Sprung:** Vertikale Bewegung wird separat von der Bewegung auf der Karte simuliert und im Renderer als
+  Höhenversatz gezeichnet. Der anfängliche Impuls beträgt 5,1 und die Schwerkraft 12 (in den Spielkoordinaten).
+  Während die Figur sichtbar über dem Boden ist, werden Zaunkollisionen übergangen. Das erlaubt das Überspringen
+  niedriger Zäune, ohne die sonstigen Gebäudewände oder beliebige feste Hindernisse zu entfernen.
+- **Wasser:** Der Schwimmzustand kommt aus der Kartenabfrage `surfaceAt` und gilt auf Wasserflächen der geladenen
+  Stadtkarte. Beim Betreten wird die Figur als Schwimmer gezeichnet und die Bewegung auf 18 Weltpunkte/s (etwa
+  1,8 m/s) begrenzt. Sprinten wird im Wasser nicht angewendet; die normale Ausdauer erholt sich weiter.
+- **Ufer:** Die Kartendaten kennzeichnen Uferbarrieren als `quay`. Diese Kollision wird während eines Sprungs oder
+  im Schwimmzustand übergangen, damit ein Sprung ins Wasser und das Zurückschwimmen ans Land möglich sind. Andere
+  Wandarten wie Gebäude, Gleise und Stadtgrenze behalten ihre Kollision.
+- **Controller:** Schwimmen funktioniert mit dem linken Stick. Die Sprungaktion ist derzeit nur auf der Tastatur
+  belegt. Im Wasser löst Leertaste keinen Sprung aus.
+- **Grenze der Umsetzung:** Es gibt derzeit keinen Ertrinkens-/Atemluft-Timer, keine Schwimm-Ausdauer und keine
+  Wasserphysik für Fahrzeuge. Die Mechanik betrifft nur die Spielerfigur zu Fuß.
+
 - Standard-Mausbelegung: links Bewegung, rechts Angriff. Die Option zum Vertauschen
   liegt im Menü **Steuerung** auf **↓** und wird als `gta-mouse-swapped` lokal gespeichert.
 - **←/→** im selben Menü schaltet weiterhin Diablo/Klassisch (`gta-controls`).

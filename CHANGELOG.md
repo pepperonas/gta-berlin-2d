@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Spieler kann zu Fuß mit Leertaste springen, Zäune und niedrige Ufer überwinden sowie auf Karten-Wasserflächen
+  schwimmen. Bewegung im Wasser ist verlangsamt; Schwimmer kommen über Uferkanten zurück an Land.
 - Enter-Befehl `tag` mit Alias `wochentag`/`day`: Wochentag anzeigen oder setzen, deutsche Namen,
   Zweibuchstaben-Kürzel, 1–7 (Montag–Sonntag), `Sonnabend`, Autovervollständigung und direkte Eingabe wie `Freitag`.
 - Fahrzeug-Klangprofile in `enginevoice.js`: Zylinder-/Zündimpulse, Boxer und V8-Bänke, Diesel, Zweitakter,

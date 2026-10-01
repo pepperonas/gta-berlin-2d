@@ -399,6 +399,8 @@ const tmp = [];
 function pushCircleOutOfWorld(w, obj, r) {
   const box = { x: obj.x - r - 2, y: obj.y - r - 2, w: 2 * r + 4, h: 2 * r + 4 };
   for (const s of w.solids.query(box, tmp)) {
+    // Zu Fuß darf ein Sprung über Zäune und niedrige Ufer führen; Schwimmer können ans Ufer zurück.
+    if (obj === w.player && ((s.sub === 'fence' && (obj.jumpZ ?? 0) > 0.18) || (s.sub === 'quay' && ((obj.jumpZ ?? 0) > 0.18 || obj.swimming)))) continue;
     if (!blocks(w, s, obj.lvl)) continue;
     const m = s.seg ? circleVsSegment(obj.x, obj.y, r, s) : s.r !== undefined ? circleVsCircle(obj.x, obj.y, r, s.x, s.y, s.r) : circleVsRect(obj.x, obj.y, r, s);
     if (m) { obj.x += m.nx * m.depth; obj.y += m.ny * m.depth; }
@@ -613,18 +615,26 @@ function clickControl(w, input, dt) {
 function updatePlayerOnFoot(w, input, dt) {
   const p = w.player;
   if (p.stun > 0) { p.stun -= dt; return; }
+  p.jumpZ ??= 0; p.jumpV ??= 0;
+  p.swimming = surfaceAt(w.city, p.x, p.y, p.lvl) === T.WATER;
+  if (input.jumpPressed && !p.swimming && p.jumpZ <= 0) p.jumpV = 5.1;
+  if (p.jumpZ > 0 || p.jumpV > 0) {
+    p.jumpZ = Math.max(0, p.jumpZ + p.jumpV * dt);
+    p.jumpV -= 12 * dt;
+    if (p.jumpZ === 0) p.jumpV = 0;
+  }
   let mx = input.moveX, my = input.moveY;
   const mag = Math.min(1, Math.hypot(mx, my));
   // Ausdauer: Sprint leert sie, nach kurzer Pause erholt sie sich; leer = nur joggen, bis wieder genug da ist
   p.stamina ??= 1; p.tired ??= false;
-  const wantSprint = !!input.sprint && mag > 0.05 && !input.walkSlow;
+  const wantSprint = !p.swimming && !!input.sprint && mag > 0.05 && !input.walkSlow;
   if (p.tired && p.stamina >= STAMINA.again) p.tired = false;
   const sprinting = wantSprint && !p.tired && p.stamina > 0;
   if (sprinting) { p.stamina = Math.max(0, p.stamina - dt / STAMINA.drain); p.rest = 0; if (p.stamina === 0) p.tired = true; }
   else if ((p.rest = (p.rest ?? 0) + dt) > STAMINA.pause) p.stamina = Math.min(1, p.stamina + dt / STAMINA.recover);
   if (mag > 0.05) {
     // Stick halb = gehen, darüber joggen; Alt = gehen; Sprint mit Ausdauer
-    const speed = sprinting ? PLAYER.sprint : input.walkSlow || mag <= 0.6 ? PLAYER.walk : PLAYER.jog;
+    const speed = p.swimming ? 18 : sprinting ? PLAYER.sprint : input.walkSlow || mag <= 0.6 ? PLAYER.walk : PLAYER.jog;
     const nx = mx / (Math.hypot(mx, my) || 1), ny = my / (Math.hypot(mx, my) || 1);
     p.x += nx * speed * dt; p.y += ny * speed * dt; p.moveSpeed = speed; // für die Streuung (combat.js spreadFactor)
     p.angle = Math.atan2(ny, nx);
@@ -635,6 +645,7 @@ function updatePlayerOnFoot(w, input, dt) {
   const st = p.inside && stationById(w.city, p.inside.id);
   if (st) { keepInside(st, p, PLAYER.radius); return; } // im U-Bahnhof: nur Bahnsteig und Säulen
   pushCircleOutOfWorld(w, p, PLAYER.radius);
+  p.swimming = surfaceAt(w.city, p.x, p.y, p.lvl) === T.WATER;
   p.x = clamp(p.x, 8, w.city.width - 8); p.y = clamp(p.y, 8, w.city.height - 8);
 }
 

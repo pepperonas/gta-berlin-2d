@@ -1511,7 +1511,7 @@ export class Renderer {
       }
     }
     const pl = world.player;
-    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }), 0, 0, 0, { skipCover: pl.dead });
+    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => { ctx.save(); if (pl.jumpZ > 0) ctx.translate(0, -pl.jumpZ * world.city.scale); drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }); ctx.restore(); }, 0, 0, 0, { skipCover: pl.dead });
     return out;
   }
 

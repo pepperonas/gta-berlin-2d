@@ -57,6 +57,22 @@ Das öffentliche GDK auf GitHub (`microsoft/GDK`) ist für **PC**-Spiele. Konsol
     daher die Umgebungsvariable (dieselbe Technik nutzt Microsofts Remote-Debugging-Anleitung).
 - **Spielstand:** `localStorage`, liegt in der Hülle im WebView2-Profil im App-Datenordner.
 
+### Fußbewegung: Sprung und Wasser
+
+`web/src/input.js` erzeugt `jumpPressed` als Tastenkanten-Ereignis für die Leertaste. `web/src/world.js`
+verwaltet Sprunghöhe und vertikale Geschwindigkeit getrennt von X/Y und der Kollision: Impuls 5,1,
+Schwerkraft 12, Landung bei Höhe 0. Beim Kollisionsaufbau in `web/src/map.js` bleibt die OSM-Unterart
+(`fence`, `quay`, `rail` usw.) auch am einzelnen Wandsegment erhalten. `pushCircleOutOfWorld` übergeht
+Zaunsegmente nur solange die Figur springt und Ufersegmente beim Sprung oder Schwimmen; alle übrigen Segmente
+werden unverändert behandelt.
+
+`surfaceAt` in `map.js` erkennt Wasserflächen. `world.js` setzt damit den Schwimmzustand und begrenzt die
+Bewegung auf 18 Kartenpunkte/s (bei Kartenmaßstab 10 Punkte/m: 1,8 m/s). `people.js` zeichnet den Schwimmer als
+liegende Figur mit Paddelbewegung; `render.js` verschiebt die Figur während des Sprungs anhand der Sprunghöhe
+vertikal. Schwimmen braucht keine eigene Controlleraktion, weil es automatisch durch die Wasserfläche ausgelöst
+wird. Der Sprung ist aktuell nur per Leertaste verfügbar. Ertrinkenslogik und Fahrzeug-Wasserverhalten gehören
+nicht zu dieser Umsetzung.
+
 ### Verworfene Alternativen
 
 - **Rust/Bevy:** Rust hat nur ein Tier-3-Ziel für UWP (`x86_64-uwp-windows-msvc`), Bevy hat keinen UWP-/Xbox-Dev-Mode-Pfad.

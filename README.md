@@ -189,7 +189,7 @@ Mit **↓** vertauschst du die Maustasten für Bewegung und Angriff. Beide Einst
 - **Bahnhof betreten:** nahe einem unterirdischen Bahnhofseingang **F** drücken. Hineinlaufen allein genügt nicht.
 - **Waffenrad:** linke und rechte Maustaste gleichzeitig gedrückt halten; eine Taste allein öffnet es nicht.
   Mit dem Zeiger die Waffe wählen, Loslassen übernimmt. **Esc** bricht ab. Am Controller bleibt **LB halten**.
-- **WASD/Pfeiltasten**, **Umschalt** zum Sprinten, **Alt** zum langsamen Gehen und **V** zum Treten bleiben verfügbar.
+- **WASD/Pfeiltasten**, **Umschalt** zum Sprinten, **Alt** zum langsamen Gehen und **V** zum Treten bleiben verfügbar. **Leertaste** lässt die Figur zu Fuß springen.
 - **M** schaltet den gesamten Spielton stumm bzw. wieder ein; der große Stadtplan liegt jetzt auf **Tab**.
 
 Die Mausumstellung ist im Code umgesetzt; der aktuelle automatisierte Prüflauf enthält noch alte Erwartungen an
@@ -205,6 +205,7 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 |---|---|---|
 | Laufen / Lenken | Linker Stick | WASD / Pfeiltasten |
 | Sprinten | A halten oder Stick voll | Umschalt |
+| Springen (zu Fuß) | – | Leertaste (am Boden) |
 | Gas / Bremse, Rückwärts | RT / LT | W / S |
 | Handbremse | RB oder B | Leertaste |
 | ESP im Auto umschalten | – | X |
@@ -231,6 +232,13 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Pause | Menü-Taste | Esc / P |
 | Statistik | Menü „Statistik“ (Titel und Pause) | dito, oder Befehl `stats` |
 | Menüs | Steuerkreuz/Stick, A wählen, B zurück | Pfeile, Enter, Esc |
+
+**Springen und Schwimmen:** Zu Fuß springst du mit **Leertaste**; lenke währenddessen weiter mit WASD/Pfeiltasten.
+Ein Sprung kann Zäune und niedrige Uferkanten überwinden. Hauswände und andere Hindernisse bleiben undurchlässig.
+Läufst oder springst du auf einer Wasserfläche ins Wasser, schwimmt die Figur automatisch. Im Wasser bewegst du
+dich weiter mit WASD/Pfeiltasten, aber langsamer als an Land; Sprinten ist dort deaktiviert. Schwimme einfach in
+Richtung des Ufers, um wieder an Land zu gelangen. Springen ist nur an Land möglich. Schwimmen funktioniert auch
+mit dem linken Gamepad-Stick; für Gamepads gibt es derzeit keine Sprungtaste.
 
 ## Auf dem Mac spielen und testen
 

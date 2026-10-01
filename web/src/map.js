@@ -265,18 +265,18 @@ function install(city, key, json) {
   for (const [gid, k, p] of json.fences) acquire(city, t, 'g' + gid, (r) => { const f = line('fence', { kind: k }, p); put(r, city.render, f, f.bbox); track(city, 'fence', f); r.drop = () => untrack(city, 'fence', f); });
 
   // Wände (Ufer, Gleise, Geländer, Zäune) und die Stadtgrenze: nur Kollision
-  const addLine = (r, pts, closed, kind, lvl = 0) => {
+  const addLine = (r, pts, closed, kind, lvl = 0, sub = null) => {
     const n = pts.length;
     for (let i = 0; i < n - 2 + (closed ? 2 : 0); i += 2) {
       const ax = pts[i], ay = pts[i + 1], bx = pts[(i + 2) % n], by = pts[(i + 3) % n];
       if (ax === bx && ay === by) continue;
-      put(r, city.solids, lvl ? { ax, ay, bx, by, seg: true, kind, lvl } : { ax, ay, bx, by, seg: true, kind }, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
+      put(r, city.solids, { ax, ay, bx, by, seg: true, kind, sub, lvl }, { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) });
     }
   };
   for (const [gid, kind, p, lvl = 0] of json.walls) acquire(city, t, 'g' + gid, (r) => {
     // kind: Kollisionsart ('border' für die Stadtgrenze), sub: Art der Wand (Ufer, Gleis, Geländer, Zaun), lvl: Ebene
     const pts = undelta(p), f = { pts, kind: kind === WALL_KIND.border ? 'border' : 'wall', sub: WALL_NAMES[kind] ?? 'other', layer: 'wall', lvl };
-    addLine(r, pts, false, f.kind, lvl); track(city, 'wall', f);
+    addLine(r, pts, false, f.kind, lvl, f.sub); track(city, 'wall', f);
     // Kollision und sichtbare OSM-Zaunlinie kamen aus getrennten Listen. Die Kollisionslinie zusätzlich
     // rendern, damit auch gekürzte/abgeleitete Zaunabschnitte nie als unsichtbare Wand im Weg stehen.
     let collisionFence = null;
