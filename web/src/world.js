@@ -205,6 +205,7 @@ function spawnPlayerAndCar(w) {
   const { places } = w.city;
   w.player.x = places.playerSpawn.x; w.player.y = places.playerSpawn.y;
   w.player.inCar = null; w.player.angle = -Math.PI / 2;
+  w.player.jumpZ = 0; w.player.jumpV = 0; w.player.swimming = false;
   let car = w.cars.find((c) => c.id === w.playerCarId);
   if (!car) {
     car = createCar({ x: 0, y: 0, color: '#c0392b', role: 'player' });
@@ -445,7 +446,7 @@ function tryEnter(w, only = null, { quiet = false } = {}) {
   best.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false };
   best.dyn = null; best.fallen = false; // Fahrdynamik beginnt mit geradem Lenkrad; ein umgefallenes Zweirad wird aufgerichtet
   if (!isBikeKind(best.kind) && !quiet) w.vehInfo = { carId: best.id, t: 0 }; // HUD blendet Name und Technik ein (wie GTA: ohne Kasten)
-  p.inCar = best.id;
+  p.inCar = best.id; p.jumpZ = 0; p.jumpV = 0; p.swimming = false;
   if (best.role !== 'player' && !isOpenKind(best.kind) && !w.cars.some((c) => c.id === w.playerCarId && !c.wrecked)) w.playerCarId = best.id; // Zweiräder nie
   if (!quiet) w.events.push({ type: 'door', x: best.x, y: best.y });
   return true;
@@ -614,16 +615,19 @@ function clickControl(w, input, dt) {
 
 function updatePlayerOnFoot(w, input, dt) {
   const p = w.player;
-  if (p.stun > 0) { p.stun -= dt; return; }
+  const stunned = p.stun > 0;
+  if (stunned) p.stun = Math.max(0, p.stun - dt);
+  const wasSwimming = !!p.swimming, wasAirborne = (p.jumpZ ?? 0) > 0;
   p.jumpZ ??= 0; p.jumpV ??= 0;
-  p.swimming = surfaceAt(w.city, p.x, p.y, p.lvl) === T.WATER;
-  if (input.jumpPressed && !p.swimming && p.jumpZ <= 0) p.jumpV = 5.1;
+  const startSurface = p.inside ? T.PLAZA : surfaceAt(w.city, p.x, p.y, p.lvl);
+  p.swimming = startSurface === T.WATER && !wasAirborne;
+  if (input.jumpPressed && !stunned && !p.swimming && p.jumpZ <= 0) { p.jumpV = 5.1; w.events.push({ type: 'footJump', x: p.x, y: p.y, surface: startSurface }); }
   if (p.jumpZ > 0 || p.jumpV > 0) {
     p.jumpZ = Math.max(0, p.jumpZ + p.jumpV * dt);
     p.jumpV -= 12 * dt;
     if (p.jumpZ === 0) p.jumpV = 0;
   }
-  let mx = input.moveX, my = input.moveY;
+  let mx = stunned ? 0 : input.moveX, my = stunned ? 0 : input.moveY;
   const mag = Math.min(1, Math.hypot(mx, my));
   // Ausdauer: Sprint leert sie, nach kurzer Pause erholt sie sich; leer = nur joggen, bis wieder genug da ist
   p.stamina ??= 1; p.tired ??= false;
@@ -645,7 +649,10 @@ function updatePlayerOnFoot(w, input, dt) {
   const st = p.inside && stationById(w.city, p.inside.id);
   if (st) { keepInside(st, p, PLAYER.radius); return; } // im U-Bahnhof: nur Bahnsteig und Säulen
   pushCircleOutOfWorld(w, p, PLAYER.radius);
-  p.swimming = surfaceAt(w.city, p.x, p.y, p.lvl) === T.WATER;
+  const endSurface = surfaceAt(w.city, p.x, p.y, p.lvl);
+  p.swimming = endSurface === T.WATER && p.jumpZ === 0;
+  if (!wasSwimming && p.swimming) w.events.push({ type: 'footSplash', x: p.x, y: p.y, surface: endSurface });
+  else if (wasAirborne && p.jumpZ === 0) w.events.push({ type: 'footLand', x: p.x, y: p.y, surface: endSurface });
   p.x = clamp(p.x, 8, w.city.width - 8); p.y = clamp(p.y, 8, w.city.height - 8);
 }
 
@@ -1053,7 +1060,7 @@ function updateKnockout(w, dt) {
   const fee = Math.floor(w.money * HOSPITAL_FEE);
   w.money -= fee;
   teleportTo(w, spot ?? { x: w.city.places.playerSpawn.x, y: w.city.places.playerSpawn.y, angle: 0 });
-  Object.assign(p, { dead: false, hp: PLAYER_HP, stun: 0, sinceHurt: 99, hurtFlash: 0, reloadT: 0, lvl: undefined });
+  Object.assign(p, { dead: false, hp: PLAYER_HP, stun: 0, jumpZ: 0, jumpV: 0, swimming: false, sinceHurt: 99, hurtFlash: 0, reloadT: 0, lvl: undefined });
   w.notice = { text: `Im Krankenhaus aufgewacht${h.name ? ': ' + h.name : ''}${fee ? ` (−${fee.toLocaleString('de-DE')} €)` : ''}`, t: 5 };
   w.events.push({ type: 'respawn', x: p.x, y: p.y, hospital: h.name ?? null, fee });
   const m = w.mission;

@@ -52,6 +52,8 @@ export function drawCar(ctx, car, t, sun) {
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
+  ctx.fillStyle = 'rgba(12,24,29,0.2)'; roundRect(ctx, -L / 2 - 2, -W / 2 - 2, L + 4, W + 4, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(8,15,20,0.23)'; roundRect(ctx, -L / 2, -W / 2, L, W, 5); ctx.fill();
   if (sprites.car) {
     ctx.drawImage(sprites.car, -L / 2, -W / 2, L, W);
     if (car.wrecked) { ctx.fillStyle = 'rgba(20,15,10,0.6)'; ctx.fillRect(-L / 2, -W / 2, L, W); }
@@ -202,10 +204,10 @@ export function treeSprite(genus, variant) {
   let c = null;
   try {
     if (typeof OffscreenCanvas === 'undefined' && typeof document === 'undefined') throw 0;
-    const N = 128, R = N / 2 / 1.15; // Kronenradius im Sprite (Rand für Ausläufer)
+    const N = 256, R = N / 2 / 1.15; // Kronenradius im Sprite (Rand für Ausläufer)
     c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(N, N) : Object.assign(document.createElement('canvas'), { width: N, height: N });
     const g = c.getContext('2d'), m = N / 2;
-    const [c0, c1, c2] = TREE_STYLE[genus] ?? TREE_STYLE.sonstige;
+    const [c0, c1, c2] = (TREE_STYLE[genus] ?? TREE_STYLE.sonstige).map(col => { const n = parseInt(col.slice(1), 16); const r = Math.round((n >> 16) * 0.9 + 12), g = Math.round(((n >> 8) & 255) * 0.78 + 12), b = Math.round((n & 255) * 0.9 + 7); return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1); });
     let a = (variant * 2654435761) >>> 0; const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
     const blob = (x, y, rr, col) => { g.fillStyle = col; g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill(); };
     if (genus === 'Nadel') {
@@ -227,6 +229,17 @@ export function treeSprite(genus, variant) {
       for (let k = 0; k < 5; k++) { const an = rnd() * Math.PI * 2, d = R * rnd() * 0.35; blob(m - R * 0.12 + Math.cos(an) * d, m - R * 0.12 + Math.sin(an) * d, R * (0.24 + rnd() * 0.1), c1); }
       for (let k = 0; k < 4; k++) blob(m - R * (0.25 + rnd() * 0.2), m - R * (0.25 + rnd() * 0.2), R * (0.09 + rnd() * 0.08), c2);
     }
+    // Hunderte kleine Blattgruppen im Sprite statt weiterer Zeichenarbeit je Baum/Bild.
+    g.globalCompositeOperation = 'source-atop';
+    for (let i = 0; i < 850; i++) {
+      const x = rnd() * N, y = rnd() * N, r = 0.8 + rnd() * 3.8;
+      const light = (m - x + m - y) / N;
+      g.fillStyle = light + (rnd() - 0.5) * 0.8 > 0.12 ? 'rgba(210,217,143,0.22)' : 'rgba(15,46,31,0.25)';
+      g.beginPath(); g.ellipse(x, y, r, r * 0.6, rnd() * Math.PI, 0, Math.PI * 2); g.fill();
+    }
+    const canopyLight = g.createLinearGradient(0, 0, N, N);
+    canopyLight.addColorStop(0, 'rgba(222,204,129,0.18)'); canopyLight.addColorStop(0.5, 'rgba(52,63,32,0.06)'); canopyLight.addColorStop(1, 'rgba(12,40,34,0.3)');
+    g.fillStyle = canopyLight; g.fillRect(0, 0, N, N); g.globalCompositeOperation = 'source-over';
   } catch { c = null; }
   treeSprites.set(key, c);
   return c;

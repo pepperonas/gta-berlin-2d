@@ -462,13 +462,25 @@ export function drawPerson(ctx, p, { shirt, skin, hair, player = false, down = f
     ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 0, 8.2 * sc, 0, TAU); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.8; ctx.stroke();
   }
+  if (player && !dead && p.jumpZ > 0) ctx.translate(0, -p.jumpZ * 10);
   ctx.rotate(face);
-  if (player && p.swimming) {
-    const stroke = Math.sin(time * 8) * 2.2;
-    ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.ellipse(-1, 0, 7.2, 3.2, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 2.2;
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(-1, side * 1.7); ctx.lineTo(2 + stroke * side, side * 5); ctx.stroke(); }
-    ctx.fillStyle = '#e8b891'; ctx.beginPath(); ctx.arc(6, 0, 3, 0, TAU); ctx.fill();
+  if (player && p.swimming && !dead) {
+    const moving = p.moveSpeed > 0, stroke = Math.sin(time * (moving ? 7 : 2.5));
+    // Untergetauchter Körper mit kurzen Beinschlägen; Kopf und Hände bleiben über der Oberfläche.
+    ctx.globalAlpha = 0.55;
+    capsule(ctx, -6, -1.6, -11 - stroke, -2.2, 2.2, look.pants);
+    capsule(ctx, -6, 1.6, -11 + stroke, 2.2, 2.2, look.pants);
+    oval(ctx, -1, 0, 7, 3.3, look.topColor);
+    ctx.globalAlpha = 1;
+    for (const side of [-1, 1]) {
+      const handX = 3 + stroke * side * 3, handY = side * (4.3 + Math.abs(stroke));
+      capsule(ctx, 1, side * 2, handX - 1.5, handY, 2.1, look.topColor);
+      capsule(ctx, handX - 1.5, handY, handX + 1, handY, 1.6, look.skin);
+    }
+    oval(ctx, 5.8, 0, 3.2, 2.6, look.skin);
+    oval(ctx, 5, 0, 2.5, 2.4, look.hair);
+    ctx.strokeStyle = 'rgba(218,239,234,0.7)'; ctx.lineWidth = 0.65;
+    ctx.beginPath(); ctx.ellipse(2, 0, 7, 4.3, 0, -1, 1); ctx.stroke();
     ctx.restore(); return;
   }
   const key = player ? 'player' : 'pedestrian';

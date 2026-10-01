@@ -3,6 +3,8 @@
 // Kante, Säulen, Treppen an beiden Enden (Ausgang zur Straße), Fahrgastinfo mit den nächsten Zügen, Wartende, Züge.
 import { STATION, toWorld, pillars, trainsAt, departures, waiting } from './station.js';
 import { drawTrainCar } from './railart.js';
+import { texture } from './textures.js';
+import { drawInteriorGlow } from './interiorfx.js';
 import { drawPerson } from './people.js';
 
 const U_BLUE = '#1d4f91', S_GREEN = '#008d4f';
@@ -71,7 +73,7 @@ export function drawStation(ctx, world, st, v, t, opts = {}) {
   ctx.fillStyle = '#050506';
   for (const s of [-1, 1]) for (const k of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * (end + 6), k * T, 10, 26, 0, 0, Math.PI * 2); ctx.fill(); }
   // Bahnsteig: Terrazzo, weiße Kante, Treppen an den Enden
-  ctx.fillStyle = '#b8b3a8'; ctx.fillRect(-HL, -H, 2 * HL, 2 * H);
+  ctx.fillStyle = texture(ctx, 'plaza') ?? '#b8b3a8'; ctx.fillRect(-HL, -H, 2 * HL, 2 * H);
   ctx.fillStyle = 'rgba(0,0,0,0.05)';
   for (let u = -HL; u < HL; u += 20) for (let w = -H; w < H; w += 20) if (((u + w) / 20) % 2 === 0) ctx.fillRect(u, w, 20, 20);
   ctx.fillStyle = '#f2efe6'; ctx.fillRect(-HL, -H, 2 * HL, 4); ctx.fillRect(-HL, H - 4, 2 * HL, 4);
@@ -91,9 +93,10 @@ export function drawStation(ctx, world, st, v, t, opts = {}) {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui, sans-serif';
     ctx.fillText(`${e > 0 ? '→' : '←'} ${label}`, su, -sw / 2 - 12);
   }
+  for (const u of pillars(st)) { drawInteriorGlow(ctx, u, 0, 85, H, 0.38); ctx.fillStyle = '#faf3db'; ctx.fillRect(u - 16, -H + 8, 32, 1.4); ctx.fillRect(u - 16, H - 10, 32, 1.4); }
   // Säulen
   ctx.fillStyle = shade(st.color, -0.35);
-  for (const u of pillars(st)) { ctx.beginPath(); ctx.arc(u, 0, STATION.pillar, 0, Math.PI * 2); ctx.fill(); out.pillars++; }
+  for (const u of pillars(st)) { ctx.fillStyle = 'rgba(9,20,27,0.25)'; ctx.beginPath(); ctx.ellipse(u + 4, 2, STATION.pillar * 1.6, STATION.pillar, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = shade(st.color, -0.35); ctx.beginPath(); ctx.arc(u, 0, STATION.pillar, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,234,198,0.4)'; ctx.fillRect(u - 4, -4, 1.3, 7); out.pillars++; }
   // Fahrgastinfo (zwei Tafeln): Linie, Ziel, Minuten
   const deps = departures(world, st);
   for (const bu of [-HL / 3, HL / 3]) {

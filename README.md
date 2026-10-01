@@ -21,6 +21,7 @@ Dokumentation:
 - [Architektur, Plattformentscheidung und Quellen](docs/TECHNIK.md)
 - [Bedienung und technische Änderungen vom 01.10.2026](docs/SPIEL-UPDATE-2026-10-01.md)
 - [Beschleunigung: Recherche, Messverfahren und alle 45 Fahrzeugwerte](docs/FAHRZEUG-BESCHLEUNIGUNG.md)
+- [Grafiküberarbeitung: Bildvergleiche, Effekte und Renderzeiten](docs/GRAFIK-UPDATE-2026-10-01.md)
 - [Versionsverlauf](CHANGELOG.md)
 
 ## Version
@@ -30,6 +31,11 @@ Version und noch nicht versionierte Änderungen stehen in [`CHANGELOG.md`](CHANG
 
 ## Inhalt des Prototyps
 
+- **Filmische Stadtgrafik:** wärmeres Tageslicht, kühlere Schatten, feinere Asphalt-/Steinoberflächen,
+  detailliertere Fassaden und Baumkronen, bewegte Wasserreflexe, Lichtspiegelungen bei Regen und dezente
+  Leuchthöfe nachts. Drift, Nässe, Schnee, Sprünge und Schwimmen erzeugen passende Bewegungseffekte.
+  Effektdichte und Details folgen der automatischen Qualitätsstufe. 60 FPS bleiben ein Ziel;
+  in dichten Straßenszenen wird das Budget noch überschritten (siehe Grafikbericht).
 - **Karte:** ganz Berlin (alle 12 Bezirke, 97 Ortsteile; Stadtgrenze aus den LOR-Prognoseräumen) im Maßstab 1:1
   (10 px = 1 m), ca. 46 × 38 km. 531 000 Gebäude mit echter Grundfläche und Höhe (Geschosszahl aus OSM), 323 000
   Straßenstücke mit Namen, Breite, Einbahnregeln und Brücken, Spree, Havel, Kanäle und Seen mit Uferwänden, Wälder, Parks,
@@ -63,6 +69,7 @@ Version und noch nicht versionierte Änderungen stehen in [`CHANGELOG.md`](CHANG
   Schilder scheinen mit Beschriftung durch.
 - **Silhouetten:** Liegt eine Baumkrone, ein Haus, eine Tordurchfahrt oder die Hochbahn über einem Fahrzeug oder einer
   Person, erscheint ihr Umriss genau im verdeckten Teil – für die Spielfigur und ihr Auto orange, für alle anderen dezent hell.
+  Bei niedriger Qualität entfallen die zusätzlichen Umrisse anderer Personen und Fahrzeuge.
 - **Bäume aus dem Berliner Baumbestand:** alle 962 000 Straßen- und Anlagenbäume mit Gattung (Farbe/Form), Kronendurchmesser
   und Stammdicke; OSM-Bäume nur noch, wo das Kataster keinen Baum kennt.
 - **POIs und Hausnummern:** rund 50 000 Orte aus OSM – U- und S-Bahnhöfe, Bushaltestellen, Einkaufszentren (Neukölln
@@ -195,8 +202,11 @@ Mit **↓** vertauschst du die Maustasten für Bewegung und Angriff. Beide Einst
 Die Mausumstellung ist im Code umgesetzt; der aktuelle automatisierte Prüflauf enthält noch alte Erwartungen an
 Klick-Einstieg und Mauskampf. Siehe [Prüfstatus](docs/SPIEL-UPDATE-2026-10-01.md#prüfstatus-und-grenzen).
 
-Zu Fuß: Joggen 3,5 m/s, Gehen 1,5 m/s (Alt oder Stick halb), Sprint 7 m/s mit Ausdauer (reicht etwa 8 s, erholt sich
-nach 1 s Pause). Die Kamera zoomt zu Fuß näher heran (2,0); ab Zoom 1,7 zeigt die Detailstufe Berliner Gehwege
+Zu Fuß: Joggen 3,5 m/s, Gehen 1,5 m/s (Alt oder Stick bis etwa halb ausgelenkt), Sprint 7 m/s mit Ausdauer (reicht etwa 8 s, erholt sich
+nach 1 s Pause). Tastaturbewegung ist digital; der linke Controller-Stick hat eine Totzone von 22 % und wählt danach
+zwischen Gehen und Joggen. Die Auslenkung dosiert die Gehgeschwindigkeit nicht stufenlos. Im Auto lenkt der linke Stick
+analog; RT (Gas) und LT (Bremse) reagieren ebenfalls auf den jeweiligen Druckweg. W/S geben dagegen volles Gas bzw.
+volle Bremse, solange die Taste gedrückt ist. Die Kamera zoomt zu Fuß näher heran (2,0); ab Zoom 1,7 zeigt die Detailstufe Berliner Gehwege
 (Granitplatten mit Mosaikstreifen), Granit-Bordsteine und Baumscheiben. Zielhilfe mit der Maus rastet nur ein, wenn der
 Zeiger auf dem Ziel liegt; die Streuung wächst mit der Bewegung (Stehen am genauesten, Sprinten am ungenauesten). Mit
 dem Controller bleibt die Zielhilfe wie gehabt.

@@ -9,6 +9,8 @@ Die Plattformrecherche unten ist ein historischer Stand vom 27.09.2026 und wurde
 für das Update vom 01.10.2026 nicht erneut recherchiert. Den aktuellen Spielstand
 beschreiben die [Update-Dokumentation](SPIEL-UPDATE-2026-10-01.md) und der
 [Beschleunigungsbericht](FAHRZEUG-BESCHLEUNIGUNG.md) mit Messwerten und Herstellerquellen.
+Die [Grafiküberarbeitung](GRAFIK-UPDATE-2026-10-01.md) dokumentiert den aktuellen Renderer mit
+Bildvergleichen, Effektbudgets und Renderzeiten; ältere Leistungsangaben unten sind historische Einzelmessungen.
 
 Neue Modulaufteilung: `vehicleart.js` zeichnet die Pkw-Oberflächen;
 `enginevoice.js` definiert Motorprofile und Zündimpuls-Spektren;
@@ -307,7 +309,7 @@ so viele, wie der mittlere Abstand ergibt (OSM zerlegt Straßen in kurze Stücke
 meisten leer), am Bordstein plus 0,7 m. Qualitätsstufe: Median der reinen Zeichenzeit über 120 Bilder; über 14 ms
 entfallen Baumschatten und der zweite Hausdurchgang, unter 8 ms kommen sie zurück.
 
-**Boden** (`web/src/textures.js`, `web/src/decals.js`): Texturen sind Kachelmuster (64–96 px, doppelt aufgelöst,
+**Boden** (`web/src/textures.js`, `web/src/decals.js`): Texturen sind Kachelmuster (64–256 px, doppelt aufgelöst,
 per Muster-Transformation halbiert), als `fillStyle`/`strokeStyle` in Weltkoordinaten – sie kleben an der Welt und
 kosten je Form nichts extra. Ein strenges Plattenraster auf dem Gehweg wurde verworfen: es liegt achsparallel über
 schräg verlaufenden Straßen und wirkt wie ein gekachelter Platz. Decals entstehen deterministisch je Kante aus dem
@@ -348,6 +350,29 @@ Nachmessen an neun Orten zwischen 0,7 und 2,9 ms je Bild. Aufbauten werden je Ha
 und nur angenommen, wenn ein 5 × 5-Punkteraster über der Fläche samt Rand im Grundriss liegt. Alles hängt am
 Gebäudeobjekt und verschwindet mit ihm, wenn seine Kachel entladen wird. Niedrige Qualitätsstufe: ohne Aufbauten,
 Kiesmuster und Wellblechrillen.
+
+**Grafikstand Oktober 2026:** `visualstyle.js` bündelt Materialfarben, Lichtstimmung und Effektlimits.
+`worldfx.js` verwaltet kurzlebige Partikel und Wasserringe getrennt vom Zufallsgenerator der Simulation.
+`footJump`, `footLand` und `footSplash` werden bei Zustandswechseln erzeugt; die Wellen beim Schwimmen
+folgen einem Zeitakkumulator. Reifenemitter berücksichtigen Schlupf, Untergrund, Nässe und Schnee.
+Pro Effektsystem sind höchstens 360 Partikel bzw. 96 bei niedriger Qualität aktiv; Wasserringe sind auf 64/16 begrenzt.
+Der ältere Kampf-/Schadenspartikelpool hat zusätzlich dieselbe Partikelobergrenze.
+
+`rastercache.js` hält höchstens 128 Dachbilder und 16 Mi Pixel (64 MiB rohe RGBA-Pixel; zusätzliche
+Browser-/GPU-Verwaltung nicht enthalten). Einzelbilder über 1 Mi Pixel werden direkt gezeichnet. Cachetreffer
+werden nach zuletzt verwendet sortiert. Qualität, Rasterdichte, Spielzeit in Drei-Minuten-Schritten,
+Sonnenstärke, Schnee und Dachfarbe bestimmen die Gültigkeit. Die Rasterdichte folgt dem Zoom bis maximal 2.
+`paintRoof` zeichnet die Inhalte, `drawRoof` verwaltet den Cache. Kameraparallaxe wird erst beim Übertragen angewandt.
+Gebäudewände für Silhouetten werden in gleich orientierten Pfaden gebündelt, damit Überlappungen keine Löcher bilden.
+
+`Lighting.drawBloom` nutzt die vorhandene Lichtkarte in Viertelbreite/-höhe; Filter und Screen-Mischung
+erzeugen nachts einen schwachen Leuchthof. `drawGrade` legt eine dezente warme/kühle Lichtstimmung über
+die Welt, vor den abschließenden Markern und dem HUD. Spiegelungen bleiben innerhalb der Wasser-, Straßen-
+und Pfützenflächen. `interiorfx.js` liefert wiederverwendete Lichtinseln für Bahnhöfe und Tunnel.
+Die vorhandene Qualitätsautomatik reduziert zusätzlich die neue Effektdichte und lässt teure Zusatzeffekte weg.
+Bei niedriger Qualität werden Licht- und Schattencanvases mit halber Breite und Höhe gerastert und anschließend auf
+die Bildgröße skaliert. Für Hausschatten wird die Vereinigung von Grundriss und Schattenversatz gegen den sichtbaren
+Weltausschnitt geprüft; Flächen außerhalb des Bilds erzeugen keine Pfadsegmente.
 
 **Autos und Figuren** (`web/src/vehicles.js`, `web/src/assets.js`): Das Automodell ist reine Darstellung und wird
 aus der Autonummer abgeleitet – nicht aus dem Zufallsgenerator der Welt, sonst würde sich der Verkehr ändern.

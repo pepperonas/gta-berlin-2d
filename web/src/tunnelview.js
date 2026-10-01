@@ -3,6 +3,7 @@
 // fade = world.underground (0…1). Nur Darstellung.
 import { positionAt, pointOn, trainCars, TRAIN } from './transit.js';
 import { undergroundAtS } from './tunnel.js';
+import { drawInteriorGlow } from './interiorfx.js';
 import { drawTrainCar } from './railart.js';
 
 const TUBE = '#3a3d44', LIGHT = 'rgba(255,236,190,0.85)';
@@ -30,23 +31,26 @@ export function drawTunnels(ctx, world, v, t, fade) {
     if (p.mode !== 'ubahn' && p.mode !== 'sbahn') continue;
     if (drawn.has(p.shape)) continue;
     // Abschnitte unter Tage im Bild, in 60-px-Schritten
-    const W = TRAIN[p.mode].W + 20, pts = [];
+    const W = TRAIN[p.mode].W + 20, pts = [], lamps = [];
     const flush = () => {
       if (pts.length < 4) { pts.length = 0; return; }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.strokeStyle = TUBE; ctx.lineWidth = W; ctx.globalAlpha = fade * (pid === own ? 1 : 0.7);
       ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.stroke();
-      ctx.strokeStyle = '#1c1e22'; ctx.lineWidth = 6; ctx.stroke();
+      ctx.strokeStyle = '#202a30'; ctx.lineWidth = W - 8; ctx.stroke();
+      ctx.strokeStyle = '#727b7d'; ctx.lineWidth = 16; ctx.stroke();
+      ctx.strokeStyle = '#242a2c'; ctx.lineWidth = 13; ctx.stroke();
       out.tubes++; pts.length = 0;
     };
     for (let s = 0; s <= p.shape.len; s += 60) {
       const q = pointOn(p, s);
       if (inView(q.x, q.y) && undergroundAtS(world.city, p, s)) {
         pts.push(q.x, q.y);
-        if (Math.round(s / 60) % 4 === 0) { ctx.fillStyle = LIGHT; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
+        if (Math.round(s / 60) % 4 === 0) lamps.push(q);
       } else flush();
     }
     flush();
+    for (const q of lamps) { drawInteriorGlow(ctx, q.x, q.y, 30, 30, 0.25); ctx.fillStyle = LIGHT; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
     drawn.add(p.shape);
     // Bahnsteige unter Tage: vom Haltepunkt (dort steht die Zugspitze) eine Zuglänge nach hinten
     const len = TRAIN[p.mode].cars * TRAIN[p.mode].carL + (TRAIN[p.mode].cars - 1) * TRAIN[p.mode].gap;

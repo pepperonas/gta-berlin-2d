@@ -1,0 +1,12 @@
+{
+  "measuredAt": "2026-10-01",
+  "viewport": "1920x1080",
+  "measurement": "120 render frames; median and p95 CPU submission time; excludes simulation and GPU compositing",
+  "lowQuality": {
+    "blockBeforeOffscreenShadowCullMs": { "median": 16.4, "p95": 35.2 },
+    "blockAfterOffscreenShadowCullMs": { "median": 12.7, "p95": 27.8 },
+    "avenueBeforeOffscreenShadowCullMs": { "median": 27.2, "p95": 58.8 },
+    "rainNightBeforeOffscreenShadowCullMs": { "median": 17.7, "p95": 74.2 }
+  },
+  "note": "Block median after shadow culling fell by 22.6% against the immediately preceding low-quality run. Avenue and rain-night values were measured before shadow culling. Runs varied with browser/system load."
+}

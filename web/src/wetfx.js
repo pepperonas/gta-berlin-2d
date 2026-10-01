@@ -2,7 +2,7 @@
 // Leuchtreklame vor Kneipen, Clubs, Spätis und Imbissen. Reine Darstellung – Positionen kommen aus Ort-Hashes,
 // Bewegung aus der Spielzeit; nichts davon berührt die Simulation.
 import { hash01, inBuilding } from './map.js';
-import { pointAlong } from './geom.js';
+import { pointAlong, offsetPolyline } from './geom.js';
 
 const h = (...n) => hash01(n.reduce((a, b) => a * 31 + Math.round(b), 5));
 
@@ -130,7 +130,7 @@ export function edgePuddles(city, e) {
 
 // Nässe auf der Fahrbahn. layer(fn) (render.js): zeichnet deckend in eine eigene Ebene und trägt sie einmal auf – sonst
 // dunkeln Überlappungen (Kreuzungsscheiben über den Straßen) zu Kreisen nach. Ohne layer direkt (Tests, Fallback).
-export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L, { layer = null, t = 0, rain = 0 } = {}) {
+export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L, { layer = null, t = 0, rain = 0, lights = [] } = {}) {
   if (wet < 0.02) return 0;
   const paint = (g, col) => {
     g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = col; g.fillStyle = col;
@@ -141,12 +141,36 @@ export function drawWetRoads(ctx, edges, junctions, pathOf, city, wet, L, { laye
   if (!layer || !layer((g) => paint(g, '#0b121d'), 0.34 * wet)) { ctx.save(); paint(ctx, `rgba(12,20,34,${0.24 * wet})`); ctx.restore(); }
   const day = 1 - L.dark;
   if (layer && day > 0.2) layer((g) => paint(g, '#8fa2bb'), 0.05 * wet * day);
-  return drawPuddles(ctx, edges, city, wet, L, t, rain);
+  if (lights.length && typeof Path2D !== 'undefined') {
+    const mask = new Path2D();
+    for (const e of edges) if (!e.bridge && e.cls <= 10) {
+      if (!e._reflectionMask) {
+        // Gleiche Umlaufrichtung wie die Kreuzungskreise, damit Überlappungen keine Löcher ausstanzen.
+        const a = offsetPolyline(e.pts, -e.w / 2), b = offsetPolyline(e.pts, e.w / 2), p = new Path2D();
+        p.moveTo(a[0], a[1]); for (let i = 2; i < a.length; i += 2) p.lineTo(a[i], a[i + 1]);
+        for (let i = b.length - 2; i >= 0; i -= 2) p.lineTo(b[i], b[i + 1]); p.closePath(); e._reflectionMask = p;
+      }
+      mask.addPath(e._reflectionMask);
+    }
+    for (const j of junctions) if (!j.bridge) { mask.moveTo(j.x + j.r, j.y); mask.arc(j.x, j.y, j.r, 0, Math.PI * 2); }
+    ctx.save(); ctx.clip(mask);
+    for (const l of lights) {
+      const x = l.x + (l.nx ?? 0) * 18, y = l.y + (l.ny ?? 0) * 18;
+      ctx.fillStyle = `rgba(${l.rgb},${wet * 0.09})`;
+      ctx.beginPath(); ctx.ellipse(x, y + 18, 11, 36, 0, 0, Math.PI * 2); ctx.fill();
+      for (let j = 0; j < 11; j++) {
+        const k = 1 - j / 11, width = 2 + k * (6 + 3 * Math.sin(t * 1.6 + j * 2 + l.x));
+        ctx.fillStyle = `rgba(${l.rgb},${wet * k * 0.32})`; ctx.fillRect(x - width, y + j * 4, width * 2, 1.1);
+      }
+    }
+    ctx.restore();
+  }
+  return drawPuddles(ctx, edges, city, wet, L, t, rain, lights);
 }
 
 // Pfützen: dunkler, nasser Rand, darin der Himmel gespiegelt (tags hell-graublau, zur Mitte heller; nachts fast
 // schwarz – Lichter spiegeln sich über die Lichtkarte); bei Regen Ringe, die sich ausbreiten
-export function drawPuddles(ctx, edges, city, wet, L, t = 0, rain = 0) {
+export function drawPuddles(ctx, edges, city, wet, L, t = 0, rain = 0, lights = []) {
   const day = 1 - L.dark, list = [];
   for (const e of edges) for (const p of edgePuddles(city, e)) list.push(p);
   if (!list.length) return 0;
@@ -164,6 +188,15 @@ export function drawPuddles(ctx, edges, city, wet, L, t = 0, rain = 0) {
       ctx.fillStyle = gr;
     } else ctx.fillStyle = sky(1, 0.55 * wet);
     ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, p.a, 0, Math.PI * 2); ctx.fill();
+    // Widerschein liegt ausschließlich innerhalb dieser Pfütze; Häuser werden später darüber gezeichnet.
+    let lamp = null, dist = 160 * 160;
+    for (const l of lights) { const d = (l.x - p.x) ** 2 + (l.y - p.y) ** 2; if (d < dist) { lamp = l; dist = d; } }
+    if (lamp && rx > 1) {
+      ctx.save(); ctx.clip(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+      ctx.fillStyle = `rgba(${lamp.rgb},${wet * 0.55 * (1 - Math.sqrt(dist) / 160)})`;
+      for (let j = -3; j <= 3; j++) { const w = rx * (0.4 + 0.2 * Math.sin(j * 1.7 + t * 2 + p.x)); ctx.fillRect(-w, j * ry / 4, w * 2, Math.max(0.6, ry / 8)); }
+      ctx.restore();
+    }
   }
   // Regenringe in den Pfützen: je Pfütze einige Ringe mit eigener Phase (aus der Lage), wachsen und verblassen
   if (rain > 0.05) {
@@ -427,10 +460,10 @@ function flakeSprite() {
   g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
   return (flakeSpr = c);
 }
-export function drawSnowfall(ctx, v, wx, t, scale, gust = 1) {
+export function drawSnowfall(ctx, v, wx, t, scale, gust = 1, density = 1) {
   const snow = wx.snow ?? 0;
   if (snow < 0.03) return 0;
-  const flakes = snowFlakes(v, wx, t, 1700, gust);
+  const flakes = snowFlakes(v, wx, t, Math.round(1700 * density), gust);
   const storm = wx.storm ?? 0;
   ctx.save();
   const wl = Math.hypot(wx.wind.x, wx.wind.y) || 1, sx = wx.wind.x / wl, sy = wx.wind.y / wl;
@@ -467,14 +500,14 @@ export function drawSnowfall(ctx, v, wx, t, scale, gust = 1) {
 }
 
 // --- Regen in drei Tiefen, bei Starkregen dichter und mit Gischtschleier; Sturm treibt ihn schräg ------------------
-export function drawRainLayers(ctx, v, wx, t, scale, gust = 1) {
+export function drawRainLayers(ctx, v, wx, t, scale, gust = 1, density = 1) {
   const rain = wx.rain ?? 0;
   if (rain < 0.03) return 0;
-  const drops = rainDrops(v, wx, t, 420, gust);
+  const drops = rainDrops(v, wx, t, Math.round(420 * density), gust);
   const heavy = clamp01(rain - 1);
   ctx.save();
   // Aufschläge am Boden zuerst (die Tropfen fallen darüber): Ringe, im ersten Moment eine kleine Krone
-  const rip = rainRipples(v, wx, t, 260);
+  const rip = rainRipples(v, wx, t, Math.round(260 * density));
   ctx.lineWidth = 0.6 / scale; ctx.strokeStyle = 'rgba(215,225,240,0.24)';
   ctx.beginPath();
   for (const r of rip) if (r.a > 0.35) { ctx.moveTo(r.x + r.r, r.y); ctx.ellipse(r.x, r.y, r.r, r.r * 0.75, 0, 0, Math.PI * 2); }

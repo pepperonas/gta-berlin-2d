@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
+  detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
+- Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.
+- Grafikleistung: halbe Rasterauflösung für Licht- und Schattenebenen bei niedriger Qualität; Hausschatten
+  außerhalb des Bildausschnitts werden vor dem Pfadaufbau verworfen.
+- Separate Entwicklungsseite `graphics-review.html`: sieben feste Szenen, Qualitäts- und Zoomvergleich,
+  PNG-Export, Renderprofil und reproduzierbare Renderzeitmessung ohne Zugriff auf Spielstände.
 - Spieler kann zu Fuß mit Leertaste springen, Zäune und niedrige Ufer überwinden sowie auf Karten-Wasserflächen
   schwimmen. Bewegung im Wasser ist verlangsamt; Schwimmer kommen über Uferkanten zurück an Land.
 - Enter-Befehl `tag` mit Alias `wochentag`/`day`: Wochentag anzeigen oder setzen, deutsche Namen,
@@ -21,6 +28,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Dächer werden in einem begrenzten Rastercache gehalten; außerhalb des Bildes liegende Hauskörper werden
+  früher verworfen, Masken verdeckter Figuren bündeln Wandflächen. Niedrige Qualität reduziert zusätzlich
+  Regen, Schneefall, Partikel und fremde Silhouetten; Nacht-Bloom und zusätzliche Spiegelungen entfallen.
+- Bahnhöfe erhalten strukturierte Böden, Leuchtbänder und Säulenschatten; Tunnel detailliertere Gleise und Lichtinseln.
+- Schwimmpose mit sichtbaren Arm-/Beinschlägen; beim Springen bleiben Markierung und Schatten am Boden.
 - Stadt-Antritt insbesondere für Front-/Hecktriebler kräftiger; Bonus läuft bis 90 km/h aus. Oberhalb 50 km/h
   beginnt die Anpassung auf mittlere Radleistung. Bestehende Starttraktion extremer Sport-/Allradfahrzeuge wird
   nicht zusätzlich erhöht. Höchstgeschwindigkeiten bleiben erhalten; Wetter, ESP und Drift werden berücksichtigt.
@@ -37,6 +49,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Treffer in der Luft frieren die Sprungbewegung nicht mehr ein. Die Schwimmpose beginnt erst beim Wasserkontakt;
+  Sprung-/Schwimmzustand wird beim Fahrzeugeinstieg und Wiedererscheinen zurückgesetzt.
+- Tunnellichter werden nach dem Tunnelkörper gezeichnet und dadurch nicht mehr übermalt.
 - Zaunkollisionssegmente werden beim Laden zusätzlich sichtbar gezeichnet; abgeleitete Abschnitte sollen
   nicht mehr nur als unsichtbare Barriere existieren. Gilt für alle geladenen Kartenkacheln.
 - Gangpendeln in der Klang-/Drehzahllogik reduziert; Reifenquietschen mit Fahrdynamik folgt tatsächlichem
@@ -45,6 +60,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Dokumentation und Prüfstatus
 
+- [Grafikbericht](docs/GRAFIK-UPDATE-2026-10-01.md) mit Vorher-/Nachher-Bildern, Speicherbudgets,
+  gezielten Prüfungen und gemessenen Renderzeiten. Das 60-FPS-Ziel ist noch nicht in allen Szenen erreicht.
 - README-Steuerung, Wochentag, Wettertafel, Fahrzeugdarstellung, Klang und Tests aktualisiert.
 - [Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md) und
   [Beschleunigungsbericht mit Herstellerquellen und 45 Messreihen](docs/FAHRZEUG-BESCHLEUNIGUNG.md).

@@ -170,8 +170,9 @@ test('Dächer: Flächen zur Sonne heller, abgewandte dunkler; Ziegelreihen und G
     meters: 8, height: 80, seed: 99, roofRgb: -1, wallRgb: -1, look: packLook({ shape: ROOF_SHAPE.gabled }), sign: [1] };
   const roof = roofOf(b);
   const col = { roof: '#808080', roofHex: '#808080', center: '#808080', parapet: '#999', line: '#333', lit: [], faces: ['#aaa', '#999', '#888'] };
-  const lum = (s) => s.match(/\d+/g).slice(0, 3).map(Number).reduce((a, c) => a + c, 0);
-  const shades = (dy) => { fills.length = 0; col.lit = []; r.light = { sun: { dx: 0, dy, strength: 1 } }; r.drawRoof(ctx, b, col, roof, new Path2D()); return fills.slice(1).map(lum); };
+  const lum = (s) => { const n = parseInt(s.slice(1), 16); return (n >> 16 & 255) + (n >> 8 & 255) + (n & 255); };
+  // Den Maler direkt prüfen; drawRoof überträgt die fertige Rasterfläche aus dem Cache.
+  const shades = (dy) => { fills.length = 0; col.lit = []; r.light = { sun: { dx: 0, dy, strength: 1 } }; r.paintRoof(ctx, b, col, roof, new Path2D()); return fills.slice(1).map(lum); };
   // Schatten zeigt nach unten (+y): Sonne im Norden, die Nordfläche (fällt nach −y ab) ist die helle
   const north = roof.geo.facets.findIndex((f) => f.ny < 0);
   const a = shades(1), bb = shades(-1);

@@ -3,6 +3,8 @@
 // Ölband in der Mitte jedes Fahrstreifens (wie auf Luftbildern), weicher Kontaktschatten um den Fuß jedes Hauses,
 // Moos/Ruß auf Dächern, bewegte Lichtreflexe auf dem Wasser und eine leichte Vignette.
 // Alles rein aus Ort/Zeit abgeleitet (kein world.rng); ohne Canvas-Bilddaten (Tests) fällt jede Ebene still weg.
+import { texture } from './textures.js';
+import { ART } from './visualstyle.js';
 import { noisePattern, scrolled } from './wetfx.js';
 import { offsetPolyline, polylineLength } from './geom.js';
 import { cutPolyline } from './roadgraph.js';
@@ -16,7 +18,7 @@ export const GRIME = {
   laneW: 0.9,       // m, Breite des Ölbands in der Spurmitte
   laneAlpha: 0.12,
   ao: [[30, 0.05], [16, 0.07], [7, 0.09]], // Kontaktschatten ums Haus: [Strichbreite px, Deckkraft], außen → innen
-  vignette: 0.26,
+  vignette: ART.vignette,
 };
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -133,14 +135,14 @@ export function roofGrime(ctx, p) {
   return true;
 }
 
-// Lichtreflexe auf dem Wasser: zwei gegeneinander treibende Rauschmuster (glitzernde, wandernde Wellenfelder)
+// Lichtreflexe auf dem Wasser: zwei gegeneinander treibende Muster aus feinen Wellenkämmen.
 export function waterGlint(ctx, p, t, sun = 1) {
-  const pat = pattern(ctx, 'water');
+  const pat = texture(ctx, 'waterRipples');
   if (!pat) return false;
   const a0 = ctx.globalAlpha;
-  for (const [scale, vx, vy, rot, a] of [[0.9, 6, 2.5, 0.2, 0.2], [1.7, -3.5, 4, 1.4, 0.14]]) {
+  for (const [scale, vx, vy, rot, a] of [[0.8, 2, 1, 0.15, 0.36], [1.4, -1.4, 0.8, -0.18, 0.22]]) {
     ctx.globalAlpha = a0 * a * (0.45 + 0.55 * sun);
-    ctx.fillStyle = scrolled(pat, scale, t * vx, t * vy, scale, rot); ctx.fill(p, 'evenodd');
+    ctx.fillStyle = scrolled(pat, scale / 2, t * vx, t * vy, scale / 2, rot); ctx.fill(p, 'evenodd');
   }
   ctx.globalAlpha = a0;
   return true;

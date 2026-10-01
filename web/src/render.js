@@ -1,6 +1,9 @@
 // Welt-Rendering in schräger Draufsicht: Boden flach (Flächen, Wasser, Straßen als Vektoren aus der Karte),
 // Gebäude als extrudierte Grundrisse mit sichtbaren Fassaden und leichter Parallaxe (Dach wandert von der
 // Bildmitte weg → Seitenwände werden sichtbar).
+import { ART, FX_BUDGET } from './visualstyle.js';
+import { RasterCache } from './rastercache.js';
+import { WorldEffects } from './worldfx.js';
 import { MISSION, RENDER } from './config.js';
 import { AREA_KIND, BUILDING_KIND } from './citycodes.js';
 import { drawCar, drawTree, shade, drawDog } from './assets.js';
@@ -37,7 +40,7 @@ import { roofOf } from './roofs.js';
 import { litWindows, houseFraction, tvFlicker, WIN_TYPES, WIN_COLOR, WIN_LIGHT } from './windows.js';
 import { occludersOf, samplePoints, levelSurfaces, surfacesOver, trackLevel } from './occlusion.js';
 import { isStreet } from './signs.js';
-import { wallColor, roofColors } from './buildcolors.js';
+import { wallColor, roofColors, mix } from './buildcolors.js';
 import { WEAPONS, PED_HP } from './combat.js';
 import { benchAngle } from './life.js';
 import { FURN_KIND } from './citycodes.js';
@@ -62,7 +65,7 @@ export const POI_STYLE = {
 // Gleismaße in px (10 px = 1 m).
 export const TRACK = { gauge: 14.35, rail: 1.6, sleeper: 26, sleeperDash: [2.5, 3.5], bed: 36, deck: 46 };
 
-const SIDEWALK = '#9d9990', ASPHALT = '#3b3e43', CURB = '#c3bfb5', WATER = '#2c6c98';
+const SIDEWALK = ART.sidewalk, ASPHALT = ART.asphalt, CURB = ART.curb, WATER = ART.water;
 
 export function ringPath(rings) {
   const p = new Path2D();
@@ -212,10 +215,17 @@ function facadePatterns(ctx) {
     altbau: glass.map((gl) => mk(16, 16, (g) => { // hohe Fenster, Gesims je Geschoss
       g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(0, 0, 16, 1.2);
       g.fillStyle = 'rgba(0,0,0,0.10)'; g.fillRect(4.5, 2.2, 7, 10.6);
-      g.fillStyle = gl; g.fillRect(5.5, 3, 5, 9);
+      g.fillStyle = 'rgba(243,232,209,0.5)'; g.fillRect(4.8, 2.8, 6.4, 10.2);
+      g.fillStyle = gl; g.fillRect(5.5, 3.5, 5, 8.5);
+      g.fillStyle = 'rgba(145,184,199,0.36)'; g.fillRect(6, 8, 4, 3);
+      g.fillStyle = 'rgba(235,225,199,0.65)'; g.fillRect(7.7, 3.5, 0.5, 8.5); g.fillRect(5.5, 7, 5, 0.5);
+      g.fillStyle = 'rgba(18,25,31,0.3)'; g.fillRect(4.6, 12.3, 7, 0.9);
     })),
     platte: glass.map((gl) => mk(14, 15, (g) => { // Raster mit Balkonbändern
       g.fillStyle = gl; g.fillRect(3.5, 7, 7, 5);
+      g.fillStyle = 'rgba(189,213,213,0.35)'; g.fillRect(4, 9, 6, 2);
+      g.fillStyle = 'rgba(240,231,209,0.5)'; g.fillRect(6.8, 7, 0.6, 5);
+      g.fillStyle = 'rgba(42,42,39,0.1)'; g.fillRect(13.4, 0, 0.6, 15);
       g.fillStyle = 'rgba(0,0,0,0.13)'; g.fillRect(0, 2, 14, 3);
       g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, 5, 14, 0.8);
     })),
@@ -250,7 +260,10 @@ const ROOF_DEFAULT_SUN = { dx: 0.55, dy: 0.84, strength: 0.5 }; // Schatten nach
 function roofShade(col, lit) {
   const k = Math.max(-10, Math.min(10, Math.round(lit * 10)));
   let c = col.lit[k + 10];
-  if (!c) c = col.lit[k + 10] = shade(col.roofHex, k > 0 ? k * 0.026 : k * 0.034);
+  if (!c) {
+    const base = mix(col.roofHex, k > 0 ? '#ffffff' : '#000000', Math.abs(k) * (k > 0 ? 0.026 : 0.034));
+    c = col.lit[k + 10] = mix(base, k > 0 ? '#f6d19a' : '#405c72', Math.abs(k) * (k > 0 ? 0.008 : 0.012));
+  }
   return c;
 }
 
@@ -489,6 +502,8 @@ export class Renderer {
     this.ctx = ctx;
     this.skids = [];
     this.particles = [];
+    this.fx = new WorldEffects();
+    this.roofCache = new RasterCache();
     this.stains = []; this.tracers = []; this.flashes = [];
     this.lighting = new Lighting();
     this.stats = { shadows: 0, lights: 0, ms: 0 };
@@ -498,6 +513,7 @@ export class Renderer {
 
   // Ereignisse der Simulation in Effekte übersetzen.
   handleEvents(events) {
+    this.fx.handleEvents(events);
     for (const e of events) {
       if (e.type === 'shot') {
         for (const [x1, y1] of e.traces) this.tracers.push({ x0: e.x, y0: e.y, x1, y1, life: 0.07, max: 0.07 });
@@ -536,6 +552,7 @@ export class Renderer {
   }
 
   update(world, dt) {
+    this.fx.update(world, dt, this.quality);
     for (const st of this.stains) { st.life -= dt; if (st.r < st.to) st.r = Math.min(st.to, st.r + dt * st.to / (st.grow || 1)); }
     this.stains = this.stains.filter((st) => st.life > 0);
     for (const t of this.tracers) t.life -= dt;
@@ -554,10 +571,6 @@ export class Renderer {
           (this._lastSkid ??= {})[key] = { x, y };
         }
       } else if (this._lastSkid) { delete this._lastSkid[`${c.id}-1`]; delete this._lastSkid[`${c.id}1`]; }
-      if (c.spin && Math.random() < 0.5) { // durchdrehende Räder: Spritzer bzw. Schnee statt Staub
-        const snowy = (world.snow ?? 0) > 0.2 || (world.ice ?? 0) > 0.2;
-        this.particles.push({ kind: snowy ? 'snowdust' : 'spray', x: c.x - Math.cos(c.angle) * c.hw * 0.8, y: c.y - Math.sin(c.angle) * c.hw * 0.8, vx: -Math.cos(c.angle) * 40, vy: -Math.sin(c.angle) * 40, life: 0.4, max: 0.4, r: 2 });
-      }
       if ((c.health < 35 || c.wrecked) && Math.random() < (c.wrecked ? 0.35 : 0.15)) {
         this.particles.push({ kind: 'smoke', x: c.x + Math.cos(c.angle) * c.hw * 0.7, y: c.y + Math.sin(c.angle) * c.hw * 0.7, vx: (Math.random() - 0.5) * 10, vy: -18, life: 1.4, max: 1.4, r: 4 });
       }
@@ -569,7 +582,7 @@ export class Renderer {
       p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.kind === 'spark' || p.kind === 'blood' || p.kind === 'dust') { p.vx *= 0.88; p.vy *= 0.88; } else p.r += dt * 8;
     }
-    this.particles = this.particles.filter((p) => p.life > 0);
+    this.particles = this.particles.filter((p) => p.life > 0).slice(-FX_BUDGET[this.quality].particles);
   }
 
 
@@ -657,19 +670,30 @@ export class Renderer {
     this.stats.snowCover = drawSnowGround(ctx, v, snowD);
     this.stats.wetGround = drawWetGround(ctx, v, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)));
 
+    const reflectionLights = L.lampsOn && this.quality === 'high' ? edges.flatMap(e => edgeLamps(city, e)).filter(l => l.x > v.x - 150 && l.x < v.x + v.w + 150 && l.y > v.y - 150 && l.y < v.y + v.h + 150).slice(0, 48) : [];
+
     // 2) Wasser mit Wellen und Kaikante
     for (const wa of water) {
       const p = pathOf(wa);
       ctx.fillStyle = WATER; ctx.fill(p, 'evenodd');
       ctx.save(); ctx.clip(p, 'evenodd');
       const glint = this.quality === 'high' && waterGlint(ctx, p, t, L.sun.strength);
-      ctx.strokeStyle = `rgba(255,255,255,${glint ? 0.06 : 0.12})`; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = `rgba(198,229,224,${glint ? 0.13 : 0.1})`; ctx.lineWidth = 0.75;
       const x0 = Math.max(v.x, wa.bbox.x), x1 = Math.min(v.x + v.w, wa.bbox.x + wa.bbox.w);
       const y0 = Math.max(v.y, wa.bbox.y), y1 = Math.min(v.y + v.h, wa.bbox.y + wa.bbox.h);
-      for (let y = Math.floor(y0 / 22) * 22 + 10; y < y1; y += 22) {
-        ctx.beginPath();
-        for (let x = x0; x <= x1 + 12; x += 12) ctx.lineTo(x, y + Math.sin(x * 0.05 + t * 1.5 + y) * 2);
-        ctx.stroke();
+      const cell = this.quality === 'high' ? 42 : 78;
+      ctx.beginPath();
+      for (let y = Math.floor(y0 / cell) * cell; y < y1; y += cell) for (let x = Math.floor(x0 / cell) * cell; x < x1; x += cell) {
+        const h = hashN(x * 0.13 + y * 0.7), ph = t * 1.2 + h * 12;
+        const xx = x + h * cell, yy = y + hashN(x + y) * cell + Math.sin(ph) * 2;
+        const len = 4 + (0.5 + Math.sin(ph) * 0.5) * 14;
+        ctx.moveTo(xx, yy); ctx.quadraticCurveTo(xx + len * 0.5, yy - 1.8, xx + len, yy);
+      }
+      ctx.stroke();
+      this.fx.drawWater(ctx);
+      for (const lp of reflectionLights) {
+        ctx.fillStyle = `rgba(${lp.rgb},0.15)`;
+        for (let j = 0; j < 12; j++) { const w = (13 - j) * (0.6 + 0.3 * Math.sin(t * 2 + j + lp.x)); ctx.fillRect(lp.x - w, lp.y + 14 + j * 5, w * 2, 1.5); }
       }
       // zum Ufer hin dunkler (Kaimauer wirft Schatten ins Wasser)
       ctx.strokeStyle = 'rgba(8,30,55,0.22)'; ctx.lineWidth = 60; ctx.stroke(shoreOf(wa));
@@ -763,7 +787,7 @@ export class Renderer {
         // Kontaktschatten ums Haus (auch nachts: Himmelslicht) – am Boden, bevor Brücken darüber kommen
         this.stats.contact = drawContactShadows(ctx, buildings.filter((b) => !(b.lvl > 0)), pathOf, 1 - Math.min(0.6, snowD), low);
       }
-      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L, { layer: (fn, a) => this.overlayLayer(fn, a), t, rain: wx?.rain ?? 0 });
+      this.stats.puddles += drawWetRoads(ctx, E, J, pathOf, city, (world.wet ?? 0) * (1 - Math.min(1, snowD * 2.5)), L, { layer: (fn, a) => this.overlayLayer(fn, a), t, rain: wx?.rain ?? 0, lights: reflectionLights });
       if (snowD > 0.02) this.snowOnRoads(E, J, city, snowD);
       if (lvl === 0) this.drawSnowTrails(world, v, snowD);
       // Straßenbahngleise in der Fahrbahn: am Boden der ganze Linienweg, oben nur die Stücke auf der Brücke
@@ -803,7 +827,7 @@ export class Renderer {
     if (L.sun.strength >= 0.02) {
       const cq = city.render.query(casterBox(v, L.sun), this._cq ??= []);
       const casters = cq.filter((f) => f.layer === 'building');
-      this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : []);
+      this.stats.shadows = this.lighting.drawShadows(ctx, W, H, tf, L.sun, casters, this.quality === 'high' ? trees : [], this.quality === 'high' ? 1 : 0.5);
     }
 
     // Blut am Boden (verblasst langsam)
@@ -824,7 +848,12 @@ export class Renderer {
     const list = [];
     const margin = 220;
     const near = (x, y) => x > v.x - margin && x < v.x + v.w + margin && y > v.y - margin && y < v.y + v.h + margin * 1.5;
-    for (const b of buildings) list.push({ y: buildingDepth(city, b), b, d: () => this.drawBuilding(b, cam) });
+    for (const b of buildings) {
+      const h = Math.max(18, b.height * RENDER.heightScale), dx = (b.cx - cam.x) * h * 0.0005, dy = -h * 0.5 + (b.cy - cam.y) * h * 0.00025;
+      const box = b.bbox;
+      if (box.x + Math.max(0, dx) + box.w < v.x - 32 || box.x + Math.min(0, dx) > v.x + v.w + 32 || box.y + Math.max(0, dy) + box.h < v.y - 32 || box.y + Math.min(0, dy) > v.y + v.h + 32) continue;
+      list.push({ y: buildingDepth(city, b), b, d: () => this.drawBuilding(b, cam) });
+    }
     const treeFx = { snow: snowD, wind: wx?.wind ?? null, storm: (wx?.storm ?? 0) * gust };
     for (const tr of trees) list.push({ y: tr.y, tr, d: () => drawTree(ctx, tr, t, L.sun, treeFx) });
     const lamps = this._lamps ??= [];
@@ -881,10 +910,12 @@ export class Renderer {
       if (p.kind === 'spark') { ctx.fillStyle = `rgba(255,${180 + (a * 75) | 0},60,${a})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
       else if (p.kind === 'blood') { ctx.fillStyle = `rgba(150,10,12,${Math.min(1, a * 1.5)})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
       else if (p.kind === 'dust') { ctx.fillStyle = `rgba(200,195,185,${a * 0.8})`; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); }
-      else if (p.kind === 'spray') { ctx.fillStyle = `rgba(200,220,240,${a * 0.8})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
+      else if (p.kind === 'spray') { ctx.fillStyle = `rgba(200,220,240,${a * 0.8})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, 0.8, 2.2, Math.atan2(p.vy, p.vx) - Math.PI / 2, 0, Math.PI * 2); ctx.fill(); }
       else if (p.kind === 'snowdust') { ctx.fillStyle = `rgba(250,250,255,${a * 0.9})`; ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5); }
       else { ctx.fillStyle = `rgba(70,70,70,${a * 0.45})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
     }
+    this.fx.draw(ctx, v);
+    this.stats.effects = { particles: this.fx.particles.length, rings: this.fx.rings.length };
     // Leuchtspuren und Mündungsfeuer
     ctx.lineCap = 'round';
     for (const tr of this.tracers) {
@@ -903,8 +934,8 @@ export class Renderer {
     if (overlayMarkers && !pl.inCar && !pl.dead) { drawClickMarks(ctx, world, this.hover, this.clickFx, performance.now()); if (this.crosshair !== false) drawCrosshair(ctx, pl); } // Diablo: nur mit Strg (main.js)
     // 9a) Regen und Nebel (vor der Lichtkarte: nachts werden sie mit dunkel)
     this.stats.debris = wx ? drawStormDebris(ctx, v, wx, t, gust) : 0;
-    this.stats.drops = wx ? drawRainLayers(ctx, v, wx, t, s, gust) : 0;
-    this.stats.flakes = wx ? drawSnowfall(ctx, v, wx, t, s, gust) : 0;
+    this.stats.drops = wx ? drawRainLayers(ctx, v, wx, t, s, gust, this.quality === 'high' ? 1 : 0.4) : 0;
+    this.stats.flakes = wx ? drawSnowfall(ctx, v, wx, t, s, gust, this.quality === 'high' ? 1 : 0.35) : 0;
     this.stats.fog = wx ? drawFog(ctx, v, wx) : false;
     this.stats.fogBanks = wx ? drawFogBanks(ctx, v, wx, t) : 0;
     this._neon = L.dark > 0.25 ? this.neonSigns(world, v) : [];
@@ -915,8 +946,10 @@ export class Renderer {
     if (L.dark > 0.02 && under <= 0.5) { // unter Tage dunkelt die Tunnelansicht ab – nicht doppelt
       const fill = `rgb(${Math.round(L.ambient[0] * 255)},${Math.round(L.ambient[1] * 255)},${Math.round(L.ambient[2] * 255)})`;
       this.stats.lights = this.lighting.drawLightmap(ctx, W, H, tf, L.ambient, this.collectLights(world, v, L, overlayMarkers),
-        (g) => this.lightOccluders(g, cam, fill, L));
+        (g) => this.lightOccluders(g, cam, fill, L), this.quality === 'high' ? 1 : 0.5);
     }
+
+    this.stats.bloom = L.dark > 0.3 && under <= 0.5 && this.lighting.drawBloom(ctx, W, H, L.dark, this.quality);
 
     // Leuchtreklame leuchtet selbst (nach der Lichtkarte)
     if (this._neon.length) drawNeon(ctx, this._neon, t, Math.min(1, (L.dark - 0.25) * 3));
@@ -924,10 +957,12 @@ export class Renderer {
     drawSkyFlash(ctx, v, flash * (L0.dark * 0.6 + 0.4));
     this.stats.bolts = strikes.length ? drawLightning(ctx, v, strikes, cam) : 0;
 
-    if (this.debug?.silhouettes !== false) for (const c of covered) this.drawCovered(ctx, c, s, t);
+    if (this.debug?.silhouettes !== false) for (const c of covered) if (this.quality === 'high' || c.player || c.board) this.drawCovered(ctx, c, s, t);
     // Unter Tage (Fahrgast/Fahrer in U-/S-Bahn): Stadt abdunkeln, Röhren, Bahnsteige, Züge im Tunnel
     this.stats.tunnel = drawTunnels(ctx, world, v, t, under);
     if (this.debug?.levels) this.drawLevelDebug(city, v, s);
+
+    this.lighting.drawGrade(ctx, W, H, L);
 
     // Vignette: Bildränder leicht abgedunkelt (lenkt den Blick zur Mitte, wirkt wie ein Kameraobjektiv)
     this.stats.vignette = drawVignette(ctx, W, H, this.quality === 'high' ? 1 : 0.7);
@@ -1117,6 +1152,21 @@ export class Renderer {
   // An Kreuzungen enden die Markierungen am Rand der Querstraße.
   // Dach in Dachkoordinaten (bereits um die Schrägansicht verschoben)
   drawRoof(ctx, b, col, roof, p) {
+    const density = this.quality === 'high' ? Math.min(2, Math.ceil((this._tf?.[0] ?? 1) * 2) / 2) : 1;
+    const pad = 28, box = b.bbox, w = Math.ceil((box.w + pad * 2) * density), h = Math.ceil((box.h + pad * 2) * density);
+    const light = this.light, snow = this._snowD ?? 0;
+    const stamp = `${this.quality}|${density}|${Math.floor((light?.minutes ?? 780) / 3)}|${Math.round((light?.sun.strength ?? 0) * 20)}|${Math.round(snow * 50)}|${col.roofHex}`;
+    const sprite = this.roofCache.get(b, stamp, w, h, canvas => {
+      const g = canvas.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
+      g.setTransform(density, 0, 0, density, (pad - box.x) * density, (pad - box.y) * density);
+      this.paintRoof(g, b, col, roof, p);
+    });
+    if (sprite) ctx.drawImage(sprite, box.x - pad, box.y - pad, w / density, h / density);
+    else this.paintRoof(ctx, b, col, roof, p);
+    this.stats.roofCachePixels = this.roofCache.pixels;
+  }
+
+  paintRoof(ctx, b, col, roof, p) {
     ctx.fillStyle = col.center; ctx.fill(p, 'evenodd');
     const hi = this.quality === 'high', g = roof.geo;
     const L = this.light?.sun;
@@ -1200,7 +1250,9 @@ export class Renderer {
         ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-10, -3, 22, 8);
         ctx.fillStyle = '#3a3d42'; ctx.fillRect(-9, -3.5, 2, 7); ctx.fillRect(7, -3.5, 2, 7);
         ctx.fillStyle = '#8a5a2e'; for (let k = -3; k <= 2; k += 1.8) ctx.fillRect(-10, k, 20, 1.3);
-        ctx.fillStyle = '#6e4521'; ctx.fillRect(-10, -4.2, 20, 1.4); // Lehne
+        ctx.fillStyle = '#6e4521'; ctx.fillRect(-10, -4.2, 20, 1.4);
+        ctx.fillStyle = '#b89761'; ctx.fillRect(-10, -4.2, 20, 0.35);
+        ctx.fillStyle = '#d0c4ab'; for (const x of [-8, 8]) for (const y of [-2, 1.5]) ctx.fillRect(x, y, 0.55, 0.55); // Lehne
       } else if (f.kind === FURN_KIND.bicycle) {
         ctx.rotate((f.seed % 314) / 100);
         ctx.strokeStyle = '#8f959c'; ctx.lineWidth = 1;
@@ -1511,7 +1563,7 @@ export class Renderer {
       }
     }
     const pl = world.player;
-    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => { ctx.save(); if (pl.jumpZ > 0) ctx.translate(0, -pl.jumpZ * world.city.scale); drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }); ctx.restore(); }, 0, 0, 0, { skipCover: pl.dead });
+    if (!pl.inCar && !pl.ride) add(pl, pl.y, pl.y, () => { ctx.save(); drawPerson(ctx, pl, { shirt: '#ff7a1a', player: true, time: t, down: pl.stun > 0 || pl.dead, dead: pl.dead, sun: L.sun, weapon: WEAPONS[pl.weapon ?? 0]?.id, attack: pl.attack }); ctx.restore(); }, 0, 0, 0, { skipCover: pl.dead });
     return out;
   }
 
@@ -1597,10 +1649,20 @@ export class Renderer {
       else if (o.kind === 'bridge') { mask.lineWidth = TRACK.deck; mask.lineCap = 'butt'; mask.beginPath(); mask.moveTo(o.pts[0], o.pts[1]); for (let i = 2; i < o.pts.length; i += 2) mask.lineTo(o.pts[i], o.pts[i + 1]); mask.stroke(); }
       else { // Hauskörper: jede Wand als Viereck zwischen Fuß und Dach, dazu das Dach (mit Höfen)
         const { b, dx, dy } = o;
-        for (const r of b.rings) for (let i = 0; i < r.length; i += 2) {
-          const x0 = r[i], y0 = r[i + 1], x1 = r[(i + 2) % r.length], y1 = r[(i + 3) % r.length];
-          mask.beginPath(); mask.moveTo(x0, y0); mask.lineTo(x1, y1); mask.lineTo(x1 + dx, y1 + dy); mask.lineTo(x0 + dx, y0 + dy); mask.closePath(); mask.fill();
+        // Dieselbe Hausmaske wird oft für mehrere verdeckte Fahrzeuge/Figuren gebraucht.
+        // Wände mit gleicher Umlaufrichtung zu einem Pfad bündeln statt je Wand einen Canvas-Fill auszulösen.
+        if (!b._maskWalls || b._maskWalls.dx !== dx || b._maskWalls.dy !== dy) {
+          const path = new Path2D();
+          for (const r of b.rings) for (let i = 0; i < r.length; i += 2) {
+            const x0 = r[i], y0 = r[i + 1], x1 = r[(i + 2) % r.length], y1 = r[(i + 3) % r.length];
+            path.moveTo(x0, y0);
+            if ((x1 - x0) * dy - (y1 - y0) * dx >= 0) { path.lineTo(x1, y1); path.lineTo(x1 + dx, y1 + dy); path.lineTo(x0 + dx, y0 + dy); }
+            else { path.lineTo(x0 + dx, y0 + dy); path.lineTo(x1 + dx, y1 + dy); path.lineTo(x1, y1); }
+            path.closePath();
+          }
+          b._maskWalls = { dx, dy, path };
         }
+        mask.fill(b._maskWalls.path);
         mask.save(); mask.translate(dx, dy); mask.fill(pathOf(b), 'evenodd'); mask.restore();
       }
     }
@@ -1757,11 +1819,14 @@ export class Renderer {
       if (!wins && lightMode) continue;
       ctx.save();
       ctx.transform(f.ex / f.L, f.ey / f.L, dx / H, dy / H, f.x0, f.y0);
+      if (!lightMode && this.quality === 'high') { const material = texture(ctx, roof.facade === 'industry' ? 'brick' : 'plaster'); if (material) { ctx.fillStyle = material; ctx.fillRect(0, 0, f.L, H); } }
       if (wins) {
         if (winPat) { ctx.fillStyle = winPat; ctx.fillRect(4, 2, f.L - 8, H - 4); }
         if (winCache) this.drawLitWindows(ctx, winCache, b, f, H, lightMode);
       }
       if (!lightMode) {
+        ctx.fillStyle = 'rgba(12,23,29,0.22)'; ctx.fillRect(0, H - 3.5, f.L, 2.2);
+        ctx.fillStyle = 'rgba(255,245,211,0.25)'; ctx.fillRect(0, H - 1.3, f.L, 1.3);
         // Kontaktschatten am Fuß der Fassade, darüber Straßenschmutz, der nach oben ausläuft: ein Verlauf je Hausöhe
         const g = this.quality === 'high' ? this.baseGradient(ctx, H) : null;
         if (g) { ctx.fillStyle = g; ctx.fillRect(0, 0, f.L, H * 0.5); }

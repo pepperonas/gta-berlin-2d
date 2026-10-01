@@ -3,6 +3,7 @@
 //    aufgetragen – so dunkeln sich überlappende Schatten nicht doppelt ab.
 //  – Licht: die Lichtkarte ist mit dem Umgebungslicht gefüllt, Lichtquellen kommen additiv dazu, dann wird sie per
 //    „multiply“ über die Welt gelegt (dunkle Nacht, helle Lichtkegel). Bei Tag entfällt sie.
+import { ART, filmMood } from './visualstyle.js';
 import { RENDER } from './config.js';
 import { treeSprite, TREE_VARIANTS } from './assets.js';
 
@@ -17,8 +18,8 @@ function sized(c, w, h) {
   return c;
 }
 
-export const SHADOW_ALPHA = 0.3;       // Deckkraft der Hausschatten bei voller Sonne
-const SHADOW_COLOR = '#0e1330';        // leicht bläulich, wirkt natürlicher als reines Schwarz
+export const SHADOW_ALPHA = 0.34;       // Deckkraft der Hausschatten bei voller Sonne
+const SHADOW_COLOR = ART.shadow;        // leicht bläulich, wirkt natürlicher als reines Schwarz
 const MAX_REACH = 900;                 // längster gezeichneter Schatten (px)
 
 // Hausgrundriss-Höhe wie in drawBuilding (schräge Extrusion)
@@ -127,15 +128,24 @@ export class Lighting {
   constructor() { this.shadow = null; this.light = null; this.sprites = new Map(); }
 
   // Schattenebene zeichnen und auftragen. tf: [s, tx, ty] Welt→Bildschirm.
-  drawShadows(ctx, W, H, tf, sun, buildings, trees) {
+  drawShadows(ctx, W, H, tf, sun, buildings, trees, resolution = 1) {
     if (sun.strength < 0.02) return 0;
-    this.shadow = sized(this.shadow, W, H);
+    const rw = Math.ceil(W * resolution), rh = Math.ceil(H * resolution);
+    this.shadow = sized(this.shadow, rw, rh);
     const g = this.shadow.getContext('2d');
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
-    g.setTransform(tf[0], 0, 0, tf[0], tf[1], tf[2]);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, rw, rh);
+    g.setTransform(tf[0] * resolution, 0, 0, tf[0] * resolution, tf[1] * resolution, tf[2] * resolution);
     g.fillStyle = SHADOW_COLOR;
     g.beginPath();
-    for (const b of buildings) { const [ox, oy] = shadowOffset(sun, buildingHeight(b)); addBuildingShadow(g, b, ox, oy); }
+    // The shadow query is extended opposite the sun so high offscreen buildings can cast into view. Cull by
+    // the union of footprint and shifted footprint before building their wall polygons.
+    const inv = 1 / tf[0], vx0 = -tf[1] * inv, vy0 = -tf[2] * inv, vx1 = (W - tf[1]) * inv, vy1 = (H - tf[2]) * inv;
+    for (const b of buildings) {
+      const [ox, oy] = shadowOffset(sun, buildingHeight(b)), box = b.bbox;
+      if (box.x + Math.min(0, ox) >= vx1 || box.x + box.w + Math.max(0, ox) <= vx0 ||
+          box.y + Math.min(0, oy) >= vy1 || box.y + box.h + Math.max(0, oy) <= vy0) continue;
+      addBuildingShadow(g, b, ox, oy);
+    }
     g.fill('nonzero');
     // Bäume: Stamm als schmaler Streifen vom Fuß bis in die Krone (deckend, im selben Pfad), die Krone mit ihrem
     // eigenen lappigen Umriss als Schattenbild (weicher Rand, lichte Stellen), entlang der Sonne gestreckt.
@@ -150,7 +160,7 @@ export class Lighting {
     for (const [t, s] of crowns) {
       const img = crownShadowSprite(t.genus, t.seed % TREE_VARIANTS);
       const k = s.major / s.minor - 1, a = 1 + k * s.ux * s.ux, b = k * s.ux * s.uy, d = 1 + k * s.uy * s.uy;
-      g.setTransform(tf[0], 0, 0, tf[0], tf[1], tf[2]);
+      g.setTransform(tf[0] * resolution, 0, 0, tf[0] * resolution, tf[1] * resolution, tf[2] * resolution);
       g.transform(a, b, b, d, s.cx, s.cy); // Streckung um den Faktor major/minor entlang der Sonnenrichtung
       if (img) g.drawImage(img, -s.minor * 1.15, -s.minor * 1.15, s.minor * 2.3, s.minor * 2.3);
       else { g.beginPath(); g.arc(0, 0, s.minor, 0, Math.PI * 2); g.fill(); }
@@ -158,9 +168,36 @@ export class Lighting {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = SHADOW_ALPHA * sun.strength;
-    ctx.drawImage(this.shadow, 0, 0);
+    ctx.drawImage(this.shadow, 0, 0, W, H);
     ctx.restore();
     return buildings.length;
+  }
+
+  // Kleine, bereits verdeckte Lichtkarte als Quelle: keine Vollbild-Pixelanalyse und kein zweiter Gebäudedurchgang.
+  drawBloom(ctx, W, H, dark, quality) {
+    const strength = Math.max(0, dark - 0.3) * 0.32;
+    if (quality !== 'high' || strength <= 0 || !this.light) return false;
+    const w = Math.ceil(W / 4), h = Math.ceil(H / 4);
+    this.bloom = sized(this.bloom, w, h);
+    const g = this.bloom.getContext('2d');
+    g.clearRect(0, 0, w, h); g.filter = 'brightness(0.55) contrast(5) blur(1.5px)';
+    g.drawImage(this.light, 0, 0, w, h); g.filter = 'none';
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = strength;
+    ctx.drawImage(this.bloom, 0, 0, W, H); ctx.restore(); return true;
+  }
+
+  drawGrade(ctx, W, H, light) {
+    const mood = filmMood(light);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (!this.grade || this.grade.W !== W || this.grade.H !== H) {
+      const warm = ctx.createLinearGradient(0, 0, W * 0.7, H), cool = ctx.createLinearGradient(0, 0, 0, H);
+      warm.addColorStop(0, `rgba(${ART.warm},1)`); warm.addColorStop(1, `rgba(${ART.warm},0)`);
+      cool.addColorStop(0, `rgba(${ART.cool},0)`); cool.addColorStop(1, `rgba(${ART.cool},1)`);
+      this.grade = { W, H, warm, cool };
+    }
+    ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = mood.warmth; ctx.fillStyle = this.grade.warm; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = mood.cool; ctx.fillStyle = this.grade.cool; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
   }
 
   // Weiche runde Lichtquelle (Farbe als "r,g,b"), einmal gerendert und zwischengespeichert.
@@ -196,14 +233,15 @@ export class Lighting {
 
   // Lichtkarte: ambient [r,g,b] (0…1), lights: [{ x, y, r, rgb, a, cone?: angle }]
   // occlude(g): zweiter Durchgang in Weltkoordinaten nach den Lichtquellen (verdeckt/ergänzt, siehe render.js)
-  drawLightmap(ctx, W, H, tf, ambient, lights, occlude = null) {
-    this.light = sized(this.light, W, H);
+  drawLightmap(ctx, W, H, tf, ambient, lights, occlude = null, resolution = 1) {
+    const rw = Math.ceil(W * resolution), rh = Math.ceil(H * resolution);
+    this.light = sized(this.light, rw, rh);
     const g = this.light.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
     g.fillStyle = `rgb(${Math.round(ambient[0] * 255)},${Math.round(ambient[1] * 255)},${Math.round(ambient[2] * 255)})`;
-    g.fillRect(0, 0, W, H);
-    g.setTransform(tf[0], 0, 0, tf[0], tf[1], tf[2]);
+    g.fillRect(0, 0, rw, rh);
+    g.setTransform(tf[0] * resolution, 0, 0, tf[0] * resolution, tf[1] * resolution, tf[2] * resolution);
     g.globalCompositeOperation = 'lighter';
     for (const l of lights) {
       g.globalAlpha = Math.min(1, l.a);
@@ -219,7 +257,7 @@ export class Lighting {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'multiply';
-    ctx.drawImage(this.light, 0, 0);
+    ctx.drawImage(this.light, 0, 0, W, H);
     ctx.restore();
     return lights.length;
   }

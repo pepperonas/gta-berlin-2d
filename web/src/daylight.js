@@ -9,17 +9,17 @@ export const SHADOW_MAX = 2.4;         // längster Schatten = 2,4 × Höhe (tie
 
 // Umgebungslicht (Faktor je Farbkanal, 1 = volles Tageslicht) über den Tag; zyklisch linear interpoliert.
 const AMBIENT = [
-  [0, [0.30, 0.35, 0.52]],
-  [270, [0.30, 0.35, 0.52]],
+  [0, [0.32, 0.39, 0.48]],
+  [270, [0.32, 0.39, 0.48]],
   [330, [0.62, 0.52, 0.58]],   // Morgendämmerung
   [390, [0.95, 0.82, 0.72]],
   [480, [1, 1, 1]],
   [1080, [1, 1, 1]],
   [1170, [1, 0.88, 0.70]],     // goldene Stunde
   [1230, [0.78, 0.58, 0.62]],  // Sonnenuntergang
-  [1290, [0.42, 0.42, 0.60]],  // blaue Stunde
-  [1350, [0.30, 0.35, 0.52]],
-  [1440, [0.30, 0.35, 0.52]],
+  [1290, [0.43, 0.47, 0.58]],  // blaue Stunde
+  [1350, [0.32, 0.39, 0.48]],
+  [1440, [0.32, 0.39, 0.48]],
 ];
 
 // Anteil erleuchteter Fenster
