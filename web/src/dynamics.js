@@ -1,5 +1,5 @@
 // Fahrdynamik des gefahrenen Autos (rein rechnerisch, deterministisch): Einspurmodell mit Reifenkräften an Vorder- und
-// Hinterachse. Ziel: fühlt sich echt an, spielt sich gut. Der Charakter jedes Autos folgt aus der Physik (unten); eine
+// Hinterachse. Ziel: zugängliches, arcadiges Fahrgefühl. Der Charakter jedes Autos folgt aus der Physik (unten); eine
 // Spielspaß-Schicht (DYN.fun) macht es großzügiger als die Wirklichkeit – mehr Grip, viel kräftigere Bremsen, etwas
 // mehr Leistung bei echtem Höchsttempo, engerer Wendekreis, flinke Lenkung, ESP fängt ein ausbrechendes Heck ab
 // (statt es nur abzuwürgen), Handbremse zum Driften (Heck verliert Seitenhalt, der Schwung bleibt). „esp aus“ = roh.
@@ -40,6 +40,8 @@ export const DYN = {
   suspension: 0.12,   // s Zeitkonstante für Nicken/Wanken
   kinematic: [1, 4],   // m/s: darunter rollt das Auto rein geometrisch, darüber mit Reifenkräften (weich überblendet)
   espFrom: 4,          // m/s: ESP regelt erst oberhalb (Rangieren, Anfahren mit Einschlag)
+  rwdDriftGrip: 0.72,  // zusätzliche Driftfreude bei ausgeschaltetem ESP
+  drift: { duration: 1, minSpeed: 8, kick: 0.2, rearGrip: 0.65, yaw: 0.15, follow: 3.8 },
 };
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -57,6 +59,7 @@ export function geometry(spec) {
 // Ein Schritt dt. surf = { grip, drag } (Untergrund), tr = Wetterfaktoren (traction.js), ctl = Bedienung.
 export function stepDynamics(car, dt, surf, tr, ctl) {
   const spec = specOf(car), geo = geometry(spec), m = spec.mass, g = DYN.g;
+  const absOn = car.abs !== false, abs = absOn ? DYN.abs : 1;
   const d = car.dyn ??= { esp: 0, delta: 0, ax: 0, ay: 0, alphaF: 0, alphaR: 0, spinF: 0, spinR: 0, lockR: 0, understeer: 0 };
   const aq = (car.aqua ?? 0) > 0;
   const F = DYN.fun, muBase = spec.mu * (surf.grip ?? 1) * F.grip;
@@ -68,8 +71,20 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
   let c = Math.cos(car.angle), s = Math.sin(car.angle);
   let u = (car.vx * c + car.vy * s) / 10, v = (-car.vx * s + car.vy * c) / 10, w = car.angVel;
   const h = dt / DYN.substeps;
+  const handbrakePressed = ctl.handbrake && !d.handbrakeWas;
+  d.handbrakeWas = !!ctl.handbrake;
+  if (handbrakePressed && !spec.twoWheel && Math.hypot(u, v) >= DYN.drift.minSpeed) {
+    const dir = Math.sign(ctl.steer || d.delta || w);
+    if (dir) {
+      d.driftT = DYN.drift.duration;
+      d.driftDir = dir;
+      w += dir * DYN.drift.kick;
+    }
+  }
   let spinAny = 0, skid = 0;
   for (let k = 0; k < DYN.substeps; k++) {
+    d.driftT = Math.max(0, (d.driftT ?? 0) - h);
+    const driftBlend = clamp(d.driftT / DYN.drift.duration, 0, 1);
     const speed = Math.hypot(u, v), [k0, k1] = DYN.kinematic, qs = clamp((speed - k0) / (k1 - k0), 0, 1);
     // Lenkung: Einschlag folgt der Eingabe mit endlicher Geschwindigkeit; bei Tempo begrenzt auf knapp über die Haftgrenze
     const steerMax = steerMax0 + (lockLow - steerMax0) * (1 - clamp((Math.abs(u) - v0) / (v1 - v0), 0, 1)); // Spielspaß: enger Wendekreis
@@ -86,11 +101,11 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     const mu = muBase * (1 - (spec.twoWheel ? 0 : 0.22 * clamp(spec.h / spec.track * Math.abs(d.ay) / g, 0, 1)));
     const muX = mu * (tr.accel ?? 1), muB = mu * F.brake * (tr.brake ?? 1) * (aq ? AQUA.brake : 1), muY = mu * (tr.lat ?? 1) * (aq ? AQUA.lat : 1);
     // --- Längskräfte je Achse ---
-    let Fxf = 0, Fxr = 0, spinF = 0, spinR = 0, lockR = 0, esp = 0, wheelie = 0, stoppie = 0;
+    let Fxf = 0, Fxr = 0, spinF = 0, spinR = 0, lockF = 0, lockR = 0, esp = 0, wheelie = 0, stoppie = 0;
     const fwd = u > -0.5;
     if (ctl.throttle > 0 && u < -0.5) { // Gas, während das Auto rückwärts rollt: erst abbremsen (wie die Fußbremse)
       const Fb = ctl.throttle * muB * m * g;
-      Fxf += Math.min(Fb * spec.bias, muB * Fzf * DYN.abs); Fxr += Math.min(Fb * (1 - spec.bias), muB * Fzr * DYN.abs);
+      Fxf += Math.min(Fb * spec.bias, muB * Fzf * abs); Fxr += Math.min(Fb * (1 - spec.bias), muB * Fzr * abs);
     }
     if (ctl.throttle > 0 && fwd) {
       const Fd = ctl.throttle * Math.min(P / spec.vLow, P / Math.max(0.5, u)) * (u < vmax ? 1 : 0);
@@ -100,7 +115,7 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
         const cap = [muX * Fzf, muX * Fzr];
         for (const [i, j] of [[0, 1], [1, 0]]) if (want[i] > cap[i]) { want[j] += want[i] - cap[i]; want[i] = cap[i]; }
       }
-      if (car.esp !== false && !spec.noAids) { // ASR: nie durchdrehen; ESP (ab Rangiertempo): Gas weg, sobald eine Achse rutscht
+      if (car.esp !== false && driftBlend <= 0) { // ASR im normalen Fahrbetrieb; den bewusst eingeleiteten Drift freigeben
         const [k, a0, span, cut] = DYN.esp, esc = speed > DYN.espFrom ? 1 : 0;
         const lim = (al, Fz) => muX * Fz * k * (1 - esc * cut * clamp((Math.abs(al) - a0) / span, 0, 1));
         const lf = lim(d.alphaF, Fzf), lr = lim(d.alphaR, Fzr);
@@ -122,7 +137,11 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     if (ctl.brake > 0) {
       if (u > 0.5) { // Fußbremse mit ABS: je Achse höchstens bis an die Haftgrenze
         const Fb = ctl.brake * muB * m * g * (spec.brakeK ?? 1); // alte Bremsanlagen (Trommeln) schaffen weniger
-        let bf = Math.min(Fb * spec.bias, muB * Fzf * DYN.abs), br = Math.min(Fb * (1 - spec.bias), muB * Fzr * DYN.abs);
+        let bf = Math.min(Fb * spec.bias, muB * Fzf * abs), br = Math.min(Fb * (1 - spec.bias), muB * Fzr * abs);
+        if (!absOn) {
+          if (bf > muY * Fzf) { lockF = 1; bf = muY * Fzf * DYN.locked; }
+          if (br > muY * Fzr) { lockR = 1; br = muY * Fzr * DYN.locked; }
+        }
         if (spec.twoWheel) { // Stoppie: zu hart gebremst hebt das Hinterrad – Bremskraft darunter halten
           const lift = m * g * (1 - spec.front) * spec.wb / spec.h;
           stoppie = clamp(((bf + br) / lift - 0.85) / 0.15, 0, 1);
@@ -145,8 +164,10 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
       return -cap * tireCurve(alpha, stiffK);
     };
     // bei Schritttempo übernimmt die Geometrie (unten): Reifenquerkräfte dort ausgeblendet, sonst bremsen sie das Anfahren
-    let Fyf = lat(alphaF, Fzf, Fxf, DYN.stiff[0], spinF) * qs;
-    let Fyr = lat(alphaR, Fzr, Fxr, DYN.stiff[1], spinR) * qs;
+    const poweredRwdDrift = car.esp === false && spec.drive === 'rwd' && ctl.throttle > 0.65 && Math.abs(ctl.steer) > 0.15 && u > 4 && !ctl.handbrake;
+    let Fyf = lat(alphaF, Fzf, Fxf, DYN.stiff[0], spinF || lockF) * qs;
+    const driftRearGrip = 1 - (1 - DYN.drift.rearGrip) * driftBlend;
+    let Fyr = lat(alphaR, Fzr, Fxr, DYN.stiff[1], spinR || lockR) * (poweredRwdDrift ? DYN.rwdDriftGrip : driftRearGrip) * qs;
     if (ctl.handbrake && speed > 0.3) { // Handbremse: Heck verliert Seitenhalt (Gleiten), bremst nur mäßig – driften
       const [side, drag] = F.handbrake, vy = v - w * geo.b;
       Fyr = -muY * side * Fzr * clamp(vy / 1.5, -1, 1) * qs;
@@ -159,9 +180,15 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     const ax = (FfX + Fxr - drag) / m, ay = (FfY + Fyr) / m;
     let dw = (geo.a * FfY - geo.b * Fyr) / geo.Iz;
     const du = ax + v * w, dv = ay - u * w;
+    if (driftBlend > 0 && !spec.twoWheel) {
+      const speedMix = clamp((Math.abs(u) - DYN.drift.minSpeed) / 14, 0, 1);
+      const counter = clamp((d.driftDir ?? 0) * ctl.steer, 0, 1);
+      const driftYaw = u * Math.tan(delta) / spec.wb + (d.driftDir ?? 0) * DYN.drift.yaw * speedMix * driftBlend * (0.25 + 0.75 * counter);
+      dw += (driftYaw - w) * DYN.drift.follow;
+    }
     // ESP-Gierregelung: dreht das Auto schneller, als die Lenkung verlangt (Übersteuern), bremst es die Drehung ab –
     // das Heck kommt, wird aber gefangen. Nicht bei Handbremse (gewollter Drift) und nicht ohne ESP.
-    if (car.esp !== false && !spec.noAids && !ctl.handbrake && speed > DYN.espFrom && u > 0) {
+    if (car.esp !== false && driftBlend <= 0 && !ctl.handbrake && speed > DYN.espFrom && u > 0) {
       const wRef = u * Math.tan(delta) / spec.wb, over = Math.abs(w) - Math.abs(wRef);
       if (over > 0.05 && Math.abs(d.alphaR) > 0.06) { dw -= sgn(w) * DYN.espYaw * over; esp = 1; }
     }
@@ -179,7 +206,7 @@ export function stepDynamics(car, dt, surf, tr, ctl) {
     d.alphaF = alphaF * qs; d.alphaR = alphaR * qs; d.spinF = spinF; d.spinR = spinR; d.lockR = lockR; d.esp = esp;
     d.wheelie = wheelie; d.stoppie = stoppie; d.lean = spec.twoWheel ? Math.atan2(d.ay, g) : 0; // Schräglage (Darstellung)
     spinAny = Math.max(spinAny, spinF, spinR);
-    if (sp > 3) skid = Math.max(skid, clamp((Math.max(Math.abs(alphaF), Math.abs(alphaR)) - 0.12) / 0.2, 0, 1), lockR * 0.8, (spinF || spinR) ? 0.6 : 0);
+    if (sp > 3) skid = Math.max(skid, clamp((Math.max(Math.abs(alphaF), Math.abs(alphaR)) - 0.12) / 0.2, 0, 1), driftBlend * 0.75, Math.max(lockF, lockR) * 0.8, (spinF || spinR) ? 0.6 : 0);
     car.angle += w * h;
     c = Math.cos(car.angle); s = Math.sin(car.angle);
     car.x += (u * c - v * s) * 10 * h; car.y += (u * s + v * c) * 10 * h;

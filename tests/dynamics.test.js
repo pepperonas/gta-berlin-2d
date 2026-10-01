@@ -84,7 +84,42 @@ test('ESP fängt den Heckantrieb ab: gleiche Kurve, Vollgas – mit ESP stabil, 
   assert.ok(alphaOn < 0.2, `mit ESP höchstens leicht quer (${alphaOn.toFixed(2)} rad)`);
   assert.ok(alphaOff > 0.35, `ohne ESP bricht das Heck aus (${alphaOff.toFixed(2)} rad)`);
   assert.ok(flagged, 'ESP hat eingegriffen');
-  assert.ok(SPECS.zweitakter.noAids, 'der Oldtimer hat kein ESP');
+  assert.ok(CAR_MODELS.every((m) => !SPECS[m].noAids), 'alle Modelle haben ESP');
+});
+
+test('Muscle-Car bleibt bei hohem Tempo mit ESP kontrollierbar; Extra-Drift gilt nur ohne ESP', () => {
+  const on = car('musclecar', { v0: 150, esp: true }); let alphaOn = 0;
+  run(on, 3, { steer: 0.45, throttle: 1 }, (q) => { alphaOn = Math.max(alphaOn, Math.abs(q.dyn.alphaR)); });
+  assert.ok(alphaOn < 0.45, `mit ESP höchstens kontrollierter Schlupf (${alphaOn.toFixed(2)} rad)`);
+  const off = car('musclecar', { v0: 100, esp: false }); let alphaOff = 0;
+  run(off, 3, { steer: 0.45, throttle: 1 }, (q) => { alphaOff = Math.max(alphaOff, Math.abs(q.dyn.alphaR)); });
+  assert.ok(alphaOff > 0.5, `ohne ESP lässt sich das Heck zum Driften bringen (${alphaOff.toFixed(2)} rad)`);
+});
+
+test('Alle Fahrzeugmodelle bleiben mit ESP bei Autobahntempo und moderater Kurve kontrollierbar', () => {
+  for (const model of CAR_MODELS) {
+    const c = car(model, { v0: 100, esp: true }); let maxRearSlip = 0;
+    run(c, 2, { steer: 0.3, throttle: 1 }, (q) => { maxRearSlip = Math.max(maxRearSlip, Math.abs(q.dyn.alphaR)); });
+    assert.ok(maxRearSlip < 0.5, `${model}: Heckschlupf ${maxRearSlip.toFixed(2)} rad`);
+  }
+});
+
+test('Kurzer Handbremsimpuls leitet einen kontrollierbaren Drift ein, Gegenlenken fängt ihn ab', () => {
+  const runTap = (countersteer) => {
+    const c = car('musclecar', { v0: 60, esp: true }); let maxSlip = 0, skidFrames = 0;
+    for (let i = 0; i < 120; i++) {
+      Object.assign(c.controls, { throttle: 0.45, steer: countersteer && i > 12 ? -0.3 : 0.4, handbrake: i < 6 });
+      stepCar(c, DT, null);
+      maxSlip = Math.max(maxSlip, Math.abs(c.dyn.alphaR));
+      if (c.skid > 0.5) skidFrames++;
+    }
+    return { c, maxSlip, skidFrames };
+  };
+  const drift = runTap(false), caught = runTap(true);
+  assert.ok(drift.maxSlip > 0.18 && drift.maxSlip < 0.45, `kurzer Tap erzeugt kontrollierten Schlupf (${drift.maxSlip.toFixed(2)} rad)`);
+  assert.ok(drift.skidFrames > 20, 'Drift bleibt nach dem Loslassen sichtbar');
+  assert.ok(kmh(drift.c) > 60, `Auto behält den Schwung (${kmh(drift.c).toFixed(0)} km/h)`);
+  assert.ok(Math.abs(caught.c.dyn.alphaR) < Math.abs(drift.c.dyn.alphaR), 'Gegenlenken baut den Drift ab');
 });
 
 test('Motorlage: Mittelmotor lenkt spontaner ein als Heckmotor (Gierträgheit), Heckmotor hat mehr Traktion', () => {

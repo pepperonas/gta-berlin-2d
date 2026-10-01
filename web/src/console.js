@@ -118,7 +118,7 @@ export const COMMANDS = [
       if (m === null) return { ok: false, msg: 'Zeit als HH:MM, z. B. zeit 21:30 – oder morgen, mittag, abend, nacht' };
       ctx.world.clock = m; return `Uhrzeit ${formatClock(m)}`;
     } },
-  { name: 'wetter', aliases: ['weather'], help: 'Wetter festlegen (auto = natürliches Wetter)', args: [{ name: 'wetter', values: () => [{ label: 'auto', hint: 'natürlich' }, ...Object.entries(WX_NAMES).map(([n, k]) => ({ label: n, hint: WX_LABEL[k] }))] }],
+  { name: 'wetter', aliases: ['weather'], help: 'Enter öffnet die Wettertafel; Wert festlegen (auto = natürliches Wetter)', args: [{ name: 'wetter', values: () => [{ label: 'auto', hint: 'natürlich' }, ...Object.entries(WX_NAMES).map(([n, k]) => ({ label: n, hint: WX_LABEL[k] }))] }],
     run(ctx, [v]) {
       const k = norm(v ?? '');
       if (k === 'auto') { ctx.world.forceWeather = null; return 'Wetter wieder natürlich'; }
@@ -174,7 +174,7 @@ export const COMMANDS = [
     run(ctx, [v]) { const on = onOff(v, ctx.world.esp !== false); if (on === null) return { ok: false, msg: 'esp an|aus' }; ctx.world.esp = on; return `ASR/ESP ${on ? 'an' : 'aus'}`; } },
   { name: 'gott', aliases: ['god'], cheat: true, help: 'unverwundbar an/aus', args: [{ name: 'an|aus', optional: true, values: () => ONOFF.map((l) => ({ label: l, hint: '' })) }],
     run(ctx, [v]) { const on = onOff(v, ctx.world.god); if (on === null) return { ok: false, msg: 'gott an|aus' }; ctx.world.god = on; return `Gottmodus ${on ? 'an' : 'aus'}`; } },
-  { name: 'auto', aliases: ['car', 'fahrzeug'], cheat: true, help: 'Fahrzeug neben dir abstellen (Modell oder Art)', args: [{ name: 'art', optional: true, values: () => [...CAR_MODELS.map((m) => ({ label: m, hint: SPECS[m].label })), ...Object.keys(KINDS).map((k) => ({ label: k, hint: KIND_LABEL[k] ?? '' }))] }],
+  { name: 'auto', aliases: ['car', 'fahrzeug', 'spawn', 'spawnen'], cheat: true, help: 'Auto oder Fahrzeug neben dir spawnen (Modell oder Art)', args: [{ name: 'art', optional: true, values: () => [...CAR_MODELS.map((m) => ({ label: m, hint: SPECS[m].label })), ...Object.keys(KINDS).map((k) => ({ label: k, hint: KIND_LABEL[k] ?? '' }))] }],
     run(ctx, [v]) {
       const model = v && (CAR_MODELS.includes(norm(v)) ? norm(v) : CAR_MODELS.find((m) => norm(SPECS[m].label) === norm(v)));
       if (model) { // Pkw-Modell mit eigener Technik (carmodels.js)
@@ -337,7 +337,24 @@ export function execute(line, ctx) {
   return { ...res, cmd };
 }
 
-export function createConsole() { return { open: false, text: '', sel: -1, hist: [], hi: -1, log: [], sugg: null }; }
+export function createConsole() { return { open: false, text: '', sel: -1, hist: [], hi: -1, log: [], sugg: null, weatherPanel: false, weatherRow: 0 }; }
+
+const WEATHER_ROWS = ['Wettertyp', 'Temperatur', 'Schneedecke', 'Straßennässe', 'Glätte'];
+function changeWeather(w, row, dir) {
+  if (row === 0) {
+    const kinds = [null, ...WEATHER_KINDS];
+    const i = kinds.indexOf(w.forceWeather ?? null);
+    w.forceWeather = kinds[(i + dir + kinds.length) % kinds.length];
+    if (['rain', 'heavyrain', 'storm', 'thunder'].includes(w.forceWeather)) w.wet = Math.max(w.wet ?? 0, 0.6);
+  } else if (row === 1) {
+    const t = w.forceTemp;
+    w.forceTemp = t == null ? (dir > 0 ? 0 : -1) : t + dir;
+    if (w.forceTemp < -30 || w.forceTemp > 40) w.forceTemp = null;
+  } else {
+    const key = row === 2 ? 'snow' : row === 3 ? 'wet' : 'ice';
+    w[key] = Math.max(0, Math.min(1, Math.round(((w[key] ?? 0) + dir * 0.1) * 10) / 10));
+  }
+}
 
 // Leere Zeile: zuletzt benutzte Befehle zuerst (je einmal, neueste oben), dann die Befehle
 function withRecent(con, sugg) {
@@ -365,6 +382,13 @@ export function consoleAccept(con, i, ctx) {
 export function consoleKey(con, key, ctx, now = 0, mods = {}) {
   const refresh = () => { con.sugg = withRecent(con, suggest(con.text, ctx)); if (con.sel >= con.sugg.items.length) con.sel = -1; };
   const accept = (i) => consoleAccept(con, i, ctx);
+  if (con.weatherPanel) {
+    if (key === 'Escape' || key === 'Backspace') { con.weatherPanel = false; con.text = ''; refresh(); return 'edit'; }
+    if (key === 'ArrowUp' || key === 'ArrowDown') { con.weatherRow = (con.weatherRow + (key === 'ArrowDown' ? 1 : -1) + WEATHER_ROWS.length) % WEATHER_ROWS.length; return 'nav'; }
+    if (key === 'ArrowLeft' || key === 'ArrowRight') { changeWeather(ctx.world, con.weatherRow, key === 'ArrowRight' ? 1 : -1); return 'nav'; }
+    if (key === 'Enter') { con.weatherPanel = false; con.text = ''; refresh(); return 'edit'; }
+    return null;
+  }
   switch (key) {
     case 'Escape':
       if (con.text) { con.text = ''; con.sel = -1; con.hi = -1; refresh(); return 'edit'; } // erst leeren, dann schließen
@@ -382,6 +406,7 @@ export function consoleKey(con, key, ctx, now = 0, mods = {}) {
       if (con.sel >= 0) accept(con.sel);
       let line = con.text.trim();
       if (!line) { con.open = false; return 'close'; }
+      if (norm(line) === 'wetter' && ctx.world) { con.weatherPanel = true; con.weatherRow = 0; return 'nav'; }
       let r = execute(line, ctx);
       // unvollständig oder vertippt: mit dem besten Vorschlag noch einmal (nur wenn der dann klappt)
       if (!r.ok) {

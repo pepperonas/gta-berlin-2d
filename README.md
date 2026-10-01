@@ -206,6 +206,8 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Sprinten | A halten oder Stick voll | Umschalt |
 | Gas / Bremse, Rückwärts | RT / LT | W / S |
 | Handbremse | RB oder B | Leertaste |
+| ESP im Auto umschalten | – | X |
+| ABS im Auto umschalten | – | Y |
 | Ein-/Aussteigen | Y | F oder rechte Maustaste (tippen) |
 | Aktion (Auftrag, Einladen, Abliefern) | A | E |
 | Mitfahren / Aussteigen (Bus, Straßenbahn, S-, U-Bahn) | Steuerkreuz unten | G |
@@ -417,7 +419,7 @@ Vorbildern: Supersportwagen mit V10-Mittelmotor und Allrad („Oberbaum Tempesta
 Sportlimousine („Teltower T3 RS“) bis zur Luxuslimousine („Grunewald Senator“); Kombis („Märker Allwetter“, „Teltower T4
 Tourer“, Power-Kombi „Märker RS Avant“ mit 600 PS); Transporter, Großraumtransporter („Spree Großraum 316“),
 Hochdachkombi und Kleinbus mit Heckmotor; Geländewagen („Grunewald Keiler“, kantiger „Grunewald Kommandant“, „Grunewald
-Förster 110“, kleiner „Lausitz Taiga“ ohne Fahrhilfen) und SUVs („Spree Tiga“, „Oberbaum Cayo“, „Teltower TX7“,
+Förster 110“, kleiner „Lausitz Taiga“) und SUVs („Spree Tiga“, „Oberbaum Cayo“, „Teltower TX7“,
 „Voltwerk E-Terra“); dazu Kleinwagen, Kompakt, Hot Hatch, Zweitakter, Roadster, Muscle-Car, Oldtimer, Pick-up und
 Rallye-Kompakt. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderrad, zu hartes Bremsen das Hinterrad
 (deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab.
@@ -427,14 +429,13 @@ die Drehzahl als Bogen mit rotem Bereich, den Gang (R rückwärts, D beim Elektr
 `auto sportwagen` (oder ein anderes Modell, `auto motorrad`, `auto roller`) stellt eines neben
 dich.
 
-Das selbst gefahrene Auto fährt mit echter Fahrdynamik (Einspurmodell mit Reifenkräften und Lastverschiebung): Mit
-Heckantrieb drängt das Heck beim Gasgeben in der Kurve, Frontantrieb schiebt über die Vorderräder, Allrad zieht sauber
-heraus; der Mittelmotor lenkt spontan ein, der Heckmotor hat viel Traktion und ein schweres Heck; ein hoher Schwerpunkt
-(Transporter, Geländewagen, Lkw) wankt und nickt sichtbar und hat weniger Kurvengrip. Das Ganze ist bewusst großzügiger
-als die Wirklichkeit, damit es Spaß macht: mehr Grip, sehr kräftige Bremsen (100–0 km/h in ≈ 25 m), etwas mehr
-Anzug, enger Wendekreis beim Rangieren. ASR/ESP ist an – es verhindert Durchdrehen und fängt ein ausbrechendes Heck ab
-(die ESP-Leuchte im Tacho blinkt); **Handbremse** (Leertaste/B) lässt das Heck kontrolliert herumkommen. Befehl `esp aus`
-schaltet die Fahrhilfen ab (der Zweitakter hat keine). Motorklang je Modell: Drei-, Vier-, Fünf-, Sechs-, Achtzylinder,
+Das selbst gefahrene Auto nutzt ein zugängliches, arcadiges Fahrmodell: Mit Heckantrieb lässt sich das Heck beim Gasgeben
+in der Kurve leichter zum Driften bringen; Frontantrieb schiebt eher über die Vorderräder, Allrad zieht stabil heraus.
+Mittelmotoren lenken spontan ein, hohe Fahrzeuge wanken sichtbar. **X** schaltet ASR/ESP während der Fahrt um; mit ESP
+an wird das Auto leichter abgefangen, aus schaltet es freier und driftet stärker (die ESP-Leuchte zeigt den Eingriff bzw.
+den abgeschalteten Zustand). **Y** schaltet ABS um; ohne ABS können die Räder bei starkem Bremsen blockieren und das Auto
+lenkt schlechter. Ein kurzer Druck auf die **Handbremse** (Leertaste/B) leitet einen Drift ein; mit Gegenlenken steuerst
+und beendest du ihn. ESP kann auch über `esp an` oder `esp aus` in der Befehlszeile gesteuert werden. Motorklang je Modell: Drei-, Vier-, Fünf-, Sechs-, Achtzylinder,
 Diesel, knatternder Zweitakter, summender Elektromotor. Der übrige Verkehr fährt weiter mit der einfachen Physik.
 
 ## Nahverkehr
@@ -536,10 +537,14 @@ Sie arbeitet wie eine Befehlspalette:
 | `temp` · `temp -5` · `temp auto` | Temperatur zeigen, erzwingen, wieder natürlich |
 | `verkehr 2` · `passanten 0` | Dichte von Autos / Fußgängern |
 | `tp kottbusser tor` | Teleport ohne Rückfrage (lädt den Stadtteil nach) |
-| `geld +1000` · `leben` · `munition` · `gott an` · `auto polizei` · `reparieren` | Schummeln (wird in der Statistik gezählt) |
+| `geld +1000` · `leben` · `munition` · `gott an` · `auto musclecar` (`spawn sportwagen`) · `reparieren` | Schummeln (wird in der Statistik gezählt) |
 | `fps` · `ebenen` · `silhouetten` · `qualitaet niedrig` | Anzeigen zum Prüfen: Bildrate, Brückenebenen, Umrisse, Zeichenqualität |
 | `bars` · `bars https://…` · `bars neu` · `bars aus` | Bar-Auslastungs-Feed zeigen, setzen, neu laden, abschalten |
 | `stats` | Statistik öffnen |
+
+**`wetter` + Enter** öffnet eine übersichtliche Wettertafel. Mit **↑/↓** wählst du Wettertyp, Temperatur, Schneedecke,
+Straßennässe oder Glätte; **←/→** ändert den Wert direkt. **Enter** übernimmt und schließt die Tafel, **Esc** geht zurück.
+Natürliches Wetter bzw. natürliche Temperatur stehen jeweils als eigener Wert zur Auswahl.
 
 Die **Statistik** zählt je Spiel und über alle Spiele: Strecke (zu Fuß/im Auto), Höchstgeschwindigkeit, Spielzeit,
 Brücken, Teleports, Aquaplaning, überfahrene Menschen und Radfahrer, Unfälle, umgefahrene Poller, geklaute Autos, gekaperte Räder, vom Rad geholte Radfahrer, Tote (erschossen

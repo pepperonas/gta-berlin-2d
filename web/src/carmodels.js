@@ -21,12 +21,12 @@ export const MOTO_MODELS = ['motorcycle', 'scooter'];
 // mass kg, front = Gewichtsanteil Vorderachse, h = Schwerpunkthöhe m, wb = Radstand m, track = Spur m, kW, vmax km/h,
 // mu = Reifenhaftung (trocken), yaw = Faktor der Gierträgheit (Mittelmotor klein, Heckmotor/Überhänge groß),
 // vLow = bis zu diesem Tempo (m/s) begrenzt das Drehmoment statt der Leistung, bias = Bremskraftanteil vorn,
-// noAids = ohne ASR/ESP (Oldtimer), brakeK = Bremsanlage relativ zu heute (Trommelbremsen < 1),
+// brakeK = Bremsanlage relativ zu heute (Trommelbremsen < 1),
 // twoWheel = Zweirad: Wheelie/Stoppie begrenzen Anzug und Bremse (Vorder-/Hinterrad hebt ab), keine Querlast (es legt sich)
 const S = (label, drive, engine, mass, front, h, wb, track, kW, vmax, mu, o = {}) =>
   ({ label, drive, engine, mass, front, h, wb, track, kW, vmax, mu, yaw: 1, vLow: 7, bias: 0.68, awdFront: 0.5, steerMax: 0.62, ...o });
 export const SPECS = {
-  zweitakter: S('Zweitakter', 'fwd', 'front', 650, 0.6, 0.56, 2.02, 1.2, 19, 107, 0.82, { yaw: 1.05, vLow: 5, twoStroke: true, noAids: true }),
+  zweitakter: S('Zweitakter', 'fwd', 'front', 650, 0.6, 0.56, 2.02, 1.2, 19, 107, 0.82, { yaw: 1.05, vLow: 5, twoStroke: true }),
   kleinwagen: S('Kleinwagen', 'fwd', 'front', 1100, 0.63, 0.54, 2.47, 1.45, 60, 170, 0.95),
   kompakt: S('Kompaktwagen', 'fwd', 'front', 1350, 0.61, 0.55, 2.63, 1.55, 110, 210, 1),
   limousine: S('Limousine', 'rwd', 'front', 1600, 0.52, 0.53, 2.85, 1.58, 180, 240, 1.02),
@@ -41,14 +41,14 @@ export const SPECS = {
   hothatch: S('Hot Hatch', 'fwd', 'front', 1380, 0.62, 0.5, 2.62, 1.56, 221, 250, 1.08, { yaw: 0.95 }),
   // Roadster: leicht, Frontmittelmotor, 50:50, tiefer Schwerpunkt, wenig Leistung – spielerisch, verzeiht viel
   roadster: S('Roadster', 'rwd', 'front', 1050, 0.5, 0.45, 2.31, 1.5, 97, 205, 1.05, { yaw: 0.85, open: true }),
-  // Muscle-Car: großer V8 vorn, schwere Nase, weiche Reifen, schwache Bremsen, keine Fahrhilfen – quertreibt am Gas
-  musclecar: S('Muscle-Car', 'rwd', 'front', 1650, 0.56, 0.52, 2.74, 1.52, 330, 250, 0.95, { yaw: 1.1, vLow: 8, noAids: true, brakeK: 0.85 }),
-  // Oldtimer-Limousine (60er): Trommelbremsen, Diagonalreifen, kein ESP, wenig Leistung
-  oldtimer: S('Oldtimer', 'rwd', 'front', 1300, 0.53, 0.58, 2.75, 1.45, 60, 150, 0.75, { yaw: 1.1, noAids: true, brakeK: 0.7, steerMax: 0.58 }),
+  // Muscle-Car: großer V8 vorn, schwere Nase, weiche Reifen, schwache Bremsen – quertreibt am Gas
+  musclecar: S('Muscle-Car', 'rwd', 'front', 1650, 0.56, 0.52, 2.74, 1.52, 330, 250, 0.95, { yaw: 1.1, vLow: 8, brakeK: 0.85 }),
+  // Oldtimer-Limousine (60er): Trommelbremsen, Diagonalreifen, wenig Leistung
+  oldtimer: S('Oldtimer', 'rwd', 'front', 1300, 0.53, 0.58, 2.75, 1.45, 60, 150, 0.75, { yaw: 1.1, brakeK: 0.7, steerMax: 0.58 }),
   // Pick-up: Motor vorn, leere Ladefläche → wenig Last auf der angetriebenen Hinterachse, hoher Schwerpunkt
   pickup: S('Pick-up', 'rwd', 'front', 2150, 0.6, 0.8, 3.1, 1.65, 150, 180, 0.9, { yaw: 1.1, diesel: true }),
   // Kleinbus mit Heckmotor (Bulli-Bauart): schwaches Heck-Boxermotörchen, hoch, windempfindlich
-  kleinbus: S('Kleinbus', 'rwd', 'rear', 1500, 0.44, 0.9, 2.4, 1.4, 55, 115, 0.85, { yaw: 1.15, noAids: true, brakeK: 0.8 }),
+  kleinbus: S('Kleinbus', 'rwd', 'rear', 1500, 0.44, 0.9, 2.4, 1.4, 55, 115, 0.85, { yaw: 1.15, brakeK: 0.8 }),
   // Rallye-Kompakt: Allrad mit Hecktendenz, leicht, bissige Reifen
   rallye: S('Rallye-Kompakt', 'awd', 'front', 1280, 0.58, 0.5, 2.52, 1.55, 190, 230, 1.08, { yaw: 0.9, awdFront: 0.35 }),
   // Neue Modelle (0.45.0), Werte nach echten Vorbildern (Leergewicht + Fahrer, Achslast, Radstand, Leistung, Spitze)
@@ -83,7 +83,7 @@ export const SPECS = {
   // Sechszylinder-Diesel, lange Federwege (Vorbild: britischer Geländewagen)
   defender: S('Expeditions-Geländewagen', 'awd', 'front', 2350, 0.5, 0.88, 3.02, 1.7, 221, 191, 0.9, { yaw: 1.1, diesel: true }),
   // permanenter Allrad, 83 PS, keine Fahrhilfen (Vorbild: russischer Kompakt-Geländewagen)
-  niva: S('Kleiner Geländewagen', 'awd', 'front', 1285, 0.55, 0.75, 2.2, 1.43, 61, 142, 0.85, { yaw: 1.05, noAids: true, brakeK: 0.85, steerMax: 0.6 }),
+  niva: S('Kleiner Geländewagen', 'awd', 'front', 1285, 0.55, 0.75, 2.2, 1.43, 61, 142, 0.85, { yaw: 1.05, brakeK: 0.85, steerMax: 0.6 }),
   // Kompakt-SUV mit Frontantrieb (Vorbild: Wolfsburger Kompakt-SUV)
   kompaktsuv: S('Kompakt-SUV', 'fwd', 'front', 1600, 0.6, 0.66, 2.68, 1.58, 110, 200, 0.98, {}),
   // sportliches V6-SUV mit hecklastigem Allrad (Vorbild: Stuttgarter Sport-SUV)
@@ -92,7 +92,7 @@ export const SPECS = {
   grosssuv: S('Großes SUV', 'awd', 'front', 2200, 0.52, 0.7, 2.98, 1.68, 250, 243, 1.02, { awdFront: 0.4, yaw: 1.05 }),
   // Motorräder (Zweiräder; Masse inkl. Fahrer, Spur ohne Bedeutung): Wheelie begrenzt den Anzug, Stoppie die Bremse
   motorcycle: S('Motorrad', 'rwd', 'mid', 280, 0.5, 0.66, 1.45, 1, 110, 240, 1.1, { twoWheel: true, yaw: 1, bias: 0.75, steerMax: 0.5, vLow: 6 }),
-  scooter: S('Motorroller', 'rwd', 'rear', 215, 0.42, 0.6, 1.35, 1, 11, 95, 1, { twoWheel: true, yaw: 1, bias: 0.6, steerMax: 0.55, vLow: 5, noAids: true }),
+  scooter: S('Motorroller', 'rwd', 'rear', 215, 0.42, 0.6, 1.35, 1, 11, 95, 1, { twoWheel: true, yaw: 1, bias: 0.6, steerMax: 0.55, vLow: 5 }),
   // Nutz- und Einsatzfahrzeuge (fleet.js-Arten), damit auch ein gekaperter LKW oder Bus echt fährt
   police: S('Streifenwagen', 'rwd', 'front', 1750, 0.53, 0.56, 2.94, 1.58, 190, 240, 1.02),
   ambulance: S('Rettungswagen', 'rwd', 'front', 4200, 0.45, 1.15, 3.66, 1.75, 140, 140, 0.85, { yaw: 1.15, steerMax: 0.55, diesel: true }),

@@ -41,7 +41,7 @@ export function createWorld({ city, seed = 1989, cars = TRAFFIC.cars, pedestrian
   if (!city) throw new Error('createWorld braucht eine Karte (city)');
   const rng = mulberry32(seed + 7);
   const w = {
-    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, snow: 0, ice: 0, temp: 0, forceTemp: null, forceWeather: null,
+    city, rng, solids: city.solids, cars: [], peds: [], bikes: [], animals: [], events: [], time: 0, clock: CLOCK.start, day: START_DAY, dayCount: 0, seed, wet: 0, snow: 0, ice: 0, temp: 0, forceTemp: null, forceWeather: null, esp: true, abs: true,
     player: { x: 0, y: 0, angle: 0, inCar: null, step: 0, stun: 0 },
     playerCarId: null,
     mission: createMission(),
@@ -859,9 +859,18 @@ export function updateWorld(w, input, dt) {
   if ((w._stT = (w._stT ?? 0) - 1) <= 0 || w._stAt !== w.city.gen) { w._stT = 30; w._stAt = w.city.gen; const o = playerCar(w) ?? p; w._stNear = stationsNear(w.city, o.x, o.y, 1200); }
   const pc = playerCar(w);
   if (pc) {
+    if (input.espToggle && !pc.wrecked) {
+      w.esp = w.esp === false;
+      w.notice = { text: `ESP ${w.esp ? 'AN' : 'AUS'}`, t: 1.6 };
+    }
+    if (input.absToggle && !pc.wrecked) {
+      w.abs = w.abs === false;
+      w.notice = { text: `ABS ${w.abs ? 'AN' : 'AUS'}`, t: 1.6 };
+    }
     if (pc.wrecked) applyDriverInput(pc, { throttle: 0, brake: 0, steer: 0, handbrake: false, horn: false });
     else applyDriverInput(pc, input);
     pc.esp = w.esp !== false; // ASR/ESP (Befehl „esp aus“ schaltet ab)
+    pc.abs = w.abs !== false;
     if (pc.horn && !pc._hornWas) w.events.push({ type: 'horn', x: pc.x, y: pc.y });
     pc._hornWas = pc.horn;
   } else if (!p.dead && !p.ride) { input = clickControl(w, input, dt); if (!p.inCar) { updatePlayerOnFoot(w, input, dt); updateStationPresence(w, input); } }

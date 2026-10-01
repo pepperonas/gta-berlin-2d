@@ -14,7 +14,7 @@ import { WHEEL, slotDir, drawWeaponIcon } from './weaponwheel.js';
 import { CONSOLE } from './console.js';
 import { STAT_SECTIONS, formatStat, accuracy } from './stats.js';
 import { dayName } from './rhythm.js';
-import { WX_ICON } from './weather.js';
+import { WX_ICON, WX_LABEL, temperatureAt } from './weather.js';
 import { undelta } from './geom.js';
 import { mapLabels, prepareStreets } from './maplabels.js';
 import { pathOf, ringPath, POI_STYLE } from './render.js';
@@ -218,7 +218,7 @@ export class Hud {
 
   // Befehlszeile: Eingabe unten links mit Vorschau (grau) und blinkender Marke, darüber die Vorschläge (gewählter hell,
   // Art/Hilfe rechts), darüber die letzten Meldungen. Geschlossen: nur frische Meldungen (verblassen nach CONSOLE.logTime).
-  drawConsole(con, now) {
+  drawConsole(con, now, world = null) {
     // rechts neben der Minikarte, links vor der Waffen-/Autoanzeige (Stand des letzten Bildes), sonst am linken Rand
     const c = this.ctx, m = this.m, L = this.layout ?? {}, mm = L.minimap;
     const x = mm && mm.y + mm.h > this.vh / 2 ? mm.x + mm.w + 16 : m.x;
@@ -236,10 +236,27 @@ export class Hud {
       const typed = this.text(con.text, tx, y + 27, { size: fs, weight: 600, shadow: false });
       if (con.sugg?.ghost && con.sel < 0) this.text(con.sugg.ghost, tx + typed, y + 27, { size: fs, weight: 600, color: 'rgba(255,255,255,0.35)', shadow: false });
       if (Math.floor(now * 2) % 2 === 0) { c.fillStyle = YELLOW; c.fillRect(tx + typed + 1, y + 10, 2, 22); }
-      if (!con.text) this.text('Befehl, Uhrzeit, Wetter oder Ort – Tab ergänzt, Enter führt aus, Esc schließt', tx + 8, y + 27, { size: 14, weight: 500, color: 'rgba(255,255,255,0.4)', shadow: false });
+      if (!con.text) this.text('z. B. wetter oder spawn musclecar · Enter bestätigt · Esc schließt', tx + 8, y + 27, { size: 14, weight: 500, color: 'rgba(255,255,255,0.4)', shadow: false });
+      if (con.weatherPanel) {
+        const rows = ['Wettertyp', 'Temperatur', 'Schneedecke', 'Straßennässe', 'Glätte'];
+        const values = world ? [world.forceWeather == null ? 'Natürlich' : WX_LABEL[world.forceWeather],
+          `${(world.forceTemp ?? temperatureAt(world.seed, world.dayCount, world.clock, world.forceWeather)).toFixed(1).replace('.', ',')} °C${world.forceTemp == null ? ' · natürlich' : ''}`,
+          `${Math.round((world.snow ?? 0) * 100)} %`, `${Math.round((world.wet ?? 0) * 100)} %`, `${Math.round((world.ice ?? 0) * 100)} %`] : ['–', '–', '–', '–', '–'];
+        const rh = 30, h = rows.length * rh + 44;
+        y -= h + 6;
+        this.panel(x, y, w, h, 0.94);
+        this.text('WETTER EINSTELLEN', x + 16, y + 22, { size: 14, weight: 800, color: YELLOW, shadow: false });
+        rows.forEach((label, i) => {
+          const yy = y + 32 + i * rh;
+          if (i === con.weatherRow) { c.fillStyle = 'rgba(255,211,61,0.2)'; rr(c, x + 7, yy, w - 14, rh - 1, 5); c.fill(); }
+          this.text(label, x + 18, yy + 20, { size: 15, weight: i === con.weatherRow ? 800 : 600, color: '#fff', shadow: false });
+          this.text(`‹  ${values[i]}  ›`, x + w - 18, yy + 20, { size: 15, weight: i === con.weatherRow ? 800 : 600, color: i === con.weatherRow ? YELLOW : '#ddd', align: 'right', shadow: false });
+        });
+        this.text('↑↓ auswählen · ←→ ändern · Enter fertig · Esc zurück', x + 16, y + h - 8, { size: 12, weight: 500, color: '#aaa', shadow: false });
+      }
       // Hilfezeile: Aufbau und Zweck des Befehls, den man gerade tippt
-      if (con.sugg?.help && con.text) { y -= 26; this.text(con.sugg.help, x + 8, y + 18, { size: 14, weight: 600, color: 'rgba(255,211,61,0.85)' }); this.counts = this.counts ?? {}; this.counts.consoleHelp = con.sugg.help; }
-      const items = con.sugg?.items ?? [];
+      if (!con.weatherPanel && con.sugg?.help && con.text) { y -= 26; this.text(con.sugg.help, x + 8, y + 18, { size: 14, weight: 600, color: 'rgba(255,211,61,0.85)' }); this.counts = this.counts ?? {}; this.counts.consoleHelp = con.sugg.help; }
+      const items = con.weatherPanel ? [] : con.sugg?.items ?? [];
       if (items.length) {
         const rh = 28, h = items.length * rh + 12;
         y -= h + 6;
@@ -458,8 +475,10 @@ export class Hud {
     if (car.wrecked) tags.push(['SCHROTT', '#ff6a5a']);
     if (car.cargo) tags.push(['▣ KISTEN', '#e6b460']);
     if (car.dyn) {
-      const sp = specOf(car), off = world.esp === false || sp.noAids, on = car.dyn.esp && Math.floor((world.time ?? 0) * 8) % 2 === 0;
-      if (off || on) tags.push([off ? 'ESP AUS' : 'ESP', '#ffb020']);
+      const sp = specOf(car), espOn = world.esp !== false;
+      const regulating = espOn && car.dyn.esp && Math.floor((world.time ?? 0) * 8) % 2 === 0;
+      tags.push([regulating ? 'ESP REGELT' : espOn ? 'ESP AN' : 'ESP AUS', regulating || !espOn ? '#ffb020' : '#8ed49b']);
+      tags.push([world.abs === false ? 'ABS AUS' : 'ABS AN', world.abs === false ? '#ffb020' : '#8ed49b']);
       tags.push([DRIVE_LABEL[sp.drive], 'rgba(255,255,255,0.7)']);
     }
     tags.forEach(([t, col], i) => this.otext(t, lx, cy + R - 4 - (tags.length - 1 - i) * 17, { size: 13, weight: 800, align: 'right', color: col, spacing: 1 }));
@@ -942,6 +961,8 @@ export class Hud {
       ['Sprinten · langsam gehen', 'A halten · Stick halb', 'Umschalt · Alt'],
       ['Gas / Bremse · Rückwärts', 'RT / LT', 'W / S'],
       ['Handbremse', 'RB oder B', 'Leertaste'],
+      ['ESP umschalten (im Auto)', '–', 'X'],
+      ['ABS umschalten (im Auto)', '–', 'Y'],
       ['Einsteigen / Aussteigen', 'Y', d ? 'Linksklick (Auto) · F' : 'F / rechte Maus tippen'],
       ['Mitfahren (Bus, Tram, S/U-Bahn)', 'Steuerkreuz unten', 'G'],
       ['Waffenrad (zu Fuß)', 'LB halten, rechter Stick', 'rechte Maus halten'],
@@ -955,8 +976,8 @@ export class Hud {
     const x0 = vw / 2 - 460;
     this.text('Controller', x0 + 470, 170, { size: 18, color: '#aaa', weight: 800 });
     this.text('Tastatur', x0 + 740, 170, { size: 18, color: '#aaa', weight: 800 });
-    // Reihenhöhe 31: 14 Zeilen enden bei y=613 – Luft zur Fußzeile bleibt (Fuß-Klickfläche beginnt bei 654).
-    const rowH = 31;
+    // Die 16 Zeilen enden bei y=615; darunter bleibt Luft zur Fußzeile (Fuß-Klickfläche beginnt bei 654).
+    const rowH = 27;
     rows.forEach(([a, b, k], i) => {
       const y = 210 + i * rowH;
       if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x0, y - (rowH - 12), 920, rowH); }
@@ -1003,4 +1024,3 @@ function rr(c, x, y, w, h, r) {
   c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
   c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
 }
-

@@ -456,7 +456,7 @@ function draw() {
       if (game.teleport) hud.drawTeleportDialog(game.teleport);
       const wh = openWheel();
       if (wh) hud.drawWeaponWheel(game.world.player, wh.state.hover, { vx: wh.state.vx, vy: wh.state.vy, age: performance.now() / 1000 - wh.state.openedAt, pad: wh === padBtn, ...(wh === rightBtn && wh.state.cx !== null ? { cx: wh.state.cx, cy: wh.state.cy } : {}) });
-      hud.drawConsole(game.console, performance.now() / 1000);
+      hud.drawConsole(game.console, performance.now() / 1000, game.world);
       if (game.resultMenu) hud.drawResult(game);
     } else if (game.screen === 'paused') hud.drawPause(game);
     else if (game.screen === 'controls') hud.drawControls(game);
