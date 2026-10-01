@@ -1,5 +1,7 @@
 # GTA Berlin
 
+[![Node.js ≥20](https://img.shields.io/badge/Node.js-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Plattformen](https://img.shields.io/badge/Plattform-Browser%20%7C%20Xbox%20Dev%20Mode-107C10)](#auf-dem-mac-spielen-und-testen)
+
 Spielbares Top-down-Open-World-Spiel mit schräger Draufsicht in **ganz Berlin, 1:1 aus OpenStreetMap**:
 echte Straßen, Gebäude, Spree, Havel, Seen, Wälder, Parks und rund eine Million Bäume, dazu Verkehr, Passanten, fahrbare Autos und eine
 vollständige Mission. Läuft im Browser (Entwicklung auf dem Mac)
