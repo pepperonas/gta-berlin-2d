@@ -1,0 +1,14 @@
+[package]
+name = "berlin-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+[dependencies]
+anyhow.workspace = true
+bytemuck.workspace = true
+glam.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+pollster.workspace = true
+berlin-map-loader = { path = "../map_loader" }
+png.workspace = true

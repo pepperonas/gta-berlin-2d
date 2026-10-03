@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/engine", "crates/game", "crates/map_loader", "crates/sim"]
+default-members = ["crates/game"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+version = "0.1.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+earcutr = "0.5"
+anyhow = "1"
+bytemuck = { version = "1", features = ["derive"] }
+glam = "0.32"
+pollster = "0.4"
+png = "0.18"
+wgpu = { version = "29.0.4", default-features = false, features = ["std", "parking_lot", "metal", "dx12", "vulkan", "wgsl"] }
+winit = "0.30.13"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

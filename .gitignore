@@ -12,3 +12,6 @@ xbox/.vs/
 data/raw/
 .superpowers/
 web/data/bars.json
+
+# Native Rust builds
+/target/

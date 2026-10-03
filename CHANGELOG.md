@@ -4,9 +4,24 @@ Alle nennenswerten Änderungen an GTA Berlin. Format nach [Keep a Changelog](htt
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/). Solange die Version mit `0.` beginnt, ist das Spiel
 ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Versionen ändern.
 
-## [Unreleased] – Entwicklungsstand 2026-10-02
+## [Unreleased] – Entwicklungsstand 2026-10-04
 
 ### Neu
+
+- Native Rust-Portierung, Phasen 1–2: Cargo-Workspace mit winit/wgpu, Metal-/DX12-
+  Konfiguration, steuerbarer Kamera und 60-/120-FPS-Zielmodus. Asynchrones Streaming
+  der bestehenden Berlin-Kacheln, indizierte GPU-Meshes für Straßen/Flächen/Gebäude,
+  Dach-/Fassadenschattierung und instanzierter Baum-/Decal-Atlas. `cargo run` startet
+  die native Kartenansicht; `--check-map` prüft alle Kacheln, `--capture` exportiert
+  ein GPU-Renderziel. Die Spiellogik bleibt vorerst im JS-Prototyp; native Xbox-
+  Ausführung ist unbestätigt. Stand und Grenzen: `docs/NATIVE-RUST.md`.
+- Native Rust-Portierung, Phase 3: neues Crate `berlin-sim` mit SAT-Kollision, Raster-Hash und
+  Nachbarschaftsraster, Stadtmodell mit Kachel-Streaming, Ebenen/Portalen, Arcade- und Einspur-Fahrphysik
+  (Lastverschiebung, ESP/ASR, ABS, Drift, Wheelie/Stoppie, Haftung je Untergrund und Nässe/Schnee/Glätte),
+  Spurgraph mit Ampeln, KI-Verkehr mit Kreuzungs-/Engstellen-Reservierungen, Passanten, Parkern, der Mission
+  „Kisten für den Kiez“ und Spielständen als JSON-Datei (Format der Browserfassung). `cargo run` ist damit
+  spielbar; Autos, Passanten und Missionsziel werden instanziert gezeichnet. `--check-sim SEKUNDEN` prüft die
+  Simulation ohne Fenster. 58 Rust-Tests, davon 10 Integrationstests auf den echten Kacheln.
 
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.

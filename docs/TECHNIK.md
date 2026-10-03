@@ -1,3 +1,7 @@
+> Native Migration: Phase 3 (spielbare Simulation) verwendet Rust/winit/wgpu mit asynchronem Kachel-Streaming. Aktueller Stand und
+> Build-Workflow: [NATIVE-RUST.md](NATIVE-RUST.md). Die folgende Beschreibung
+> dokumentiert den bisherigen Browser-/UWP-Prototyp.
+
 # Technische Entscheidung: Weg auf die Xbox
 
 Stand der Recherche: **27.09.2026**. Alle Quellen am selben Tag geprüft. Ein Teil der Microsoft-Seiten zu „UWP auf Xbox“ ist

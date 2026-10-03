@@ -1,0 +1,11 @@
+[package]
+name = "gta-berlin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+[dependencies]
+berlin-engine = { path = "../engine" }
+berlin-map-loader = { path = "../map_loader" }
+anyhow.workspace = true
+berlin-sim = { path = "../sim" }
+glam.workspace = true

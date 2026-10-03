@@ -1,0 +1,684 @@
+//! Worker-side tessellation; the render thread only uploads completed batches.
+use crate::{
+    buildcolors::{rgb, roof_colors, wall_color},
+    citycodes::{area_kind, hash01, roof_mat, unpack_look},
+    format::{Building, Feature, Polygon, Road},
+    geom::{Bounds, clip_ring, cum_lengths, edges, point_along_cum, signed_area},
+    roofs::{self, Style},
+};
+use anyhow::{Result, ensure};
+use glam::{Vec2, Vec3};
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub point: [f32; 3],
+    pub normal: [f32; 3],
+    pub color: [f32; 3],
+    pub uv: [f32; 2],
+    pub center: [f32; 2],
+    pub material: f32,
+    pub depth: f32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Sprite {
+    pub point: [f32; 3],
+    pub size: [f32; 2],
+    pub angle: f32,
+    pub color: [f32; 3],
+    pub cell: f32,
+    pub depth: f32,
+}
+#[derive(Debug, Default, Clone)]
+pub struct Mesh {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+    pub sprites: Vec<Sprite>,
+}
+impl Mesh {
+    pub fn append(&mut self, other: &Self) {
+        let base = self.vertices.len() as u32;
+        self.vertices.extend_from_slice(&other.vertices);
+        self.indices.extend(other.indices.iter().map(|i| base + i));
+        self.sprites.extend_from_slice(&other.sprites);
+    }
+    pub fn bytes(&self) -> usize {
+        self.vertices.len() * size_of::<Vertex>()
+            + self.indices.len() * 4
+            + self.sprites.len() * size_of::<Sprite>()
+    }
+    fn polygon(
+        &mut self,
+        points: &[Vec2],
+        surface: Surface,
+        height: f32,
+        center: Vec2,
+        uv: impl Fn(Vec2) -> Vec2,
+    ) {
+        if points.len() < 3 {
+            return;
+        }
+        let base = self.vertices.len() as u32;
+        for &p in points {
+            self.vertices.push(Vertex {
+                point: [p.x, p.y, height],
+                normal: surface.normal.to_array(),
+                color: rgb(surface.color),
+                uv: uv(p).to_array(),
+                center: center.to_array(),
+                material: surface.material,
+                depth: surface.depth,
+            });
+        }
+        for i in 1..points.len() - 1 {
+            self.indices
+                .extend_from_slice(&[base, base + i as u32, base + i as u32 + 1]);
+        }
+    }
+    fn stroke(&mut self, points: &[Vec2], width: f32, surface: Surface) {
+        if width <= 0. {
+            return;
+        }
+        // Limited miter joins prevent cracks without producing long spikes at acute bends.
+        let mut offsets = Vec::with_capacity(points.len());
+        for i in 0..points.len() {
+            let previous = points[i] - points[i.saturating_sub(1)];
+            let next = points[(i + 1).min(points.len() - 1)] - points[i];
+            let a = if previous.length_squared() > 0. {
+                previous.normalize()
+            } else {
+                next.normalize_or_zero()
+            };
+            let b = if next.length_squared() > 0. {
+                next.normalize()
+            } else {
+                a
+            };
+            let na = Vec2::new(-a.y, a.x);
+            let nb = Vec2::new(-b.y, b.x);
+            let m = (na + nb).normalize_or_zero();
+            let denom = m.dot(nb).abs().max(0.25);
+            offsets.push(m * (width * 0.5 / denom).min(width));
+        }
+        for i in 0..points.len().saturating_sub(1) {
+            if points[i] == points[i + 1] {
+                continue;
+            }
+            let a = points[i];
+            let b = points[i + 1];
+            self.polygon(
+                &[
+                    a - offsets[i],
+                    b - offsets[i + 1],
+                    b + offsets[i + 1],
+                    a + offsets[i],
+                ],
+                surface,
+                0.,
+                Vec2::ZERO,
+                |p| p,
+            );
+        }
+    }
+    fn circle(&mut self, p: Vec2, r: f32, surface: Surface) {
+        let pts: Vec<_> = (0..24)
+            .map(|i| p + Vec2::from_angle(i as f32 * std::f32::consts::TAU / 24.) * r)
+            .collect();
+        self.polygon(&pts, surface, 0., Vec2::ZERO, |p| p);
+    }
+}
+#[derive(Clone, Copy)]
+struct Surface {
+    color: u32,
+    material: f32,
+    depth: f32,
+    normal: Vec3,
+}
+impl Surface {
+    fn ground(color: u32, material: f32, depth: f32) -> Self {
+        Self {
+            color,
+            material,
+            depth,
+            normal: Vec3::Z,
+        }
+    }
+}
+/// Returns triangles grouped by outer rings, retaining courtyard/multipolygon holes.
+pub fn triangulate(polygon: &Polygon) -> Result<Vec<[Vec2; 3]>> {
+    ensure!(
+        polygon.rings.len() == polygon.outer.len(),
+        "Ringflags passen nicht"
+    );
+    let parents = crate::geom::ring_parents(&polygon.rings);
+    let depths = crate::geom::ring_depths(&parents);
+    let mut out = Vec::new();
+    for (i, ring) in polygon.rings.iter().enumerate() {
+        if !depths[i].is_multiple_of(2) {
+            continue;
+        }
+        let origin = ring[0];
+        let mut coords = Vec::<f64>::new();
+        let mut points = Vec::new();
+        let mut holes = Vec::new();
+        let add = |r: &[Vec2], coords: &mut Vec<f64>, points: &mut Vec<Vec2>| {
+            let r = if r.len() > 1 && r[0] == r[r.len() - 1] {
+                &r[..r.len() - 1]
+            } else {
+                r
+            };
+            for &p in r {
+                let local = p - origin;
+                coords.extend([local.x as f64, local.y as f64]);
+                points.push(p);
+            }
+        };
+        add(ring, &mut coords, &mut points);
+        for (j, hole) in polygon.rings.iter().enumerate() {
+            if parents[j] == Some(i) {
+                holes.push(points.len());
+                add(hole, &mut coords, &mut points);
+            }
+        }
+        let indices = earcutr::earcut(&coords, &holes, 2)
+            .map_err(|e| anyhow::anyhow!("Triangulierung: {e:?}"))?;
+        for tri in indices.as_chunks::<3>().0 {
+            let triangle = [points[tri[0]], points[tri[1]], points[tri[2]]];
+            if signed_area(&triangle).abs() > 0.001 {
+                out.push(triangle);
+            }
+        }
+    }
+    ensure!(!out.is_empty(), "Polygon hat keine triangulierbare Fläche");
+    Ok(out)
+}
+fn polygon_fill(
+    mesh: &mut Mesh,
+    polygon: &Polygon,
+    surface: Surface,
+    clip: Option<Bounds>,
+) -> Result<()> {
+    for tri in triangulate(polygon)? {
+        let points = clip.map_or_else(|| tri.to_vec(), |b| clip_ring(&tri, b));
+        mesh.polygon(&points, surface, 0., Vec2::ZERO, |p| p);
+    }
+    Ok(())
+}
+fn clip_convex(points: &[Vec2], clip: &[Vec2]) -> Vec<Vec2> {
+    let mut points = points.to_vec();
+    let sign = signed_area(clip).signum() as f32;
+    for (a, b) in edges(clip) {
+        let d = b - a;
+        if d.length_squared() < 0.001 {
+            continue;
+        }
+        let mut out = Vec::new();
+        for (p, q) in edges(&points) {
+            let vp = d.perp_dot(p - a) * sign;
+            let vq = d.perp_dot(q - a) * sign;
+            let pin = vp >= -0.001;
+            let qin = vq >= -0.001;
+            if pin != qin {
+                out.push(p.lerp(q, vp / (vp - vq)));
+            }
+            if qin {
+                out.push(q);
+            }
+        }
+        points = out;
+    }
+    points
+}
+fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
+    let style = roofs::roof_style(b, scale);
+    let facade = roofs::facade_style(b);
+    let wall = wall_color(b, facade);
+    let (skin, center_color) = roof_colors(b, style, wall);
+    let depth = 0.45 - b.center.y / 500000. * 0.2;
+    let axis = roofs::oriented_box(b);
+    let wall_surface = Surface {
+        color: wall,
+        material: 11.,
+        depth: depth + 0.00004,
+        normal: Vec3::Z,
+    };
+    let wall_lines: Vec<_> = if let Some(walls) = &b.walls {
+        walls
+            .iter()
+            .flat_map(|r| r.windows(2).map(|p| (p[0], p[1])))
+            .collect()
+    } else {
+        b.polygon.rings.iter().flat_map(|r| edges(r)).collect()
+    };
+    for (a, c) in wall_lines {
+        let d = c - a;
+        let len = d.length();
+        if len < 0.1 {
+            continue;
+        }
+        let n = Vec3::new(d.y / len, -d.x / len, 0.);
+        let base = mesh.vertices.len() as u32;
+        for (point, z, uv) in [
+            (a, 0., [0., 0.]),
+            (c, 0., [len, 0.]),
+            (c, b.height, [len, b.height]),
+            (a, b.height, [0., b.height]),
+        ] {
+            mesh.vertices.push(Vertex {
+                point: [point.x, point.y, z],
+                normal: n.to_array(),
+                color: rgb(wall_surface.color),
+                uv,
+                center: b.center.to_array(),
+                material: wall_surface.material,
+                depth: wall_surface.depth,
+            });
+        }
+        mesh.indices
+            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    let lk = unpack_look(b.look);
+    let material = match lk.rmat {
+        roof_mat::TILES => 6.,
+        roof_mat::SLATE => 7.,
+        roof_mat::METAL => 8.,
+        roof_mat::GREEN => 4.,
+        roof_mat::GLASS => 0.,
+        _ => {
+            if style.pitched() || style == Style::Berlin {
+                6.
+            } else if style == Style::Corrugated {
+                8.
+            } else {
+                9.
+            }
+        }
+    };
+    let triangles = triangulate(&b.polygon)?;
+    for tri in &triangles {
+        let base = Surface {
+            color: center_color,
+            material: if style == Style::Berlin || style == Style::Mansard {
+                9.
+            } else {
+                material
+            },
+            depth,
+            normal: Vec3::Z,
+        };
+        if style == Style::Dome || style == Style::Round {
+            let start = mesh.vertices.len();
+            mesh.polygon(tri, base, b.height, b.center, |p| axis.local(p));
+            let radius = ((axis.max - axis.min).min_element() * 0.46).max(1.);
+            for v in &mut mesh.vertices[start..] {
+                let p = Vec2::new(v.point[0], v.point[1]);
+                let local = (p - b.center) / radius;
+                let z = (1. - local.length_squared()).max(0.05).sqrt();
+                v.normal = Vec3::new(local.x, local.y, z).normalize().to_array();
+            }
+        } else {
+            mesh.polygon(tri, base, b.height, b.center, |p| axis.local(p));
+        }
+    }
+    for facet in roofs::roof_facets(b, style, scale) {
+        if signed_area(&facet.points).abs() < 0.01 {
+            continue;
+        }
+        let slope = if style == Style::Mansard { 1.2 } else { 0.65 };
+        let normal = Vec3::new(facet.outward.x * slope, facet.outward.y * slope, 1.).normalize();
+        let surface = Surface {
+            color: skin,
+            material,
+            depth: depth - 0.00002,
+            normal,
+        };
+        for tri in &triangles {
+            let clipped = clip_convex(tri, &facet.points);
+            if signed_area(&clipped).abs() > 0.01 {
+                mesh.polygon(&clipped, surface, b.height, b.center, |p| axis.local(p));
+            }
+        }
+    }
+    Ok(())
+}
+fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
+    if r.passage {
+        return;
+    }
+    let depth = if r.level > 0 {
+        0.68 - r.level as f32 * 0.03
+    } else if r.level < 0 {
+        0.935
+    } else {
+        0.85
+    };
+    let sidewalk = if r.class <= 9 { 2. * scale } else { 0. };
+    mesh.stroke(
+        &r.points,
+        r.width + 2. * sidewalk,
+        Surface::ground(0xa8a59d, 3., depth + 0.03),
+    );
+    let (color, material) = match r.surface {
+        1 => (0x72716b, 2.),
+        2 => (0x949087, 3.),
+        3 => (0x9b9276, 10.),
+        _ => (0x454d50, 1.),
+    };
+    mesh.stroke(&r.points, r.width, Surface::ground(color, material, depth));
+    if r.fill > 0. {
+        let shifted = crate::geom::offset_polyline(&r.points, r.width * 0.5 + r.fill * 0.5);
+        mesh.stroke(&shifted, r.fill, Surface::ground(color, material, depth));
+    }
+    let cum = cum_lengths(&r.points);
+    let length = *cum.last().unwrap_or(&0.);
+    let margin = r.width * 0.5 + 3. * scale;
+    // Parking and cycle lanes follow the stored street cross-section.
+    for side in 0..2 {
+        let sign = if side == 0 { -1. } else { 1. };
+        let inset = r.park_width[side] + r.cycle[side] + r.track[side];
+        if inset > 0. {
+            let off = sign * (r.width * 0.5 - inset);
+            let shifted = crate::geom::offset_polyline(&r.points, off);
+            mesh.stroke(
+                &shifted,
+                0.1 * scale,
+                Surface::ground(0xb7b6a8, 0., depth - 0.0003),
+            );
+        }
+    }
+    if r.forward > 0 && r.backward > 0 && r.class <= 7 {
+        let mut s = margin;
+        while s < length - margin {
+            if let Some(p) = point_along_cum(&r.points, &cum, s) {
+                mesh.sprites.push(Sprite {
+                    point: [p.point.x, p.point.y, 0.],
+                    size: [3. * scale, 0.14 * scale],
+                    angle: p.direction.y.atan2(p.direction.x),
+                    color: rgb(0xe3dfc9),
+                    cell: 7.,
+                    depth: depth - 0.001,
+                });
+            }
+            s += 9. * scale;
+        }
+    }
+    // Deterministic road wear with the source module's spacing, dimensions and cap.
+    if r.class <= 8 && !r.bridge {
+        let mut count = 0;
+        let seed = (r.id as u32).wrapping_mul(2654435761);
+        for (cell, every, size) in [
+            (2., 45., Vec2::splat(0.7)),
+            (3., if r.class <= 5 { 90. } else { 45. }, Vec2::new(3., 1.4)),
+            (4., 70., Vec2::new(3.5, 0.5)),
+            (1., 25., Vec2::new(0.6, 0.4)),
+        ] {
+            if r.surface == 1 && [3., 4.].contains(&cell) {
+                continue;
+            }
+            let n = (length / (every * scale)).floor() as u32;
+            for i in 0..n {
+                let s =
+                    (i as f32 + 0.2 + hash01(seed.wrapping_add(i * 13 + cell as u32)) as f32 * 0.6)
+                        * length
+                        / n.max(1) as f32;
+                if s < margin || s > length - margin || count >= 120 {
+                    continue;
+                }
+                let Some(p) = point_along_cum(&r.points, &cum, s) else {
+                    continue;
+                };
+                for side in if cell == 1. { vec![-1., 1.] } else { vec![0.] } {
+                    let offset = if cell == 1. {
+                        side * (r.width * 0.5 - 0.35 * scale)
+                    } else {
+                        (hash01(seed.wrapping_add(i + 991)) as f32 - 0.5)
+                            * (r.width - r.park_width.iter().sum::<f32>())
+                            * 0.5
+                    };
+                    let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * offset;
+                    mesh.sprites.push(Sprite {
+                        point: [pos.x, pos.y, 0.],
+                        size: (size * scale).to_array(),
+                        angle: p.direction.y.atan2(p.direction.x),
+                        color: [1.; 3],
+                        cell,
+                        depth: depth - 0.0008,
+                    });
+                    count += 1;
+                }
+            }
+        }
+        for side in 0..2 {
+            if r.park[side] != 1 && r.park[side] != 2 {
+                continue;
+            }
+            let n = (length / (14. * scale)) as u32;
+            for i in 0..n {
+                if count >= 120 || hash01(seed.wrapping_add(i + side as u32 * 819)) >= 0.5 {
+                    continue;
+                }
+                let s = (i as f32 + 0.5) * 14. * scale;
+                if s < margin || s > length - margin {
+                    continue;
+                }
+                if let Some(p) = point_along_cum(&r.points, &cum, s) {
+                    let off = (if side == 0 { -1. } else { 1. })
+                        * (r.width * 0.5 - r.park_width[side] * 0.5);
+                    let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * off;
+                    mesh.sprites.push(Sprite {
+                        point: [pos.x, pos.y, 0.],
+                        size: [scale, 0.7 * scale],
+                        angle: hash01(seed.wrapping_add(i + 511)) as f32 * std::f32::consts::PI,
+                        color: [1.; 3],
+                        cell: 5.,
+                        depth: depth - 0.0008,
+                    });
+                    count += 1;
+                }
+            }
+        }
+    }
+}
+pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
+    let mut mesh = Mesh::default();
+    match feature {
+        Feature::Building(b) => building_mesh(&mut mesh, b, scale)?,
+        Feature::Water { polygon, clip } => polygon_fill(
+            &mut mesh,
+            polygon,
+            Surface::ground(0x466f78, 5., 0.96),
+            *clip,
+        )?,
+        Feature::Area {
+            polygon,
+            kind,
+            level,
+            clip,
+        } => {
+            let (color, material) = match *kind {
+                area_kind::RAIL => (0x777365, 10.),
+                area_kind::PLAZA => (0xa39f94, 3.),
+                area_kind::ALLOTMENTS => (0x648b50, 4.),
+                area_kind::CEMETERY => (0x5b8a47, 4.),
+                area_kind::GRASS => (0x5d9340, 4.),
+                area_kind::PITCH => (0x4d8c3c, 4.),
+                area_kind::SAND => (0xd6c48d, 10.),
+                area_kind::WOOD => (0x425e3d, 4.),
+                area_kind::BRIDGE => (0x858780, 3.),
+                _ => (0x6a8555, 4.),
+            };
+            let depth = if *kind == area_kind::BRIDGE {
+                0.70 - *level as f32 * 0.03
+            } else {
+                0.975
+            };
+            polygon_fill(
+                &mut mesh,
+                polygon,
+                Surface::ground(color, material, depth),
+                *clip,
+            )?;
+        }
+        Feature::Road(r) => road_mesh(&mut mesh, r, scale),
+        Feature::Junction {
+            point,
+            radius,
+            level,
+            cobble,
+        } => {
+            let depth = if *level > 0 {
+                0.68 - *level as f32 * 0.03
+            } else if *level < 0 {
+                0.935
+            } else {
+                0.85
+            };
+            mesh.circle(
+                *point,
+                *radius + 2. * scale,
+                Surface::ground(0xa8a59d, 3., depth + 0.03),
+            );
+            mesh.circle(
+                *point,
+                *radius,
+                Surface::ground(
+                    if *cobble { 0x72716b } else { 0x454d50 },
+                    if *cobble { 2. } else { 1. },
+                    depth - 0.0001,
+                ),
+            );
+        }
+        Feature::Line {
+            points,
+            kind,
+            level,
+            hidden,
+        } => {
+            if !hidden {
+                let depth = if *level > 0 {
+                    0.67 - *level as f32 * 0.03
+                } else {
+                    0.82
+                };
+                match kind {
+                    0 => mesh.stroke(
+                        points,
+                        1.8 * scale,
+                        Surface::ground(0xaaa38d, 3., depth + 0.08),
+                    ),
+                    1 => {
+                        mesh.stroke(points, 2.8 * scale, Surface::ground(0x6f6c62, 10., depth));
+                        for off in [-0.72 * scale, 0.72 * scale] {
+                            let shifted = crate::geom::offset_polyline(points, off);
+                            mesh.stroke(
+                                &shifted,
+                                0.12 * scale,
+                                Surface::ground(0xb7b4a7, 0., depth - 0.001),
+                            );
+                        }
+                    }
+                    _ => mesh.stroke(
+                        points,
+                        0.18 * scale,
+                        Surface::ground(0x776b54, 0., depth - 0.01),
+                    ),
+                }
+            }
+        }
+        Feature::Tree {
+            point,
+            radius,
+            seed,
+            genus,
+        } => {
+            let color = if *genus == 16 {
+                0x4a6952
+            } else {
+                [0x557547, 0x63814d, 0x748955, 0x4e7044][*seed as usize % 4]
+            };
+            mesh.sprites.push(Sprite {
+                point: [point.x, point.y, 0.],
+                size: [radius * 2., radius * 2.],
+                angle: hash01(*seed) as f32 * std::f32::consts::TAU,
+                color: rgb(color),
+                cell: if *genus == 16 { 6. } else { 0. },
+                depth: 0.44 - point.y / 500000. * 0.2,
+            });
+        }
+    }
+    Ok(mesh)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geom::point_in_ring;
+    #[test]
+    fn disconnected_rings_and_nested_islands_use_even_odd_fill() {
+        let square = |lo: f32, hi: f32| {
+            vec![
+                Vec2::splat(lo),
+                Vec2::new(hi, lo),
+                Vec2::splat(hi),
+                Vec2::new(lo, hi),
+            ]
+        };
+        let polygon = Polygon {
+            rings: vec![
+                square(0., 10.),
+                square(2., 8.),
+                square(4., 6.),
+                square(20., 25.),
+            ],
+            outer: vec![true, false, false, false],
+        };
+        let triangles = triangulate(&polygon).unwrap();
+        assert_eq!(
+            triangles.iter().map(|t| signed_area(t).abs()).sum::<f64>(),
+            93.
+        );
+    }
+    #[test]
+    fn courtyard_and_concavity_survive_tessellation() {
+        let outer = vec![
+            Vec2::ZERO,
+            Vec2::new(10., 0.),
+            Vec2::splat(10.),
+            Vec2::new(0., 10.),
+        ];
+        let hole = vec![
+            Vec2::splat(3.),
+            Vec2::new(7., 3.),
+            Vec2::splat(7.),
+            Vec2::new(3., 7.),
+        ];
+        let polygon = Polygon {
+            rings: vec![outer, hole],
+            outer: vec![true, false],
+        };
+        let tris = triangulate(&polygon).unwrap();
+        let area: f64 = tris.iter().map(|t| signed_area(t).abs()).sum();
+        assert!((area - 84.).abs() < 1e-6);
+        for t in tris {
+            assert!(!point_in_ring((t[0] + t[1] + t[2]) / 3., &polygon.rings[1]));
+        }
+        let concave = Polygon {
+            rings: vec![vec![
+                Vec2::ZERO,
+                Vec2::new(10., 0.),
+                Vec2::new(10., 4.),
+                Vec2::new(4., 4.),
+                Vec2::new(4., 10.),
+                Vec2::new(0., 10.),
+            ]],
+            outer: vec![true],
+        };
+        assert_eq!(
+            triangulate(&concave)
+                .unwrap()
+                .iter()
+                .map(|t| signed_area(t).abs())
+                .sum::<f64>(),
+            64.
+        );
+    }
+}

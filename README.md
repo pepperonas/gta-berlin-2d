@@ -1,5 +1,30 @@
 # GTA Berlin
 
+## Native Rust-Portierung – Phase 3
+
+Die native Fassung läuft mit `cargo run` (macOS: Metal, Windows: DX12) und ist
+seit Phase 3 spielbar: Kollision (SAT), Fahrphysik mit Einspurmodell/ESP/ABS,
+KI-Verkehr mit Ampeln und Vorfahrt, Passanten, die Mission „Kisten für den Kiez“
+und Spielstände als JSON-Datei. Beleuchtung, Audio, HUD-Texte, Waffen und
+Nahverkehr folgen; das Browser-Spiel bleibt die vollständige Referenz.
+
+```bash
+cargo run --release
+cargo run --release -- --new          # ohne gespeicherten Stand beginnen
+cargo run --release -- --check-sim 120  # Simulation ohne Fenster
+cargo run -- --free                   # freie Kartenansicht (Phase 2)
+cargo test --workspace
+cargo run -- --check-map
+```
+
+Zu Fuß: WASD/Pfeile, Shift sprinten, Alt langsam. F ein-/aussteigen, E Aktion
+(halten = Kisten einladen). Im Auto: W/S Gas/Bremse (gehalten: rückwärts), A/D
+lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
+erledigten Auftrag wird automatisch gespeichert. Mausrad zoomt, Esc beendet.
+Missionsziel und Hinweise stehen vorerst im Fenstertitel.
+Details und Plattformgrenzen: [Native Architektur und Build](docs/NATIVE-RUST.md).
+Die folgenden Browser-/UWP-Anleitungen beziehen sich auf den bisherigen Prototyp.
+
 [![Node.js ≥20](https://img.shields.io/badge/Node.js-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Plattformen](https://img.shields.io/badge/Plattform-Browser%20%7C%20Xbox%20Dev%20Mode-107C10)](#auf-dem-mac-spielen-und-testen)
 
 Spielbares Top-down-Open-World-Spiel mit schräger Draufsicht in **ganz Berlin, 1:1 aus OpenStreetMap**:

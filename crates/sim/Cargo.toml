@@ -1,0 +1,11 @@
+[package]
+name = "berlin-sim"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+berlin-map-loader = { path = "../map_loader" }

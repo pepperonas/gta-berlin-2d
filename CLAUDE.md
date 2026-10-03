@@ -1,5 +1,29 @@
 # CLAUDE.md
 
+## Native migration (phase 3)
+
+The Rust 2024 workspace is now the native migration target. `cargo run` starts
+the playable `crates/game` (`--free` = old map viewer); `crates/engine` owns winit/wgpu, camera and pacing
+plus the `Game` trait (fixed step, keys, instanced `Body` quads for cars/people/markers);
+`crates/sim` (`berlin-sim`) is the DOM/GPU-free deterministic simulation ported from the JS reference:
+`collision.rs` (SAT, `SpatialHash`, `Grid`), `city.rs` (own sim decoder of v3 tiles with refcounted
+streaming, surfaces, walls, levels data; `DiskSource`/`ThreadedSource`), `levels.rs`, `car.rs` + `dynamics.rs`
++ `carmodels.rs` + `traction.rs`, `roadgraph.rs` (lanes, signals), `traffic.rs` (AI + reservations kept in
+`Reservations`, AI reads an `Agent` snapshot), `pedestrians.rs`, `mission.rs`, `save.rs` (JS-compatible JSON
+file, atomic write), `world.rs`. Positions are f64. Integration tests on real tiles: `crates/sim/tests/world.rs`;
+`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: weather cycle, combat, bikes, transit,
+stations, life spots, emergency services, HUD text, audio, lighting;
+`crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
+colors, and tessellates meshes on a dedicated streaming thread. It owns shared
+features by global IDs and releases far tiles (maximum 64 resident). The engine
+uploads changed tile batches only and instances a procedural tree/decal atlas.
+`cargo run -- --check-map` validates every committed tile and polygon;
+`cargo run -- --capture /tmp/berlin.png` checks loaded-map rendering on the GPU.
+Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
+and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
+The Canvas implementation below remains the reference for later porting phases.
+Do not claim Xbox Dev Mode support based only on a Windows MSVC/DX12 build.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
