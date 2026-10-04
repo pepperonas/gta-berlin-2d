@@ -1,4 +1,9 @@
-use crate::{Body, LightSource, Lighting, atlas, camera::Camera, lightpass};
+use crate::{
+    Body, LightSource, Lighting, atlas,
+    camera::Camera,
+    hud::{self, HudItem},
+    lightpass,
+};
 use anyhow::{Context, Result};
 use berlin_map_loader::{
     format::TileKey,
@@ -44,6 +49,11 @@ pub(crate) struct Renderer {
     layout: wgpu::PipelineLayout,
     atlas_layout: wgpu::BindGroupLayout,
     shader: wgpu::ShaderModule,
+    hud_pipeline: wgpu::RenderPipeline,
+    hud_font: wgpu::BindGroup,
+    hud: Option<wgpu::Buffer>,
+    hud_capacity: usize,
+    hud_count: u32,
 }
 impl Renderer {
     pub async fn new(window: Arc<Window>, scale: f32, lighting: Lighting) -> Result<Self> {
@@ -90,7 +100,12 @@ impl Renderer {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Berlin mesh / atlas shaders"),
             source: wgpu::ShaderSource::Wgsl(
-                concat!(include_str!("scene.wgsl"), include_str!("lighting.wgsl")).into(),
+                concat!(
+                    include_str!("scene.wgsl"),
+                    include_str!("lighting.wgsl"),
+                    include_str!("hud.wgsl")
+                )
+                .into(),
             ),
         });
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -266,6 +281,91 @@ impl Renderer {
             ],
         });
         let depth = depth_view(&device, &config);
+        let hud_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Float32,3=>Float32,4=>Float32x4,5=>Float32x4];
+        let hud_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("HUD"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("hud_vs"),
+                compilation_options: Default::default(),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: size_of::<HudItem>() as u64,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &hud_attrs,
+                }],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("hud_fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: Default::default(),
+            // im Hauptpass gezeichnet (mit Tiefenpuffer), aber ohne Tiefentest
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let font = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("HUD-Schrift"),
+            size: wgpu::Extent3d {
+                width: hud::ATLAS,
+                height: hud::ATLAS,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &font,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &hud::atlas(),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(hud::ATLAS),
+                rows_per_image: Some(hud::ATLAS),
+            },
+            font.size(),
+        );
+        let font_view = font.create_view(&Default::default());
+        let font_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("HUD-Schrift"),
+            ..Default::default()
+        });
+        let hud_font = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("HUD-Schrift"),
+            layout: &atlas_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&font_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&font_sampler),
+                },
+            ],
+        });
         let light = lightpass::LightPass::new(
             &lightpass::Ctx {
                 device: &device,
@@ -307,6 +407,11 @@ impl Renderer {
             layout,
             atlas_layout,
             shader,
+            hud_pipeline,
+            hud_font,
+            hud: None,
+            hud_capacity: 0,
+            hud_count: 0,
         })
     }
     pub fn viewport(&self) -> Vec2 {
@@ -402,6 +507,25 @@ impl Renderer {
     }
     pub fn set_lights(&mut self, lights: &[LightSource]) {
         self.light.set_lights(&self.device, &self.queue, lights);
+    }
+    /// HUD-Elemente des nächsten Bildes (Bildschirm-Pixel).
+    pub fn set_hud(&mut self, items: &[HudItem]) {
+        self.hud_count = items.len() as u32;
+        if items.is_empty() {
+            return;
+        }
+        if self.hud.is_none() || self.hud_capacity < items.len() {
+            self.hud_capacity = items.len().next_power_of_two().max(1024);
+            self.hud = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("HUD"),
+                size: (self.hud_capacity * size_of::<HudItem>()) as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        if let Some(b) = &self.hud {
+            self.queue.write_buffer(b, 0, bytemuck::cast_slice(items));
+        }
     }
     pub fn drawable(&self) -> bool {
         self.size.width > 0 && self.size.height > 0
@@ -562,6 +686,13 @@ impl Renderer {
             pass.draw(0..3, 0..1);
             pass.set_pipeline(&self.light.ambient_composite);
             pass.draw(0..3, 0..1);
+        }
+        // 4) HUD über allem (ohne Tiefentest)
+        if let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) {
+            pass.set_pipeline(&self.hud_pipeline);
+            pass.set_bind_group(1, &self.hud_font, &[]);
+            pass.set_vertex_buffer(0, hud.slice(..));
+            pass.draw(0..6, 0..self.hud_count);
         }
     }
     /// Read back our own render target for repeatable visual QA, independent of desktop capture.

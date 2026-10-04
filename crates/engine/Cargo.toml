@@ -12,3 +12,5 @@ winit.workspace = true
 pollster.workspace = true
 berlin-map-loader = { path = "../map_loader" }
 png.workspace = true
+font8x8 = { version = "0.3", default-features = false }
+gilrs = "0.11"

@@ -1,6 +1,8 @@
 mod atlas;
 pub mod camera;
+pub mod hud;
 mod lightpass;
+pub mod pad;
 mod renderer;
 use anyhow::Result;
 use berlin_map_loader::{
@@ -80,6 +82,9 @@ pub struct LightSource {
 pub struct Keys<'a> {
     pub held: &'a HashSet<KeyCode>,
     pub pressed: &'a HashSet<KeyCode>,
+    /// Gamepad: gehaltener Zustand und Tastenflanken seit dem letzten Schritt
+    pub pad: pad::Pad,
+    pub pad_pressed: pad::Pad,
 }
 
 /// Spiel, das die Engine mit festem Schritt antreibt (die Simulation selbst kennt weder Fenster noch GPU).
@@ -100,6 +105,8 @@ pub trait Game {
     }
     /// Lichtquellen im Bild (nur nachts sichtbar).
     fn lights(&mut self, _out: &mut Vec<LightSource>) {}
+    /// Anzeigen über dem Bild; `camera` + `viewport` rechnen Weltpunkte in Bildschirm-Pixel um.
+    fn hud(&mut self, _camera: &camera::Camera, _viewport: Vec2, _out: &mut hud::Hud) {}
 }
 
 pub use winit::keyboard::KeyCode;
@@ -150,6 +157,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         smoke_started: Instant::now(),
         keys: HashSet::new(),
         pressed: HashSet::new(),
+        pads: pad::Gamepads::new(),
         game,
         accumulator: 0.,
         bodies: Vec::new(),
@@ -174,6 +182,7 @@ struct App {
     camera: Camera,
     keys: HashSet<KeyCode>,
     pressed: HashSet<KeyCode>,
+    pads: pad::Gamepads,
     game: Option<Box<dyn Game>>,
     accumulator: f64,
     bodies: Vec<Body>,
@@ -290,6 +299,7 @@ impl ApplicationHandler for App {
                     pressed(KeyCode::KeyS, KeyCode::ArrowDown)
                         - pressed(KeyCode::KeyW, KeyCode::ArrowUp),
                 );
+                self.pads.poll();
                 if let Some(game) = self.game.as_mut() {
                     // fester Simulationsschritt; kurze Tastendrücke gelten bis zum nächsten Schritt
                     let step = game.step_seconds();
@@ -299,10 +309,13 @@ impl ApplicationHandler for App {
                             &Keys {
                                 held: &self.keys,
                                 pressed: &self.pressed,
+                                pad: self.pads.state,
+                                pad_pressed: self.pads.edges,
                             },
                             step,
                         );
                         self.pressed.clear();
+                        self.pads.edges = pad::Pad::default();
                         self.accumulator -= step;
                     }
                     let (position, zoom) = game.camera();
@@ -315,6 +328,10 @@ impl ApplicationHandler for App {
                     self.lights.clear();
                     game.lights(&mut self.lights);
                     renderer.set_lights(&self.lights);
+                    let viewport = renderer.viewport();
+                    let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
+                    game.hud(&self.camera, viewport, &mut overlay);
+                    renderer.set_hud(&overlay.items);
                 } else if self.focused {
                     self.camera.position += movement.normalize_or_zero()
                         * (if self.keys.contains(&KeyCode::ShiftLeft) {

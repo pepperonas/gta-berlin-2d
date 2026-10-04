@@ -20,7 +20,8 @@ Never name a WGSL identifier `half` (Naga passes it to Metal, where it is a type
 rules in `sim/{enginevoice,soundscape,ambience}.rs`; `crates/audio` (`berlin-audio`) has Web-Audio-like DSP
 (`dsp.rs`), the synth graph of `audio.js` (`synth.rs`, driven by a per-step `Frame`), cpal output and WAV writer
 (`output.rs`); `game/sound.rs` builds frames. `cargo run --release -- --audio-wav x.wav` renders a measured test
-drive offline;
+drive offline. HUD: `engine/hud.rs` (font8x8 bitmap atlas, screen-space instances) laid out by `game/hud.rs` in
+720-line base units; gamepad: `engine/pad.rs` (gilrs) merged with keys in `game/play.rs input_from`;
 `crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
 colors, and tessellates meshes on a dedicated streaming thread. It owns shared
 features by global IDs and releases far tiles (maximum 64 resident). The engine

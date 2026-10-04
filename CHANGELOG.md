@@ -31,6 +31,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Schalten, Turbo, Reifen, Quietschen, Fahrtwind, vier Fremdfahrzeuge mit Panorama und Doppler, Stadt, Vögel,
   Wasser, Dämpfung im Auto, Ereignisklänge und Schritte. Mischregeln (`enginevoice`, `soundscape`, `ambience`)
   rein und getestet in `berlin-sim`. Taste M, `--stumm`, `--audio-wav` für eine gemessene Offline-Fahrt.
+- Native Rust-Fassung: HUD im Bild (Bitmapschrift mit Umlauten; Geld, Uhr, Auftrag mit Zeit, Tacho mit Drehzahl
+  und Gang, Fahrzeugname, Zielpfeil, Hinweise, Briefing, Ergebnis) und Gamepad über `gilrs` mit der Belegung der
+  Browserfassung. `--im-auto` startet im eigenen Auto.
 
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.

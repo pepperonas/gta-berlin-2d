@@ -23,7 +23,7 @@ Zu Fuß: WASD/Pfeile, Shift sprinten, Alt langsam. F ein-/aussteigen, E Aktion
 (halten = Kisten einladen). Im Auto: W/S Gas/Bremse (gehalten: rückwärts), A/D
 lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
 erledigten Auftrag wird automatisch gespeichert. Mausrad zoomt, Esc beendet.
-Missionsziel und Hinweise stehen vorerst im Fenstertitel.
+Mit Controller: linker Stick, RT/LT Gas/Bremse, Y ein-/aussteigen, A Aktion, B/RB Handbremse, X Hupe.
 Details und Plattformgrenzen: [Native Architektur und Build](docs/NATIVE-RUST.md).
 Die folgenden Browser-/UWP-Anleitungen beziehen sich auf den bisherigen Prototyp.
 

@@ -19,6 +19,8 @@ pub struct Play {
     lamps: LampCache,
     audio: Option<berlin_audio::output::Audio>,
     listener: crate::sound::Listener,
+    /// beim ersten geladenen Schritt ins eigene Auto setzen (`--im-auto`)
+    pub auto_enter: bool,
 }
 
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
@@ -70,6 +72,7 @@ impl Play {
                 None
             },
             listener: Default::default(),
+            auto_enter: false,
         })
     }
     pub fn set_storage(&mut self, st: FileStorage) {
@@ -89,34 +92,57 @@ impl Play {
     }
 }
 
-/// Tasten → abstrakte Eingabe (Belegung wie `input.js`).
+/// Radiale Totzone (input.js radialDeadzone): kleine Ausschläge zählen nicht, darüber linear auf 0…1.
+pub fn radial_deadzone(x: f32, y: f32, dz: f32) -> (f32, f32) {
+    let m = x.hypot(y);
+    if m < dz {
+        return (0., 0.);
+    }
+    let k = ((m - dz) / (1. - dz)).min(1.) / m;
+    (x * k, y * k)
+}
+
+/// Tasten und Gamepad → abstrakte Eingabe (Belegung wie `input.js`).
 pub fn input_from(keys: &Keys, driving: bool) -> Input {
     let held = |a: KeyCode, b: KeyCode| keys.held.contains(&a) || keys.held.contains(&b);
     let pressed = |k: KeyCode| keys.pressed.contains(&k);
     let axis = |pos: bool, neg: bool| (pos as i32 - neg as i32) as f64;
-    let lx = axis(
+    let (p, pe) = (&keys.pad, &keys.pad_pressed);
+    let (plx, ply) = radial_deadzone(p.lx, p.ly, 0.22);
+    let kx = axis(
         held(KeyCode::KeyD, KeyCode::ArrowRight),
         held(KeyCode::KeyA, KeyCode::ArrowLeft),
     );
-    let ly = axis(
+    let ky = axis(
         held(KeyCode::KeyS, KeyCode::ArrowDown),
         held(KeyCode::KeyW, KeyCode::ArrowUp),
     );
+    // Stick überstimmt die Tasten nur, wenn er ausgelenkt ist
+    let lx = if plx != 0. { plx as f64 } else { kx };
+    let ly = if ply != 0. { ply as f64 } else { ky };
     let up = held(KeyCode::KeyW, KeyCode::ArrowUp);
     let down = held(KeyCode::KeyS, KeyCode::ArrowDown);
     Input {
         move_x: if driving { 0. } else { lx },
         move_y: if driving { 0. } else { ly },
-        sprint: held(KeyCode::ShiftLeft, KeyCode::ShiftRight),
+        sprint: held(KeyCode::ShiftLeft, KeyCode::ShiftRight) || (!driving && p.a),
         walk_slow: held(KeyCode::AltLeft, KeyCode::AltRight),
-        throttle: if driving && up { 1. } else { 0. },
-        brake: if driving && down { 1. } else { 0. },
-        steer: if driving { lx } else { 0. },
-        handbrake: driving && keys.held.contains(&KeyCode::Space),
-        horn: keys.held.contains(&KeyCode::KeyH),
-        enter_exit: pressed(KeyCode::KeyF),
-        action: pressed(KeyCode::KeyE),
-        action_held: keys.held.contains(&KeyCode::KeyE),
+        throttle: if driving {
+            f64::from(u8::from(up)).max(p.rt as f64)
+        } else {
+            0.
+        },
+        brake: if driving {
+            f64::from(u8::from(down)).max(p.lt as f64)
+        } else {
+            0.
+        },
+        steer: if driving { lx.clamp(-1., 1.) } else { 0. },
+        handbrake: driving && (keys.held.contains(&KeyCode::Space) || p.rb || p.b),
+        horn: keys.held.contains(&KeyCode::KeyH) || p.x,
+        enter_exit: pressed(KeyCode::KeyF) || pe.y,
+        action: pressed(KeyCode::KeyE) || pe.a,
+        action_held: keys.held.contains(&KeyCode::KeyE) || p.a,
         esp_toggle: pressed(KeyCode::KeyX),
         abs_toggle: pressed(KeyCode::KeyY) || pressed(KeyCode::KeyZ),
     }
@@ -147,7 +173,7 @@ impl Game for Play {
         if keys.pressed.contains(&KeyCode::F5) {
             self.save();
         }
-        if keys.pressed.contains(&KeyCode::KeyM)
+        if (keys.pressed.contains(&KeyCode::KeyM) || keys.pad_pressed.view)
             && let Some(a) = &self.audio
         {
             let muted = a.toggle_mute();
@@ -166,15 +192,27 @@ impl Game for Play {
         }
         // Ergebnis bestätigen: neuer Auftrag
         if matches!(w2.mission.state, State::Success | State::Failed)
-            && keys.pressed.contains(&KeyCode::KeyE)
+            && (keys.pressed.contains(&KeyCode::KeyE) || keys.pad_pressed.a)
         {
             w2.restart_mission();
             return;
         }
-        let input = input_from(keys, w2.player.in_car.is_some());
+        let mut input = input_from(keys, w2.player.in_car.is_some());
+        if self.auto_enter && !w2.loading && w2.player.in_car.is_none() {
+            self.auto_enter = false;
+            if let Some((x, y)) = w2
+                .player_car_id
+                .and_then(|id| w2.car(id))
+                .map(|c| (c.x, c.y))
+            {
+                (w2.player.x, w2.player.y) = (x + 15., y);
+                input.enter_exit = true;
+            }
+        }
         w2.update(&input, dt);
+        // Klang-Frame immer berechnen: der Motorzustand speist auch Drehzahlmesser und Gang im HUD
+        let frame = self.listener.frame(&mut self.world, dt);
         if let Some(audio) = &self.audio {
-            let frame = self.listener.frame(&mut self.world, dt);
             audio.apply(&frame);
         }
         // nach einem erledigten Auftrag automatisch speichern (wie die JS-Fassung)
@@ -406,6 +444,15 @@ impl Game for Play {
         }
         parts.join(" · ")
     }
+    fn hud(
+        &mut self,
+        camera: &berlin_engine::camera::Camera,
+        viewport: Vec2,
+        out: &mut berlin_engine::hud::Hud,
+    ) {
+        let engine = self.world.player_car().map(|_| self.listener.engine());
+        crate::hud::draw(&self.world, engine.as_ref(), camera, viewport, out);
+    }
     fn lighting(&self) -> Option<Lighting> {
         Some(lighting_at(self.world.clock))
     }
@@ -540,6 +587,50 @@ impl Game for Play {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gamepad_and_keys_merge() {
+        use berlin_engine::pad::Pad;
+        use std::collections::HashSet;
+        assert_eq!(radial_deadzone(0.1, 0.1, 0.22), (0., 0.));
+        let (x, y) = radial_deadzone(1., 0., 0.22);
+        assert!((x - 1.).abs() < 1e-6 && y == 0.);
+        let held: HashSet<KeyCode> = [KeyCode::KeyW].into();
+        let none = HashSet::new();
+        let pad = Pad {
+            connected: true,
+            lx: -0.8,
+            rt: 0.4,
+            lt: 0.2,
+            ..Default::default()
+        };
+        let edges = Pad {
+            y: true,
+            ..Default::default()
+        };
+        let keys = Keys {
+            held: &held,
+            pressed: &none,
+            pad,
+            pad_pressed: edges,
+        };
+        let i = input_from(&keys, true);
+        assert_eq!(i.throttle, 1., "Taste W und Trigger: das Stärkere zählt");
+        assert!((i.brake - 0.2).abs() < 1e-6 && i.steer < -0.5 && i.enter_exit);
+        let walk = input_from(
+            &Keys {
+                held: &none,
+                pressed: &none,
+                pad: Pad {
+                    ly: -1.,
+                    a: true,
+                    ..Default::default()
+                },
+                pad_pressed: Pad::default(),
+            },
+            false,
+        );
+        assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
+    }
     #[test]
     fn lighting_follows_the_clock() {
         let noon = lighting_at(13. * 60.);
