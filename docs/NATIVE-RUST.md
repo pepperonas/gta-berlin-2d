@@ -492,10 +492,9 @@ Aufnahmen: [Titel](images/native/menu-title.png), [Pause](images/native/menu-pau
 [Steuerung](images/native/menu-steuerung.png).
 
 **Noch offen:**
-- Statistik-Bildschirm
-- Ergebnis-Menü mit „Erneut versuchen / Frei weiterspielen“ (das Ergebnis bestätigt weiter E/A)
 - Maus in Menüs
 - Einstellungen
+- (Statistik und Ergebnis-Menü: siehe unten)
 
 **Validierung:** Clippy und Formatprüfung sind sauber, alle 94 Rust-Tests laufen erfolgreich. Neu getestet:
 - Menülogik: deaktivierte Einträge überspringen, Umlauf, Bestätigen und Zurück
@@ -504,3 +503,32 @@ Aufnahmen: [Titel](images/native/menu-title.png), [Pause](images/native/menu-pau
   geschrieben) → Hauptmenü mit „Fortsetzen“ → Steuerung → Beenden
 
 GPU-Aufnahmen aller drei Bildschirme wurden visuell kontrolliert.
+
+## Ergebnismenü und Statistik (04.10.2026)
+
+**Ergebnis** (`game.js resultMenu`): Nach einem Auftrag steht die Welt still, unter der Abrechnung erscheint ein
+Menü. Erfolg bietet „Weiter“. Ein Fehlschlag bietet „Erneut versuchen“, was den Auftrag am Start neu beginnt,
+und „Frei weiterspielen“, was den Auftrag zurücksetzt, während der Spieler bleibt, wo er ist. Esc pausiert wie im
+Browser. Der Spielstand wird nach einem Erfolg weiterhin automatisch gespeichert.
+
+**Statistik:**
+- **Zähler** (`sim/stats.rs`, Port von `stats.js`): Strecke gesamt, im Auto und zu Fuß (Sprünge über 60 m
+  zählen nicht), Höchstgeschwindigkeit (Rekord statt Summe), Spielzeit, Zeit im Auto und Brücken. Dazu kommen
+  Aquaplaning (Flanke), überfahrene Menschen, Unfälle, Poller, geklaute und gefahrene Autos, eigene Schrottautos,
+  erledigte und verpatzte Aufträge sowie verdientes Geld.
+- **Speichern:** Gebucht wird in zwei Stände, „dieses Spiel“ und „insgesamt“. Beide liegen in `stats.json` neben
+  dem Spielstand, zusammen mit dem Stand zum Zeitpunkt des letzten Speicherns, damit „Fortsetzen“ ihn
+  zurückholt. Geschrieben wird beim Speichern, beim Verlassen ins Hauptmenü, beim Beenden und alle 60 Spielsekunden,
+  jeweils atomar über eine temporäre Datei.
+- **Bildschirm:** Er ist aus Titel und Pause erreichbar und zeigt zwei Spalten mit beiden Ständen.
+- **Nicht angezeigt** werden Zähler für noch nicht portierte Teile (Kampf, Nahverkehr, Teleport, Konsole).
+
+Aufnahme: [Statistik](images/native/menu-statistik.png) (`--bildschirm statistik`).
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 97 Rust-Tests laufen erfolgreich. Neu getestet:
+- Formatierung wie im Browser, Rekord als Höchstwert, JSON hin und zurück mit Prüfung fremder Werte
+- auf echten Kacheln: Strecke zu Fuß, kein Sprung-Kilometer, Einsteigen einmal gezählt, beide Stände gleich
+- im Spieldurchlauf: gescheiterter Auftrag friert ein, „Frei weiterspielen“ setzt den Auftrag zurück und lässt den
+  Spieler stehen; die Statistik zählt und `stats.json` wird geschrieben
+
+Die GPU-Aufnahme wurde visuell kontrolliert.

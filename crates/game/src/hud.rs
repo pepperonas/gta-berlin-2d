@@ -535,7 +535,7 @@ pub fn draw(
                     h.text(
                         "Fortschritt wird automatisch gespeichert.",
                         cx,
-                        400.,
+                        470.,
                         15.,
                         GREY,
                         Align::Center,
@@ -556,7 +556,6 @@ pub fn draw(
                 }
                 None => {}
             }
-            h.text("E: weiter", cx, 460., 22., YELLOW, Align::Center, true);
         }
         _ => {}
     }

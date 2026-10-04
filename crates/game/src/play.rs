@@ -31,6 +31,26 @@ pub struct Play {
     /// Stick-Stellung des letzten Schritts (Menüauswahl per Stick als Flanke)
     stick_prev: f32,
     quit: bool,
+    /// Statistik: dieses Spiel, insgesamt, Stand des gespeicherten Spiels (für „Fortsetzen“)
+    pub stats: berlin_sim::stats::Stats,
+    pub stats_total: berlin_sim::stats::Stats,
+    stats_saved: berlin_sim::stats::Stats,
+    tracker: berlin_sim::stats::Tracker,
+    stats_written: f64,
+    result_menu: Option<crate::menu::Menu>,
+}
+
+/// Statistikdatei neben dem Spielstand: `{"total": …, "saved": …}`.
+fn stats_path(st: &FileStorage) -> std::path::PathBuf {
+    st.path.with_file_name("stats.json")
+}
+fn read_stats(st: &FileStorage) -> (berlin_sim::stats::Stats, berlin_sim::stats::Stats) {
+    use berlin_sim::stats::Stats;
+    let v: serde_json::Value = std::fs::read(stats_path(st))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    (Stats::from_json(&v["total"]), Stats::from_json(&v["saved"]))
 }
 
 /// Bildschirm (game.js): Titel mit laufender Stadt dahinter, Spiel, Pause, Steuerungstafel.
@@ -39,8 +59,9 @@ pub enum Screen {
     Title,
     Playing,
     Paused,
-    /// Steuerung; merkt sich, wohin „Zurück“ führt
+    /// Steuerung bzw. Statistik; merkt sich, ob „Zurück“ zum Titel führt
     Controls(bool),
+    Stats(bool),
 }
 
 /// Wie das Programm startet.
@@ -103,6 +124,12 @@ impl Play {
         let has_save = save
             .as_ref()
             .is_some_and(|st| read_save(st as &dyn Storage).is_some());
+        let (stats_total, stats_saved) = save.as_ref().map(read_stats).unwrap_or_default();
+        let stats = if start == Start::Continue && screen == Screen::Playing && has_save {
+            stats_saved.clone()
+        } else {
+            Default::default()
+        };
         let bigmap = match berlin_map_loader::overview::Overview::read(root) {
             Ok(ov) => crate::bigmap::BigMap::new(ov),
             Err(e) => {
@@ -139,6 +166,12 @@ impl Play {
             seed,
             stick_prev: 0.,
             quit: false,
+            stats,
+            stats_total,
+            stats_saved,
+            tracker: Default::default(),
+            stats_written: 0.,
+            result_menu: None,
         })
     }
     fn save(&mut self) -> bool {
@@ -152,6 +185,8 @@ impl Play {
         match write_save(st, &self.world.make_save(now)) {
             Ok(()) => {
                 eprintln!("Spielstand gespeichert: {}", st.path.display());
+                self.stats_saved = self.stats.clone();
+                self.write_stats();
                 true
             }
             Err(e) => {
@@ -159,6 +194,24 @@ impl Play {
                 false
             }
         }
+    }
+    /// Statistik sichern (insgesamt + Stand des gespeicherten Spiels), atomar ersetzt.
+    pub fn write_stats(&mut self) {
+        let Some(st) = &self.storage else {
+            return;
+        };
+        let path = stats_path(st);
+        let v = serde_json::json!({ "total": self.stats_total.to_json(), "saved": self.stats_saved.to_json() });
+        let tmp = path.with_extension("json.tmp");
+        let ok = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| std::fs::write(&tmp, v.to_string()))
+            .and_then(|_| std::fs::rename(&tmp, &path));
+        if let Err(e) = ok {
+            eprintln!("Statistik nicht gespeichert: {e}");
+        }
+        self.stats_written = self.world.time;
     }
     fn has_save(&self) -> bool {
         self.storage
@@ -183,6 +236,13 @@ impl Play {
                 }
                 w.force_weather = self.world.force_weather;
                 self.world = w;
+                self.stats = if resume {
+                    self.stats_saved.clone()
+                } else {
+                    Default::default()
+                };
+                self.tracker = Default::default();
+                self.result_menu = None;
                 self.listener = Default::default();
                 self.lamps = LampCache::default();
                 self.saved_for = self.world.completed as u32;
@@ -191,6 +251,13 @@ impl Play {
             }
             Err(e) => eprintln!("Neue Welt nicht ladbar: {e:#}"),
         }
+    }
+    fn free_play(&mut self) {
+        self.world.mission.reset();
+        for c in &mut self.world.cars {
+            c.cargo = false;
+        }
+        self.result_menu = None;
     }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
@@ -207,7 +274,12 @@ impl Play {
         let mk = crate::menu::MenuKeys::from(keys, self.stick_prev);
         self.stick_prev = keys.pad.ly;
         // solange Kacheln fehlen, steht die Welt ohnehin still; weiterladen auch in den Menüs
-        if self.world.loading && matches!(self.screen, Screen::Paused | Screen::Controls(false)) {
+        if self.world.loading
+            && matches!(
+                self.screen,
+                Screen::Paused | Screen::Controls(false) | Screen::Stats(false)
+            )
+        {
             self.world.update(&Input::default(), dt);
         }
         match self.screen {
@@ -227,6 +299,33 @@ impl Play {
                     }
                     return true;
                 }
+                // Ergebnis eines Auftrags: Welt steht, Auswahl wie game.js resultMenu
+                let state = self.world.mission.state;
+                if matches!(state, State::Success | State::Failed) {
+                    let menu = self
+                        .result_menu
+                        .get_or_insert_with(|| crate::menu::result_menu(state == State::Success));
+                    let pick = menu.input(mk);
+                    let success = state == State::Success;
+                    match pick {
+                        Some(Pick::Choose(Action::Retry)) => {
+                            self.world.restart_mission();
+                            self.result_menu = None;
+                        }
+                        // Auftrag zurücksetzen, der Spieler bleibt, wo er ist (Zurück nur nach Erfolg)
+                        Some(Pick::Choose(Action::Next | Action::Free)) => self.free_play(),
+                        Some(Pick::Back) if success => self.free_play(),
+                        _ => {}
+                    }
+                    if pick.is_some() {
+                        self.ui_sound();
+                    }
+                    if let Some(a) = &self.audio {
+                        a.apply(&berlin_audio::synth::Frame::default());
+                    }
+                    return true;
+                }
+                self.result_menu = None;
                 false
             }
             Screen::Title => {
@@ -243,7 +342,11 @@ impl Play {
                         Some(Pick::Choose(Action::Controls)) => {
                             self.screen = Screen::Controls(true)
                         }
-                        Some(Pick::Choose(Action::Quit)) => self.quit = true,
+                        Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(true),
+                        Some(Pick::Choose(Action::Quit)) => {
+                            self.write_stats();
+                            self.quit = true
+                        }
                         Some(_) => self.ui_sound(),
                         None => {}
                     }
@@ -285,7 +388,9 @@ impl Play {
                         self.screen = Screen::Playing;
                     }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
+                    Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(false),
                     Some(Pick::Choose(Action::Title)) => {
+                        self.write_stats();
                         self.screen = Screen::Title;
                         self.menu = crate::menu::title_menu(self.has_save());
                     }
@@ -296,7 +401,7 @@ impl Play {
                 }
                 true
             }
-            Screen::Controls(from_title) => {
+            Screen::Controls(from_title) | Screen::Stats(from_title) => {
                 if mk.back || mk.confirm {
                     self.ui_sound();
                     self.screen = if from_title {
@@ -437,13 +542,6 @@ impl Game for Play {
                 t: 1.5,
             });
         }
-        // Ergebnis bestätigen: neuer Auftrag
-        if matches!(w2.mission.state, State::Success | State::Failed)
-            && (keys.pressed.contains(&KeyCode::KeyE) || keys.pad_pressed.a)
-        {
-            w2.restart_mission();
-            return;
-        }
         // offene Karte: die Welt läuft weiter, der Spieler bekommt keine Eingaben
         let mut input = if self.bigmap.open {
             Input::default()
@@ -462,6 +560,15 @@ impl Game for Play {
             }
         }
         w2.update(&input, dt);
+        berlin_sim::stats::track_step(
+            &mut [&mut self.stats, &mut self.stats_total],
+            &mut self.tracker,
+            &self.world,
+            dt,
+        );
+        if self.world.time - self.stats_written > 60. {
+            self.write_stats();
+        }
         // Klang-Frame immer berechnen: der Motorzustand speist auch Drehzahlmesser und Gang im HUD
         let frame = self.listener.frame(&mut self.world, dt);
         if let Some(audio) = &self.audio {
@@ -477,7 +584,10 @@ impl Game for Play {
     }
     fn camera(&self) -> (Vec2, f32) {
         let c = self.world.camera;
-        if matches!(self.screen, Screen::Title | Screen::Controls(true)) {
+        if matches!(
+            self.screen,
+            Screen::Title | Screen::Controls(true) | Screen::Stats(true)
+        ) {
             // langsame Kreisfahrt über dem Kiez (main.js demo-Kamera, kleiner Radius: geladene Kacheln)
             let t = self.world.time;
             let (x, y) = (c.x + (t * 0.05).cos() * 900., c.y + (t * 0.07).sin() * 600.);
@@ -727,6 +837,10 @@ impl Game for Play {
                 crate::menu::draw_controls(out);
                 return;
             }
+            Screen::Stats(from_title) => {
+                crate::menu::draw_stats(out, &self.stats, &self.stats_total, !from_title);
+                return;
+            }
             _ => {}
         }
         if self.bigmap.open {
@@ -735,6 +849,14 @@ impl Game for Play {
         }
         let warn = self.world.road_warning();
         crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
+        if let Some(m) = &self.result_menu {
+            let y = if self.world.mission.state == State::Success {
+                400.
+            } else {
+                330.
+            };
+            crate::menu::draw_menu(out, m, out.width / 2., y);
+        }
         if self.screen == Screen::Paused {
             crate::menu::draw_pause(
                 out,
@@ -983,6 +1105,28 @@ mod tests {
         press(&mut p, Some(KeyCode::Enter));
         assert_eq!(p.screen, Screen::Playing);
         wait(&mut p, &mut press);
+        // gescheiterter Auftrag: Welt steht, Menü „Erneut versuchen / Frei weiterspielen“
+        p.world.mission.state = State::Failed;
+        p.world.mission.result = Some(Outcome::Failed {
+            reason: "Test".into(),
+        });
+        let (t, px) = (p.world.time, p.world.player.x);
+        press(&mut p, None);
+        assert_eq!(p.world.time, t);
+        assert_eq!(p.result_menu.as_ref().map(|m| m.items.len()), Some(2));
+        press(&mut p, Some(KeyCode::Escape));
+        // Esc pausiert hier (wie game.js: Pause hat Vorrang), Zurück ins Ergebnis
+        assert_eq!(p.screen, Screen::Paused);
+        press(&mut p, Some(KeyCode::Escape));
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(
+            p.world.mission.state,
+            State::Available,
+            "frei weiterspielen setzt zurück"
+        );
+        assert_eq!(p.world.player.x, px, "der Spieler bleibt, wo er ist");
+        assert!(p.result_menu.is_none());
         // Esc pausiert, die Welt steht
         press(&mut p, Some(KeyCode::Escape));
         assert_eq!(p.screen, Screen::Paused);
@@ -996,7 +1140,7 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
-        for _ in 0..4 {
+        for _ in 0..5 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
         press(&mut p, Some(KeyCode::Enter));
@@ -1007,6 +1151,15 @@ mod tests {
         press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::Enter));
         assert_eq!(p.screen, Screen::Controls(true));
+        press(&mut p, Some(KeyCode::Escape));
+        assert_eq!(p.screen, Screen::Title);
+        // Statistik: Spielzeit des Spiels ist gezählt und liegt in der Datei
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::Stats(true));
+        assert!(p.stats.get("timePlayed") > 0. && p.stats_total.get("timePlayed") > 0.);
+        let file = std::fs::read_to_string(dir.join("stats.json")).expect("stats.json");
+        assert!(file.contains("timePlayed"));
         press(&mut p, Some(KeyCode::Escape));
         assert_eq!(p.screen, Screen::Title);
         // Beenden

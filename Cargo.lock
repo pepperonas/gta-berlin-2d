@@ -759,6 +759,7 @@ dependencies = [
  "berlin-map-loader",
  "berlin-sim",
  "glam",
+ "serde_json",
 ]
 
 [[package]]

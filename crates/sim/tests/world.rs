@@ -528,3 +528,65 @@ fn weather_covers_the_road_and_warns_the_driver() {
     run(&mut w, 60, idle());
     assert_eq!(w.road_warning(), None);
 }
+
+#[test]
+fn statistics_track_distance_time_and_entering() {
+    use berlin_sim::stats::{Stats, Tracker, track_step};
+    let mut w = world(11);
+    let (mut game, mut total, mut tr) = (Stats::default(), Stats::default(), Tracker::default());
+    let step =
+        |w: &mut World, input: Input, game: &mut Stats, total: &mut Stats, tr: &mut Tracker| {
+            w.update(&input, DT);
+            track_step(&mut [game, total], tr, w, DT);
+        };
+    for _ in 0..120 {
+        step(
+            &mut w,
+            Input {
+                move_x: 1.,
+                ..idle()
+            },
+            &mut game,
+            &mut total,
+            &mut tr,
+        );
+    }
+    assert!((game.get("timePlayed") - 2.).abs() < 1e-6);
+    let foot = game.get("kmFoot");
+    assert!(foot > 0.001 && foot < 0.03, "2 s joggen: {foot} km");
+    assert_eq!(game.get("kmTotal"), foot);
+    // ein Sprung (Neustart, Laden) zählt nicht als Strecke
+    w.player.x += 5000.;
+    step(&mut w, idle(), &mut game, &mut total, &mut tr);
+    assert!(game.get("kmTotal") - foot < 0.001);
+    // Einsteigen zählt einmal, Zeit im Auto läuft
+    let pc = w.player_car_id.unwrap();
+    let (x, y) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    (w.player.x, w.player.y) = (x + 15., y);
+    step(
+        &mut w,
+        Input {
+            move_x: 0.,
+            ..idle()
+        },
+        &mut game,
+        &mut total,
+        &mut tr,
+    );
+    step(
+        &mut w,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+        &mut game,
+        &mut total,
+        &mut tr,
+    );
+    for _ in 0..30 {
+        step(&mut w, idle(), &mut game, &mut total, &mut tr);
+    }
+    assert_eq!(game.get("carsEntered"), 1.);
+    assert!(game.get("timeCar") > 0.4);
+    assert_eq!(game, total, "beide Stände bekommen dasselbe");
+}

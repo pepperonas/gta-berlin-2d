@@ -135,10 +135,10 @@ fn main() -> Result<()> {
             "--bildschirm" => {
                 let v = args
                     .next()
-                    .context("--bildschirm erwartet pause oder steuerung")?;
+                    .context("--bildschirm erwartet pause, steuerung oder statistik")?;
                 ensure!(
-                    v == "pause" || v == "steuerung",
-                    "--bildschirm erwartet pause oder steuerung"
+                    ["pause", "steuerung", "statistik"].contains(&v.as_str()),
+                    "--bildschirm erwartet pause, steuerung oder statistik"
                 );
                 screen = Some(v);
             }
@@ -161,7 +161,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung] [--audio-wav DATEI [--audio-seconds N]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik] [--audio-wav DATEI [--audio-seconds N]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
@@ -250,6 +250,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     match screen.as_deref() {
         Some("pause") => play.pause(),
         Some("steuerung") => play.screen = play::Screen::Controls(false),
+        Some("statistik") => play.screen = play::Screen::Stats(false),
         _ => {}
     }
     play.auto_enter = in_car;

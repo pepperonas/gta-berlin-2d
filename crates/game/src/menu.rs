@@ -16,6 +16,11 @@ pub enum Action {
     Save,
     Restart,
     Title,
+    Stats,
+    /// Ergebnis: weiter (Auftrag zurücksetzen, Spieler bleibt), erneut versuchen, frei weiterspielen
+    Next,
+    Retry,
+    Free,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -118,6 +123,7 @@ pub fn title_menu(has_save: bool) -> Menu {
         },
         item(Action::New, "Neues Spiel"),
         item(Action::Controls, "Steuerung"),
+        item(Action::Stats, "Statistik"),
         item(Action::Quit, "Beenden"),
     ]);
     m.index = if has_save { 0 } else { 1 };
@@ -130,8 +136,100 @@ pub fn pause_menu() -> Menu {
         item(Action::Save, "Spiel speichern"),
         item(Action::Restart, "Mission neu starten"),
         item(Action::Controls, "Steuerung"),
+        item(Action::Stats, "Statistik"),
         item(Action::Title, "Zum Hauptmenü"),
     ])
+}
+
+/// Nach dem Auftrag (game.js resultMenu).
+pub fn result_menu(success: bool) -> Menu {
+    Menu::new(if success {
+        vec![item(Action::Next, "Weiter")]
+    } else {
+        vec![
+            item(Action::Retry, "Erneut versuchen"),
+            item(Action::Free, "Frei weiterspielen"),
+        ]
+    })
+}
+
+/// Statistik (hud.js drawStats): Abschnitte in zwei Spalten, je „dieses Spiel“ und „insgesamt“.
+pub fn draw_stats(
+    h: &mut Hud,
+    game: &berlin_sim::stats::Stats,
+    total: &berlin_sim::stats::Stats,
+    in_game: bool,
+) {
+    use berlin_sim::stats::{SECTIONS, format_stat};
+    let vw = h.width;
+    h.rect(
+        0.,
+        0.,
+        vw,
+        720.,
+        [0.02, 0.024, 0.04, if in_game { 0.82 } else { 0.94 }],
+        0.,
+    );
+    h.text("STATISTIK", vw / 2., 70., 36., YELLOW, Align::Center, true);
+    let cols: [&[usize]; 2] = [&[0], &[1, 2]];
+    let (col_w, gap, voff, size) = (600., 24., 150., 15.);
+    let x0 = vw / 2. - (2. * col_w + gap) / 2.;
+    let grey = [0.6, 0.6, 0.6, 1.];
+    let mut rows = 0;
+    for (ci, secs) in cols.iter().enumerate() {
+        let x = x0 + ci as f32 * (col_w + gap);
+        let mut y = 120.;
+        h.text(
+            "dieses Spiel",
+            x + col_w - voff,
+            y,
+            13.,
+            grey,
+            Align::Right,
+            true,
+        );
+        h.text(
+            "insgesamt",
+            x + col_w - 8.,
+            y,
+            13.,
+            grey,
+            Align::Right,
+            true,
+        );
+        for &si in secs.iter() {
+            let (title, list) = SECTIONS[si];
+            y += 34.;
+            h.text(&title.to_uppercase(), x, y, size, YELLOW, Align::Left, true);
+            for (k, label, f) in list.iter() {
+                y += 26.;
+                if rows % 2 == 0 {
+                    h.rect(x - 6., y - 19., col_w + 12., 26., [1., 1., 1., 0.04], 0.);
+                }
+                rows += 1;
+                h.text(label, x, y, size, [1.; 4], Align::Left, false);
+                h.text(
+                    &format_stat(game.get(k), *f),
+                    x + col_w - voff,
+                    y,
+                    size,
+                    [1.; 4],
+                    Align::Right,
+                    false,
+                );
+                h.text(
+                    &format_stat(total.get(k), *f),
+                    x + col_w - 8.,
+                    y,
+                    size,
+                    [0.8, 0.8, 0.8, 1.],
+                    Align::Right,
+                    false,
+                );
+            }
+        }
+    }
+    footer(h, "Esc / B: Zurück");
 }
 
 /// Menüeinträge untereinander, ab y (Mitte der ersten Zeile), zentriert bei cx.
@@ -391,6 +489,7 @@ mod tests {
         draw_title(&mut h, &title_menu(true), false);
         draw_pause(&mut h, &pause_menu(), 3, Some(95.));
         draw_controls(&mut h);
+        draw_stats(&mut h, &Default::default(), &Default::default(), true);
         assert!(h.items.len() > 500);
         // Steuerungstafel: jede Spalte endet vor der nächsten
         let size = 16.;
@@ -407,6 +506,17 @@ mod tests {
             .map(|r| h.text_width(r.2, size))
             .fold(0., f32::max);
         assert!(wa + wb + wc + 108. < h.width, "Tafel passt in 16:9");
+        // Statistik: längste Beschriftung endet vor der Spalte „dieses Spiel“ (600 − 150 − Zahlbreite)
+        let longest = berlin_sim::stats::SECTIONS
+            .iter()
+            .flat_map(|(_, rows)| rows.iter())
+            .map(|r| h.text_width(r.1, 15.))
+            .fold(0., f32::max);
+        assert!(
+            longest + h.text_width("888 km/h", 15.) < 600. - 150. + 4.,
+            "{longest}"
+        );
+        assert!(2. * 600. + 24. < h.width, "zwei Spalten passen in 16:9");
         assert!(
             h.items
                 .iter()

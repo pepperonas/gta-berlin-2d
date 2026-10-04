@@ -19,6 +19,7 @@ pub mod pedestrians;
 pub mod roadgraph;
 pub mod save;
 pub mod soundscape;
+pub mod stats;
 pub mod traction;
 pub mod traffic;
 pub mod weather;
