@@ -62,6 +62,7 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
             ("bikesJacked", "Räder gekapert", Fmt::N),
             ("deaths", "selbst umgehauen", Fmt::N),
             ("hospitalFees", "Krankenhauskosten", Fmt::Eur),
+            ("cheats", "Konsolenbefehle (Cheats)", Fmt::N),
         ],
     ),
     (
@@ -136,6 +137,12 @@ pub struct Tracker {
     lvl: i8,
     money: Option<f64>,
     aqua: bool,
+}
+impl Tracker {
+    /// Geldstand übernehmen, ohne ihn als verdient zu zählen (Schummelgeld der Befehlszeile).
+    pub fn set_money(&mut self, m: f64) {
+        self.money = Some(m);
+    }
 }
 
 /// Ein Simulationsschritt in alle Stände (dieses Spiel, insgesamt) buchen.

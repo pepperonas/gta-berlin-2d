@@ -149,6 +149,7 @@ pub struct Labels {
     pub ortsteile: Vec<PointLabel>,
     pub kieze: Vec<PointLabel>,
     pub stations: Vec<Station>,
+    pub streets: Vec<PointLabel>,
 }
 
 #[derive(Default)]
@@ -178,6 +179,7 @@ impl BigMap {
                 ortsteile: ov.ortsteile,
                 kieze: ov.kieze,
                 stations: ov.stations,
+                streets: ov.streets,
             },
             mesh: Some(ov.mesh),
             cache: None,
@@ -440,6 +442,7 @@ mod tests {
             ortsteile: vec![l(200_000., 150_000., "Ort", 1.)],
             kieze: vec![l(200_100., 150_100., "Kiez", 0.)],
             stations: vec![],
+            streets: vec![],
         }
     }
     #[test]

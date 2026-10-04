@@ -603,7 +603,7 @@ pub fn hurt_car(w: &mut World, i: usize, dmg: f64, from: (f64, f64)) {
 /// Treffer auf die Spielfigur (Faustschlag); bei 0 LP K. o. (world.rs schickt sie ins Krankenhaus).
 pub fn hurt_player(w: &mut World, dmg: f64, from: (f64, f64)) {
     let p = &mut w.player;
-    if p.combat.dead || p.in_car.is_some() || dmg <= 0. {
+    if p.combat.dead || p.in_car.is_some() || dmg <= 0. || w.god {
         return;
     }
     let c = &mut p.combat;

@@ -863,3 +863,31 @@ Lichtpass ausstanzen. `--wetter ART` setzt für Aufnahmen auch den Boden (Regen:
 
 **Validierung:** Integrationstest (Pfützen deterministisch, trocken keine, nass da, schnelles KI-Auto schwimmt auf und
 meldet das Ereignis) und Unit-Test der Reifenspuren (Schritt, Sprung, vier bzw. zwei Räder, Verblassen); 126 Tests.
+
+## Befehlszeile (04.10.2026)
+
+`game/console.rs` ist ein Port von `console.js`, rein und ohne Fenster. Enter öffnet die Zeile, solange sie offen ist,
+steht die Welt (fehlende Kacheln laden weiter).
+- **Befehle:** `hilfe`, `zeit`, `tag`, `wetter` (Enter allein öffnet die Wettertafel: Typ, Temperatur, Schnee, Nässe,
+  Glätte mit ←/→), `schnee`, `nass`, `glaette`, `temp`, `tempo` (Uhrtempo), `verkehr`, `passanten`, `tp`, `geld`,
+  `leben`, `munition`, `esp`, `gott`, `auto` (Pkw-Modell oder Fahrzeugart neben der Figur), `reparieren`, `stats`.
+  Deutsche und englische Aliasse wie im Browser.
+- **Palette:** Vorschläge für Befehle, feste Werte je Argument und Orte; Tippfehler werden verziehen (Levenshtein, ab
+  4 Zeichen ein Fehler, ab 7 zwei). Ohne Befehlswort versteht die Zeile Uhrzeit („22:30“, „nacht“), Wochentag, Wetter
+  und sichere Ortstreffer. Enter übernimmt zuerst einen abweichenden Vorschlag, das nächste führt aus; Erfolg
+  schließt (Umschalt hält offen), Fehler bleiben mit Hinweis stehen („meintest du …?“). ↑/↓ Vorschläge bzw. Verlauf,
+  Tab/→ übernimmt, Strg/Alt+Rücktaste löscht ein Wort, Esc leert bzw. schließt (Controller: B).
+- **Orte für `tp`:** Bezirke, Ortsteile, Bahnhöfe und Kieze aus dem Stadtplan, dazu Straßen: `overview.rs
+  street_points` nimmt je Name die Mitte des längsten Stücks. Der Teleport läuft über denselben Weg wie der
+  Stadtplan-Klick, nur ohne Rückfrage (sobald das Ziel geladen ist).
+- **Schummeln:** Befehle mit `cheat` zählen in der neuen Statistikzeile „Konsolenbefehle (Cheats)“; Schummelgeld
+  zählt nicht als verdient (`Tracker::set_money`). Neu in der Welt: `force_temp`, `clock_rate`, `god` (in
+  `hurt_player` geprüft) und `spawn_vehicle`.
+
+Die Engine liefert dafür getippten Text (`Keys::typed`, aus `KeyEvent::text`, beachtet die Tastaturbelegung).
+`--bildschirm konsole` zeigt die Zeile mit „tp kott“ ([Bild](images/native/konsole.png)).
+
+**Validierung:** Unit-Tests für Uhrzeit-/Wochentagslesen, Suchform, Tippfehler-Abstand, Zerlegung in Wörter,
+Rangfolge und Vorschläge; ein Test gegen die echte Welt prüft Uhrzeit, Wetter, Wochentag, Geld (als Cheat gezählt),
+`tp` mit Ortsliste aus `overview.json`, Fahrzeug abstellen, Tippfehler-Hinweis, Grenzen und den Ablauf
+Enter-übernimmt/Enter-führt-aus; 129 Rust-Tests.

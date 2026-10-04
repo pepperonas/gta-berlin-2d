@@ -102,6 +102,8 @@ pub struct Keys<'a> {
     pub pad: pad::Pad,
     pub pad_pressed: pad::Pad,
     pub mouse: Mouse,
+    /// Getippter Text seit dem letzten Schritt (Tastaturbelegung beachtet, Wiederholungen inklusive)
+    pub typed: &'a str,
 }
 
 /// Spiel, das die Engine mit festem Schritt antreibt (die Simulation selbst kennt weder Fenster noch GPU).
@@ -182,6 +184,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         smoke_started: Instant::now(),
         keys: HashSet::new(),
         pressed: HashSet::new(),
+        typed: String::new(),
         pads: pad::Gamepads::new(),
         game,
         accumulator: 0.,
@@ -208,6 +211,7 @@ struct App {
     camera: Camera,
     keys: HashSet<KeyCode>,
     pressed: HashSet<KeyCode>,
+    typed: String,
     pads: pad::Gamepads,
     game: Option<Box<dyn Game>>,
     accumulator: f64,
@@ -280,6 +284,11 @@ impl ApplicationHandler for App {
                 self.last = Instant::now();
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == ElementState::Pressed
+                    && let Some(t) = &event.text
+                {
+                    self.typed.extend(t.chars().filter(|c| !c.is_control()));
+                }
                 if let PhysicalKey::Code(key) = event.physical_key {
                     if event.state == ElementState::Pressed {
                         if !event.repeat {
@@ -363,6 +372,7 @@ impl ApplicationHandler for App {
                     if quiet {
                         self.keys.clear();
                         self.pressed.clear();
+                        self.typed.clear();
                         self.mouse = Mouse::default();
                         self.pads.state = pad::Pad::default();
                         self.pads.edges = pad::Pad::default();
@@ -382,10 +392,12 @@ impl ApplicationHandler for App {
                                 pad: self.pads.state,
                                 pad_pressed: self.pads.edges,
                                 mouse,
+                                typed: &self.typed,
                             },
                             step,
                         );
                         self.pressed.clear();
+                        self.typed.clear();
                         self.pads.edges = pad::Pad::default();
                         // Flanken und Rad gelten genau einen Schritt
                         mouse.left_pressed = false;

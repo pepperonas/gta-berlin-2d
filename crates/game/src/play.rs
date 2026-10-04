@@ -66,6 +66,11 @@ pub struct Play {
     pub fx: crate::effects::Effects,
     /// Reifenspuren im Schnee (nur Darstellung)
     pub trails: crate::snowtracks::Trails,
+    /// Befehlszeile (Enter) und ihre Ortsliste aus dem Stadtplan
+    pub console: crate::console::Console,
+    pub places: Vec<crate::console::Place>,
+    /// Teleport der Befehlszeile: ohne Rückfrage springen, sobald das Ziel geladen ist
+    teleport_auto: bool,
 }
 
 /// Einstellungen neben dem Spielstand (`settings.json`): Steuerschema.
@@ -178,7 +183,11 @@ impl Play {
                 crate::bigmap::BigMap::default()
             }
         };
+        let places = crate::console::place_index(&bigmap.labels);
         Ok(Self {
+            console: Default::default(),
+            places,
+            teleport_auto: false,
             bigmap,
             hud_width: 1280.,
             world,
@@ -389,6 +398,70 @@ impl Play {
             }
         }
     }
+    /// Befehlszeile bedienen (Welt steht): Tasten und getippter Text, danach die Folgen der Befehle.
+    fn step_console(&mut self, keys: &Keys) {
+        use crate::console::{Action, Ctx, Key};
+        let p = |k: KeyCode| keys.pressed.contains(&k);
+        let held = |k: KeyCode| keys.held.contains(&k);
+        let shift = held(KeyCode::ShiftLeft) || held(KeyCode::ShiftRight);
+        let word = held(KeyCode::ControlLeft)
+            || held(KeyCode::ControlRight)
+            || held(KeyCode::AltLeft)
+            || held(KeyCode::AltRight);
+        let mut list: Vec<Key> = keys.typed.chars().map(Key::Char).collect();
+        for (k, key) in [
+            (KeyCode::Escape, Key::Escape),
+            (KeyCode::Tab, Key::Tab),
+            (KeyCode::ArrowRight, Key::Right),
+            (KeyCode::ArrowLeft, Key::Left),
+            (KeyCode::ArrowUp, Key::Up),
+            (KeyCode::ArrowDown, Key::Down),
+            (
+                KeyCode::Backspace,
+                if word {
+                    Key::DeleteWord
+                } else {
+                    Key::Backspace
+                },
+            ),
+            (KeyCode::Enter, Key::Enter),
+            (KeyCode::NumpadEnter, Key::Enter),
+        ] {
+            if p(k) {
+                list.push(key);
+            }
+        }
+        if keys.pad_pressed.b {
+            list.push(Key::Escape);
+        }
+        let now = self.world.time;
+        for key in list {
+            let mut ctx = Ctx {
+                world: &mut self.world,
+                places: &self.places,
+                actions: Vec::new(),
+            };
+            self.console.key(key, &mut ctx, now, shift);
+            let actions = std::mem::take(&mut ctx.actions);
+            for a in actions {
+                match a {
+                    Action::Teleport { x, y, .. } => {
+                        self.teleport = Some(((x, y), None));
+                        self.teleport_auto = true;
+                    }
+                    Action::Stats => self.screen = Screen::Stats(false),
+                    Action::Cheat(_) => {
+                        self.stats.bump("cheats");
+                        self.stats_total.bump("cheats");
+                    }
+                    Action::Money(m) => self.tracker.set_money(m),
+                }
+            }
+            if !self.console.open {
+                break;
+            }
+        }
+    }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
         self.menu = crate::menu::pause_menu();
@@ -408,11 +481,16 @@ impl Play {
             && (matches!(
                 self.screen,
                 Screen::Paused | Screen::Controls(false) | Screen::Stats(false)
-            ) || (self.screen == Screen::Playing && self.teleport.is_some()))
+            ) || (self.screen == Screen::Playing
+                && (self.teleport.is_some() || self.console.open)))
         {
             self.world.update(&Input::default(), dt);
         }
         match self.screen {
+            Screen::Playing if self.console.open => {
+                self.step_console(keys);
+                true
+            }
             Screen::Playing if self.teleport.is_some() => {
                 // Teleport-Rückfrage: Welt steht; Ziel nachladen, bis es da ist
                 if let Some(((x, y), None)) = self.teleport.clone() {
@@ -431,6 +509,16 @@ impl Play {
                             self.world.city.release("teleport");
                         }
                     }
+                }
+                if self.teleport_auto {
+                    // Befehlszeile: ohne Rückfrage, sobald das Ziel geladen ist
+                    if self.teleport.as_ref().is_some_and(|t| t.1.is_some()) {
+                        self.teleport_auto = false;
+                        self.confirm_teleport(true);
+                    } else if self.teleport.is_none() {
+                        self.teleport_auto = false;
+                    }
+                    return true;
                 }
                 let (yes, no) = crate::menu::teleport_buttons(self.hud_width);
                 let m = keys.mouse;
@@ -456,6 +544,17 @@ impl Play {
                 if pause && self.bigmap.open && !keys.pad_pressed.menu {
                     self.bigmap.open = false;
                     return false;
+                }
+                let enter = keys.pressed.contains(&KeyCode::Enter)
+                    || keys.pressed.contains(&KeyCode::NumpadEnter);
+                if enter
+                    && !self.bigmap.open
+                    && !self.world.loading
+                    && !matches!(self.world.mission.state, State::Success | State::Failed)
+                {
+                    self.console.open(&self.places);
+                    self.ui_sound();
+                    return true;
                 }
                 if pause && !self.world.loading {
                     self.pause();
@@ -1848,8 +1947,13 @@ impl Game for Play {
         {
             crate::hud::crosshair(out, c, p.combat.weapon().melee);
         }
-        if let Some((_, spot)) = &self.teleport {
+        if let Some((_, spot)) = &self.teleport
+            && !self.teleport_auto
+        {
             crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+        }
+        if self.screen == Screen::Playing {
+            crate::console::draw(out, &self.console, &self.world);
         }
         for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
             if wh.open && self.screen == Screen::Playing {
@@ -2063,6 +2167,7 @@ mod tests {
             pad,
             pad_pressed: edges,
             mouse: Default::default(),
+            typed: "",
         };
         let i = input_from(&keys, true);
         assert_eq!(i.throttle, 1., "Taste W und Trigger: das Stärkere zählt");
@@ -2078,6 +2183,7 @@ mod tests {
                 },
                 pad_pressed: Pad::default(),
                 mouse: Default::default(),
+                typed: "",
             },
             false,
         );
@@ -2112,6 +2218,7 @@ mod tests {
                     pad: Pad::default(),
                     pad_pressed: Pad::default(),
                     mouse: Default::default(),
+                    typed: "",
                 },
                 DT,
             );

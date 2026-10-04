@@ -83,6 +83,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Wetter am Boden. Pfützen lösen Aquaplaning aus (mit Spritzwasser-Klang); nasser Asphalt,
   Pfützen mit Regenringen, Aufschlagringe, Schneedecke, Schnee und Matschspuren auf den Straßen, Reifenspuren im
   Schnee, Bodennebel und Wolkenschatten.
+- Native Rust-Fassung: Befehlszeile (Enter) wie im Browser – Uhrzeit, Wochentag, Wetter samt Wettertafel, Dichte,
+  Teleport zu Straßen/Bahnhöfen/Ortsteilen/Kiezen/Bezirken, Geld, Gesundheit, Munition, Gottmodus, Fahrzeuge;
+  Vorschläge mit Tippfehler-Toleranz, Verlauf, Statistikzeile für Konsolenbefehle.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

@@ -1,4 +1,5 @@
 mod bigmap;
+mod console;
 mod effects;
 mod hud;
 mod menu;
@@ -141,12 +142,19 @@ fn main() -> Result<()> {
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad oder teleport",
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport oder konsole",
                 )?;
                 ensure!(
-                    ["pause", "steuerung", "statistik", "waffenrad", "teleport"]
-                        .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad oder teleport"
+                    [
+                        "pause",
+                        "steuerung",
+                        "statistik",
+                        "waffenrad",
+                        "teleport",
+                        "konsole"
+                    ]
+                    .contains(&v.as_str()),
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport oder konsole"
                 );
                 screen = Some(v);
             }
@@ -169,7 +177,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|waffenrad|teleport] [--kampf-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|waffenrad|teleport|konsole] [--kampf-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Strg: angreifen · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
@@ -269,6 +277,10 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("statistik") => play.screen = play::Screen::Stats(false),
         Some("waffenrad") => play.demo_wheel(),
         Some("teleport") => play.demo_teleport(),
+        Some("konsole") => {
+            play.console.open(&play.places);
+            play.console.set_text("tp kott", &play.places);
+        }
         _ => {}
     }
     play.auto_enter = in_car;

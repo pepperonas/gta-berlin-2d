@@ -106,6 +106,42 @@ pub struct Overview {
     pub ortsteile: Vec<PointLabel>,
     pub kieze: Vec<PointLabel>,
     pub stations: Vec<Station>,
+    /// Straßen: je Name die Mitte des längsten Stücks (Ortssuche der Befehlszeile)
+    pub streets: Vec<PointLabel>,
+}
+
+/// Straßen je Name: Mitte des längsten Stücks, Länge als Rang (`console.js placeIndex`).
+pub fn street_points(ov: &Value) -> Vec<PointLabel> {
+    let names = ov["names"].as_array().cloned().unwrap_or_default();
+    let mut best: std::collections::BTreeMap<usize, (f32, Vec2)> = Default::default();
+    for r in ov["roads"].as_array().into_iter().flatten() {
+        let Some(n) = r[1].as_i64().filter(|&n| n >= 0).map(|n| n as usize) else {
+            continue;
+        };
+        if names
+            .get(n)
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+        {
+            continue;
+        }
+        let pts = undelta(&r[2]);
+        if pts.is_empty() {
+            continue;
+        }
+        let len: f32 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+        let mid = pts[pts.len() / 2];
+        if best.get(&n).is_none_or(|b| len > b.0) {
+            best.insert(n, (len, mid));
+        }
+    }
+    best.into_iter()
+        .map(|(n, (len, at))| PointLabel {
+            at,
+            text: names[n].as_str().unwrap_or("").to_owned(),
+            area: len,
+        })
+        .collect()
 }
 
 /// Farben wie `hud.js` (sRGB 0…1).
@@ -267,6 +303,7 @@ impl Overview {
             ortsteile: point_labels(&ov["ortsteile"]),
             kieze: point_labels(&ov["kieze"]),
             stations,
+            streets: street_points(ov),
         }
     }
 }

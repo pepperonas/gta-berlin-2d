@@ -166,6 +166,12 @@ pub struct World {
     pub temp: f64,
     /// erzwungenes Wetterbild (Befehlszeile/Taste) statt des Tagesverlaufs
     pub force_weather: Option<&'static str>,
+    /// erzwungene Temperatur (°C, Befehlszeile `temp`)
+    pub force_temp: Option<f64>,
+    /// Tempo der Spieluhr (1 = normal, 0 = steht; Befehlszeile `tempo`)
+    pub clock_rate: f64,
+    /// unverwundbar (Befehlszeile `gott`)
+    pub god: bool,
     /// Wetter folgt dem Tagesverlauf (sonst bleibt es klar und der Boden trocken)
     pub weather_cycle: bool,
     pub seed: u32,
@@ -262,6 +268,9 @@ impl World {
             sky: crate::weather::weather_at(seed, 0, CLOCK_START, Some("clear")),
             temp: crate::weather::temperature_at(seed, 0, CLOCK_START, None),
             force_weather: None,
+            force_temp: None,
+            clock_rate: 1.,
+            god: false,
             weather_cycle: true,
             seed,
             player: Player {
@@ -1046,6 +1055,21 @@ impl World {
 
     /// Aufnahmen (`--fahrzeugschau`): je ein Fahrzeug jeder Art auf der nächsten Fahrspur hintereinander, stehend,
     /// Paketwagen mit Warnblinker, Müllauto bei der Arbeit, Einsatzfahrzeuge mit Blaulicht.
+    /// Fahrzeug neben der Figur abstellen (Befehlszeile `auto`): Art aus `carmodels::KINDS`, optional ein Pkw-Modell.
+    pub fn spawn_vehicle(&mut self, kind: &str, model: Option<&'static str>) -> Option<u32> {
+        let k = crate::carmodels::kind(kind);
+        let a = self.player.angle;
+        let (x, y) = (self.player.x + a.cos() * 60., self.player.y + a.sin() * 60.);
+        let id = self.new_car_id();
+        let (sx, sy, angle) = self.open_spot(x, y, Some((id, k.l / 2., k.w / 2.)))?;
+        let color = CAR_COLORS[(id as usize) % CAR_COLORS.len()];
+        let mut c = Car::new(id, sx, sy, angle, color, Role::Parked, k.name);
+        c.model = model;
+        c.level.lvl = self.player.level.lvl;
+        self.cars.push(c);
+        Some(id)
+    }
+
     pub fn vehicle_show(&mut self) {
         let (px, py) = (self.player.x, self.player.y);
         let Some(hit) = self.lanes.nearest_lane(px, py, None, 400., false) else {
@@ -2236,7 +2260,9 @@ impl World {
         if g.snow < snow_was {
             g.wet = g.wet.max((g.snow * 1.5).min(1.)); // Tauwetter: Matsch und nasse Straßen
         }
-        self.temp = wx::temperature_at(self.seed, self.day_count, self.clock, self.force_weather);
+        self.temp = self.force_temp.unwrap_or_else(|| {
+            wx::temperature_at(self.seed, self.day_count, self.clock, self.force_weather)
+        });
         g.ice = wx::step_ice(g.ice, g.wet, self.temp, dt);
     }
 
@@ -2254,7 +2280,7 @@ impl World {
             return;
         }
         self.time += dt;
-        self.clock += dt;
+        self.clock += dt * self.clock_rate;
         if self.clock >= 1440. {
             self.clock -= 1440.;
             self.day = (self.day + 1) % 7;
