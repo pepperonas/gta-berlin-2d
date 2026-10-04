@@ -17,6 +17,9 @@ const GREY: [f32; 4] = [0.8, 0.8, 0.8, 1.];
 const GREEN: [f32; 4] = [0.5, 0.88, 0.48, 1.];
 const RED: [f32; 4] = [1., 0.36, 0.36, 1.];
 const MARGIN: (f32, f32) = (28., 24.);
+/// Kantenlänge der Minikarte (Basiseinheiten) und gezeigte Weltbreite (px, ~400 m), wie `hud.js`.
+const MINI: f32 = 176.;
+const MINI_SPAN: f32 = 4000.;
 const DAYS: [&str; 7] = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 pub fn fmt_time(s: f64) -> String {
@@ -112,6 +115,10 @@ pub fn draw(
     };
     let (objective, target) = w.mission.objective(&w.city.places, pv, &w.cars);
     let ms = w.mission.state;
+    // unten links: Minikarte (beim Briefing ausgeblendet)
+    if ms != State::Briefing {
+        minimap(w, target, mx, 720. - my - MINI - 10., MINI, h);
+    }
     // oben rechts: Auftrag und Zeit
     if !objective.is_empty() {
         let r = h.width - mx;
@@ -568,6 +575,83 @@ pub fn group(v: i64) -> String {
     if v < 0 { format!("-{out}") } else { out }
 }
 
+/// Minikarte (`hud.js drawMinimap`): Kartenmeshes als Ausschnitt um Spieler bzw. eigenes Auto, darüber andere Autos,
+/// das Ziel (am Rand festgehalten), der Spielerpfeil und ein „N“.
+pub fn minimap(w: &World, target: Option<(f64, f64)>, x: f32, y: f32, size: f32, h: &mut Hud) {
+    let pc = w.player_car();
+    let (px, py, angle) = pc.map_or((w.player.x, w.player.y, w.player.angle), |c| {
+        (c.x, c.y, c.angle)
+    });
+    h.rect(x, y, size, size, [0.227, 0.239, 0.267, 1.], 6.);
+    h.map_inset(x, y, size, size, [px as f32, py as f32], MINI_SPAN);
+    let k = size / MINI_SPAN;
+    let (cx, cy) = (x + size / 2., y + size / 2.);
+    let to_mini = |wx: f64, wy: f64| (cx + (wx - px) as f32 * k, cy + (wy - py) as f32 * k);
+    let inside =
+        |mx: f32, my: f32| mx > x + 2. && mx < x + size - 2. && my > y + 2. && my < y + size - 2.;
+    for c in &w.cars {
+        if pc.is_some_and(|p| p.id == c.id) {
+            continue;
+        }
+        let (mx, my) = to_mini(c.x, c.y);
+        if !inside(mx, my) {
+            continue;
+        }
+        let color = if c.cargo {
+            [0.878, 0.69, 0.376, 1.]
+        } else if Some(c.id) == w.player_car_id {
+            [1., 0.478, 0.478, 1.]
+        } else {
+            [0.82, 0.82, 0.82, 0.55]
+        };
+        h.rect(mx - 1.5, my - 1.5, 3., 3., color, 0.);
+    }
+    if let Some((tx, ty)) = target {
+        let (mut mx, mut my) = to_mini(tx, ty);
+        let lim = size / 2. - 9.;
+        let f = (mx - cx).abs().max((my - cy).abs()) / lim;
+        if f > 1. {
+            mx = cx + (mx - cx) / f;
+            my = cy + (my - cy) / f;
+        }
+        h.ellipse(mx, my, 7., 7., [0., 0., 0., 1.]);
+        h.ellipse(mx, my, 5.5, 5.5, YELLOW);
+    }
+    // Spielerpfeil mit dunklem Rand
+    let a = angle as f32;
+    h.triangle(cx, cy, 9., a, [0., 0., 0., 1.]);
+    h.triangle(cx, cy, 7., a, WHITE);
+    // Rahmen
+    let edge = [0., 0., 0., 0.7];
+    h.line(x - 1., y - 1., x + size + 1., y - 1., 2.5, edge);
+    h.line(
+        x - 1.,
+        y + size + 1.,
+        x + size + 1.,
+        y + size + 1.,
+        2.5,
+        edge,
+    );
+    h.line(x - 1., y - 1., x - 1., y + size + 1., 2.5, edge);
+    h.line(
+        x + size + 1.,
+        y - 1.,
+        x + size + 1.,
+        y + size + 1.,
+        2.5,
+        edge,
+    );
+    h.text(
+        "N",
+        cx,
+        y + 15.,
+        12.,
+        [0.9, 0.9, 0.9, 1.],
+        Align::Center,
+        true,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,5 +662,33 @@ mod tests {
         assert_eq!(group(1234567), "1.234.567");
         assert_eq!(group(500), "500");
         assert_eq!(group(-1000), "-1.000");
+    }
+    #[test]
+    fn minimap_centres_on_the_player_and_marks_the_target() {
+        use berlin_sim::city::{City, DiskSource};
+        let root = berlin_map_loader::default_data_root();
+        let city = City::open(&root, Box::new(DiskSource::new(root.clone()))).unwrap();
+        let w = World::new(city, 3, 8, 0);
+        let mut h = Hud::new([1280., 720.]);
+        h.text("davor", 10., 10., 12., WHITE, Align::Left, false);
+        let before = h.items.len() as u32;
+        // Ziel weit weg: wird am Rand festgehalten
+        let target = (w.player.x + 50_000., w.player.y);
+        minimap(&w, Some(target), 40., 500., MINI, &mut h);
+        let m = h.map.expect("Kartenausschnitt");
+        assert_eq!(m.center, [w.player.x as f32, w.player.y as f32]);
+        assert_eq!(m.span, MINI_SPAN);
+        assert_eq!(m.rect, [40., 500., MINI, MINI]);
+        assert_eq!(
+            m.split,
+            before + 1,
+            "Hintergrund unter, Markierungen über der Karte"
+        );
+        let yellow = h
+            .items
+            .iter()
+            .find(|i| i.color == YELLOW)
+            .expect("Zielpunkt");
+        assert!(yellow.center[0] <= 40. + MINI && yellow.center[0] > 40. + MINI / 2.);
     }
 }

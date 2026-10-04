@@ -1,7 +1,7 @@
 use crate::{
     Body, LightSource, Lighting, atlas,
     camera::Camera,
-    hud::{self, HudItem},
+    hud::{self, HudItem, MapInset},
     lightpass,
 };
 use anyhow::{Context, Result};
@@ -54,6 +54,9 @@ pub(crate) struct Renderer {
     hud: Option<wgpu::Buffer>,
     hud_capacity: usize,
     hud_count: u32,
+    map: Option<MapInset>,
+    map_uniform: wgpu::Buffer,
+    map_bind: wgpu::BindGroup,
 }
 impl Renderer {
     pub async fn new(window: Arc<Window>, scale: f32, lighting: Lighting) -> Result<Self> {
@@ -228,6 +231,20 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: uniform.as_entire_binding(),
+            }],
+        });
+        let map_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Minikarte"),
+            size: UNIFORM_BYTES,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let map_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Minikarte"),
+            layout: &camera_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: map_uniform.as_entire_binding(),
             }],
         });
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -412,6 +429,9 @@ impl Renderer {
             hud: None,
             hud_capacity: 0,
             hud_count: 0,
+            map: None,
+            map_uniform,
+            map_bind,
         })
     }
     pub fn viewport(&self) -> Vec2 {
@@ -509,8 +529,27 @@ impl Renderer {
         self.light.set_lights(&self.device, &self.queue, lights);
     }
     /// HUD-Elemente des nächsten Bildes (Bildschirm-Pixel).
-    pub fn set_hud(&mut self, items: &[HudItem]) {
+    pub fn set_hud(&mut self, items: &[HudItem], map: Option<MapInset>) {
         self.hud_count = items.len() as u32;
+        self.map = map.filter(|m| m.rect[2] >= 4. && m.rect[3] >= 4. && m.span > 0.);
+        if let Some(m) = self.map {
+            // eigene Kamera: Mitte, Maßstab Pixel je Welt-px, Ausschnittgröße; params.y = schematisch
+            let mut u = vec![
+                m.center[0],
+                m.center[1],
+                m.rect[2] / m.span,
+                0.,
+                m.rect[2],
+                m.rect[3],
+                0.,
+                0.,
+            ];
+            u.extend([0.3, -0.5, 0.8, 0.]);
+            u.extend([self.scale, 1., 0., 0.]);
+            u.extend([0.; 8]);
+            self.queue
+                .write_buffer(&self.map_uniform, 0, bytemuck::cast_slice(&u));
+        }
         if items.is_empty() {
             return;
         }
@@ -687,12 +726,74 @@ impl Renderer {
             pass.set_pipeline(&self.light.ambient_composite);
             pass.draw(0..3, 0..1);
         }
-        // 4) HUD über allem (ohne Tiefentest)
-        if let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) {
-            pass.set_pipeline(&self.hud_pipeline);
-            pass.set_bind_group(1, &self.hud_font, &[]);
-            pass.set_vertex_buffer(0, hud.slice(..));
-            pass.draw(0..6, 0..self.hud_count);
+        drop(pass);
+        // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("HUD"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
+            return;
+        };
+        let split = self
+            .map
+            .map_or(self.hud_count, |m| m.split.min(self.hud_count));
+        pass.set_bind_group(0, &self.bind, &[]);
+        pass.set_pipeline(&self.hud_pipeline);
+        pass.set_bind_group(1, &self.hud_font, &[]);
+        pass.set_vertex_buffer(0, hud.slice(..));
+        pass.draw(0..6, 0..split);
+        if let Some(m) = self.map {
+            let (w, h) = (self.size.width as f32, self.size.height as f32);
+            let x0 = m.rect[0].clamp(0., w);
+            let y0 = m.rect[1].clamp(0., h);
+            let x1 = (m.rect[0] + m.rect[2]).clamp(0., w);
+            let y1 = (m.rect[1] + m.rect[3]).clamp(0., h);
+            if x1 - x0 >= 1. && y1 - y0 >= 1. {
+                let k = m.span / m.rect[2] / 2.;
+                let (c, r) = (Vec2::from(m.center), Vec2::new(m.rect[2], m.rect[3]) * k);
+                let area = Bounds {
+                    min: c - r,
+                    max: c + r,
+                }
+                .expand(256.);
+                pass.set_viewport(m.rect[0], m.rect[1], m.rect[2], m.rect[3], 0., 1.);
+                pass.set_scissor_rect(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32);
+                pass.set_bind_group(0, &self.map_bind, &[]);
+                pass.set_bind_group(1, &self.atlas_bind, &[]);
+                pass.set_pipeline(&self.pipeline);
+                for tile in self.tiles.values().filter(|t| t.bounds.intersects(area)) {
+                    if let (Some(v), Some(i)) = (&tile.vertices, &tile.indices) {
+                        pass.set_vertex_buffer(0, v.slice(..));
+                        pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+                    }
+                }
+                pass.set_viewport(0., 0., w, h, 0., 1.);
+                pass.set_scissor_rect(0, 0, self.size.width, self.size.height);
+                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_pipeline(&self.hud_pipeline);
+                pass.set_bind_group(1, &self.hud_font, &[]);
+                pass.set_vertex_buffer(0, hud.slice(..));
+                pass.draw(0..6, split..self.hud_count);
+            }
         }
     }
     /// Read back our own render target for repeatable visual QA, independent of desktop capture.

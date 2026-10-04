@@ -133,8 +133,21 @@ fn lefts() -> &'static [u8; 256] {
 }
 
 /// Sammelt die HUD-Elemente eines Bildes. Koordinaten in Basiseinheiten (Fensterhöhe = 720).
+/// Kartenausschnitt im HUD (Minikarte): die Kartenmeshes mit eigener Kamera in einem Rechteck des Bildes.
+/// HUD-Elemente vor `split` liegen darunter, alle späteren darüber.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapInset {
+    /// Rechteck in Bildschirm-Pixeln (x, y, Breite, Höhe)
+    pub rect: [f32; 4],
+    /// Kartenmitte (Welt-px)
+    pub center: [f32; 2],
+    /// Weltbreite des Ausschnitts (px)
+    pub span: f32,
+    pub split: u32,
+}
 pub struct Hud {
     pub items: Vec<HudItem>,
+    pub map: Option<MapInset>,
     pub scale: f32,
     /// Breite in Basiseinheiten
     pub width: f32,
@@ -145,10 +158,35 @@ impl Hud {
         let scale = (viewport[1] / 720.).max(0.25);
         Self {
             items: Vec::new(),
+            map: None,
             scale,
             width: viewport[0] / scale,
             height: 720.,
         }
+    }
+    /// Minikarte in das Rechteck (Basiseinheiten) legen; was danach gezeichnet wird, liegt über der Karte.
+    pub fn map_inset(&mut self, x: f32, y: f32, w: f32, h: f32, center: [f32; 2], span: f32) {
+        let s = self.scale;
+        self.map = Some(MapInset {
+            rect: [x * s, y * s, w * s, h * s],
+            center,
+            span,
+            split: self.items.len() as u32,
+        });
+    }
+    /// Strich von (x0, y0) nach (x1, y1) mit runden Enden.
+    pub fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, width: f32, color: [f32; 4]) {
+        let s = self.scale;
+        let (dx, dy) = (x1 - x0, y1 - y0);
+        let len = dx.hypot(dy);
+        self.items.push(HudItem {
+            center: [(x0 + x1) / 2. * s, (y0 + y1) / 2. * s],
+            half: [(len + width) / 2. * s, width / 2. * s],
+            angle: dy.atan2(dx),
+            shape: 0.,
+            color,
+            extra: [width / 2. * s, 0., 0., 0.],
+        });
     }
     pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: [f32; 4], radius: f32) {
         let s = self.scale;

@@ -11,8 +11,7 @@ streaming, surfaces, walls, levels data; `DiskSource`/`ThreadedSource`), `levels
 + `carmodels.rs` + `traction.rs`, `roadgraph.rs` (lanes, signals), `traffic.rs` (AI + reservations kept in
 `Reservations`, AI reads an `Agent` snapshot), `pedestrians.rs`, `mission.rs`, `save.rs` (JS-compatible JSON
 file, atomic write), `world.rs`. Positions are f64. Integration tests on real tiles: `crates/sim/tests/world.rs`;
-`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: weather cycle, combat, bikes, transit,
-stations, life spots, emergency services, HUD text, audio. Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
+`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: combat, bikes, transit, stations, life spots, emergency services, big map, menus. Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
 (pure, tested), `map_loader` emits per-building `ShadowVertex` wall quads, `engine/lightpass.rs` + `lighting.wgsl`
 render a shadow mask (vertex extrusion along the sun, tree crowns from the atlas) and a half-res lightmap, then
 apply both with a fullscreen triangle at depth 0.5 (ground/cars behind, roofs/crowns in front get ambient only).
@@ -23,6 +22,8 @@ rules in `sim/{enginevoice,soundscape,ambience}.rs`; `crates/audio` (`berlin-aud
 drive offline. HUD: `engine/hud.rs` (font8x8 bitmap atlas, screen-space instances) laid out by `game/hud.rs` in
 720-line base units; gamepad: `engine/pad.rs` (gilrs) merged with keys in `game/play.rs input_from`;
 weather: `sim/weather.rs` (pure, seed + time) stepped by `World::step_weather`, drawn by `game/weatherfx.rs`;
+minimap: `Hud::map_inset` → renderer draws tile meshes with a second camera uniform (`params.y = 1` = flat
+schematic) inside a viewport/scissor rect between HUD items `..split` and `split..`;
 `crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
 colors, and tessellates meshes on a dedicated streaming thread. It owns shared
 features by global IDs and releases far tiles (maximum 64 resident). The engine

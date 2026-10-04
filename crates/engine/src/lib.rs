@@ -331,7 +331,7 @@ impl ApplicationHandler for App {
                     let viewport = renderer.viewport();
                     let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
                     game.hud(&self.camera, viewport, &mut overlay);
-                    renderer.set_hud(&overlay.items);
+                    renderer.set_hud(&overlay.items, overlay.map);
                 } else if self.focused {
                     self.camera.position += movement.normalize_or_zero()
                         * (if self.keys.contains(&KeyCode::ShiftLeft) {

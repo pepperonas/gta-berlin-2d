@@ -39,6 +39,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Donner, Temperatur, Nässe/Schnee/Glätte auf der Straße mit Haftung und Sturmböen. Im Bild gedämpftes Tageslicht,
   Regen, Schnee, Nebelschleier und Blitze; im HUD Wetter, Temperatur und Warnschild; Donner und Regen im Klang.
   `--wetter ART` und Taste N.
+- Native Rust-Fassung: Minikarte unten links (echte Kartenmeshes mit zweiter Kamera im HUD-Rechteck, Häuser als
+  dunkle Grundrisse; Autos, Ziel am Rand, Spielerpfeil, Nordmarke).
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

@@ -16,7 +16,8 @@ struct Out {
 fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
     let delta = point.xy - camera.position;
     var h = 0.0;
-    if point.z > 0.0 { h = max(18.0, point.z * 0.5); }
+    // Minikarte (params.y = 1) zeigt alles flach von oben
+    if point.z > 0.0 && camera.params.y < 0.5 { h = max(18.0, point.z * 0.5); }
     let relative_center = center - camera.position;
     let offset = vec2(relative_center.x * h * 0.0005, -h * 0.5 + relative_center.y * h * 0.00025);
     let screen = (delta + offset) * camera.scale;
@@ -30,6 +31,8 @@ fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
     var out: Out;
     out.position = project(point, center, depth);
     out.color = color; out.normal = normal; out.uv = uv; out.material = material;
+    // Minikarte: Häuser als dunkle Grundrisse (hud.js MINI: #2b2d33), Boden in seinen Farben
+    if camera.params.y > 0.5 && point.z > 0.0 { out.color = vec3(0.169, 0.176, 0.2) / 0.78; }
     return out;
 }
 fn noise(p: vec2<f32>) -> f32 {
@@ -40,6 +43,10 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     return select(c / 12.92, pow((c + vec3(0.055)) / 1.055, vec3(2.4)), c > vec3(0.04045));
 }
 @fragment fn fs(in: Out) -> @location(0) vec4<f32> {
+    // Minikarte: flache Farben, etwas abgedunkelt, damit Markierungen darauf lesbar bleiben
+    if camera.params.y > 0.5 {
+        return vec4(linear_color(in.color * 0.78), 1.0);
+    }
     let px_per_m = camera.params.x;
     let p = in.uv / px_per_m;
     let n = noise(floor(p * 12.0));

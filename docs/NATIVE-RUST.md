@@ -399,3 +399,23 @@ Formatprüfung, Clippy mit `-D warnings` und alle 86 Rust-Tests sind erfolgreich
 - 90 s Gewitter mit Donner und Regen im Klangmix
 
 GPU-Aufnahmen bei Starkregen, Schneesturm und dichtem Nebel wurden visuell kontrolliert.
+
+## Minikarte (04.10.2026)
+
+Unten links liegt eine Minikarte wie `hud.js drawMinimap`: 176 Einheiten groß, ~400 m Ausschnitt um den Spieler
+bzw. das eigene Auto, nach Norden ausgerichtet. Sie zeichnet die echten Kartenmeshes mit einer zweiten Kamera
+(`hud::MapInset`, eigener Uniform-Puffer) im HUD-Durchgang in ein Viewport-/Scissor-Rechteck. HUD-Elemente vor dem
+Ausschnitt liegen darunter, spätere darüber. Im Kartenmodus (`params.y = 1` in `scene.wgsl`) gibt es keinen
+Höhenversatz und keine Texturen; Häuser sind dunkle Grundrisse, der Boden behält seine Farben, etwas abgedunkelt.
+Darüber liegen andere Autos als Punkte, Kistenautos gelb, das eigene geparkte Auto rot. Das Ziel ist ein gelber
+Punkt, außer Sicht am Rand festgehalten. Dazu kommen der Spielerpfeil, ein Rahmen und „N“. Neu im HUD ist
+`Hud::line` (gedrehtes Rechteck mit runden Enden). Aufnahme: [Minikarte](images/native/minimap.png).
+
+**Noch offen:**
+- Bahnhofssymbole (kein Nahverkehr portiert)
+- Lebensleiste
+- große Karte mit Beschriftung (`overview.json`, `maplabels.js`)
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 87 Rust-Tests laufen erfolgreich. Neu ist ein Test
+der Ausschnittsgeometrie: Mitte am Spieler, Trennung unter/über, Ziel am Rand. Die GPU-Aufnahme wurde visuell
+kontrolliert.
