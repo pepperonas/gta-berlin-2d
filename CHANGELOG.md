@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: jedes Fahrzeugmodell mit eigenem Bild aus einem beim Start gerasterten Atlas (Lack,
+  Scheiben, Leuchten, Modellmerkmale), dazu Räder mit Lenkeinschlag, Blinker, Rückfahrlicht und Nicken/Wanken.
 - Native Rust-Portierung: Menschen mit Schuhen, Schultern, Armen mit Ellbogen und Händen, Ohren und Haaransatz;
   Gangart aus der zurückgelegten Strecke.
 - Native Rust-Portierung: Statistik vollständig – Nahverkehr, zerstörte Autos und eine Waffentabelle mit Quote.

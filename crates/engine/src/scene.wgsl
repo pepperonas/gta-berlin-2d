@@ -205,7 +205,41 @@ struct BodyOut {
     out.color = color; out.local = local; out.extent = extent; out.shape = shape;
     return out;
 }
+// Fahrzeugbild aus dem Atlas (shape ≥ 16, Modell = shape − 16): zwei Zellen nebeneinander (Lack, Details), 8 je
+// Zeile, je 256 × 128 px. Der Lack trägt die Schattierung s als (s+1)/2; die Farbe des Autos (in.color) wird wie
+// assets.js shade aufgehellt bzw. abgedunkelt, die Details liegen darüber.
+fn vehicle(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> vec4<f32> {
+    let q = in.local / in.extent;
+    if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return vec4(0.0); }
+    let dims = vec2<f32>(textureDimensions(atlas));
+    let cell = vec2(256.0, 128.0);
+    let idx = u32(in.shape - 16.0 + 0.5);
+    let uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
+    let cb = idx * 2u;
+    let cd = cb + 1u;
+    let pb = (vec2(f32(cb % 8u), f32(cb / 8u)) + uv) * cell / dims;
+    let pd = (vec2(f32(cd % 8u), f32(cd / 8u)) + uv) * cell / dims;
+    let k = 0.5 * cell / dims;
+    let dx = gx / in.extent * k;
+    let dy = gy / in.extent * k;
+    let b = textureSampleGrad(atlas, atlas_sampler, pb, dx, dy);
+    let d = textureSampleGrad(atlas, atlas_sampler, pd, dx, dy);
+    let s = b.r * 2.0 - 1.0;
+    let c = in.color.rgb;
+    let paint = select(c * (1.0 + s), c + (vec3(1.0) - c) * s, s >= 0.0);
+    let a = d.a + b.a * (1.0 - d.a);
+    let rgb = (paint * b.a * (1.0 - d.a) + d.rgb * d.a) / max(a, 1e-4);
+    return vec4(rgb, a * in.color.a);
+}
 @fragment fn body_fs(in: BodyOut) -> @location(0) vec4<f32> {
+    // Ableitungen vor jeder Verzweigung (einheitlicher Kontrollfluss)
+    let gx = dpdx(in.local);
+    let gy = dpdy(in.local);
+    if in.shape >= 16.0 {
+        let v = vehicle(in, gx, gy);
+        if v.a < 0.03 { discard; }
+        return vec4(linear_color(v.rgb), v.a);
+    }
     var d: f32;
     if in.shape == 3.0 {
         let q = length(in.local / in.extent);

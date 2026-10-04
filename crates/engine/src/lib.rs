@@ -122,6 +122,10 @@ pub trait Game {
     /// Kameraziel (Kartenpixel) und Zoom.
     fn camera(&self) -> (Vec2, f32);
     fn bodies(&self, out: &mut Vec<Body>);
+    /// Fahrzeugbilder (RGBA8, Breite, Höhe), einmal abgeholt.
+    fn take_vehicle_atlas(&mut self) -> Option<(Vec<u8>, u32, u32)> {
+        None
+    }
     /// Umrisse, die nur dort erscheinen, wo etwas Näheres davor liegt (Spielfigur unter Dach oder Baumkrone).
     fn silhouettes(&self, _out: &mut Vec<Body>) {}
     /// Zeile für den Fenstertitel.
@@ -442,6 +446,9 @@ impl ApplicationHandler for App {
                     game.lights(&mut self.lights);
                     renderer.set_lights(&self.lights);
                     let viewport = renderer.viewport();
+                    if let Some((px, w, h)) = game.take_vehicle_atlas() {
+                        renderer.set_vehicle_atlas(&px, w, h);
+                    }
                     if let Some(mesh) = game.take_overview() {
                         renderer.set_overview(&mesh);
                     }

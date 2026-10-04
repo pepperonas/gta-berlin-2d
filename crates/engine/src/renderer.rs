@@ -45,6 +45,9 @@ pub(crate) struct Renderer {
     uniform: wgpu::Buffer,
     bind: wgpu::BindGroup,
     atlas_bind: wgpu::BindGroup,
+    /// Fahrzeugbilder (vom Spiel einmal geliefert; bis dahin leer)
+    vehicle_bind: wgpu::BindGroup,
+    atlas_sampler: wgpu::Sampler,
     depth: wgpu::TextureView,
     tiles: BTreeMap<TileKey, GpuTile>,
     size: PhysicalSize<u32>,
@@ -330,6 +333,7 @@ impl Renderer {
             label: Some("Atlas sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let atlas_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -346,6 +350,8 @@ impl Renderer {
                 },
             ],
         });
+        let vehicle_bind =
+            vehicle_atlas_bind(&device, &queue, &atlas_layout, &sampler, &[0; 4], 1, 1);
         let depth = depth_view(&device, &config);
         let hud_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Float32,3=>Float32,4=>Float32x4,5=>Float32x4];
         let hud_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -504,6 +510,8 @@ impl Renderer {
             uniform,
             bind,
             atlas_bind,
+            vehicle_bind,
+            atlas_sampler: sampler,
             depth,
             tiles: BTreeMap::new(),
             size,
@@ -612,6 +620,18 @@ impl Renderer {
             self.queue
                 .write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
         }
+    }
+    /// Fahrzeugbilder hochladen (RGBA8, w × h).
+    pub fn set_vehicle_atlas(&mut self, pixels: &[u8], w: u32, h: u32) {
+        self.vehicle_bind = vehicle_atlas_bind(
+            &self.device,
+            &self.queue,
+            &self.atlas_layout,
+            &self.atlas_sampler,
+            pixels,
+            w,
+            h,
+        );
     }
     /// Umrisse verdeckter Figuren (wenige; Puffer wächst bei Bedarf).
     pub fn set_silhouettes(&mut self, bodies: &[Body]) {
@@ -847,6 +867,7 @@ impl Renderer {
             }
         }
         if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
+            pass.set_bind_group(1, &self.vehicle_bind, &[]);
             pass.set_pipeline(&self.body_pipeline);
             pass.set_vertex_buffer(0, bodies.slice(..));
             pass.draw(0..6, 0..self.body_count);
@@ -879,6 +900,7 @@ impl Renderer {
             .as_ref()
             .filter(|_| self.silhouette_count > 0)
         {
+            pass.set_bind_group(1, &self.vehicle_bind, &[]);
             pass.set_pipeline(&self.silhouette_pipeline);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.silhouette_count);
@@ -1112,4 +1134,99 @@ fn depth_view(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> wgp
             view_formats: &[],
         })
         .create_view(&Default::default())
+}
+
+/// Fahrzeug-Atlas mit Mip-Stufen (Kastenfilter auf der CPU): die Bilder sind bis 256 px breit und werden stark
+/// verkleinert gezeichnet, ohne Mips flimmerten Türfugen und Leuchten.
+fn vehicle_atlas_bind(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+) -> wgpu::BindGroup {
+    let levels = if w >= 64 && h >= 64 { 4 } else { 1 };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Vehicle atlas"),
+        size: wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: levels,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let (mut cur, mut cw, mut ch) = (pixels.to_vec(), w, h);
+    for level in 0..levels {
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: level,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &cur,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(cw * 4),
+                rows_per_image: Some(ch),
+            },
+            wgpu::Extent3d {
+                width: cw,
+                height: ch,
+                depth_or_array_layers: 1,
+            },
+        );
+        if level + 1 == levels {
+            break;
+        }
+        // nächste Stufe: 2×2 mitteln, Farbe nach Deckkraft gewichtet (sonst färben leere Ränder dunkel)
+        let (nw, nh) = ((cw / 2).max(1), (ch / 2).max(1));
+        let mut next = vec![0u8; (nw * nh * 4) as usize];
+        for y in 0..nh {
+            for x in 0..nw {
+                let mut acc = [0f32; 4];
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let i =
+                        (((y * 2 + dy).min(ch - 1) * cw + (x * 2 + dx).min(cw - 1)) * 4) as usize;
+                    let a = cur[i + 3] as f32;
+                    for c in 0..3 {
+                        acc[c] += cur[i + c] as f32 * a;
+                    }
+                    acc[3] += a;
+                }
+                let o = ((y * nw + x) * 4) as usize;
+                for c in 0..3 {
+                    next[o + c] = if acc[3] > 0. {
+                        (acc[c] / acc[3]).round() as u8
+                    } else {
+                        0
+                    };
+                }
+                next[o + 3] = (acc[3] / 4.).round() as u8;
+            }
+        }
+        (cur, cw, ch) = (next, nw, nh);
+    }
+    let view = texture.create_view(&Default::default());
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Vehicle atlas"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+        ],
+    })
 }

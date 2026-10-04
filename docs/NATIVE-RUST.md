@@ -1187,3 +1187,26 @@ Die Spielfigur wird genauso gezeichnet (orange Jacke, dunkle Jeans, weiße Turns
 die Schrittphase an der zurückgelegten Strecke (Doppelschritt 28 px gehend, 52 px rennend – entspricht der Kadenz in
 `gait.js`), der Ausschlag am Bewegungszustand. Der Fuß hebt sich dadurch nie ab, wenn die Figur steht, und gleitet nie
 über den Boden. Unit-Test `pose_follows_distance_and_state`. [Bild](images/native/leute.png).
+
+## Fahrzeugbilder aus dem Atlas (04.10.2026)
+
+Port von `vehicleart.js paintPassenger`/`paintLamps` und `vehicles.js paintSpecial`/`drawCarBody`. Statt eines
+Rechtecks mit Dach trägt jedes der 37 Pkw-Modelle und der sechs Sonderfahrzeuge (Lkw, Paketwagen, Müllwagen,
+Polizei, Rettungswagen, Bus) sein eigenes Bild: Umriss mit Taille, Lack mit Glanzband und Schultern, Kabine aus
+Front-, Heck- und Seitenscheiben mit Spiegelung, Dach (Glasdach, Reling, zweifarbig), Türfugen und Griffe,
+Spiegel, Stoßfänger, Kennzeichen, Endrohre, Scheinwerfer und Rückleuchten, Modellmerkmale (Streifen,
+Lüftungsgitter, Heckflügel, Reserverad, Ladefläche, offenes Verdeck, Taxischild), bei den Sonderfahrzeugen
+Fahrerhaus, Aufbau, Rippen, Leuchtstreifen und Dachaufbauten.
+- **`game/raster.rs`:** kleiner Vektor-Rasterer ohne Abhängigkeiten (Pfade, Bézier, Nonzero-Füllung über
+  Scanlinien mit vier Unterzeilen, Striche). **`game/carart.rs`** malt jedes Modell beim Start einmal in einen
+  2048 × 1408-Atlas (68 ms), je Modell zwei Zellen: die **Lackebene** speichert nur die Schattierung
+  (`assets.js shade`), die Farbe des einzelnen Autos setzt der Shader ein – so genügt ein Bild je Modell für alle
+  Farben; die **Detailebene** (Glas, Gummi, Chrom, Leuchten) liegt darüber.
+- **Engine:** zweite Atlas-Textur mit vier Mip-Stufen (`Game::take_vehicle_atlas`, `Renderer::set_vehicle_atlas`);
+  Bodies mit `shape ≥ 16` lesen daraus (`scene.wgsl vehicle`, `textureSampleGrad` mit vor jeder Verzweigung
+  gebildeten Ableitungen).
+- **Dynamisch** bleiben Räder (Vorderräder lenken mit), Bremslicht, **Blinker** (aus dem Spurgraph) und
+  **Rückfahrlicht**, Warnblinker, Blaulicht und das **Nicken und Wanken** des gefahrenen Autos (`bodyShift`).
+- [Bild](images/native/fahrzeuge.png) (`--fahrzeugschau`, vergrößert). Unit-Tests für den Rasterer (genaue
+  Abdeckung, Kreisfläche, keine Doppeldeckung von Strichen) und dafür, dass jedes Modell Lack und Details bekommt.
+  Zweiräder sind unverändert.

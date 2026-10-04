@@ -55,6 +55,8 @@ pub struct Play {
     /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
     pub demo_station: Option<bool>,
     pub people_show: bool,
+    /// Fahrzeug-Atlas schon an die Engine gegeben
+    vehicle_atlas_sent: bool,
     /// Schaufensterlicht und Leuchtreklame (nachts)
     neon: crate::neon::Neon,
     pub demo_covered: bool,
@@ -271,6 +273,7 @@ impl Play {
             demo_drive: false,
             demo_station: None,
             people_show: false,
+            vehicle_atlas_sent: false,
             neon: Default::default(),
             demo_covered: false,
             demo_neon: false,
@@ -2038,15 +2041,15 @@ impl Game for Play {
                 depth: depth + 0.0004,
                 color: [0., 0., 0., 0.28],
             });
-            out.push(Body {
-                center: [x, y],
-                half: [hw, hh],
-                angle: a,
-                shape: 0.,
-                depth,
-                color,
-            });
             if c.kind_info().bike || c.kind_info().moto {
+                out.push(Body {
+                    center: [x, y],
+                    half: [hw, hh],
+                    angle: a,
+                    shape: 0.,
+                    depth,
+                    color,
+                });
                 // Zweirad: Fahrer mit Helm (geparkt ohne Fahrer)
                 if c.driver.is_some() && !c.wrecked {
                     out.push(Body {
@@ -2068,83 +2071,93 @@ impl Game for Play {
                 }
                 continue;
             }
-            let boxy = matches!(
-                c.kind,
-                "truck" | "delivery" | "garbage" | "ambulance" | "bus"
-            );
-            if boxy {
-                // Kastenaufbau hinten, Fahrerhaus vorn mit Frontscheibe
-                let cab = if c.kind == "bus" { 0.1 } else { 0.24 };
+            // Pkw und Nutzfahrzeuge: Bild aus dem Fahrzeug-Atlas (vehicles.js drawCarBody)
+            let model = c.model_name();
+            let tint = if c.wrecked {
+                0x3b332d
+            } else if model == "taxi" {
+                0xf1e9c8
+            } else {
+                c.color
+            };
+            // Räder unter der Karosserie, an den Ecken sichtbar; die vorderen lenken mit
+            let steer = c
+                .dyn_state
+                .as_ref()
+                .map_or(c.controls.steer * 0.45, |d| d.delta) as f32;
+            let blen = crate::carart::body_length(model, 2. * hw);
+            let inset = crate::carart::shape(model).inset;
+            let (wx, wy) = ((hw - 8.).min(blen / 2. - 6.), hh - inset - 1.2);
+            let (rx, ry) = (-fy, fx);
+            for (along, side, front) in [
+                (wx, -wy, true),
+                (wx, wy, true),
+                (1. - wx, -wy, false),
+                (1. - wx, wy, false),
+            ] {
                 out.push(Body {
-                    center: [x - fx * hw * cab, y - fy * hw * cab],
-                    half: [hw * (1. - cab) - 1., hh - 1.5],
-                    angle: a,
+                    center: [x + fx * along + rx * side, y + fy * along + ry * side],
+                    half: [4.2, 2.05],
+                    angle: a + if front { steer } else { 0. },
                     shape: 0.,
-                    depth: depth - 0.0002,
-                    color: shade(color, 1.1),
+                    depth: depth + 0.0002,
+                    color: [0.067, 0.075, 0.09, 1.],
                 });
+            }
+            // Nicken und Wanken des gefahrenen Autos (bodyShift): Bremsen taucht vorn ein, Kurven drücken nach außen
+            let (mut sx, mut sy) = (0f32, 0f32);
+            if let Some(d) = c
+                .dyn_state
+                .as_ref()
+                .filter(|_| !c.wrecked && c.role == berlin_sim::car::Role::Player)
+            {
+                let k = berlin_sim::carmodels::spec_of(model).h * 0.35;
+                sx = (-d.ax * k).clamp(-6., 6.) as f32;
+                sy = (-d.ay * k).clamp(-6., 6.) as f32;
+            }
+            out.push(Body {
+                center: [x + fx * sx + rx * sy, y + fy * sx + ry * sy],
+                half: [hw + crate::carart::PAD, hh + crate::carart::PAD],
+                angle: a,
+                shape: 16. + crate::carart::model_index(model) as f32,
+                depth: depth - 0.0001,
+                color: rgba(tint, 1.),
+            });
+            if c.kind == "garbage" && c.work {
+                // Rundumleuchte und zwei Müllwerker mit Tonne am Heck
+                let t = w.time as f32;
                 out.push(Body {
-                    center: [x + fx * hw * 0.88, y + fy * hw * 0.88],
-                    half: [hw * 0.06, hh * 0.8],
-                    angle: a,
-                    shape: 0.,
-                    depth: depth - 0.0003,
-                    color: [0.16, 0.2, 0.24, 1.],
+                    center: [x + fx * (hw - 8.), y + fy * (hw - 8.)],
+                    half: [3., 3.],
+                    angle: 0.,
+                    shape: 1.,
+                    depth: depth - 0.0006,
+                    color: [1., 0.59, 0.08, 0.55 + 0.4 * (t * 4.).sin()],
                 });
-                if c.kind == "garbage" && c.work {
-                    // Rundumleuchte und zwei Müllwerker mit Tonne am Heck
-                    let t = w.time as f32;
+                let (rx, ry) = (-fy, fx);
+                for side in [-1f32, 1.] {
+                    let bob = (t * 6. + side).sin() * 1.2;
+                    let (px, py) = (
+                        x - fx * (hw + 5. + bob) + rx * side * (hh - 3.),
+                        y - fy * (hw + 5. + bob) + ry * side * (hh - 3.),
+                    );
                     out.push(Body {
-                        center: [x + fx * (hw - 8.), y + fy * (hw - 8.)],
-                        half: [3., 3.],
+                        center: [px - fx * 6., py - fy * 6.],
+                        half: [3., 2.5],
+                        angle: a,
+                        shape: 0.,
+                        depth: depth - 0.0002,
+                        color: rgba(0x1b5e20, 1.),
+                    });
+                    out.push(Body {
+                        center: [px, py],
+                        half: [3.4, 3.4],
                         angle: 0.,
                         shape: 1.,
-                        depth: depth - 0.0006,
-                        color: [1., 0.59, 0.08, 0.55 + 0.4 * (t * 4.).sin()],
+                        depth: depth - 0.0003,
+                        color: rgba(0xf07d00, 1.),
                     });
-                    let (rx, ry) = (-fy, fx);
-                    for side in [-1f32, 1.] {
-                        let bob = (t * 6. + side).sin() * 1.2;
-                        let (px, py) = (
-                            x - fx * (hw + 5. + bob) + rx * side * (hh - 3.),
-                            y - fy * (hw + 5. + bob) + ry * side * (hh - 3.),
-                        );
-                        out.push(Body {
-                            center: [px - fx * 6., py - fy * 6.],
-                            half: [3., 2.5],
-                            angle: a,
-                            shape: 0.,
-                            depth: depth - 0.0002,
-                            color: rgba(0x1b5e20, 1.),
-                        });
-                        out.push(Body {
-                            center: [px, py],
-                            half: [3.4, 3.4],
-                            angle: 0.,
-                            shape: 1.,
-                            depth: depth - 0.0003,
-                            color: rgba(0xf07d00, 1.),
-                        });
-                    }
                 }
-            } else {
-                let roof = shade(color, 1.18);
-                out.push(Body {
-                    center: [x - fx * hw * 0.1, y - fy * hw * 0.1],
-                    half: [hw * 0.45, hh * 0.78],
-                    angle: a,
-                    shape: 0.,
-                    depth: depth - 0.0002,
-                    color: roof,
-                });
-                out.push(Body {
-                    center: [x + fx * hw * 0.42, y + fy * hw * 0.42],
-                    half: [hw * 0.12, hh * 0.8],
-                    angle: a,
-                    shape: 0.,
-                    depth: depth - 0.0003,
-                    color: [0.16, 0.2, 0.24, 1.],
-                });
             }
             // Warnblinker (Paketwagen in zweiter Reihe): alle vier Ecken, 1,5 Hz
             if c.hazard && (w.time * 3.).floor() as i64 % 2 == 0 {
@@ -2162,6 +2175,35 @@ impl Game for Play {
                         color: [1., 0.66, 0.1, 1.],
                     });
                 }
+            }
+            // Blinker (Abbiegen, aus dem Spurgraph) und Rückfahrlicht
+            let blink = c.ai.as_ref().map_or(0, |ai| ai.blink);
+            if blink != 0 && !c.hazard && (w.time * 3.).floor() as i64 % 2 == 0 {
+                let (rx, ry) = (-fy, fx);
+                let side = blink.signum() as f32;
+                for along in [1f32, -1.] {
+                    out.push(Body {
+                        center: [
+                            x + fx * hw * 0.93 * along + rx * hh * 0.82 * side,
+                            y + fy * hw * 0.93 * along + ry * hh * 0.82 * side,
+                        ],
+                        half: [1.6, 1.],
+                        angle: a,
+                        shape: 0.,
+                        depth: depth - 0.0006,
+                        color: [1., 0.64, 0.1, 1.],
+                    });
+                }
+            }
+            if c.driver.is_some() && c.forward_speed() < -5. && !c.wrecked {
+                out.push(Body {
+                    center: [x - fx * hw * 0.95, y - fy * hw * 0.95],
+                    half: [1., 1.7],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth - 0.0006,
+                    color: [0.96, 0.97, 1., 1.],
+                });
             }
             // Bremslichter
             if c.controls.brake > 0. && c.speed() > 2.
@@ -2428,6 +2470,21 @@ impl Game for Play {
                 color: tint,
             });
         }
+    }
+    fn take_vehicle_atlas(&mut self) -> Option<(Vec<u8>, u32, u32)> {
+        if self.vehicle_atlas_sent {
+            return None;
+        }
+        self.vehicle_atlas_sent = true;
+        let t = std::time::Instant::now();
+        let a = crate::carart::atlas();
+        eprintln!(
+            "Fahrzeugbilder: {} × {} px in {:.0} ms",
+            a.1,
+            a.2,
+            t.elapsed().as_secs_f64() * 1000.
+        );
+        Some(a)
     }
     fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
         self.bigmap.mesh.take()

@@ -1,5 +1,6 @@
 mod barfeed;
 mod bigmap;
+mod carart;
 mod console;
 mod effects;
 mod figure;
@@ -7,6 +8,7 @@ mod hud;
 mod menu;
 mod neon;
 mod play;
+mod raster;
 mod snowtracks;
 mod sound;
 mod underground;
