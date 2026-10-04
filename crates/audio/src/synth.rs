@@ -5,10 +5,11 @@
 //! Reifen, Fahrtwind) hat einen eigenen Bus. Hauptpegel 0,55, Kompressor vor dem Ausgang.
 //! Die Parameter kommen je Bild über [`Frame`]; geglättet wird wie mit `setTargetAtTime`.
 use crate::dsp::{
-    Biquad, Compressor, Env, FilterType, Noise, Osc, Smooth, Table, Wave, pan, shape,
+    Biquad, Compressor, Env, FilterType, Noise, Osc, Reverb, Smooth, Table, Wave, pan, shape,
 };
 use berlin_sim::ambience::Mix;
 use berlin_sim::enginevoice::{Voice, engine_spectrum};
+use berlin_sim::railsound::{RailMix, TrainLayers};
 use berlin_sim::soundscape::{CarVoice, EngineState, Footstep, Tires};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -65,6 +66,12 @@ pub enum Sfx {
     GongClose,
     /// Kirchenglocke: n Schläge (Grundton + unharmonische Teiltöne, langer Nachhall), Lautstärke
     Bells(u32, f32),
+    /// Schienenstoß unter einer Achse: dumpfer Schlag mit metallischem Klicken
+    RailJoint(f32),
+    /// Druckluft: Bremse löst bzw. Türen arbeiten
+    AirHiss(f32),
+    /// Abfertigung: Warnton vor dem Schließen der Türen
+    DepartBeep(f32),
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -74,6 +81,8 @@ pub struct Frame {
     pub voices: Vec<CarVoice>,
     pub ambience: Mix,
     pub sfx: Vec<Sfx>,
+    /// S-/U-Bahn: eigener Zug, Zug am Bahnsteig, Nachhall
+    pub rail: RailMix,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +121,74 @@ impl NoiseLayer {
     #[inline]
     fn next(&mut self, sr: f32, block: bool) -> f32 {
         self.filtered(sr, block) * self.gain.tick()
+    }
+}
+
+/// Stimme einer S-/U-Bahn (`railsound`): Rollen, Grollen, Fahrtwind, Fahrmotor-Surren, Bremsquietschen.
+#[derive(Debug, Clone)]
+struct TrainVoice {
+    roll: NoiseLayer,
+    rumble: NoiseLayer,
+    wind: NoiseLayer,
+    motor: Osc,
+    motor2: Osc,
+    motor_g: Smooth,
+    motor_f: Smooth,
+    motor_bp: Biquad,
+    sq: [Osc; 2],
+    sqg: Smooth,
+    vib: Osc,
+    pan: Smooth,
+}
+impl TrainVoice {
+    fn new(seed: &mut u32) -> Self {
+        use FilterType::*;
+        let mut l = |k, f, q| layer(k, f, q, seed);
+        Self {
+            roll: l(Bandpass, 400., 0.8),
+            rumble: l(Lowpass, 75., 0.7),
+            wind: l(Lowpass, 420., 0.5),
+            motor: Osc::new(Wave::Saw, 150.),
+            motor2: Osc::new(Wave::Sine, 225.),
+            motor_g: Smooth::new(0.),
+            motor_f: Smooth::new(150.),
+            motor_bp: Biquad::new(Bandpass, 300., 1.2),
+            sq: [Osc::new(Wave::Sine, 2650.), Osc::new(Wave::Sine, 3970.)],
+            sqg: Smooth::new(0.),
+            vib: Osc::new(Wave::Sine, 7.),
+            pan: Smooth::new(0.),
+        }
+    }
+    /// `k` = Gesamtpegel (im Wagen 1, am Bahnsteig etwas lauter, der Zug ist näher am Ohr als die Wand)
+    fn set(&mut self, l: &TrainLayers, sr: f32, k: f32) {
+        let set = |x: &mut Smooth, v: f64, tc: f32| x.set(v as f32, tc, sr);
+        set(&mut self.roll.gain, 0.11 * k as f64 * l.roll, 0.12);
+        set(&mut self.roll.freq, l.roll_f.max(60.), 0.2);
+        set(&mut self.rumble.gain, 0.3 * k as f64 * l.rumble, 0.15);
+        set(&mut self.wind.gain, 0.08 * k as f64 * l.wind, 0.25);
+        set(&mut self.motor_g, 0.028 * k as f64 * l.motor, 0.12);
+        set(&mut self.motor_f, l.motor_f.max(40.), 0.12);
+        set(&mut self.sqg, 0.016 * k as f64 * l.squeal, 0.08);
+    }
+    #[inline]
+    fn next(&mut self, sr: f32, block: bool) -> f32 {
+        let mf = self.motor_f.tick();
+        self.motor.freq.value = mf;
+        self.motor.freq.target = mf;
+        self.motor2.freq.value = mf * 1.5;
+        self.motor2.freq.target = mf * 1.5;
+        if block {
+            self.motor_bp.set_freq(mf * 2.);
+        }
+        let m =
+            self.motor_bp.process(self.motor.next(sr, 0.), sr) + 0.35 * self.motor2.next(sr, 0.);
+        let vib = self.vib.next(sr, 0.) * 30.;
+        let sq = self.sq[0].next(sr, vib) + 0.5 * self.sq[1].next(sr, vib * 1.5);
+        self.roll.next(sr, block)
+            + self.rumble.next(sr, block)
+            + self.wind.next(sr, block)
+            + m * self.motor_g.tick()
+            + sq * self.sqg.tick()
     }
 }
 
@@ -232,6 +309,11 @@ pub struct Synth {
     shots: Vec<Shot>,
     tables: HashMap<(&'static str, u32, bool), Arc<Table>>,
     rng: Noise,
+    /// eigene Bahn, Bahn am Bahnsteig, Nachhall (Halle, Tunnel)
+    ride: TrainVoice,
+    pass: TrainVoice,
+    hall: Reverb,
+    hall_g: Smooth,
 }
 
 fn layer(kind: FilterType, f: f32, q: f32, seed: &mut u32) -> NoiseLayer {
@@ -355,6 +437,10 @@ impl Synth {
             shots: Vec::new(),
             tables: HashMap::new(),
             rng: Noise::new(0x9e37_79b9),
+            ride: TrainVoice::new(&mut seed),
+            pass: TrainVoice::new(&mut seed),
+            hall: Reverb::new(sr),
+            hall_g: Smooth::new(0.),
         }
     }
 
@@ -387,6 +473,7 @@ impl Synth {
         self.set_vehicle(&f.vehicle);
         self.set_voices(&f.voices);
         self.set_ambience(&f.ambience);
+        self.set_rail(&f.rail);
         for s in &f.sfx {
             self.play(*s);
         }
@@ -660,6 +747,14 @@ impl Synth {
             set(&mut s.tire.freq, 500. * rate + v.tire as f32 * 500., 0.2);
             set(&mut s.pan, v.pan as f32, 0.1);
         }
+    }
+
+    fn set_rail(&mut self, r: &RailMix) {
+        let sr = self.sr;
+        self.ride.set(&r.ride, sr, 0.8);
+        self.pass.set(&r.pass, sr, 1.2);
+        self.pass.pan.set(r.pass_pan as f32 * 0.8, 0.2, sr);
+        self.hall_g.set(r.hall as f32, 0.5, sr);
     }
 
     fn set_ambience(&mut self, m: &Mix) {
@@ -968,6 +1063,20 @@ impl Synth {
                 self.tone(659., 0.35, Sine, 0.1, 0., 0., 0., M);
                 self.tone(880., 0.45, Sine, 0.1, 0.28, 0., 0., M);
             }
+            Sfx::RailJoint(k) => {
+                // „ta“: dumpfer Schlag (Rad fällt in die Lücke) und kurzes metallisches Klicken
+                self.burst(0.09, 160., 0.16 * k, Lowpass, 1.2, 0., 0.002, M);
+                self.burst(0.03, 1700., 0.035 * k, Bandpass, 2.5, 0., 0.001, M);
+            }
+            Sfx::AirHiss(k) => {
+                self.burst(1.1, 3200., 0.045 * k, Highpass, 0.7, 0., 0.03, M);
+                self.burst(0.35, 900., 0.03 * k, Bandpass, 0.8, 0., 0.005, M);
+            }
+            Sfx::DepartBeep(k) => {
+                for i in 0..3 {
+                    self.tone(1175., 0.16, Sine, 0.045 * k, i as f32 * 0.28, 0., 0., M);
+                }
+            }
             Sfx::GongClose => {
                 self.tone(880., 0.3, Sine, 0.1, 0., 0., 0., M);
                 self.tone(659., 0.4, Sine, 0.1, 0.24, 0., 0., M);
@@ -1164,8 +1273,12 @@ impl Synth {
             let (bl, br) = pan(a.bar_pan.tick());
             ol += bab * bl;
             or += bab * br;
+            // --- S-/U-Bahn: eigener Zug mittig, Zug am Bahnsteig aus seiner Richtung (beide direkt, nicht gedämpft)
+            let ride = self.ride.next(sr, block);
+            let pv = self.pass.next(sr, block);
+            let (pl, pr) = pan(self.pass.pan.tick());
             // --- Einzelklänge
-            let (mut ml, mut mr) = (eng, eng);
+            let (mut ml, mut mr) = (eng + ride + pv * pl, eng + ride + pv * pr);
             let t = self.t;
             for s in &mut self.shots {
                 let lt = (t - s.start) as f32;
@@ -1219,6 +1332,10 @@ impl Synth {
             }
             ml += self.muffle[0].process(ol, sr);
             mr += self.muffle[1].process(or, sr);
+            // Nachhall in der Bahnhofshalle bzw. im Tunnel (läuft immer, damit Nachklänge nicht abreißen)
+            let (wl, wr) = self.hall.process((ml + mr) * 0.5 * self.hall_g.tick());
+            ml += wl * 0.8;
+            mr += wr * 0.8;
             let g = self.master.tick();
             let (l, r) = self.comp.process(ml * g, mr * g, sr);
             frame[0] = l.clamp(-1., 1.);

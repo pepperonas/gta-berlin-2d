@@ -336,8 +336,30 @@ pub struct Pos {
     pub stop: usize,
     pub dwelling: bool,
     pub done: bool,
+    /// Tempo (px je echter Sekunde), 0 beim Halten
+    pub v: f64,
 }
-/// Zwischen zwei Halten fährt das Fahrzeug gleichmäßig; die letzten `dwell` Sekunden vor der Abfahrt steht es.
+/// Anteil der Fahrzeit zwischen zwei Halten, in dem S- und U-Bahn anfahren bzw. bremsen (je Ende).
+pub const RAMP: f64 = 0.25;
+/// Fahrprofil zwischen zwei Halten (Zeitanteil u ∈ 0…1): zurückgelegter Wegeanteil und Tempo relativ zum Mittel.
+/// Bahnen fahren trapezförmig (gleichmäßig anfahren, fahren, bremsen); die Fahrzeit bleibt die des Fahrplans.
+/// Bus und Straßenbahn fahren weiter gleichmäßig (die Straßenbahn bremst ohnehin vor Hindernissen).
+pub fn run_profile(mode: Mode, u: f64) -> (f64, f64) {
+    let u = u.clamp(0., 1.);
+    if !mode.rail() {
+        return (u, 1.);
+    }
+    let vmax = 1. / (1. - RAMP);
+    if u < RAMP {
+        (vmax * u * u / (2. * RAMP), vmax * u / RAMP)
+    } else if u > 1. - RAMP {
+        let w = 1. - u;
+        (1. - vmax * w * w / (2. * RAMP), vmax * w / RAMP)
+    } else {
+        (vmax * (u - RAMP / 2.), vmax)
+    }
+}
+/// Zwischen zwei Halten fährt das Fahrzeug nach `run_profile`; die letzten `dwell` Sekunden vor der Abfahrt steht es.
 pub fn position_at(p: &Pattern, tau: f64) -> Pos {
     let (off, st) = (&p.off, &p.stops);
     let n = off.len().min(st.len());
@@ -347,6 +369,7 @@ pub fn position_at(p: &Pattern, tau: f64) -> Pos {
             stop: 0,
             dwelling: true,
             done: true,
+            v: 0.,
         };
     }
     if tau <= 0. {
@@ -355,6 +378,7 @@ pub fn position_at(p: &Pattern, tau: f64) -> Pos {
             stop: 0,
             dwelling: true,
             done: false,
+            v: 0.,
         };
     }
     if tau >= off[n - 1] {
@@ -363,6 +387,7 @@ pub fn position_at(p: &Pattern, tau: f64) -> Pos {
             stop: n - 1,
             dwelling: true,
             done: true,
+            v: 0.,
         };
     }
     let mut i = 1;
@@ -383,22 +408,24 @@ pub fn position_at(p: &Pattern, tau: f64) -> Pos {
             stop: i,
             dwelling: true,
             done: false,
+            v: 0.,
         };
     }
+    let (frac, rel) = run_profile(p.mode, u);
     Pos {
-        s: st[i - 1] + (st[i] - st[i - 1]) * u,
+        s: st[i - 1] + (st[i] - st[i - 1]) * frac,
         stop: i,
         dwelling: false,
         done: false,
+        v: p.mode.pace() * (st[i] - st[i - 1]) / run * rel,
     }
 }
-/// Fahrtempo zwischen zwei Halten (px je echter Sekunde), 0 beim Halten.
-pub fn speed_at(p: &Pattern, pos: &Pos) -> f64 {
+/// Fahrtempo (px je echter Sekunde), 0 beim Halten.
+pub fn speed_at(_p: &Pattern, pos: &Pos) -> f64 {
     if pos.dwelling || pos.stop == 0 {
         return 0.;
     }
-    let (a, b) = (pos.stop - 1, pos.stop);
-    p.mode.pace() * (p.stops[b] - p.stops[a]) / (p.off[b] - p.off[a] - p.dwell).max(1.)
+    pos.v
 }
 
 /// Virtuelles Fahrzeug eines Musters.
@@ -674,9 +701,19 @@ mod tests {
         assert_eq!(departures_per_hour(&p, 630., 0), 12);
         // Haltezeit: 8 echte Sekunden = 24 Fahrplansekunden
         assert_eq!(p.dwell, RAIL_DWELL_S * RAIL_PACE);
-        // Tempo: 1000 px in (120 − 24) Fahrplansekunden, gerafft dreimal so schnell
-        let pos = position_at(&p, 50.);
-        assert!((speed_at(&p, &pos) - 3. * 1000. / 96.).abs() < 1e-9);
+        // Tempo: 1000 px in (120 − 24) Fahrplansekunden, gerafft dreimal so schnell; in der Mitte des Abschnitts
+        // fährt der Zug mit Spitzentempo (Mittel / (1 − RAMP)), an den Enden steht er fast
+        let mean = 3. * 1000. / 96.;
+        let pos = position_at(&p, 48.);
+        assert!((speed_at(&p, &pos) - mean / (1. - RAMP)).abs() < 1e-9);
+        assert!(
+            speed_at(&p, &position_at(&p, 0.5)) < mean * 0.05,
+            "fährt sanft an"
+        );
+        assert!(
+            speed_at(&p, &position_at(&p, 95.5)) < mean * 0.05,
+            "bremst bis fast zum Stand"
+        );
         // ein Bus bleibt ungerafft
         assert_eq!(Mode::Bus.pace(), 1.);
         assert_eq!(Mode::Tram.takt(), 1.);
@@ -713,6 +750,34 @@ mod tests {
         assert!(
             v.windows(2)
                 .all(|w| (w[1].tau - w[0].tau - 150.).abs() < 1e-9)
+        );
+    }
+    #[test]
+    fn rail_profile_accelerates_cruises_brakes_and_keeps_the_timetable() {
+        // Weg 0 → 1 in der Zeit 0 → 1, stetig, Tempo als Ableitung des Wegs, Mittel 1
+        let n = 10_000;
+        let mut prev = 0.;
+        let mut dist = 0.;
+        for k in 1..=n {
+            let u = k as f64 / n as f64;
+            let (f, v) = run_profile(Mode::UBahn, u);
+            assert!(
+                f >= prev - 1e-12 && f - prev < 2. / n as f64,
+                "stetig, vorwärts"
+            );
+            dist += v / n as f64;
+            prev = f;
+        }
+        assert!(
+            (prev - 1.).abs() < 1e-12 && (dist - 1.).abs() < 1e-3,
+            "{prev} {dist}"
+        );
+        assert_eq!(run_profile(Mode::UBahn, 0.), (0., 0.));
+        assert_eq!(run_profile(Mode::UBahn, 0.5).1, 1. / (1. - RAMP));
+        assert_eq!(
+            run_profile(Mode::Tram, 0.3),
+            (0.3, 1.),
+            "Straßenbahn gleichmäßig"
         );
     }
 }

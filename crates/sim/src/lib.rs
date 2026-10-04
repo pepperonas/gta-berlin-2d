@@ -24,6 +24,7 @@ pub mod math;
 pub mod mission;
 pub mod nightlife;
 pub mod pedestrians;
+pub mod railsound;
 pub mod rhythm;
 pub mod ride;
 pub mod roadgraph;

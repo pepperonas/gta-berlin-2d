@@ -1350,7 +1350,7 @@ fn demo_cover(w: &mut World) {
 }
 
 /// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
-fn demo_station_step(w: &mut World, ride: bool) -> bool {
+pub fn demo_station_step(w: &mut World, ride: bool) -> bool {
     if w.player.ride.is_some() {
         return true;
     }

@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Klang der S- und U-Bahn neu. Im Zug: Rollgeräusch und Fahrmotor-Surren nach Tempo (laut
+  beim Anfahren und Bremsen), Schienenstöße je Achse, Fahrtwind, im Tunnel lautere Röhre mit Nachhall,
+  Bremsquietschen vor dem Halt, Druckluft beim Halten, Warnton vor der Abfahrt, leises Summen im Stand. Im
+  U-Bahnhof: Halle mit Nachhall, ein- und ausfahrende Züge aus ihrer Richtung. Dazu fahren S- und U-Bahn jetzt mit
+  Anfahren und Bremsen statt mit gleichem Tempo von Halt zu Halt. `--audio-szene ubahn` nimmt das offline auf.
 - Native Rust-Portierung: S- und U-Bahn gerafft. Die Züge fahren dreimal so schnell, die Abfahrtsanzeigen zeigen
   weiter Fahrplanminuten, zählen aber dreimal so schnell herunter, und es fahren sechsmal so viele Züge wie im
   Fahrplan (U8 etwa alle 50 s statt alle 5 min). Halt am Bahnsteig 8 s. Gilt auch für selbst gefahrene Züge

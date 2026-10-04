@@ -138,7 +138,8 @@ pub fn ambience_at(w: &mut World) -> Mix {
         return Mix {
             hum: 0.5,
             muffle: 0.9,
-            rumble: (train_rumble(w, cx, cy) * 1.3).clamp(0., 1.),
+            // ferne Züge grollen durch die Wände; der Zug am Bahnsteig selbst klingt über `railsound`
+            rumble: (train_rumble(w, cx, cy) * 0.6).clamp(0., 1.),
             station: true,
             ..Mix::default()
         };
@@ -192,9 +193,20 @@ pub fn ambience_at(w: &mut World) -> Mix {
                 };
         }
     }
-    let in_car = w
-        .player_car()
-        .is_some_and(|c| !crate::carmodels::is_open_kind(c.kind));
+    // im Auto, im Bus, in der Bahn: draußen gedämpft (die eigene Bahn klingt über `railsound`)
+    let riding = w.player.ride.as_ref();
+    if riding.is_some_and(|r| r.underground) {
+        // im Tunnel: von oben kommt nichts an, andere Züge hört man durch die Röhre
+        return Mix {
+            hum: 0.15,
+            muffle: 0.95,
+            in_car: true,
+            ..Mix::default()
+        };
+    }
+    let in_car = riding.is_some()
+        || w.player_car()
+            .is_some_and(|c| !crate::carmodels::is_open_kind(c.kind));
     let night = wrap(w.clock) < 360. || wrap(w.clock) > 1260.;
     let sky = w.sky.p;
     let hush = 1. - 0.45 * w.weather.snow.clamp(0., 1.) - 0.2 * sky.snow.clamp(0., 1.);

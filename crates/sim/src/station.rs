@@ -211,6 +211,9 @@ pub struct AtPlatform {
     pub dest: String,
     pub color: String,
     pub mode: Mode,
+    /// Tempo (px je echter Sekunde) und Beschleunigung (px/s², negativ = bremst) für den Klang
+    pub v: f64,
+    pub a: f64,
 }
 /// Abfahrt (Fahrgastinfo).
 #[derive(Debug, Clone, PartialEq)]
@@ -531,6 +534,13 @@ impl World {
                 if ds < -st.hl - l || ds > st.hl + l {
                     continue;
                 }
+                // Beschleunigung aus dem Fahrprofil: Tempo jetzt und eine Zehntelsekunde später
+                let later = position_at(p, v.tau + 0.1 * p.mode.pace());
+                let (sv, sa) = if pos.dwelling || pos.done {
+                    (0., 0.)
+                } else {
+                    (pos.v, (later.v - pos.v) / 0.1)
+                };
                 let dir = h.dir as f64;
                 let head = dir * (l / 2. + ds);
                 let cars = (0..n)
@@ -557,6 +567,8 @@ impl World {
                     dest: station_name(p.stop_names.last().map_or("", String::as_str)),
                     color: p.color.clone(),
                     mode: p.mode,
+                    v: sv,
+                    a: sa,
                 });
             }
         }

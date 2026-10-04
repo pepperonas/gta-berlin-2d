@@ -338,6 +338,102 @@ impl Env {
     }
 }
 
+/// Kammfilter mit gedämpfter Rückkopplung (Freeverb).
+#[derive(Debug, Clone)]
+struct Comb {
+    buf: Vec<f32>,
+    i: usize,
+    store: f32,
+}
+impl Comb {
+    fn new(len: usize) -> Self {
+        Self {
+            buf: vec![0.; len.max(1)],
+            i: 0,
+            store: 0.,
+        }
+    }
+    #[inline]
+    fn process(&mut self, x: f32, feedback: f32, damp: f32) -> f32 {
+        let y = self.buf[self.i];
+        self.store = y * (1. - damp) + self.store * damp;
+        self.buf[self.i] = x + self.store * feedback;
+        self.i = (self.i + 1) % self.buf.len();
+        y
+    }
+}
+/// Allpass (Freeverb, Faktor 0,5).
+#[derive(Debug, Clone)]
+struct AllPass {
+    buf: Vec<f32>,
+    i: usize,
+}
+impl AllPass {
+    fn new(len: usize) -> Self {
+        Self {
+            buf: vec![0.; len.max(1)],
+            i: 0,
+        }
+    }
+    #[inline]
+    fn process(&mut self, x: f32) -> f32 {
+        let b = self.buf[self.i];
+        self.buf[self.i] = x + b * 0.5;
+        self.i = (self.i + 1) % self.buf.len();
+        b - x
+    }
+}
+/// Nachhall für Bahnhofshalle und Tunnel: vier Kammfilter und zwei Allpässe je Kanal (Längen nach Freeverb, rechts
+/// leicht versetzt für Breite). `room` 0…1 = Nachhallzeit, `damp` 0…1 = Höhen schlucken.
+#[derive(Debug, Clone)]
+pub struct Reverb {
+    combs: [Vec<Comb>; 2],
+    alls: [Vec<AllPass>; 2],
+    pub room: f32,
+    pub damp: f32,
+}
+impl Reverb {
+    pub fn new(sr: f32) -> Self {
+        let k = sr / 44100.;
+        let combs = |off: usize| {
+            [1116, 1277, 1422, 1557]
+                .iter()
+                .map(|&n| Comb::new(((n + off) as f32 * k) as usize))
+                .collect()
+        };
+        let alls = |off: usize| {
+            [556, 341]
+                .iter()
+                .map(|&n| AllPass::new(((n + off) as f32 * k) as usize))
+                .collect()
+        };
+        Self {
+            combs: [combs(0), combs(23)],
+            alls: [alls(0), alls(23)],
+            room: 0.6,
+            damp: 0.3,
+        }
+    }
+    /// Ein Abtastwert hinein, Hallanteil links/rechts heraus.
+    #[inline]
+    pub fn process(&mut self, x: f32) -> (f32, f32) {
+        let fb = 0.7 + 0.28 * self.room.clamp(0., 1.);
+        let damp = self.damp.clamp(0., 1.);
+        let mut out = [0f32; 2];
+        for (ch, o) in out.iter_mut().enumerate() {
+            let mut y: f32 = self.combs[ch]
+                .iter_mut()
+                .map(|c| c.process(x * 0.25, fb, damp))
+                .sum();
+            for a in &mut self.alls[ch] {
+                y = a.process(y);
+            }
+            *o = y;
+        }
+        (out[0], out[1])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,5 +550,35 @@ mod tests {
         let mut n = Noise::new(1);
         let mean: f32 = (0..10000).map(|_| n.tick()).sum::<f32>() / 10000.;
         assert!(mean.abs() < 0.05);
+    }
+    #[test]
+    fn reverb_rings_on_and_dies_away() {
+        let sr = 48000.;
+        let mut r = Reverb::new(sr);
+        // ein Klick, dann Stille: Hall setzt verzögert ein (erste Reflexion nach ~25 ms) und klingt in ~1,5 s ab
+        let buckets = 30; // je 0,1 s
+        let mut energy = vec![0f32; buckets];
+        for n in 0..(sr as usize * 3) {
+            let (l, rr) = r.process(if n == 0 { 1. } else { 0. });
+            assert!(l.is_finite() && rr.is_finite());
+            energy[n * buckets / (sr as usize * 3)] += l * l + rr * rr;
+        }
+        let first_reflection = (0.02 * sr) as usize;
+        let mut q = Reverb::new(sr);
+        let early: f32 = (0..first_reflection)
+            .map(|n| q.process(if n == 0 { 1. } else { 0. }).0.abs())
+            .sum();
+        assert_eq!(early, 0., "nichts vor der ersten Reflexion");
+        assert!(energy[0] > 0., "Hall hörbar");
+        // −60 dB (Faktor 10⁶ in der Energie) nach etwa 1,5 s
+        assert!(energy[16] < energy[0] * 1e-5, "{:?}", &energy[..18]);
+        assert!(
+            energy[8] > energy[0] * 1e-5,
+            "nicht zu trocken: {:?}",
+            &energy[..10]
+        );
+        // ohne Eingang bleibt er still
+        let mut z = Reverb::new(sr);
+        assert!((0..1000).all(|_| z.process(0.) == (0., 0.)));
     }
 }

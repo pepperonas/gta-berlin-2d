@@ -14,6 +14,7 @@ mod menu;
 mod nav;
 mod neon;
 mod play;
+mod railaudio;
 mod raster;
 mod rumble;
 mod snowtracks;
@@ -60,6 +61,7 @@ fn main() -> Result<()> {
     let mut commands: Vec<String> = Vec::new();
     let mut audio_wav: Option<std::path::PathBuf> = None;
     let mut audio_secs = 20.;
+    let mut audio_scene = String::from("auto");
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fps" => options.fps = args.next().context("Wert für --fps fehlt")?.parse()?,
@@ -152,6 +154,13 @@ fn main() -> Result<()> {
             "--audio-wav" => {
                 audio_wav = Some(args.next().context("Pfad für --audio-wav fehlt")?.into())
             }
+            "--audio-szene" => {
+                audio_scene = args.next().context("Szene für --audio-szene fehlt")?;
+                ensure!(
+                    ["auto", "ubahn"].contains(&audio_scene.as_str()),
+                    "--audio-szene erwartet auto oder ubahn"
+                );
+            }
             "--audio-seconds" => {
                 audio_secs = args.next().context("Sekunden fehlen")?.parse()?;
                 ensure!(
@@ -215,7 +224,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
@@ -255,6 +264,9 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         return Ok(());
     }
     if let Some(path) = audio_wav {
+        if audio_scene == "ubahn" {
+            return render_audio_ubahn(&options.data_root, seed, audio_secs, &path);
+        }
         return render_audio(&options.data_root, seed, audio_secs, &path);
     }
     if let Some(secs) = check_sim {
@@ -527,6 +539,120 @@ fn render_audio(
         rms,
         peak,
         kmh
+    );
+    Ok(())
+}
+
+/// U-Bahn-Klang offline: hinunter in den nächsten U-Bahnhof, die erste Hälfte am Bahnsteig (Züge fahren ein, halten,
+/// fahren ab), dann einsteigen und mitfahren. Protokolliert je Sekunde, was zu hören ist.
+fn render_audio_ubahn(
+    root: &std::path::Path,
+    seed: u32,
+    secs: f64,
+    path: &std::path::Path,
+) -> Result<()> {
+    use berlin_audio::synth::Synth;
+    use berlin_sim::city::{City, ThreadedSource};
+    use berlin_sim::world::{DT, Input, World};
+    const SR: u32 = 48000;
+    let city = City::open(root, Box::new(ThreadedSource::new(root)?))?;
+    let mut w = World::new(
+        city,
+        seed,
+        berlin_sim::world::TRAFFIC_CARS,
+        berlin_sim::world::TRAFFIC_PEDS,
+    );
+    w.set_transit(berlin_sim::transit::Transit::read(root)?);
+    // an einen echten U-Bahnhof (Hermannplatz, U7/U8) stellen, dann hinunter (ohne Ton; die Stadt lädt dabei)
+    let at = w.transit.as_ref().and_then(|tr| {
+        tr.patterns.iter().find_map(|p| {
+            let i = p.stop_names.iter().position(|n| {
+                p.mode == berlin_sim::transit::Mode::UBahn && n.contains("Hermannplatz")
+            })?;
+            let (x, y, _) = berlin_sim::transit::point_on_shape(tr.shape_of(p), p.stops[i]);
+            Some((x, y))
+        })
+    });
+    let (x, y) = at.context("Hermannplatz nicht im Fahrplan")?;
+    (w.player.x, w.player.y) = (x, y);
+    w.camera.x = x;
+    w.camera.y = y;
+    let mut k = 0;
+    while w.player.inside.is_none() {
+        w.update(&Input::default(), DT);
+        play::demo_station_step(&mut w, false);
+        k += 1;
+        ensure!(k < 60 * 120, "kein U-Bahnhof erreicht");
+    }
+    let name = w
+        .player
+        .inside
+        .as_ref()
+        .map(|i| i.id.clone())
+        .unwrap_or_default();
+    eprintln!("Bahnhof: {name} (nach {:.0} s)", k as f64 * DT);
+    let mut synth = Synth::new(SR as f32);
+    let mut listener = sound::Listener::default();
+    let mut out = Vec::with_capacity((secs * SR as f64) as usize * 2);
+    let steps = (secs / DT) as usize;
+    let mut chunk = vec![0f32; 0];
+    let mut acc = 0f64;
+    let mut counts = std::collections::BTreeMap::<&str, u32>::new();
+    for k in 0..steps {
+        let t = k as f64 * DT;
+        if t > secs / 2. {
+            play::demo_station_step(&mut w, true);
+        }
+        w.update(&Input::default(), DT);
+        let frame = listener.frame(&mut w, DT);
+        for s in &frame.sfx {
+            let n = match s {
+                berlin_audio::synth::Sfx::RailJoint(_) => "Schienenstoß",
+                berlin_audio::synth::Sfx::AirHiss(_) => "Druckluft",
+                berlin_audio::synth::Sfx::DepartBeep(_) => "Warnton",
+                _ => continue,
+            };
+            *counts.entry(n).or_default() += 1;
+        }
+        if k % 60 == 0 {
+            let r = &frame.rail;
+            eprintln!(
+                "{t:5.1} s · {} · Zug am Bahnsteig: Rollen {:.2} Quietschen {:.2} Motor {:.2} · im Zug: Rollen {:.2} \
+                 Motor {:.2} ({:.0} Hz) Wind {:.2} Quietschen {:.2} · Halle {:.2}",
+                if w.player.ride.is_some() {
+                    "fährt mit"
+                } else {
+                    "Bahnsteig"
+                },
+                r.pass.roll,
+                r.pass.squeal,
+                r.pass.motor,
+                r.ride.roll,
+                r.ride.motor,
+                r.ride.motor_f,
+                r.ride.wind,
+                r.ride.squeal,
+                r.hall
+            );
+        }
+        synth.apply(&frame);
+        acc += DT * SR as f64;
+        let n = acc.floor() as usize;
+        acc -= n as f64;
+        chunk.resize(n * 2, 0.);
+        synth.render(&mut chunk);
+        out.extend_from_slice(&chunk);
+    }
+    berlin_audio::output::write_wav(path, &out, SR)?;
+    let rms = (out.iter().map(|v| v * v).sum::<f32>() / out.len().max(1) as f32).sqrt();
+    let peak = out.iter().fold(0f32, |m, v| m.max(v.abs()));
+    println!(
+        "Klang: {} ({:.1} s) · RMS {:.3} · Spitze {:.2} · {:?}",
+        path.display(),
+        out.len() as f64 / 2. / SR as f64,
+        rms,
+        peak,
+        counts
     );
     Ok(())
 }

@@ -268,15 +268,10 @@ fn bus_cars(x: f64, y: f64, angle: f64) -> Vec<CarPos> {
     }]
 }
 
-/// Tempo aus dem Fahrplan (px je echter Sekunde): Abstand der Halte durch die Fahrzeit ohne Haltezeit, gerafft.
+/// Tempo aus dem Fahrplan (px je echter Sekunde), mit Anfahren und Bremsen (`transit::run_profile`).
 pub fn speed_of_pattern(p: &Pattern, tau: f64) -> f64 {
     let pos = position_at(p, tau);
-    if pos.dwelling || pos.stop == 0 {
-        return 0.;
-    }
-    let i = pos.stop;
-    let span = p.off[i] - p.off[i - 1];
-    p.mode.pace() * (p.stops[i] - p.stops[i - 1]) / (span - p.dwell.min(span * 0.4)).max(1.)
+    crate::transit::speed_at(p, &pos)
 }
 
 impl World {

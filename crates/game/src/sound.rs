@@ -18,6 +18,7 @@ pub struct Listener {
     prev_step: f64,
     thunder_t: Option<f64>,
     clock: Option<f64>,
+    rail: crate::railaudio::RailAudio,
 }
 
 impl Listener {
@@ -165,6 +166,7 @@ impl Listener {
                 f.sfx.push(Sfx::Bells(n, 1.));
             }
         }
+        f.rail = self.rail.step(w, dt, &mut f.sfx);
         f.ambience = ambience_at(w);
         f
     }
