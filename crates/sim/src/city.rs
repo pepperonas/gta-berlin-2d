@@ -168,6 +168,8 @@ pub struct Poly {
     pub kind: PolyKind,
     pub rings: Vec<Vec<Pt>>,
     pub id: i64,
+    /// Gebäudeart (`citycodes.js BUILDING_KIND`: 3 = Kirche), sonst 0
+    pub bkind: u8,
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Portal {
@@ -413,7 +415,7 @@ pub struct TileData {
     dens: Option<(f64, Vec<f64>)>,
 }
 /// Gebäude: (ID, Höhe m, Ringe, eigene Wandzüge)
-type RawBuilding = (i64, f64, Vec<Vec<Pt>>, Option<Vec<Vec<Pt>>>);
+type RawBuilding = (i64, f64, u8, Vec<Vec<Pt>>, Option<Vec<Vec<Pt>>>);
 #[derive(Debug, Clone)]
 struct RawEdge {
     gid: i64,
@@ -577,7 +579,13 @@ impl TileData {
                 }
                 _ => None,
             };
-            buildings.push((int(&r[0])?, num(&r[1])? / 10., rings, walls));
+            buildings.push((
+                int(&r[0])?,
+                num(&r[1])? / 10.,
+                opt_num(r, 2)? as u8,
+                rings,
+                walls,
+            ));
         }
         let water = list("water")?
             .iter()
@@ -1526,7 +1534,7 @@ impl City {
                 city.add_line(&pts, false, k, sub, lvl)
             });
         }
-        for (gid, _height, rings, walls) in d.buildings {
+        for (gid, _height, bkind, rings, walls) in d.buildings {
             self.acquire(&mut t, format!("g{gid}"), |city| {
                 let b = bounds_of(&rings[0]);
                 let mut owned = Vec::new();
@@ -1559,6 +1567,7 @@ impl City {
                         kind: PolyKind::Building,
                         rings,
                         id: gid,
+                        bkind,
                     },
                     &b,
                 );
@@ -1575,6 +1584,7 @@ impl City {
                             kind,
                             rings,
                             id: gid,
+                            bkind: 0,
                         },
                         &b,
                     );
@@ -1944,6 +1954,16 @@ impl City {
             .iter()
             .find(|d| point_in_rings(x, y, &d.rings))
             .map(|d| d.name.as_str())
+    }
+    /// Steht eine Kirche (geladen) im Umkreis?
+    pub fn church_near(&mut self, x: f64, y: f64, r: f64) -> bool {
+        self.polys
+            .query(&Rect::around(x, y, r))
+            .into_iter()
+            .any(|h| {
+                let p = self.polys.get(h);
+                p.kind == PolyKind::Building && p.bkind == 3
+            })
     }
     /// Bezirk an einer Stelle.
     pub fn bezirk_at(&self, x: f64, y: f64) -> Option<&str> {

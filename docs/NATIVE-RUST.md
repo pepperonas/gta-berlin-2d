@@ -1102,3 +1102,12 @@ vergrößert). Gegenprobe ohne Verdeckung: kein Umriss.
 
 **Abweichungen:** JS zeigt Silhouetten auch für Autos, Passanten, Räder und Straßenbahnwagen; hier nur für die
 Spielfigur und ihr Fahrzeug.
+
+## Kirchenglocken (04.10.2026)
+
+Port von `ambience.js bellStrikes` und `audio.js bells`: Überschreitet die Spieluhr eine volle Stunde und steht
+eine Kirche in Hörweite (1 800 px), schlägt die Glocke die Stunde (1–12 Schläge, je Schlag Grundton 196 Hz und vier
+unharmonische Teiltöne, 3,2 s Nachhall, Abstand 2,1 s) über den Außen-Bus, also im Auto gedämpft. Dafür liest die
+Rust-Stadt jetzt die Gebäudeart (Feld 2 der Gebäudezeile, `Poly::bkind`) und fragt `City::church_near` ab – nur im
+Moment des Stundenwechsels. `ambience::bell_strikes` ist rein und getestet; ein Integrationstest findet Kirchen in den
+geladenen Kacheln.

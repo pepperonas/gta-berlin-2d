@@ -17,6 +17,7 @@ pub struct Listener {
     engine_car: Option<u32>,
     prev_step: f64,
     thunder_t: Option<f64>,
+    clock: Option<f64>,
 }
 
 impl Listener {
@@ -155,6 +156,15 @@ impl Listener {
             f.sfx.push(Sfx::Thunder(loud as f32, near));
         }
         self.thunder_t = Some(w.time);
+        // Kirchenglocke zur vollen Stunde, wenn eine Kirche in Hörweite steht
+        let prev = self.clock.replace(w.clock).unwrap_or(w.clock);
+        if prev != w.clock {
+            use berlin_sim::ambience::{BELLS_HEAR, bell_strikes};
+            let n = bell_strikes(prev, w.clock, true);
+            if n > 0 && w.city.church_near(cx, cy, BELLS_HEAR) {
+                f.sfx.push(Sfx::Bells(n, 1.));
+            }
+        }
         f.ambience = ambience_at(w);
         f
     }

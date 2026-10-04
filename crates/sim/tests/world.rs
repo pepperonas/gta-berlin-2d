@@ -1820,3 +1820,21 @@ fn pedestrian_kinds_joggers_and_dog_walkers() {
     run(&mut q, 30, idle());
     assert!(q.peds.iter().all(|p| p.style == Style::Plain));
 }
+
+#[test]
+fn churches_are_known_for_the_bells() {
+    let mut w = world(93);
+    run(&mut w, 5, idle());
+    let churches: Vec<(f64, f64)> = w
+        .city
+        .polys
+        .slab
+        .iter()
+        .filter(|p| p.kind == berlin_sim::city::PolyKind::Building && p.bkind == 3)
+        .map(|p| p.rings[0][0])
+        .collect();
+    assert!(!churches.is_empty(), "Kirchen in den geladenen Kacheln");
+    let (x, y) = churches[0];
+    assert!(w.city.church_near(x, y, 50.));
+    assert!(!w.city.church_near(x + 1e6, y, 50.));
+}

@@ -8,6 +8,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Kirchenglocken schlagen zur vollen Stunde, wenn eine Kirche in Hörweite steht.
 - Native Rust-Portierung: Silhouette der Spielfigur bzw. des eigenen Fahrzeugs unter Dächern, Baumkronen und
   Viadukten (`--bildschirm verdeckt`).
 - Native Rust-Portierung: Farbabstimmung (warm in der Dämmerung, kühl in der Nacht) und Vignette.

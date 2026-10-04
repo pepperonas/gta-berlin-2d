@@ -63,6 +63,8 @@ pub enum Sfx {
     /// Türgong: öffnen (aufsteigend), schließen (absteigend)
     GongOpen,
     GongClose,
+    /// Kirchenglocke: n Schläge (Grundton + unharmonische Teiltöne, langer Nachhall), Lautstärke
+    Bells(u32, f32),
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -965,6 +967,19 @@ impl Synth {
             Sfx::GongClose => {
                 self.tone(880., 0.3, Sine, 0.1, 0., 0., 0., M);
                 self.tone(659., 0.4, Sine, 0.1, 0.24, 0., 0., M);
+            }
+            Sfx::Bells(n, k) => {
+                for i in 0..n.min(12) {
+                    for (f, g) in [
+                        (196., 0.09),
+                        (392., 0.05),
+                        (470., 0.04),
+                        (588., 0.03),
+                        (784., 0.02),
+                    ] {
+                        self.tone(f, 3.2, Sine, g * k, i as f32 * 2.1, 0., 0., Dest::Outside);
+                    }
+                }
             }
             Sfx::TramBell(k) => {
                 for at in [0., 0.22] {
