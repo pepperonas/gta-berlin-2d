@@ -64,6 +64,9 @@ pub struct Ai {
     pub field: Option<std::sync::Arc<GoalField>>,
     /// Sondersignal: fährt langsam über Rot
     pub urgent: bool,
+    /// Arbeitshalte (Paketwagen, Müllauto): Fahrstrecke seit dem letzten Halt und Abstand bis zum nächsten
+    pub odo: f64,
+    pub next_stop: Option<f64>,
 }
 
 /// Entfernungsfeld über den Spurgraph zum Zielspurstück (traffic.js goalField).
@@ -280,6 +283,8 @@ impl Ai {
             next_uid: 0,
             field: None,
             urgent: false,
+            odo: 0.,
+            next_stop: None,
         }
     }
     fn append_lane(&mut self, lanes: &LaneGraph, city: &City, lane: LaneId, from_s: f64) {

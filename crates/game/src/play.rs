@@ -41,6 +41,8 @@ pub struct Play {
     trigger_was: bool,
     /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
     pub demo_combat: bool,
+    /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
+    pub vehicle_show: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -200,6 +202,7 @@ impl Play {
             result_menu: None,
             trigger_was: false,
             demo_combat: false,
+            vehicle_show: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -741,6 +744,10 @@ impl Game for Play {
         } else {
             input_from(keys, w2.player.in_car.is_some())
         };
+        if self.vehicle_show && !w2.loading {
+            self.vehicle_show = false;
+            w2.vehicle_show();
+        }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
         }
@@ -895,25 +902,122 @@ impl Game for Play {
                 color,
             });
             if c.kind_info().bike || c.kind_info().moto {
+                // Zweirad: Fahrer mit Helm (geparkt ohne Fahrer)
+                if c.driver.is_some() && !c.wrecked {
+                    out.push(Body {
+                        center: [x - fx * hw * 0.15, y - fy * hw * 0.15],
+                        half: [4., 5.5],
+                        angle: a,
+                        shape: 1.,
+                        depth: depth - 0.0002,
+                        color: rgba(0x2b2f3a, 1.),
+                    });
+                    out.push(Body {
+                        center: [x - fx * hw * 0.05, y - fy * hw * 0.05],
+                        half: [3.2, 3.2],
+                        angle: 0.,
+                        shape: 1.,
+                        depth: depth - 0.0003,
+                        color: shade(color, 0.8),
+                    });
+                }
                 continue;
             }
-            let roof = shade(color, 1.18);
-            out.push(Body {
-                center: [x - fx * hw * 0.1, y - fy * hw * 0.1],
-                half: [hw * 0.45, hh * 0.78],
-                angle: a,
-                shape: 0.,
-                depth: depth - 0.0002,
-                color: roof,
-            });
-            out.push(Body {
-                center: [x + fx * hw * 0.42, y + fy * hw * 0.42],
-                half: [hw * 0.12, hh * 0.8],
-                angle: a,
-                shape: 0.,
-                depth: depth - 0.0003,
-                color: [0.16, 0.2, 0.24, 1.],
-            });
+            let boxy = matches!(
+                c.kind,
+                "truck" | "delivery" | "garbage" | "ambulance" | "bus"
+            );
+            if boxy {
+                // Kastenaufbau hinten, Fahrerhaus vorn mit Frontscheibe
+                let cab = if c.kind == "bus" { 0.1 } else { 0.24 };
+                out.push(Body {
+                    center: [x - fx * hw * cab, y - fy * hw * cab],
+                    half: [hw * (1. - cab) - 1., hh - 1.5],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth - 0.0002,
+                    color: shade(color, 1.1),
+                });
+                out.push(Body {
+                    center: [x + fx * hw * 0.88, y + fy * hw * 0.88],
+                    half: [hw * 0.06, hh * 0.8],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth - 0.0003,
+                    color: [0.16, 0.2, 0.24, 1.],
+                });
+                if c.kind == "garbage" && c.work {
+                    // Rundumleuchte und zwei Müllwerker mit Tonne am Heck
+                    let t = w.time as f32;
+                    out.push(Body {
+                        center: [x + fx * (hw - 8.), y + fy * (hw - 8.)],
+                        half: [3., 3.],
+                        angle: 0.,
+                        shape: 1.,
+                        depth: depth - 0.0006,
+                        color: [1., 0.59, 0.08, 0.55 + 0.4 * (t * 4.).sin()],
+                    });
+                    let (rx, ry) = (-fy, fx);
+                    for side in [-1f32, 1.] {
+                        let bob = (t * 6. + side).sin() * 1.2;
+                        let (px, py) = (
+                            x - fx * (hw + 5. + bob) + rx * side * (hh - 3.),
+                            y - fy * (hw + 5. + bob) + ry * side * (hh - 3.),
+                        );
+                        out.push(Body {
+                            center: [px - fx * 6., py - fy * 6.],
+                            half: [3., 2.5],
+                            angle: a,
+                            shape: 0.,
+                            depth: depth - 0.0002,
+                            color: rgba(0x1b5e20, 1.),
+                        });
+                        out.push(Body {
+                            center: [px, py],
+                            half: [3.4, 3.4],
+                            angle: 0.,
+                            shape: 1.,
+                            depth: depth - 0.0003,
+                            color: rgba(0xf07d00, 1.),
+                        });
+                    }
+                }
+            } else {
+                let roof = shade(color, 1.18);
+                out.push(Body {
+                    center: [x - fx * hw * 0.1, y - fy * hw * 0.1],
+                    half: [hw * 0.45, hh * 0.78],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth - 0.0002,
+                    color: roof,
+                });
+                out.push(Body {
+                    center: [x + fx * hw * 0.42, y + fy * hw * 0.42],
+                    half: [hw * 0.12, hh * 0.8],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth - 0.0003,
+                    color: [0.16, 0.2, 0.24, 1.],
+                });
+            }
+            // Warnblinker (Paketwagen in zweiter Reihe): alle vier Ecken, 1,5 Hz
+            if c.hazard && (w.time * 3.).floor() as i64 % 2 == 0 {
+                let (rx, ry) = (-fy, fx);
+                for (along, side) in [(1f32, 1f32), (1., -1.), (-1., 1.), (-1., -1.)] {
+                    out.push(Body {
+                        center: [
+                            x + fx * hw * 0.95 * along + rx * hh * 0.85 * side,
+                            y + fy * hw * 0.95 * along + ry * hh * 0.85 * side,
+                        ],
+                        half: [2.2, 2.2],
+                        angle: 0.,
+                        shape: 1.,
+                        depth: depth - 0.0006,
+                        color: [1., 0.66, 0.1, 1.],
+                    });
+                }
+            }
             // Bremslichter
             if c.controls.brake > 0. && c.speed() > 2.
                 || c.driver.is_some() && c.forward_speed() < -2.

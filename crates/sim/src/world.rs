@@ -174,6 +174,8 @@ pub struct World {
     pub res: Reservations,
     /// Blaulichteinsätze (services.rs); aus = ruhige Testwelt
     pub services: bool,
+    /// Fahrzeugarten nach Tageszeit (fleet.rs); aus = nur Pkw
+    pub rhythm: bool,
     pub emergency: crate::services::Emergency,
     pub knocked: Knocked,
     pub esp: bool,
@@ -267,6 +269,7 @@ impl World {
             },
             res: Reservations::default(),
             services: true,
+            rhythm: true,
             emergency: crate::services::Emergency::new(0.5),
             knocked: Knocked::new(),
             esp: true,
@@ -428,8 +431,26 @@ impl World {
             if self.rng.float() > (dtv / 15000.).clamp(0.12, 1.) {
                 continue;
             }
-            let color = CAR_COLORS[self.rng.index(CAR_COLORS.len())];
-            return self.put_npc_car_colored(lane, s, x, y, "car", color);
+            // Fahrzeugart nach Uhrzeit, Wochentag und Straße (höchstens ein Müllauto in der Nähe)
+            let cls = self
+                .lanes
+                .lane(lane)
+                .and_then(|l| self.city.edges.get(&l.edge))
+                .map_or(5, |e| e.cls);
+            let mut kind = if self.rhythm {
+                crate::fleet::pick_kind(self.clock, self.day, cls, self.rng.float())
+            } else {
+                "car"
+            };
+            if kind == "garbage" && self.cars.iter().any(|o| o.kind == "garbage") {
+                kind = "car";
+            }
+            let pal = crate::carmodels::kind(kind).colors;
+            if kind != "car" && !self.cars.iter().all(|o| (o.x - x).hypot(o.y - y) > 110.) {
+                continue;
+            }
+            let color = pal[self.rng.index(pal.len())];
+            return self.put_npc_car_colored(lane, s, x, y, kind, color);
         }
         None
     }
@@ -513,6 +534,54 @@ impl World {
             claim_narrow(&mut ctx, id, lane, seg);
             self.cars.push(car);
             Some(id)
+        }
+    }
+
+    /// Aufnahmen (`--fahrzeugschau`): je ein Fahrzeug jeder Art auf der nächsten Fahrspur hintereinander, stehend,
+    /// Paketwagen mit Warnblinker, Müllauto bei der Arbeit, Einsatzfahrzeuge mit Blaulicht.
+    pub fn vehicle_show(&mut self) {
+        let (px, py) = (self.player.x, self.player.y);
+        let Some(hit) = self.lanes.nearest_lane(px, py, None, 400., false) else {
+            return;
+        };
+        let kinds = [
+            "car",
+            "truck",
+            "delivery",
+            "garbage",
+            "police",
+            "ambulance",
+            "motorcycle",
+            "scooter",
+        ];
+        let (mut lane, mut s) = (hit.lane, 40.);
+        for kind in kinds {
+            let k = crate::carmodels::kind(kind);
+            s += k.l / 2.;
+            // über das Spurende hinaus auf der geradesten Folgespur weiter
+            while let Some(len) = self.lanes.lane(lane).map(|l| l.len).filter(|&len| s > len) {
+                let next = self.lanes.next(&self.city, lane, false);
+                let Some(&n) = next.first() else { return };
+                s -= len;
+                lane = n;
+            }
+            let Some((x, y)) = self.lanes.lane(lane).map(|l| {
+                let p = crate::city::point_along(&l.pts, s);
+                (p.x, p.y)
+            }) else {
+                return;
+            };
+            if let Some(id) = self.put_npc_car(lane, s, x, y, kind)
+                && let Some(c) = self.cars.iter_mut().find(|c| c.id == id)
+            {
+                if let Some(ai) = c.ai.as_mut() {
+                    ai.hold = 1e9;
+                }
+                c.hazard = kind == "delivery";
+                c.work = kind == "garbage";
+                c.blue = matches!(kind, "police" | "ambulance");
+            }
+            s += k.l / 2. + 14.;
         }
     }
 
@@ -1506,6 +1575,7 @@ impl World {
                 res: &mut self.res,
                 events: &mut self.events,
             };
+            update_service(&mut self.cars[i], ctx.lanes, ctx.city, ctx.rng, dt);
             drive_ai(&mut self.cars[i], &mut ctx, dt);
         }
         for i in 0..self.cars.len() {
@@ -2030,6 +2100,58 @@ pub fn teleport_on_foot(w: &mut World, x: f64, y: f64) {
     w.camera.x = x;
     w.camera.y = y;
     w.reset_population();
+}
+
+/// Arbeitshalte von Paketwagen und Müllauto (services.js updateService): nach einer Fahrstrecke an einer passenden
+/// Stelle anhalten, Warnblinker bzw. Müllwerker an.
+fn update_service(
+    c: &mut Car,
+    lanes: &mut crate::roadgraph::LaneGraph,
+    city: &crate::city::City,
+    rng: &mut crate::math::Rng,
+    dt: f64,
+) {
+    let kind = c.kind;
+    if kind != "delivery" && kind != "garbage" {
+        return;
+    }
+    let v = c.speed();
+    let Some(ai) = c.ai.as_mut() else { return };
+    if ai.hold <= 0. {
+        c.hazard = false;
+        c.work = false;
+    }
+    ai.odo += v * dt;
+    let next = *ai
+        .next_stop
+        .get_or_insert_with(|| crate::fleet::next_stop_after(kind, rng.float()));
+    if ai.hold > 0. || ai.odo < next || v > 160. {
+        return;
+    }
+    let Some(lane) = ai
+        .segs
+        .get(ai.current_seg())
+        .and_then(|s| lanes.lane(s.lane))
+    else {
+        return;
+    };
+    let p = &lane.pts;
+    let (Some(&(ex, ey)), Some(&(sx, sy))) = (p.last(), p.first()) else {
+        return;
+    };
+    let cls = city.edges.get(&lane.edge).map_or(5, |e| e.cls);
+    let (to_end, from_start) = ((ex - c.x).hypot(ey - c.y), (sx - c.x).hypot(sy - c.y));
+    if !crate::fleet::may_stop_on(kind, cls, to_end, from_start) {
+        return;
+    }
+    ai.hold = crate::fleet::stop_duration(kind, rng.float());
+    ai.odo = 0.;
+    ai.next_stop = Some(crate::fleet::next_stop_after(kind, rng.float()));
+    if kind == "delivery" {
+        c.hazard = true;
+    } else {
+        c.work = true;
+    }
 }
 
 /// Kurzer Name für Logs.

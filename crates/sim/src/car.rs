@@ -74,6 +74,9 @@ pub struct Car {
     pub blue: bool,
     pub duty: Option<crate::services::Duty>,
     pub done: bool,
+    /// Warnblinker (Paketwagen hält in zweiter Reihe) bzw. Müllabfuhr bei der Arbeit
+    pub hazard: bool,
+    pub work: bool,
     pub skid: f64,
     pub spin: f64,
     pub level: LevelState,
@@ -126,6 +129,8 @@ impl Car {
             blue: false,
             duty: None,
             done: false,
+            hazard: false,
+            work: false,
             skid: 0.,
             spin: 0.,
             level: LevelState::default(),

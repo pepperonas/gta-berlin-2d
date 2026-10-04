@@ -1041,3 +1041,38 @@ fn a_gunshot_calls_the_police() {
     let p = police[0];
     assert!((p.x - w.camera.x).abs() > 1000. || (p.y - w.camera.y).abs() > 600.);
 }
+
+#[test]
+fn traffic_mixes_vehicle_kinds_and_delivery_vans_stop() {
+    use std::collections::BTreeSet;
+    let mut w = world(51);
+    w.clock = 10. * 60.; // Freitag, 10 Uhr: Lieferverkehr
+    let mut kinds = BTreeSet::new();
+    let mut hazard = false;
+    for _ in 0..(240. / DT) as usize {
+        w.update(&idle(), DT);
+        for c in w.cars.iter().filter(|c| c.driver == Some(Driver::Npc)) {
+            kinds.insert(c.kind);
+            hazard |= c.hazard && c.ai.as_ref().is_some_and(|a| a.hold > 0.);
+        }
+        // für den Test die Bevölkerung erneuern lassen: Kamera wandert langsam die Straße entlang
+    }
+    eprintln!("Arten {kinds:?}, Warnblinker {hazard}");
+    assert!(kinds.contains("car"));
+    assert!(kinds.len() >= 3, "nur {kinds:?}");
+    if kinds.contains("delivery") {
+        assert!(hazard, "ein Paketwagen hält mit Warnblinker");
+    }
+    // ohne Tagesrhythmus nur Pkw
+    let mut q = world(51);
+    q.rhythm = false;
+    q.services = false;
+    q.reset_population();
+    run(&mut q, 120, idle());
+    assert!(
+        q.cars
+            .iter()
+            .filter(|c| c.driver == Some(Driver::Npc))
+            .all(|c| c.kind == "car")
+    );
+}

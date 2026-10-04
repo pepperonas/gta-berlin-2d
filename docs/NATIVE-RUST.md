@@ -685,7 +685,6 @@ Kacheln getestet:
 ab.
 
 **Noch offen:**
-- Arbeitshalte von Paketwagen und Müllauto (es gibt noch keine Fahrzeugarten im Verkehr)
 - Polizei verfolgt den Spieler nicht (im Browser auch nicht)
 
 **Validierung:** Clippy und Formatprüfung sind sauber, alle 110 Rust-Tests laufen erfolgreich. Neu auf echten
@@ -697,3 +696,35 @@ Kacheln getestet:
 
 Außerdem wächst die Frist des Smoke-Tests jetzt mit der Bildzahl (30 s plus Bilder/30), damit lange Aufnahmen
 möglich sind.
+
+## Fahrzeugarten im Verkehr (04.10.2026)
+
+`sim/fleet.rs` ist ein Port von `fleet.js`. Neue Verkehrsteilnehmer bekommen ihre Art nach Uhrzeit, Wochentag und
+Straßenklasse:
+- **Lkw** werktags tagsüber vor allem auf Hauptstraßen.
+- **Paketwagen** 8–19:30 Uhr außer sonntags.
+- **Müllautos** werktags 6–12 Uhr in Wohnstraßen, höchstens eines in der Nähe.
+- **Motorräder und Roller** tagsüber, am Wochenende mehr.
+
+Farben kommen aus der Palette der Art. Die Maße standen schon in `carmodels::KINDS`; daraus ergeben sich Leistung
+und Motorklang.
+
+**Arbeitshalte** (`world::update_service`, Port von `updateService`):
+- Paketwagen halten alle 150–500 m für 12–28 s in zweiter Reihe, mit Warnblinker.
+- Müllautos halten alle 35–80 m für 6–10 s, mit Rundumleuchte und zwei Müllwerkern samt Tonne am Heck.
+- Gehalten wird nur auf passenden Straßen und nicht nahe einer Kreuzung.
+
+**Darstellung:**
+- Kastenwagen (Lkw, Paketwagen, Müllauto, Rettungswagen) haben einen Aufbau und eine Frontscheibe am Fahrerhaus.
+- Motorräder und Roller tragen einen Fahrer mit Helm.
+
+`World::rhythm = false` lässt nur Pkw fahren. Für Aufnahmen stellt `--fahrzeugschau` je ein Fahrzeug jeder Art
+hintereinander auf die Fahrspur vor der Figur ([Aufnahme](images/native/fahrzeuge.png)).
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 113 Rust-Tests laufen erfolgreich. Neu getestet:
+- Auswahlanteile nach Zeit, Tag und Straße (Mittwoch 10 Uhr auf einer Klasse-5-Straße: 80 % Pkw) und die
+  Haltregeln
+- auf echten Kacheln, Freitag 10 Uhr über vier Minuten: Pkw, Paketwagen, Müllauto, Motorrad und Polizei; ein
+  Paketwagen hält mit Warnblinker; ohne Tagesrhythmus nur Pkw
+
+Die GPU-Aufnahme wurde visuell kontrolliert.
