@@ -525,10 +525,10 @@ pub const COMMANDS: &[Command] = &[
     Command {
         name: "bars",
         aliases: &["nachtleben"],
-        help: "Bar-Auslastung (Feed-Datei setzen, neu laden, aus)",
+        help: "Bar-Auslastung (Datei, live aus dem Netz, URL, neu laden, aus)",
         cheat: false,
         args: &[arg(
-            "Datei|neu|aus",
+            "Datei|live|URL|neu|aus",
             true,
             Values::Fixed(&[("neu", "Feed neu laden"), ("aus", "nur OSM-Lokale")]),
         )],
@@ -1138,7 +1138,7 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                     b.list.len(),
                     b.list.iter().filter(|b| b.osm).count()
                 )),
-                None => ok("Kein Bar-Feed – bars <Datei>"),
+                None => ok("Kein Bar-Feed – bars <Datei|live>"),
             },
             Some(v) => {
                 ctx.actions.push(Action::Bars(Some(v.to_string())));

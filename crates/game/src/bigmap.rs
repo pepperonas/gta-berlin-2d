@@ -399,7 +399,7 @@ impl BigMap {
 }
 
 /// U-/S-Bahn-Symbol: blaues Quadrat mit U bzw. grüner Kreis mit S (Größe r = halbe Kante).
-fn station_icon(h: &mut Hud, cat: &str, p: Vec2, r: f32) {
+pub fn station_icon(h: &mut Hud, cat: &str, p: Vec2, r: f32) {
     let (bg, letter) = match cat {
         "ubahn" => ([0.067, 0.365, 0.659, 1.], "U"),
         "sbahn" => ([0.0, 0.533, 0.278, 1.], "S"),

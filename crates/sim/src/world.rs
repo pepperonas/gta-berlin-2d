@@ -1,8 +1,6 @@
 //! Spielwelt (Port der Kernschleife von `world.js`): verbindet Stadt, Spieler, Autos, Passanten und Mission zu
 //! einem deterministischen Simulationsschritt. Eingaben kommen als abstrakter Zustand ([`Input`]), Ausgaben als
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
-//!
-//! Noch nicht portiert: Bahnhofssymbole auf der Minikarte.
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
 use crate::city::{City, Ground, Solid, point_along};

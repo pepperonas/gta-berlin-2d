@@ -19,6 +19,7 @@ pollster = "0.4"
 png = "0.18"
 wgpu = { version = "29.0.4", default-features = false, features = ["std", "parking_lot", "metal", "dx12", "vulkan", "wgsl"] }
 winit = "0.30.13"
+ureq = { version = "2", default-features = false, features = ["tls"] }
 
 [profile.release]
 lto = "thin"

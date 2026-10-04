@@ -957,6 +957,34 @@ pub fn minimap(w: &World, target: Option<(f64, f64)>, x: f32, y: f32, size: f32,
     let to_mini = |wx: f64, wy: f64| (cx + (wx - px) as f32 * k, cy + (wy - py) as f32 * k);
     let inside =
         |mx: f32, my: f32| mx > x + 2. && mx < x + size - 2. && my > y + 2. && my < y + size - 2.;
+    // Bahnhöfe (OSM-Symbole) und die Eingänge der begehbaren Bahnhöfe (weiß umrandet)
+    let half = f64::from(MINI_SPAN) / 2.;
+    for q in w.city.pois.slab.iter() {
+        if (q.cat == "ubahn" || q.cat == "sbahn")
+            && (q.x - px).abs() < half
+            && (q.y - py).abs() < half
+        {
+            let (mx, my) = to_mini(q.x, q.y);
+            if inside(mx, my) {
+                crate::bigmap::station_icon(h, q.cat, glam::Vec2::new(mx, my), 6.);
+            }
+        }
+    }
+    for st in &w.st_near {
+        for ex in &st.exits {
+            let (mx, my) = to_mini(ex.x, ex.y);
+            if !inside(mx, my) {
+                continue;
+            }
+            if st.sbahn {
+                h.ellipse(mx, my, 5., 5., WHITE);
+            } else {
+                h.rect(mx - 5., my - 5., 10., 10., WHITE, 1.);
+            }
+            let cat = if st.sbahn { "sbahn" } else { "ubahn" };
+            crate::bigmap::station_icon(h, cat, glam::Vec2::new(mx, my), 4.);
+        }
+    }
     for c in &w.cars {
         if pc.is_some_and(|p| p.id == c.id) {
             continue;

@@ -1016,8 +1016,8 @@ steigt aus, übernimmt eine Bahn am Führerstand, fährt an, bremst mit der Notb
 läuft auf dem Bahnsteig, steigt in einen haltenden Zug, steigt am nächsten Halt aus und kommt über die Treppe wieder
 hinauf. 142 Rust-Tests.
 
-Noch nicht portiert: Bahnhofssymbole auf der Minikarte und die Bar-Belegung über HTTP (der native Stand liest nur
-eine Datei). Jogger und Hundehalter folgen im nächsten Abschnitt.
+Bahnhofssymbole auf der Minikarte, die Bar-Belegung über HTTP sowie Jogger und Hundehalter folgen in den nächsten
+Abschnitten.
 
 ## Menschen-Typen, Jogger und Hundehalter (04.10.2026)
 
@@ -1041,3 +1041,19 @@ eine Datei). Jogger und Hundehalter folgen im nächsten Abschnitt.
 Stil-Häufigkeiten je Uhrzeit und die Darstellung je Typ. Ein Integrationstest am Morgen prüft gemischte Typen,
 Jogger und Hundehalter, die Zuordnung Stil → Typ, das höhere Jogger-Tempo und dass ohne Tagesrhythmus kein Stil
 gewürfelt wird. 147 Rust-Tests.
+
+## Bahnhöfe auf der Minikarte und Bar-Feed aus dem Netz (04.10.2026)
+
+- **Minikarte:** U- und S-Bahnhöfe (OSM-Symbole: blaues Quadrat mit U, grüner Kreis mit S) und, weiß umrandet, die
+  Eingänge der begehbaren Bahnhöfe in der Nähe – wie `hud.js`. Die Minikarte hat nur Lesezugriff auf die Welt,
+  deshalb läuft sie über die geladenen POIs statt über das Raster.
+- **Bar-Feed live:** `game/barfeed.rs` portiert `tools/bars-source.mjs`. `--bars live` (gostumblr) oder `--bars URL`
+  bzw. der Befehl `bars live|URL` holt die Auslastung in einem eigenen Faden (ureq mit rustls), bei
+  `…/bars/busyness` samt Wochenschnitt je Wochentag, und erneuert alle zwei Minuten; `BARS_TOKEN` setzt eine
+  Anmeldung. Ein Fehlschlag lässt den letzten Stand stehen. Ohne diese Angabe bleibt es bei der Datei
+  `web/data/bars.json` – das Spiel geht von sich aus nicht ins Netz. Aufnahmen warten bis zu 30 s auf die erste
+  Antwort.
+
+**Validierung:** Unit-Tests für Adressen, Wochenschnitt-Erkennung und das Zusammenführen; ein Netz-Test
+(`cargo test -p gta-berlin -- --ignored live_feed`) holt gostumblr mit sieben Wochentagen. Live geprüft: 121 Bars.
+149 Rust-Tests (dazu einer, der Netz braucht).

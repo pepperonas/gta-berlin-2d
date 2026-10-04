@@ -32,6 +32,8 @@ pub struct Play {
     root: std::path::PathBuf,
     /// Bar-Feed (Standard `web/data/bars.json` neben den Kacheln, `--bars DATEI`), `None` = aus
     pub bars_file: Option<std::path::PathBuf>,
+    /// Live-Abruf des Bar-Feeds (`--bars live|URL`, Befehl `bars URL`); ersetzt die Datei
+    pub bars_live: Option<crate::barfeed::Live>,
     seed: u32,
     /// Stick-Stellung des letzten Schritts (Menüauswahl per Stick als Flanke)
     stick_prev: f32,
@@ -147,7 +149,12 @@ pub fn load_bars(world: &mut World, path: &Path) -> Result<usize, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let json: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|e| format!("Bar-Feed: {e}"))?;
-    let (_, _, bars) = berlin_sim::nightlife::parse_bar_feed(&json)?;
+    attach_feed(world, &json)
+}
+
+/// Feed-Dokument (Datei oder Netz) an die Stadt hängen; Zahl der Bars.
+pub fn attach_feed(world: &mut World, json: &serde_json::Value) -> Result<usize, String> {
+    let (_, _, bars) = berlin_sim::nightlife::parse_bar_feed(json)?;
     Ok(berlin_sim::nightlife::attach_bars(&mut world.city, bars))
 }
 
@@ -237,6 +244,7 @@ impl Play {
             screen,
             menu: crate::menu::title_menu(has_save),
             root: root.to_path_buf(),
+            bars_live: None,
             bars_file: root
                 .parent()
                 .map(|p| p.join("bars.json"))
@@ -440,11 +448,55 @@ impl Play {
             }
         }
     }
+    /// Quelle des Bar-Feeds wählen: `aus`, `neu` (gleiche Quelle neu laden), `live`/URL (Netz) oder eine Datei.
+    pub fn set_bars_source(&mut self, arg: Option<&str>) {
+        match arg {
+            Some("aus") => {
+                self.bars_file = None;
+                self.bars_live = None;
+            }
+            Some("neu") | None => {
+                if let Some(l) = &self.bars_live {
+                    self.bars_live = Some(crate::barfeed::Live::start(l.url.clone()));
+                }
+            }
+            Some(a) => match crate::barfeed::url_of(a) {
+                Some(url) => self.bars_live = Some(crate::barfeed::Live::start(url)),
+                None => {
+                    self.bars_live = None;
+                    self.bars_file = Some(a.into());
+                }
+            },
+        }
+    }
+    /// Fertige Antwort des Live-Abrufs übernehmen (jeder Schritt; billig, wenn nichts da ist).
+    pub fn poll_bars(&mut self) {
+        let Some(r) = self.bars_live.as_ref().and_then(|l| l.poll()) else {
+            return;
+        };
+        self.apply_live_bars(r);
+    }
+    /// Erste Antwort abwarten (Aufnahmen und `--befehl`, damit das Bild den Feed schon zeigt).
+    pub fn wait_bars(&mut self, max: std::time::Duration) {
+        if let Some(r) = self.bars_live.as_ref().and_then(|l| l.wait(max)) {
+            self.apply_live_bars(r);
+        }
+    }
+    fn apply_live_bars(&mut self, r: Result<serde_json::Value, String>) {
+        let msg = match r.and_then(|doc| attach_feed(&mut self.world, &doc)) {
+            Ok(n) => format!("Nachtleben: {n} Bars live"),
+            Err(e) => format!("Bar-Feed: {e} – letzter Stand bleibt"),
+        };
+        eprintln!("{msg}");
+    }
     /// Bar-Feed (neu) an die Stadt hängen; Meldung für Befehlszeile und Konsole.
     pub fn reload_bars(&mut self) -> Result<String, String> {
+        if let Some(l) = &self.bars_live {
+            return Ok(format!("Bar-Feed wird geladen: {}", l.url));
+        }
         let Some(p) = self.bars_file.clone() else {
             self.world.city.bars = None;
-            return Ok("Kein Bar-Feed – bars <Datei>".into());
+            return Ok("Kein Bar-Feed – bars <Datei|live>".into());
         };
         let n = load_bars(&mut self.world, &p)?;
         Ok(format!("{n} Bars aus {}", p.display()))
@@ -515,11 +567,7 @@ impl Play {
                 }
                 Action::Money(m) => self.tracker.set_money(m),
                 Action::Bars(arg) => {
-                    match arg.as_deref() {
-                        Some("aus") => self.bars_file = None,
-                        Some("neu") | None => {}
-                        Some(p) => self.bars_file = Some(p.into()),
-                    }
+                    self.set_bars_source(arg.as_deref());
                     let (msg, ok) = match self.reload_bars() {
                         Ok(m) => (m, true),
                         Err(e) => (e, false),
@@ -1627,6 +1675,9 @@ impl Game for Play {
                 text: (if muted { "Ton aus" } else { "Ton an" }).into(),
                 t: 1.5,
             });
+        }
+        if self.bars_live.is_some() {
+            self.poll_bars();
         }
         let w2 = &mut self.world;
         if keys.pressed.contains(&KeyCode::KeyN) {

@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: U-/S-Bahnhöfe und Bahnhofseingänge auf der Minikarte; Bar-Auslastung live aus dem Netz
+  (`--bars live|URL`, Befehl `bars live`, alle zwei Minuten neu).
 - Native Rust-Portierung: zwölf Menschen-Typen nach Bezirk, Uhrzeit und Wochentag (Tempo und Aussehen), Jogger
   und Hundehalter mit Hund an der Leine, Kinderwagen, Stock, Aktentasche und Kopfbedeckungen (`--bildschirm leute`).
 - Native Rust-Portierung, Nahverkehr C: begehbare U-Bahnhöfe aus dem Fahrplan (Eingänge an der Straße,
