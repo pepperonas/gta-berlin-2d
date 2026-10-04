@@ -1076,3 +1076,82 @@ fn traffic_mixes_vehicle_kinds_and_delivery_vans_stop() {
             .all(|c| c.kind == "car")
     );
 }
+
+#[test]
+fn cyclists_ride_and_can_be_taken_or_knocked_off() {
+    use berlin_sim::bikes::{Kind, State};
+    use berlin_sim::events::Event;
+    let mut w = world(61);
+    w.force_weather = Some("clear");
+    run(&mut w, 30, idle());
+    assert!(w.bike_target() >= 4, "Ziel {}", w.bike_target());
+    // Bestand füllt sich im Lauf (eines je Schritt)
+    run(&mut w, 120, idle());
+    assert!(
+        w.bikes.iter().filter(|b| b.state == State::Ride).count() >= 3,
+        "{}",
+        w.bikes.len()
+    );
+    // sie kommen voran, auf radtauglichen Spuren, nie im Haus
+    let start: Vec<(u32, f64, f64)> = w.bikes.iter().map(|b| (b.id, b.x, b.y)).collect();
+    let mut dist = 0.;
+    for _ in 0..(20. / DT) as usize {
+        w.update(&idle(), DT);
+        for b in w.bikes.iter().filter(|b| b.state == State::Ride) {
+            assert!(
+                w.city.in_building(b.x, b.y).is_none(),
+                "Rad im Haus bei {},{}",
+                b.x,
+                b.y
+            );
+        }
+    }
+    for (id, x, y) in start {
+        if let Some(b) = w.bikes.iter().find(|b| b.id == id) {
+            dist += (b.x - x).hypot(b.y - y);
+        }
+    }
+    assert!(dist > 300., "Räder fahren: {dist} px");
+    // ein Rad kapern: daneben stellen, einsteigen
+    let i = w
+        .bikes
+        .iter()
+        .position(|b| b.state == State::Ride)
+        .expect("Rad");
+    let (bx, by, kind) = (w.bikes[i].x, w.bikes[i].y, w.bikes[i].kind);
+    (w.player.x, w.player.y) = (bx + 10., by);
+    w.update(
+        &Input {
+            enter_exit: true,
+            ..idle()
+        },
+        DT,
+    );
+    let car = w.player_car().expect("auf dem Rad");
+    assert_eq!(
+        car.kind,
+        if kind == Kind::Scooter {
+            "escooter"
+        } else {
+            "bicycle"
+        }
+    );
+    assert!(
+        w.events
+            .iter()
+            .any(|e| matches!(e, Event::Carjack { bike: true, .. }))
+    );
+    // ein anderer Radfahrer wird getroffen: er stürzt vom Rad
+    if let Some(j) = w.bikes.iter().position(|b| b.state == State::Ride) {
+        let peds = w.peds.len();
+        let (x, y) = (w.bikes[j].x, w.bikes[j].y);
+        berlin_sim::combat::hurt_bike(&mut w, j, 20., (x + 30., y), true, "fists", true);
+        assert_eq!(w.bikes[j].state, State::Lying);
+        assert_eq!(w.peds.len(), peds + 1, "der Fahrer ist jetzt ein Passant");
+        assert!(
+            w.events
+                .iter()
+                .any(|e| matches!(e, Event::BikeDown { player: true, .. }))
+        );
+    }
+}

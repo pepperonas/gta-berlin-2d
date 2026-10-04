@@ -30,6 +30,7 @@ pub enum Event {
     Carjack {
         x: f64,
         y: f64,
+        bike: bool,
     },
     Bump {
         x: f64,
@@ -41,6 +42,8 @@ pub enum Event {
         car: u32,
         player: bool,
         speed: f64,
+        /// ein Radfahrer (stürzt), sonst ein Fußgänger
+        bike: bool,
     },
     Ui,
     MissionStart,
@@ -112,6 +115,12 @@ pub enum Event {
     },
     WeaponSwitch {
         weapon: &'static str,
+    },
+    /// Radfahrer vom Rad geholt (Schuss, Schlag)
+    BikeDown {
+        x: f64,
+        y: f64,
+        player: bool,
     },
     /// Rettungswagen hat Tote mitgenommen
     PickupBody {

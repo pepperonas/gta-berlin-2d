@@ -586,7 +586,6 @@ Pistole und schießt auf den nächsten Passanten.
 - Klicksteuerung zum Laufen (Diablo-Schema)
 - Waffenrad
 - Waffen-Statistik je Waffe
-- Radfahrer als Ziele (keine Räder portiert)
 
 **Validierung:** Clippy und Formatprüfung sind sauber, alle 104 Rust-Tests laufen erfolgreich. Neu getestet:
 - Strahl gegen Kreis, Strecke und gedrehtes Rechteck; Kämpferanteil ~15 %; Waffentabelle
@@ -728,3 +727,38 @@ hintereinander auf die Fahrspur vor der Figur ([Aufnahme](images/native/fahrzeug
   Paketwagen hält mit Warnblinker; ohne Tagesrhythmus nur Pkw
 
 Die GPU-Aufnahme wurde visuell kontrolliert.
+
+## Fahrräder und E-Roller (04.10.2026)
+
+`sim/bikes.rs` ist ein Port von `bikes.js`.
+- **Wo sie fahren:** auf dem Spurgraph (Einbahnstraßen und Abbiegeverbote gelten), nur auf der rechten Spur. Wo
+  der Querschnitt einen Radstreifen hat, fahren sie auf dessen Mitte, sonst 0,8 m vom Fahrbahnrand.
+  Hauptstraßen ohne Radstreifen meiden sie. Die Fahrlinien werden je Spur gemerkt.
+- **Verhalten:**
+  - 80 % halten bei Rot.
+  - Vor Autos, Menschen, anderen Rädern und der Spielfigur bremsen sie. Stehender Querverkehr zählt nicht,
+    er wartet auf sie.
+  - Wer 6 s ohne Ampel festsitzt, schiebt sich 2 s vorbei.
+  - Kreuzungen queren sie geradlinig zur nächsten Fahrlinie.
+- **Bestand:** 15 % der Fußgängerzahl, bei Regen, Nebel, Schnee und Sturm weniger; davon ein Viertel E-Roller.
+  Gilt nur mit Tagesrhythmus.
+- **Zusammenstoß:** Ein Auto ab 6 km/h holt den Fahrer vom Rad. Das Rad bleibt liegen, der Fahrer läuft als
+  Passant davon (Ereignis `Hit` mit `bike`).
+- **Rad nehmen:** F bzw. Y nimmt ein Rad in 3,4 m Reichweite, wenn es näher ist als jedes Auto. Daraus wird ein
+  Fahrzeug der Art Fahrrad bzw. E-Roller. Ein fahrender Fahrer wird heruntergezogen und flieht, bei Tempo stürzt
+  er.
+- **Kampf:** Fahrende Radfahrer sind Ziele für Strahl, Nahkampf, Zeiger und Zielhilfe. Ein Treffer holt sie vom
+  Rad, der Fahrer nimmt den Treffer als Person (`combat::hurt_bike`, Ereignis `BikeDown`).
+- **Klicken (Diablo):** Ein Klick auf einen Radfahrer greift an, bis er unten ist. Ein Doppelklick oder ein Klick
+  auf ein liegendes Rad läuft hin und nimmt es.
+- **Darstellung:** zwei Räder, Rahmen bzw. Trittbrett, Lenker und der Fahrer im Trikot, beim Rad mit
+  Tretbewegung. Liegende Räder sind gekippt und ohne Fahrer.
+- **Statistik:** Radfahrer umgefahren, vom Rad geholt, Räder gekapert.
+
+**Noch offen:** abgestellte E-Roller am Gehweg (`parkedScooters`, reine Darstellung).
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 115 Rust-Tests laufen erfolgreich. Neu getestet:
+- Hinderniserkennung nur voraus
+- auf echten Kacheln bei klarem Wetter: der Bestand füllt sich, die Räder kommen voran und sind nie in einem Haus
+- Kapern ergibt das passende Fahrzeug samt Ereignis
+- ein Treffer holt den Fahrer vom Rad, er wird ein Passant

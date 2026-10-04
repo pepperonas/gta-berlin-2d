@@ -603,6 +603,99 @@ fn demo_combat_input(w: &World, input: &mut Input) {
     }
 }
 
+/// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
+/// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+fn bike_bodies(b: &berlin_sim::bikes::Bike, _t: f64, out: &mut Vec<Body>) {
+    use berlin_sim::bikes::{Kind, State};
+    let depth = if b.level.lvl >= 1 { 0.551 } else { 0.619 };
+    let lying = b.state == State::Lying;
+    let a = b.angle as f32 + if lying { 0.9 } else { 0. };
+    let (x, y) = (b.x as f32, b.y as f32);
+    let (fx, fy) = (a.cos(), a.sin());
+    let scooter = b.kind == Kind::Scooter;
+    let half = if scooter { 6. } else { 8. };
+    let dark = [0.12, 0.13, 0.15, 1.];
+    out.push(Body {
+        center: [x + 1., y + 2.],
+        half: [half + 1., 3.],
+        angle: a,
+        shape: 0.,
+        depth: depth + 0.0004,
+        color: [0., 0., 0., 0.22],
+    });
+    for k in [-1f32, 1.] {
+        out.push(Body {
+            center: [x + fx * half * 0.8 * k, y + fy * half * 0.8 * k],
+            half: [if scooter { 1.8 } else { 2.6 }, 1.],
+            angle: a,
+            shape: 1.,
+            depth: depth + 0.0002,
+            color: dark,
+        });
+    }
+    out.push(Body {
+        center: [x, y],
+        half: [half * 0.7, if scooter { 1.6 } else { 0.9 }],
+        angle: a,
+        shape: 0.,
+        depth: depth + 0.0001,
+        color: if scooter {
+            [0.25, 0.27, 0.3, 1.]
+        } else {
+            rgba(0x1e272e, 1.)
+        },
+    });
+    // Lenker quer
+    out.push(Body {
+        center: [x + fx * half * 0.7, y + fy * half * 0.7],
+        half: [0.7, 3.],
+        angle: a,
+        shape: 0.,
+        depth,
+        color: dark,
+    });
+    if lying || b.state != State::Ride {
+        return;
+    }
+    let shirt = rgba(b.shirt(), 1.);
+    let lean = if scooter { 0.25 } else { -0.1 };
+    out.push(Body {
+        center: [x + fx * half * lean, y + fy * half * lean],
+        half: [3.4, 5.],
+        angle: a,
+        shape: 1.,
+        depth: depth - 0.0002,
+        color: shirt,
+    });
+    out.push(Body {
+        center: [x + fx * half * (lean + 0.12), y + fy * half * (lean + 0.12)],
+        half: [2.7, 2.7],
+        angle: 0.,
+        shape: 1.,
+        depth: depth - 0.0003,
+        color: shade(shirt, 0.6),
+    });
+    if !scooter {
+        // Knie bewegen sich mit der Kurbel
+        let ph = b.pedal as f32;
+        let (rx, ry) = (-fy, fx);
+        for (k, side) in [(0f32, 1f32), (std::f32::consts::PI, -1.)] {
+            let along = (ph + k).sin() * 2.;
+            out.push(Body {
+                center: [
+                    x + fx * (half * 0.15 + along) + rx * side * 3.,
+                    y + fy * (half * 0.15 + along) + ry * side * 3.,
+                ],
+                half: [1.6, 1.2],
+                angle: a,
+                shape: 1.,
+                depth: depth - 0.0001,
+                color: rgba(0x2b2f3a, 1.),
+            });
+        }
+    }
+}
+
 /// Waffe in der Hand der Spielfigur (vor dem Körper in Zielrichtung) und Schlagbewegung.
 fn weapon_bodies(
     c: &berlin_sim::combat::Combat,
@@ -1079,6 +1172,10 @@ impl Game for Play {
                     color: rgba(0x8d6e4b, 1.),
                 });
             }
+        }
+        // Radfahrer und E-Roller (fahrend mit Fahrer, liegend ohne)
+        for b in w.bikes.iter().filter(|b| near(b.x, b.y)) {
+            bike_bodies(b, w.time, out);
         }
         for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
             let depth = if p.level.lvl >= 1 { 0.549 } else { 0.618 };

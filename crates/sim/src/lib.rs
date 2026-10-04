@@ -3,6 +3,7 @@
 //! `levels.js`, `roadgraph.js`, `traffic.js`, `pedestrians.js`, `mission.js`, `save.js` und der Kernschleife von
 //! `world.js`.
 pub mod ambience;
+pub mod bikes;
 pub mod car;
 pub mod carmodels;
 pub mod city;

@@ -102,6 +102,8 @@ pub enum Click {
     },
     /// mit Strg: am Platz angreifen, wohin gezeigt wird (bzw. auf die Person darunter)
     Force { at: (f64, f64), ped: Option<u32> },
+    /// Rad: fahrend angreifen (bis der Fahrer runter ist), sonst bzw. mit Doppelklick hinlaufen und nehmen
+    Bike { bike: u32, attack: bool },
 }
 /// Klick: an der Tür stehen (s), Doppelklick-Fenster (s), Annäherung über die Einsteigweite hinaus (px).
 pub const CLICK_DOOR: f64 = 0.35;
@@ -148,6 +150,10 @@ pub struct World {
     pub rng: Rng,
     pub cars: Vec<Car>,
     pub peds: Vec<Ped>,
+    /// Radfahrer und E-Roller (bikes.rs)
+    pub bikes: Vec<crate::bikes::Bike>,
+    pub bike_paths: crate::bikes::Paths,
+    next_bike: u32,
     pub events: Vec<Event>,
     pub time: f64,
     pub clock: f64,
@@ -280,6 +286,9 @@ impl World {
             ped_target: peds,
             loading: true,
             populated: false,
+            bikes: Vec::new(),
+            bike_paths: Default::default(),
+            next_bike: 1,
             pending_save: None,
             parked_keys: HashSet::new(),
             park_tick: 0,
@@ -365,6 +374,229 @@ impl World {
         for _ in 0..self.ped_target {
             self.spawn_ped(60., SPAWN_MAX);
         }
+        for _ in 0..self.bike_target() {
+            self.spawn_bike(120., SPAWN_MAX);
+        }
+    }
+    /// Radfahrer: ein Anteil der Fußgänger-Zielzahl, bei Regen, Schnee und Sturm weniger (nur mit Tagesrhythmus).
+    pub fn bike_target(&self) -> usize {
+        if !self.rhythm {
+            return 0;
+        }
+        (self.ped_target as f64 * crate::bikes::SHARE * crate::bikes::weather_factor(&self.sky.p))
+            .round() as usize
+    }
+    fn spawn_bike(&mut self, min_r: f64, max_r: f64) -> Option<u32> {
+        use crate::bikes;
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (lane, s) = bikes::spawn_spot(
+            &self.city,
+            &mut self.lanes,
+            &mut self.bike_paths,
+            &mut self.rng,
+            cx,
+            cy,
+            min_r,
+            max_r,
+        )?;
+        let kind = if self.rng.float() < bikes::SCOOTER_SHARE {
+            bikes::Kind::Scooter
+        } else {
+            bikes::Kind::Bike
+        };
+        let b = bikes::create(
+            self.next_bike,
+            &self.city,
+            &self.lanes,
+            &mut self.bike_paths,
+            lane,
+            s,
+            &mut self.rng,
+            kind,
+        )?;
+        if self
+            .cars
+            .iter()
+            .any(|c| (c.x - b.x).abs() < c.hw + 12. && (c.y - b.y).abs() < c.hw + 12.)
+            || self
+                .bikes
+                .iter()
+                .any(|o| (o.x - b.x).hypot(o.y - b.y) < 30.)
+        {
+            return None;
+        }
+        self.next_bike += 1;
+        let id = b.id;
+        self.bikes.push(b);
+        Some(id)
+    }
+    /// Fahrer runter (Auto, Schuss, Schlag): das Rad bleibt liegen, der Fahrer wird ein Passant, der (bei `fall`)
+    /// erschrocken wegläuft. Liefert den Index des neuen Passanten.
+    pub fn dismount(&mut self, i: usize, from: (f64, f64), fall: bool) -> Option<usize> {
+        let b = &mut self.bikes[i];
+        b.state = crate::bikes::State::Lying;
+        b.t = 0.;
+        b.speed = 0.;
+        b.cross = None;
+        let (x, y, shirt, lvl) = (b.x, b.y, b.shirt(), b.level.lvl);
+        let sp = pedestrians::nearest_spot(&mut self.city, &mut self.sidewalks, x, y, 600.)?;
+        let id = self.next_ped;
+        self.next_ped += 1;
+        let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
+        (p.x, p.y, p.shirt) = (x, y, shirt);
+        p.level.lvl = lvl;
+        p.level_init = true;
+        if fall {
+            scare(&mut p, from, 3.);
+        }
+        self.peds.push(p);
+        Some(self.peds.len() - 1)
+    }
+    /// Rad nehmen: aus dem Radfahrer wird ein Fahrzeug der Art Fahrrad/E-Roller (Autophysik), ein Fahrer wird
+    /// heruntergezogen und flieht (bei Tempo stürzt er). Liefert die Kennung des neuen Fahrzeugs.
+    fn take_bike(&mut self, i: usize) -> u32 {
+        let b = self.bikes[i].clone();
+        let kind = if b.kind == crate::bikes::Kind::Scooter {
+            "escooter"
+        } else {
+            "bicycle"
+        };
+        let id = self.new_car_id();
+        let mut car = Car::new(id, b.x, b.y, b.angle, 0x1e272e, Role::Parked, kind);
+        let v = if b.state == crate::bikes::State::Ride {
+            b.speed * 0.3
+        } else {
+            0.
+        };
+        (car.vx, car.vy) = (b.angle.cos() * v, b.angle.sin() * v);
+        car.level = b.level;
+        car.level_init = true;
+        if b.state == crate::bikes::State::Ride {
+            let (px, py) = (self.player.x, self.player.y);
+            if let Some(k) = self.dismount(i, (px, py), b.speed > 40.) {
+                let side = (-b.angle.sin() * 10., b.angle.cos() * 10.);
+                let q = &mut self.peds[k];
+                (q.x, q.y) = (b.x + side.0, b.y + side.1);
+                scare(q, (px, py), 3.5);
+            }
+            self.events.push(Event::Carjack {
+                x: b.x,
+                y: b.y,
+                bike: true,
+            });
+        }
+        self.bikes.remove(i);
+        self.cars.push(car);
+        id
+    }
+    /// Räder fahren lassen; wer von einem schnellen Auto erwischt wird, stürzt (Fahrer flieht, Rad bleibt liegen).
+    fn update_bikes(&mut self, dt: f64) {
+        use crate::bikes::{self, Obstacle, State};
+        let mut obstacles: Vec<Obstacle> =
+            Vec::with_capacity(self.cars.len() + self.peds.len() + self.bikes.len() + 1);
+        for c in &self.cars {
+            obstacles.push(Obstacle {
+                x: c.x,
+                y: c.y,
+                lat: c.hh + 5.,
+                len: c.hw,
+                car: Some((c.angle, c.vx.abs() + c.vy.abs() < 20.)),
+                bike: None,
+            });
+        }
+        for p in self.peds.iter().filter(|p| p.state != PedState::Dead) {
+            obstacles.push(Obstacle {
+                x: p.x,
+                y: p.y,
+                lat: 9.,
+                len: 0.,
+                car: None,
+                bike: None,
+            });
+        }
+        for o in self.bikes.iter().filter(|o| o.state == State::Ride) {
+            obstacles.push(Obstacle {
+                x: o.x,
+                y: o.y,
+                lat: 8.,
+                len: 0.,
+                car: None,
+                bike: Some(o.id),
+            });
+        }
+        if self.player.in_car.is_none() {
+            obstacles.push(Obstacle {
+                x: self.player.x,
+                y: self.player.y,
+                lat: 10.,
+                len: 0.,
+                car: None,
+                bike: None,
+            });
+        }
+        let mut hits = Vec::new();
+        for i in 0..self.bikes.len() {
+            let b = &mut self.bikes[i];
+            bikes::update(
+                b,
+                &self.city,
+                &mut self.lanes,
+                &mut self.bike_paths,
+                &mut self.rng,
+                self.time,
+                &obstacles,
+                dt,
+            );
+            if b.state != State::Ride {
+                continue;
+            }
+            for c in &self.cars {
+                if (c.x - b.x).abs() > c.hw + 8. || (c.y - b.y).abs() > c.hw + 8. || c.speed() < 60.
+                {
+                    continue;
+                }
+                if circle_vs_obb(b.x, b.y, bikes::RADIUS, &c.obb()).is_some() {
+                    hits.push((i, c.id, c.x, c.y, c.speed()));
+                    break;
+                }
+            }
+        }
+        let player_car = self.player.in_car;
+        for (i, car, cx, cy, speed) in hits {
+            let (x, y) = (self.bikes[i].x, self.bikes[i].y);
+            self.dismount(i, (cx, cy), true);
+            self.events.push(Event::Hit {
+                x,
+                y,
+                car,
+                player: Some(car) == player_car,
+                speed,
+                bike: true,
+            });
+        }
+        // Fernes, Verschwundenes und lange Liegendes außer Sicht abbauen; Fehlendes im Ring erzeugen
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        self.bikes.retain(|b| {
+            let d = (b.x - cx).hypot(b.y - cy);
+            b.state != State::Gone
+                && d < DESPAWN
+                && !(b.state == State::Lying && b.t > 30. && d > 900.)
+        });
+        let riding = self.bikes.iter().filter(|b| b.state == State::Ride).count();
+        let target = self.bike_target();
+        if riding < target {
+            self.spawn_bike(SPAWN_MIN, SPAWN_MAX);
+        } else if riding > target + 2
+            && let Some(k) = self
+                .bikes
+                .iter()
+                .position(|b| (b.x - cx).hypot(b.y - cy) > SPAWN_MIN)
+        {
+            self.bikes.remove(k);
+        }
+        if self.time % 5. < dt {
+            self.bike_paths.prune(&self.lanes);
+        }
     }
     /// Verkehr, Passanten und Parker verwerfen (nach einem Ortswechsel).
     pub fn reset_population(&mut self) {
@@ -391,6 +623,7 @@ impl World {
             k
         });
         self.peds.clear();
+        self.bikes.clear();
         self.populated = false;
     }
 
@@ -827,6 +1060,26 @@ impl World {
     }
 
     fn try_enter(&mut self) -> bool {
+        // ein Rad (fahrend oder liegend) in Greifweite, näher als jedes Auto? Dann das nehmen
+        let (px, py) = (self.player.x, self.player.y);
+        let car_d = self
+            .cars
+            .iter()
+            .filter(|c| !c.wrecked)
+            .map(|c| (c.x - px).hypot(c.y - py))
+            .fold(f64::INFINITY, f64::min);
+        let bike = self
+            .bikes
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.state != crate::bikes::State::Gone)
+            .map(|(i, b)| (i, (b.x - px).hypot(b.y - py)))
+            .filter(|(_, d)| *d < crate::bikes::GRAB && *d < car_d)
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((i, _)) = bike {
+            let id = self.take_bike(i);
+            return self.try_enter_car(Some(id));
+        }
         self.try_enter_car(None)
     }
     /// Einsteigen ins nächste heile Auto in Reichweite, mit `only` nur in dieses (Klick auf ein Auto).
@@ -852,7 +1105,7 @@ impl World {
         if self.cars[i].driver == Some(Driver::Npc) {
             // Fahrer steigt aus und flieht
             let (x, y) = (self.cars[i].x, self.cars[i].y);
-            self.events.push(Event::Carjack { x, y });
+            self.events.push(Event::Carjack { x, y, bike: false });
             self.fleeing_driver(i, px, py, 3.5);
         }
         let id = self.cars[i].id;
@@ -1039,6 +1292,48 @@ impl World {
                     door,
                 });
             }
+            Click::Bike { bike, attack } => {
+                let Some(b) = self
+                    .bikes
+                    .iter()
+                    .find(|b| b.id == bike && b.state != crate::bikes::State::Gone)
+                    .map(|b| (b.x, b.y, b.state))
+                else {
+                    self.player.click = None;
+                    return out;
+                };
+                let d = (b.0 - px).hypot(b.1 - py);
+                if attack {
+                    // bis der Fahrer vom Rad ist
+                    if b.2 != crate::bikes::State::Ride {
+                        self.player.click = None;
+                        return out;
+                    }
+                    let wp = self.player.combat.weapon();
+                    let reach = if wp.melee {
+                        wp.range + 6.
+                    } else {
+                        wp.range * 0.85
+                    };
+                    if d > reach {
+                        toward(&mut out, (b.0, b.1));
+                    } else {
+                        out.combat.aim_world = Some((b.0, b.1));
+                        out.combat.fire = true;
+                        out.combat.fire_pressed = self.player.combat.cool <= 0.;
+                    }
+                } else if d < crate::bikes::GRAB - 4. {
+                    // packen und aufsteigen
+                    stop(&mut out);
+                    self.player.click = None;
+                    self.try_enter();
+                } else {
+                    // fahrendem Rad direkt nach (sprinten hilft)
+                    toward(&mut out, (b.0, b.1));
+                    out.combat.fire = false;
+                    out.combat.fire_pressed = false;
+                }
+            }
             Click::Walk {
                 path,
                 mut i,
@@ -1083,6 +1378,18 @@ impl World {
             return Some(Click::Target {
                 ped: id,
                 done: false,
+            });
+        }
+        let bike = self
+            .bikes
+            .iter()
+            .filter(|b| b.state != crate::bikes::State::Gone && b.level.lvl == lvl)
+            .find(|b| (b.x - at.0).hypot(b.y - at.1) < crate::bikes::RADIUS + 5.)
+            .map(|b| (b.id, b.state == crate::bikes::State::Ride));
+        if let Some((id, riding)) = bike {
+            return Some(Click::Bike {
+                bike: id,
+                attack: riding && !double,
             });
         }
         let car = self
@@ -1331,6 +1638,9 @@ impl World {
             } else {
                 step_level(&mut self.city, p.x, p.y, None, &mut p.level);
             }
+        }
+        for b in &mut self.bikes {
+            step_level(&mut self.city, b.x, b.y, Some(b.angle), &mut b.level);
         }
         if let Some(c) = self
             .player
@@ -1696,6 +2006,7 @@ impl World {
         }
 
         self.update_peds(dt);
+        self.update_bikes(dt);
         crate::services::manage_emergency(self, dt);
         self.manage_population();
         self.manage_parked();
@@ -1851,6 +2162,7 @@ impl World {
                                 car: c.id,
                                 player: Some(c.id) == player_car,
                                 speed,
+                                bike: false,
                             });
                             hits.push((ped.x, ped.y));
                         }

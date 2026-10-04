@@ -38,7 +38,8 @@ impl Listener {
                     Some((Sfx::Horn(if npc { 0.6 } else { 1. }), near(x, y)))
                 }
                 Event::Door { x, y } => Some((Sfx::Door, near(x, y))),
-                Event::Carjack { x, y } => Some((Sfx::Carjack, near(x, y))),
+                Event::Carjack { x, y, .. } => Some((Sfx::Carjack, near(x, y))),
+                Event::BikeDown { x, y, .. } => Some((Sfx::Hit, near(x, y))),
                 Event::Bump { .. } => Some((Sfx::Hit, 1.)),
                 Event::Hit { x, y, .. } => Some((Sfx::Hit, near(x, y))),
                 Event::Ui => Some((Sfx::Ui, 1.)),

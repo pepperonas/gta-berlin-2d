@@ -40,6 +40,7 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
         "Verkehr",
         &[
             ("pedsRunOver", "Menschen überfahren", Fmt::N),
+            ("cyclistsHit", "Radfahrer umgefahren", Fmt::N),
             ("crashes", "Unfälle", Fmt::N),
             ("bollards", "Poller umgefahren", Fmt::N),
             ("carjacks", "Autos geklaut", Fmt::N),
@@ -56,6 +57,8 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
             ("shots", "Schüsse", Fmt::N),
             ("bullets", "Kugeln", Fmt::N),
             ("hits", "Treffer", Fmt::N),
+            ("cyclistsDown", "Radfahrer vom Rad geholt", Fmt::N),
+            ("bikesJacked", "Räder gekapert", Fmt::N),
             ("deaths", "selbst umgehauen", Fmt::N),
             ("hospitalFees", "Krankenhauskosten", Fmt::Eur),
         ],
@@ -175,12 +178,16 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
     }
     for e in &w.events {
         match *e {
-            Event::Hit { player: true, .. } => add("pedsRunOver", 1.),
+            Event::Hit {
+                player: true, bike, ..
+            } => add(if bike { "cyclistsHit" } else { "pedsRunOver" }, 1.),
+            Event::BikeDown { player: true, .. } => add("cyclistsDown", 1.),
+            Event::Carjack { bike: true, .. } => add("bikesJacked", 1.),
             Event::Crash { car, strength, .. } if Some(car) == p.in_car && strength > 0.15 => {
                 add("crashes", 1.)
             }
             Event::Knock { car, .. } if Some(car) == p.in_car => add("bollards", 1.),
-            Event::Carjack { .. } => add("carjacks", 1.),
+            Event::Carjack { bike: false, .. } => add("carjacks", 1.),
             Event::Wreck { car, .. } if Some(car) == w.player_car_id || Some(car) == p.in_car => {
                 add("ownWrecks", 1.)
             }

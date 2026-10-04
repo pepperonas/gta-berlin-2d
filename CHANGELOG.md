@@ -68,6 +68,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Kastenwagen- und Zweirad-Darstellung; `--fahrzeugschau` für Aufnahmen.
 - Native Rust-Fassung: Wackelnde Streaming-Tests behoben (etwa jeder fünfte Lauf schlug fehl). Parallele Tests
   bekamen unter macOS denselben Testordner, weil die Uhr nur mikrosekundengenau ist; jetzt mit Zähler im Namen.
+- Native Rust-Fassung: Fahrräder und E-Roller (`sim/bikes.rs` nach `bikes.js`): auf Radstreifen bzw. am
+  Fahrbahnrand, Ampeln und Hindernisse, Stürze nach Zusammenstoß oder Treffer, Räder nehmen und kapern,
+  Radfahrer als Ziele und per Klick; Statistik dazu.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

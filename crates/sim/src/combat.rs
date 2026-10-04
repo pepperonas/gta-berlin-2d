@@ -282,6 +282,8 @@ pub enum Target {
     Wall,
     Ped(usize),
     Car(usize),
+    /// fahrender Radfahrer: ein Treffer holt ihn vom Rad
+    Bike(usize),
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RayHit {
@@ -356,6 +358,16 @@ pub fn cast_ray(w: &mut World, ox: f64, oy: f64, ang: f64, range: f64, lvl: i8) 
             hit = Some(Target::Car(i));
         }
     }
+    for (i, b) in w.bikes.iter().enumerate() {
+        if b.state != crate::bikes::State::Ride || b.level.lvl != lvl {
+            continue;
+        }
+        let t = ray_circle(ox, oy, dx, dy, b.x, b.y, crate::bikes::RADIUS + 2.);
+        if t < best {
+            best = t;
+            hit = Some(Target::Bike(i));
+        }
+    }
     RayHit {
         t: best,
         x: ox + dx * best,
@@ -389,11 +401,17 @@ pub fn aim_assist(w: &mut World, ang: f64, range: f64, cone: f64) -> f64 {
             consider(c.x, c.y, Target::Car(i));
         }
     }
+    for (i, b) in w.bikes.iter().enumerate() {
+        if b.state == crate::bikes::State::Ride {
+            consider(b.x, b.y, Target::Bike(i));
+        }
+    }
     cands.sort_by(|a, b| a.0.total_cmp(&b.0));
     for (_, a, t) in cands {
         let (x, y) = match t {
             Target::Ped(i) => (w.peds[i].x, w.peds[i].y),
             Target::Car(i) => (w.cars[i].x, w.cars[i].y),
+            Target::Bike(i) => (w.bikes[i].x, w.bikes[i].y),
             Target::Wall => continue,
         };
         let d = (x - px).hypot(y - py);
@@ -417,6 +435,16 @@ pub fn pick_target(w: &World, x: f64, y: f64) -> Option<(f64, f64)> {
         .min_by(|a, b| a.0.total_cmp(&b.0));
     if let Some((_, p)) = ped {
         return Some((p.x, p.y));
+    }
+    let bike = w
+        .bikes
+        .iter()
+        .filter(|b| b.state != crate::bikes::State::Gone && b.level.lvl == lvl)
+        .map(|b| ((b.x - x).hypot(b.y - y), b))
+        .filter(|(d, _)| *d < crate::bikes::RADIUS + 5.)
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((_, b)) = bike {
+        return Some((b.x, b.y));
     }
     w.cars
         .iter()
@@ -447,6 +475,20 @@ fn melee_targets(w: &World, ang: f64, wp: &Weapon) -> Vec<Target> {
             continue;
         }
         out.push(Target::Ped(i));
+    }
+    for (i, b) in w.bikes.iter().enumerate() {
+        if b.state != crate::bikes::State::Ride || b.level.lvl != lvl {
+            continue;
+        }
+        let (dx, dy) = (b.x - p.x, b.y - p.y);
+        let d = dx.hypot(dy);
+        if d > wp.range + crate::bikes::RADIUS + 6. {
+            continue;
+        }
+        if d > 4. && wrap_angle(dy.atan2(dx) - ang).abs() > wp.arc / 2. {
+            continue;
+        }
+        out.push(Target::Bike(i));
     }
     for (i, c) in w.cars.iter().enumerate() {
         if Some(c.id) == p.in_car || c.lvl() != lvl {
@@ -510,6 +552,27 @@ pub fn hurt_ped(
             q.x += a.cos() * 6.;
             q.y += a.sin() * 6.;
         }
+    }
+}
+
+/// Radfahrer getroffen: er stürzt vom Rad (das liegen bleibt) und nimmt den Treffer als Person.
+pub fn hurt_bike(
+    w: &mut World,
+    i: usize,
+    dmg: f64,
+    from: (f64, f64),
+    melee: bool,
+    weapon: &'static str,
+    player: bool,
+) {
+    if w.bikes[i].state != crate::bikes::State::Ride {
+        return;
+    }
+    let (x, y) = (w.bikes[i].x, w.bikes[i].y);
+    let rider = w.dismount(i, from, true);
+    w.events.push(Event::BikeDown { x, y, player });
+    if let Some(k) = rider {
+        hurt_ped(w, k, dmg, from, melee, weapon, player);
     }
 }
 
@@ -592,6 +655,7 @@ pub fn strike(w: &mut World, wp: &Weapon, ang: f64) -> usize {
                 w.events.push(Event::Thud { x, y });
             }
             Target::Ped(i) => hurt_ped(w, i, wp.dmg, (px, py), true, wp.id, true),
+            Target::Bike(i) => hurt_bike(w, i, wp.dmg, (px, py), true, wp.id, true),
             Target::Wall => {}
         }
     }
@@ -629,6 +693,13 @@ pub fn shoot(w: &mut World, wp: &Weapon, ang: f64, spread_k: f64) {
                     car: true,
                 });
                 hurt_car(w, i, wp.dmg, (px, py));
+            }
+            Some(Target::Bike(i)) => {
+                w.events.push(Event::WeaponHit {
+                    weapon: wp.id,
+                    car: false,
+                });
+                hurt_bike(w, i, wp.dmg, (px, py), false, wp.id, true);
             }
             Some(Target::Wall) => w.events.push(Event::Impact {
                 x: r.x,
