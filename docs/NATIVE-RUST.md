@@ -1268,3 +1268,14 @@ Ein Integrationstest liest Wegweiser aus den echten Kacheln; Unit-Tests für Taf
 
 Unit-Tests: Aufbauten liegen ganz im Grundriss, Wohnhäuser bekommen Schornsteine und Gauben, Kleinbauten nichts,
 der Rechtecktest erkennt eine überstehende Ecke.
+
+## Straßennamen entlang der Straße (04.10.2026)
+
+Port von `maplabels.js streetLabels`: Ganz nah herangezoomt beschriftet der Stadtplan Hauptstraßen (bis 6 m je
+Bildpunkt) und Nebenstraßen (bis 2,6 m) entlang der Straße. Fast gerade Läufe (Knick unter 0,3 rad) werden
+zusammengefasst, nur Läufe länger als der Name zählen, die längsten zuerst, gleiche Namen mindestens 320 px
+auseinander, nie kopfüber, ohne Überlappung mit Bezirken, Kiezen und Bahnhöfen (Hüllrechteck des gedrehten Texts).
+Dafür liefert `overview.rs` die benannten Straßenzüge (`StreetLine`, wie `prepareStreets`), und die Engine kann
+Bitmapschrift drehen (`Hud::text_rotated`, Glyph für Glyph entlang der Grundlinie).
+[Bild](images/native/stadtplan-strassen.png). Unit-Test: der Name liegt mittig auf einer schrägen Straße im
+richtigen Winkel und verschwindet weit herausgezoomt.

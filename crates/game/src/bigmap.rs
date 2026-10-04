@@ -2,7 +2,7 @@
 //! WASD/Pfeile/linker Stick verschieben, +/−, Bild↑/↓ bzw. RT/LT zoomen. Die Welt läuft weiter, der Spieler steht.
 use berlin_engine::hud::{Align, Hud};
 use berlin_engine::{KeyCode, Keys};
-use berlin_map_loader::overview::{Overview, PointLabel, Station};
+use berlin_map_loader::overview::{Overview, PointLabel, Station, StreetLine};
 use berlin_sim::mission::PlayerView;
 use berlin_sim::world::World;
 use glam::Vec2;
@@ -19,6 +19,8 @@ pub enum Kind {
     Ortsteil,
     Kiez,
     Station,
+    MainStreet,
+    Street,
 }
 impl Kind {
     fn tier(self) -> (f32, f32) {
@@ -27,6 +29,8 @@ impl Kind {
             Kind::Ortsteil => (3., 40.),
             Kind::Kiez => (0., 11.),
             Kind::Station => (0., 8.),
+            Kind::MainStreet => (0., 6.),
+            Kind::Street => (0., 2.6),
         }
     }
     pub fn visible(self, mpp: f32) -> bool {
@@ -39,6 +43,8 @@ impl Kind {
             Kind::Ortsteil => 15.,
             Kind::Kiez => 13.,
             Kind::Station => 12.,
+            Kind::MainStreet => 12.,
+            Kind::Street => 11.,
         }
     }
     fn color(self) -> [f32; 4] {
@@ -47,6 +53,8 @@ impl Kind {
             Kind::Ortsteil => [0.9, 0.9, 0.9, 1.],
             Kind::Kiez => [1., 0.878, 0.541, 1.],
             Kind::Station => [0.847, 0.847, 0.847, 1.],
+            Kind::MainStreet => [0.957, 0.957, 0.957, 1.],
+            Kind::Street => [0.91, 0.91, 0.91, 1.],
         }
     }
 }
@@ -77,6 +85,8 @@ pub struct Placed {
     pub kind: Kind,
     pub text: String,
     pub at: Vec2,
+    /// Drehung (Straßennamen entlang der Straße), sonst 0
+    pub angle: f32,
 }
 
 /// Beschriftungen setzen (maplabels.js ohne Straßennamen): Wichtigeres zuerst, Überlappendes entfällt, alles
@@ -90,9 +100,11 @@ pub fn place_labels(
     let mpp = view.mpp();
     let mut boxes: Vec<[f32; 4]> = blocked.to_vec();
     let mut out = Vec::new();
-    let mut put = |kind: Kind, text: &str, at: Vec2| {
+    // Hüllrechteck des (gedrehten) Textes; gesetzt wird nur, was ganz im Bild und frei ist
+    let mut put_at = |kind: Kind, text: &str, at: Vec2, angle: f32, pad: f32| -> bool {
         let (tw, th) = (measure(text, kind.size()), kind.size());
-        let (hw, hh) = (tw / 2. + 3., th / 2. + 3.);
+        let (c, s) = (angle.cos().abs(), angle.sin().abs());
+        let (hw, hh) = ((tw * c + th * s) / 2. + pad, (tw * s + th * c) / 2. + pad);
         let b = [at.x - hw, at.y - hh, at.x + hw, at.y + hh];
         let inside =
             b[0] >= view.x && b[2] <= view.x + view.w && b[1] >= view.y && b[3] <= view.y + view.h;
@@ -101,14 +113,19 @@ pub fn place_labels(
                 .iter()
                 .any(|o| b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])
         {
-            return;
+            return false;
         }
         boxes.push(b);
         out.push(Placed {
             kind,
             text: text.to_owned(),
             at,
+            angle,
         });
+        true
+    };
+    let mut put = |kind: Kind, text: &str, at: Vec2| {
+        put_at(kind, text, at, 0., 3.);
     };
     let mut big_first = |kind: Kind, list: &[PointLabel]| {
         if !kind.visible(mpp) {
@@ -137,6 +154,74 @@ pub fn place_labels(
             put(Kind::Kiez, &k.text, view.to_screen(k.at));
         }
     }
+    // Straßennamen entlang der Straße (maplabels.js streetLabels): fast gerade Läufe (Knick < 0,3 rad)
+    // zusammenfassen, nur Läufe länger als der Name, die längsten zuerst, gleiche Namen nicht zu dicht, nie kopfüber
+    for kind in [Kind::MainStreet, Kind::Street] {
+        if !kind.visible(mpp) {
+            continue;
+        }
+        let main = kind == Kind::MainStreet;
+        let w0 = Vec2::new((view.x - view.ox) / view.f, (view.y - view.oy) / view.f);
+        let w1 = Vec2::new(
+            (view.x + view.w - view.ox) / view.f,
+            (view.y + view.h - view.oy) / view.f,
+        );
+        let mut cands: Vec<(f32, &str, Vec2, Vec2)> = Vec::new();
+        for st in &ov.lines {
+            if (main && st.class > 5) || (!main && st.class <= 5) {
+                continue;
+            }
+            if st.max.x < w0.x || st.min.x > w1.x || st.max.y < w0.y || st.min.y > w1.y {
+                continue;
+            }
+            let tw = measure(&st.name, kind.size()) + 16.;
+            let p = &st.pts;
+            let mut i0 = 0;
+            for i in 1..p.len() {
+                let end = i == p.len() - 1;
+                let bend = !end && {
+                    let a = (p[i + 1] - p[i]).to_angle();
+                    let b = (p[i] - p[i0]).to_angle();
+                    let mut d = a - b;
+                    while d > std::f32::consts::PI {
+                        d -= std::f32::consts::TAU;
+                    }
+                    while d < -std::f32::consts::PI {
+                        d += std::f32::consts::TAU;
+                    }
+                    d.abs() > 0.3
+                };
+                if !end && !bend {
+                    continue;
+                }
+                let len = p[i].distance(p[i0]) * view.f;
+                if len >= tw {
+                    cands.push((len, &st.name, view.to_screen(p[i0]), view.to_screen(p[i])));
+                }
+                i0 = i;
+            }
+        }
+        cands.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(b.1)));
+        let mut done: std::collections::HashMap<&str, Vec<Vec2>> = Default::default();
+        for (_, name, a, b) in cands {
+            let m = (a + b) * 0.5;
+            if done
+                .get(name)
+                .is_some_and(|v| v.iter().any(|q| q.distance(m) < 320.))
+            {
+                continue;
+            }
+            let mut ang = (b - a).to_angle();
+            if ang > std::f32::consts::FRAC_PI_2 {
+                ang -= std::f32::consts::PI;
+            } else if ang < -std::f32::consts::FRAC_PI_2 {
+                ang += std::f32::consts::PI;
+            }
+            if put_at(kind, name, m, ang, 2.) {
+                done.entry(name).or_default().push(m);
+            }
+        }
+    }
     out
 }
 
@@ -150,6 +235,7 @@ pub struct Labels {
     pub kieze: Vec<PointLabel>,
     pub stations: Vec<Station>,
     pub streets: Vec<PointLabel>,
+    pub lines: Vec<StreetLine>,
 }
 
 #[derive(Default)]
@@ -180,6 +266,7 @@ impl BigMap {
                 kieze: ov.kieze,
                 stations: ov.stations,
                 streets: ov.streets,
+                lines: ov.street_lines,
             },
             mesh: Some(ov.mesh),
             cache: None,
@@ -317,6 +404,18 @@ impl BigMap {
             }
         };
         for l in &placed {
+            if l.angle != 0. {
+                h.text_rotated(
+                    &l.text,
+                    l.at.x,
+                    l.at.y,
+                    l.kind.size(),
+                    l.angle,
+                    l.kind.color(),
+                    true,
+                );
+                continue;
+            }
             h.text(
                 &l.text,
                 l.at.x,
@@ -443,7 +542,49 @@ mod tests {
             kieze: vec![l(200_100., 150_100., "Kiez", 0.)],
             stations: vec![],
             streets: vec![],
+            lines: vec![],
         }
+    }
+    #[test]
+    fn street_names_follow_the_street() {
+        let mut lab = labels();
+        let (a, b) = (Vec2::new(200_000., 150_000.), Vec2::new(200_400., 150_400.));
+        lab.lines = vec![StreetLine {
+            class: 6,
+            name: "Teststraße".into(),
+            pts: vec![a, b],
+            min: a,
+            max: b,
+        }];
+        // 0,2 m je HUD-Pixel: Nebenstraßen sichtbar; Straßenmitte in der Bildmitte
+        let v = View {
+            x: 0.,
+            y: 0.,
+            w: 1200.,
+            h: 600.,
+            f: 0.5,
+            ox: 600. - 200_200. * 0.5,
+            oy: 300. - 150_200. * 0.5,
+        };
+        let measure = |t: &str, s: f32| t.chars().count() as f32 * s * 0.6;
+        let placed = place_labels(&lab, &v, &measure, &[]);
+        let st = placed
+            .iter()
+            .find(|p| p.kind == Kind::Street)
+            .expect("Straßenname");
+        assert!(
+            (st.angle - std::f32::consts::FRAC_PI_4).abs() < 1e-3,
+            "{}",
+            st.angle
+        );
+        assert!((st.at - Vec2::new(600., 300.)).length() < 1.);
+        // weit herausgezoomt keine Nebenstraßen
+        let far = View { f: 0.01, ..v };
+        assert!(
+            place_labels(&lab, &far, &measure, &[])
+                .iter()
+                .all(|p| p.kind != Kind::Street)
+        );
     }
     #[test]
     fn view_clamps_to_berlin_and_zoom_bounds() {

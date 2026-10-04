@@ -108,6 +108,48 @@ pub struct Overview {
     pub stations: Vec<Station>,
     /// Straßen: je Name die Mitte des längsten Stücks (Ortssuche der Befehlszeile)
     pub streets: Vec<PointLabel>,
+    /// Straßenzüge mit Namen für die Beschriftung entlang der Straße (`maplabels.js prepareStreets`)
+    pub street_lines: Vec<StreetLine>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreetLine {
+    pub class: u8,
+    pub name: String,
+    pub pts: Vec<Vec2>,
+    pub min: Vec2,
+    pub max: Vec2,
+}
+/// Benannte Straßenzüge (`prepareStreets`).
+pub fn street_lines(ov: &Value) -> Vec<StreetLine> {
+    let names = ov["names"].as_array().cloned().unwrap_or_default();
+    let mut out = Vec::new();
+    for r in ov["roads"].as_array().into_iter().flatten() {
+        let Some(name) = r[1]
+            .as_i64()
+            .filter(|&n| n >= 0)
+            .and_then(|n| names.get(n as usize))
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+        else {
+            continue;
+        };
+        let pts = undelta(&r[2]);
+        if pts.len() < 2 {
+            continue;
+        }
+        let (min, max) = pts.iter().fold(
+            (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN)),
+            |(a, b), &p| (a.min(p), b.max(p)),
+        );
+        out.push(StreetLine {
+            class: r[0].as_u64().unwrap_or(9) as u8,
+            name: name.to_owned(),
+            pts,
+            min,
+            max,
+        });
+    }
+    out
 }
 
 /// Straßen je Name: Mitte des längsten Stücks, Länge als Rang (`console.js placeIndex`).
@@ -304,6 +346,7 @@ impl Overview {
             kieze: point_labels(&ov["kieze"]),
             stations,
             streets: street_points(ov),
+            street_lines: street_lines(ov),
         }
     }
 }

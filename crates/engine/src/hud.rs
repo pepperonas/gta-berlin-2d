@@ -364,6 +364,55 @@ impl Hud {
         self.glyph_run(text, x0.round(), top.round(), p, color, adv, lefts);
         w
     }
+    /// Gedrehter Text, mittig um (cx, cy) in Basiseinheiten (Straßennamen entlang der Straße); `outline` = Kontur.
+    #[allow(clippy::too_many_arguments)]
+    pub fn text_rotated(
+        &mut self,
+        text: &str,
+        cx: f32,
+        cy: f32,
+        size: f32,
+        angle: f32,
+        color: [f32; 4],
+        outline: bool,
+    ) {
+        let p = self.px(size);
+        let w = self.text_width(text, size) * self.scale;
+        let (adv, lefts) = (advances(), lefts());
+        let (ca, sa) = (angle.cos(), angle.sin());
+        let (dir, perp) = ((ca, sa), (-sa, ca));
+        let c = (cx * self.scale, cy * self.scale);
+        let shadow = [0.02, 0.02, 0.03, color[3] * 0.85];
+        let mut runs: Vec<((f32, f32), [f32; 4])> = Vec::new();
+        if outline {
+            for o in [(-1., 0.), (1., 0.), (0., -1.), (0., 1.), (1., 1.)] {
+                runs.push((o, shadow));
+            }
+        }
+        runs.push(((0., 0.), color));
+        for ((ox, oy), col) in runs {
+            let mut pen = -w / 2.;
+            for ch in text.chars().filter_map(cell) {
+                if ch != 32 {
+                    // Glyphmitte im Textsystem: entlang (Schrift-Vorlauf) und quer (Mitte der Zelle auf der Linie)
+                    let along = pen - lefts[ch as usize] as f32 * p + 4. * p + ox * p;
+                    let across = -0.5 * p + oy * p;
+                    self.items.push(HudItem {
+                        center: [
+                            c.0 + dir.0 * along + perp.0 * across,
+                            c.1 + dir.1 * along + perp.1 * across,
+                        ],
+                        half: [4. * p, 4. * p],
+                        angle,
+                        shape: 3.,
+                        color: col,
+                        extra: [ch as f32, 0., 0., 0.],
+                    });
+                }
+                pen += adv[ch as usize] as f32 * p;
+            }
+        }
+    }
     #[allow(clippy::too_many_arguments)]
     fn glyph_run(
         &mut self,

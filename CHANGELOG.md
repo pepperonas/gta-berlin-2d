@@ -8,6 +8,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Straßennamen entlang der Straße auf dem Stadtplan (gedrehte Bitmapschrift).
 - Native Rust-Portierung: Dachaufbauten (Schornsteine, Schächte, Oberlichter, Klimageräte, Solar, Terrassen),
   Gauben, Hauseingänge und die Spätifront.
 - Native Rust-Portierung: Wegweiser an Kreuzungen (Pfeile, Ziele, Bundesstraßen) und Laternen mit Mast und
