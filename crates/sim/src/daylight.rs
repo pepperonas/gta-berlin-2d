@@ -134,6 +134,12 @@ pub fn parse_clock(s: &str) -> Option<f64> {
     (h <= 23 && m <= 59).then_some((h * 60 + m) as f64)
 }
 
+/// Filmische Stimmung (`visualstyle.js filmMood`): Wärme in der Dämmerung, kühler Ton in der Nacht.
+pub fn film_mood(l: &Light) -> (f64, f64) {
+    let dusk = (1. - (l.elevation - 0.15).abs() / 0.35).max(0.) * (1. - l.dark * 0.7);
+    (0.018 + dusk * 0.045, 0.015 + l.dark * 0.035)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +174,18 @@ mod tests {
         for bad in ["24:00", "7:5", "a:00", "", "12:60", "123:00"] {
             assert_eq!(parse_clock(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn film_mood_is_warm_at_dusk_and_cool_at_night() {
+        let dusk = light_at(19.5 * 60.);
+        let noon = light_at(13. * 60.);
+        let night = light_at(2. * 60.);
+        let (wd, _) = film_mood(&dusk);
+        let (wn, cn) = film_mood(&night);
+        let (wt, ct) = film_mood(&noon);
+        assert!(wd > wt && wd > wn, "Dämmerung am wärmsten: {wd} {wt} {wn}");
+        assert!(cn > ct, "Nacht kühler: {cn} {ct}");
+        assert!(wd <= 0.063 + 1e-9 && cn <= 0.05 + 1e-9);
     }
 }

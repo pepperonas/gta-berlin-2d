@@ -22,6 +22,7 @@ pub(crate) struct LightPass {
     pub shadow_composite: wgpu::RenderPipeline,
     pub light_composite: wgpu::RenderPipeline,
     pub ambient_composite: wgpu::RenderPipeline,
+    pub grade: wgpu::RenderPipeline,
     pub mask: Target,
     pub lightmap: Target,
     sampler: wgpu::Sampler,
@@ -246,6 +247,15 @@ impl LightPass {
                 cx.surface,
                 MULTIPLY,
                 Some(depth_test(GreaterEqual)),
+            ),
+            grade: cx.pipeline(
+                "Farbabstimmung und Vignette",
+                "full_vs",
+                "grade_fs",
+                &[],
+                cx.surface,
+                MULTIPLY,
+                Some(depth_test(wgpu::CompareFunction::Always)),
             ),
             mask: cx.target(&sampler, "Schattenmaske", MASK_FORMAT, w, h),
             lightmap: cx.target(

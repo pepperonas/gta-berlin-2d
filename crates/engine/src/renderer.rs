@@ -826,6 +826,8 @@ impl Renderer {
                 }
             }
         }
+        pass.set_pipeline(&self.light.grade);
+        pass.draw(0..3, 0..1);
         drop(pass);
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1017,7 +1019,7 @@ impl Renderer {
         let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
         uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
-        uniform.extend([self.scale, 0., l.windows, 0.]);
+        uniform.extend([self.scale, 0., l.windows, l.warmth]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
         uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
         self.queue

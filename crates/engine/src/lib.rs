@@ -51,6 +51,8 @@ pub struct Lighting {
     /// Anteil brennender Fenster (Tagesgang, `daylight.js windowsLit`) und Spieluhr in Minuten
     pub windows: f32,
     pub minutes: f32,
+    /// Wärme der Farbabstimmung (`visualstyle.js filmMood`)
+    pub warmth: f32,
 }
 impl Default for Lighting {
     /// 13 Uhr: Sonne im Süden, kurze Schatten nach Norden, volles Tageslicht.
@@ -65,6 +67,7 @@ impl Default for Lighting {
             dark: 0.,
             windows: 0.,
             minutes: 780.,
+            warmth: 0.018,
         }
     }
 }

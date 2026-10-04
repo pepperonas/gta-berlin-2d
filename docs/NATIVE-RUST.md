@@ -1077,3 +1077,15 @@ den Vorhang halb zu.
 **Abweichungen:** Büros, Schulen und Hallen haben in JS einen eigenen Tagesgang; die Gebäudeart steht nicht im
 Mesh, hier folgen alle Häuser dem Wohnungs-Tagesgang. Das Fensterlicht strahlt nicht in die Lichtkarte ab und wird
 im Nebel nicht gedämpft. Geprüft per Aufnahme (Nacht: Fenster, Tag: kein einziges warmes Fensterpixel).
+
+## Farbabstimmung und Vignette (04.10.2026)
+
+Port von `lighting.js drawGrade`, `visualstyle.js filmMood` und `grime.js drawVignette` als ein Vollbild-Durchgang
+am Ende des Szenenbilds (`lighting.wgsl grade_fs`, Mischung „multiply“, ohne Tiefentest): ein warmer Verlauf von oben
+links, dessen Stärke in der Dämmerung am größten ist (`daylight::film_mood`, rein und getestet), ein kühler von unten,
+nachts stärker, und ein dunkler Rand auf 17 % in den Ecken. [Bild](images/native/daemmerung.png), 19:35.
+
+**Abweichungen:** Soft-Light gibt es als feste Mischfunktion nicht; bei 2–6 % Deckkraft ist es eine Tönung mit dem
+Faktor 1 + a·(2c − 1), auf das hellste Glied normiert, weil das Bildziel nicht über 1 aufhellen kann. Die Vignette
+dunkelt ab, statt die fast schwarze Farbe einzumischen. Bloom fehlt noch (er braucht eine weichgezeichnete Kopie der
+Lichtkarte).

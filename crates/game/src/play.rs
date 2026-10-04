@@ -177,6 +177,7 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
         dark: l.dark as f32,
         windows: l.windows_lit as f32,
         minutes: l.minutes as f32,
+        warmth: berlin_sim::daylight::film_mood(l).0 as f32,
     }
 }
 
