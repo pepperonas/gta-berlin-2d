@@ -242,7 +242,6 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     // Der Spieler fährt mit echter Fahrdynamik; Verkehr, geparkte und geschobene Autos sowie Räder arcadig.
     // Vierrädrige Fahrzeuge mit Datensatz fahren über den Kern `vphys`, Zweiräder bis Phase 5 über `dynamics`.
     if car.driver == Some(Driver::Player)
-        && info.top.is_none()
         && !car.wrecked
         && let Some(v) = vphys_vehicle(car)
     {
@@ -346,10 +345,16 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
 
 /// Datensatz für den Fahrphysik-Kern (vierrädrig, mit Daten; Winterreifen, wenn die Welt sie gewählt hat).
 pub fn vphys_vehicle(car: &Car) -> Option<&'static crate::vehdata::Vehicle> {
-    if car.kind_info().top.is_some() || car.wrecked {
+    if car.wrecked {
         return None;
     }
-    crate::vehdata::game_vehicle_tire(car.model_name(), car.season_tire).filter(|v| !v.two_wheel)
+    // Fahrrad und E-Scooter (Fahrzeugarten ohne Pkw-Modell) über ihre Datensätze
+    let id = match car.kind {
+        "bicycle" => "fahrrad_city",
+        "escooter" => "escooter",
+        _ => car.model_name(),
+    };
+    crate::vehdata::game_vehicle_tire(id, car.season_tire)
 }
 
 /// Spielerauto über den Fahrphysik-Kern. Das Spiel rechnet in Pixeln (10 px = 1 m) mit y nach unten und
@@ -401,7 +406,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
         brake: ctl.brake,
         steer: -ctl.steer,
         handbrake: ctl.handbrake,
-        sprint: false,
+        sprint: ctl.sprint,
         esp: Some(esp),
         no_abs: !car.abs,
     };
@@ -429,6 +434,10 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     d.lock_r = if s.locked[1] { 1. } else { 0. };
     d.esp = if s.esp_active || s.tcs { 1. } else { 0. };
     d.understeer = s.understeer;
+    // Zweirad: Schräglage (Spielsystem: positiv = nach rechts), Wheelie, Stoppie
+    d.lean = -s.lean;
+    d.wheelie = s.pitch.max(0.);
+    d.stoppie = (-s.pitch).max(0.);
     let lat = vr.abs();
     car.spin = d.spin_f.max(d.spin_r);
     car.skid = if s.locked.iter().any(|&l| l) || s.abs {

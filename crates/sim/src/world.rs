@@ -2409,6 +2409,52 @@ impl World {
         c.vy += ay * dt;
     }
 
+    /// Zweirad gestürzt: der Fahrer fliegt in Fahrtrichtung ab, landet benommen und verletzt sich je nach Tempo;
+    /// das Rad rutscht liegend aus (wieder aufsteigen richtet es auf).
+    pub fn throw_rider(&mut self, i: usize, why: crate::twowheel::Fall) {
+        let c = &mut self.cars[i];
+        let (x, y, vx, vy, lvl) = (c.x, c.y, c.vx, c.vy, c.lvl());
+        let speed = vx.hypot(vy);
+        c.driver = None;
+        c.controls = Default::default();
+        let level = c.level;
+        // Landepunkt: ein Stück voraus, wenn dort Platz ist, sonst neben dem Rad
+        let fly = (speed * 0.12).min(60.);
+        let (dx, dy) = if speed > 1. {
+            (vx / speed, vy / speed)
+        } else {
+            (1., 0.)
+        };
+        let cands = [
+            (x + dx * fly, y + dy * fly),
+            (x + dx * fly * 0.5, y + dy * fly * 0.5),
+            (x - dy * 14., y + dx * 14.),
+            (x + dy * 14., y - dx * 14.),
+            (x, y),
+        ];
+        let spot = cands
+            .into_iter()
+            .find(|&(px, py)| {
+                spot_free_static(&mut self.city, &self.knocked, px, py, PLAYER_RADIUS, lvl)
+            })
+            .unwrap_or((x, y));
+        self.player.in_car = None;
+        (self.player.x, self.player.y) = spot;
+        self.player.level = level;
+        self.player.stun = 1.2 + (speed / 300.).min(1.);
+        self.events.push(Event::Bump {
+            x: spot.0,
+            y: spot.1,
+        });
+        self.notice = Some(Notice {
+            text: why.label().into(),
+            t: 2.,
+        });
+        // Verletzung nach Aufprallgeschwindigkeit (km/h ≈ px/s · 0,36)
+        let dmg = (speed * 0.36 - 8.).max(0.) * 0.6;
+        crate::combat::hurt_player(self, dmg, (x, y));
+    }
+
     /// Untergrund je Rad eines Autos mit Fahrphysik (vorn links, vorn rechts, hinten links, hinten rechts): Belag
     /// aus der Karte, Straßenbahnschienen, Pfützen, Witterung; dazu Bordsteinwechsel und im Winter die Reifen.
     pub fn wheel_env(&mut self, i: usize, v: &crate::vehdata::Vehicle) -> crate::vphys::Env {
@@ -2481,6 +2527,18 @@ impl World {
             let puddle = road
                 && w.wet > crate::traction::PUDDLE_WET
                 && self.puddle_at(px, py, lvl).is_some();
+            // Zweirad: flach gequerte Straßenbahnschiene (unter 25°) zieht das Vorderrad in die Rille – je flacher
+            // und nasser, desto wahrscheinlicher
+            let groove = if v.two_wheel && k == 0 && rail {
+                let heading = sa.atan2(ca);
+                let track = self
+                    .transit
+                    .as_mut()
+                    .and_then(|t| t.tram_track_angle(px, py, 9.));
+                track.map_or(0., |ta| groove_risk(heading, ta, cond.wet))
+            } else {
+                0.
+            };
             let mix = resolve(
                 &Spot {
                     material,
@@ -2491,6 +2549,7 @@ impl World {
                 &wx,
             );
             let mut gr = ground(db, &v.tire, &mix);
+            gr.groove = groove;
             // Bordstein: Wechsel zwischen Fahrbahn und Gehweg unter dem Rad
             let on = matches!(g, G::Road | G::Cobble);
             let off = matches!(g, G::Sidewalk);
@@ -2719,6 +2778,7 @@ impl World {
                 c.controls.brake = input.brake;
                 c.controls.steer = input.steer;
                 c.controls.handbrake = input.handbrake;
+                c.controls.sprint = input.sprint;
                 c.horn = input.horn;
             }
             c.esp = esp;
@@ -2822,7 +2882,15 @@ impl World {
                 self.cars[i].env = Some(Box::new(env));
             }
             let c = &mut self.cars[i];
+            let fallen_was = c.phys.as_ref().is_some_and(|s| s.fallen.is_some());
             step_car(c, dt, Some(ground));
+            if !fallen_was
+                && c.driver == Some(crate::car::Driver::Player)
+                && let Some(why) = c.phys.as_ref().and_then(|s| s.fallen)
+            {
+                self.throw_rider(i, why);
+            }
+            let c = &self.cars[i];
             if let Some(s) = c.phys.as_ref() {
                 let aq = s.aqua[0].max(s.aqua[1]);
                 if aq > 0.5 && aqua_was <= 0.5 {
@@ -2852,6 +2920,7 @@ impl World {
                     t: 1.6,
                 });
             }
+            let c = &mut self.cars[i];
             collide_car_world(c, &mut self.city, &mut self.knocked, &mut self.events);
         }
         // Auto gegen Auto: nur Nachbarn, Paare in aufsteigender Folge
@@ -3492,5 +3561,18 @@ pub fn esp_label(esp: bool, full: bool) -> &'static str {
         (false, _) => "AUS",
         (true, true) => "VOLL",
         (true, false) => "SPORT",
+    }
+}
+
+/// Sturzgefahr (0…1), wenn ein Zweirad mit Kurs `heading` ein Gleis mit Richtung `track` quert: unter 25° steigt
+/// sie mit flacherem Winkel und mit der Nässe.
+pub fn groove_risk(heading: f64, track: f64, wet: f64) -> f64 {
+    let d = (heading - track).rem_euclid(std::f64::consts::PI);
+    let cross = d.min(std::f64::consts::PI - d);
+    let lim = 25f64.to_radians();
+    if cross < lim {
+        (1. - cross / lim) * (0.35 + 0.65 * wet.clamp(0., 1.))
+    } else {
+        0.
     }
 }

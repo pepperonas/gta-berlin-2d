@@ -2,38 +2,39 @@
 
 Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener Asphalt, `realismus = 1`, `grip_global = 1`; LKW und Busse voll beladen, sonst leer. Toleranzen: 0-X ±7 %, Vmax ±3 %, Bremsweg ±5 %, Querbeschleunigung ±0,05 g. Stellschrauben nur innerhalb der erlaubten Grenzen (cwA ±15 %, μ ±10 %, Übersetzung, Schaltzeit, Wirkungsgrad ±3 %, Bremskraft); Masse, Leistung und Drehmoment unverändert. Verläufe im 100-ms-Takt: `docs/kalibrierung/csv/<id>.csv`.
 
-**179 von 205 Zielwerten in der Toleranz** (87 Fahrzeuge, Laufzeit 12 s).
+**183 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 7 s).
 
 | Fahrzeug | Test | Ziel | Ist | Abweichung | | Stellschrauben |
 |---|---|---|---|---|---|---|
-| **Kiezrad Trekking** (fahrrad_city) | 0–25 km/h | 8.0 s | 3.9 s | -50.7 % | ✗ | cwA -15 %, μ -10 %, Bremskraft -50 %, Wirkungsgrad -3 % |
-|  | Bremsweg 25 km/h | 4.8 m | 4.4 m | -8.7 % | ✗ |  |
+| **Kiezrad Trekking** (fahrrad_city) | 0–25 km/h | 8.0 s | 3.9 s | -50.7 % | ✗ | cwA -15 %, μ -10 %, Bremskraft -46 %, Wirkungsgrad -3 % |
+|  | Bremsweg 25 km/h | 4.8 m | 4.8 m | -0.0 % | ✓ |  |
 |  | Vmax | 32 km/h | 27 km/h | -14.1 % | ✗ |  |
-| | *Grund:* 0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 32 km/h größer als 800 W × Wirkungsgrad) | | | | | |
-| **Avus Carbon** (rennrad) | 0–25 km/h | 5.5 s | 2.6 s | -52.4 % | ✗ | cwA -15 %, μ -10 %, Bremskraft -50 %, Wirkungsgrad -3 % |
-|  | Bremsweg 25 km/h | 4.5 m | 4.2 m | -6.5 % | ✗ |  |
+| | *Grund:* 0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 32 km/h größer als 800 W × Wirkungsgrad) | | | | | |
+| **Avus Carbon** (rennrad) | 0–25 km/h | 5.5 s | 2.6 s | -52.4 % | ✗ | cwA -15 %, μ -10 %, Bremskraft -42 %, Wirkungsgrad -3 % |
+|  | Bremsweg 25 km/h | 4.5 m | 4.5 m | +0.0 % | ✓ |  |
 |  | Vmax | 55 km/h | 39 km/h | -28.6 % | ✗ |  |
-| | *Grund:* 0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad) | | | | | |
-| **Flitz Max (offen)** (escooter_entdrosselt) | 0–25 km/h | 5.0 s | 4.7 s | -6.2 % | ✓ | cwA -15 %, μ -10 %, Bremskraft -50 %, Wirkungsgrad -3 % |
-|  | Bremsweg 25 km/h | 5.5 m | 4.8 m | -13.3 % | ✗ |  |
+| | *Grund:* 0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad) | | | | | |
+| **Flitz Max** (escooter) | Vmax | 20 km/h | 19 km/h | -3.0 % | ✓ | – |
+| **Flitz Max (offen)** (escooter_entdrosselt) | 0–25 km/h | 5.0 s | 4.7 s | -6.2 % | ✓ | cwA -15 %, μ -10 %, Bremskraft -49 %, Wirkungsgrad -3 % |
+|  | Bremsweg 25 km/h | 5.5 m | 5.5 m | -0.0 % | ✓ |  |
 |  | Vmax | 35 km/h | 34 km/h | -2.2 % | ✓ |  |
-| | *Grund:* brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter | | | | | |
-| **Flitz Duo** (escooter_performance) | 0–50 km/h | 3.8 s | 3.7 s | -1.3 % | ✓ | cwA -15 %, μ +10 % |
-|  | Bremsweg 50 km/h | 13.0 m | 13.4 m | +2.8 % | ✓ |  |
+| **Flitz Duo** (escooter_performance) | 0–50 km/h | 3.8 s | 3.7 s | -1.3 % | ✓ | cwA -15 %, μ +10 %, Bremskraft +60 % |
+|  | Bremsweg 50 km/h | 13.0 m | 13.8 m | +5.8 % | ✗ |  |
 |  | Vmax | 80 km/h | 79 km/h | -1.5 % | ✓ |  |
-| **Kiezflitzer 50** (roller_45) | 0–45 km/h | 8.0 s | – | – | – | μ -9 % |
-|  | Bremsweg 50 km/h | 12.0 m | 12.0 m | -0.2 % | ✓ |  |
-|  | Vmax | 45 km/h | 44 km/h | -1.2 % | ✓ |  |
-| **Tegel Nackt 700** (motorrad_naked) | 0–100 km/h | 3.9 s | 4.1 s | +5.1 % | ✓ | cwA -15 %, μ -10 %, Übersetzung ×1.15, Schaltzeit ×0.50, Wirkungsgrad +3 % |
-|  | Bremsweg 100 km/h | 40.0 m | 40.0 m | -0.1 % | ✓ |  |
-|  | Vmax | 214 km/h | 212 km/h | -0.7 % | ✓ |  |
-| **Tegel RR 1000** (superbike) | 0–100 km/h | 3.1 s | 3.1 s | -0.5 % | ✓ | μ +10 %, Bremskraft +60 %, Übersetzung ×1.60 |
-|  | Bremsweg 100 km/h | 36.0 m | 38.6 m | +7.2 % | ✗ |  |
-|  | Vmax | 299 km/h | 298 km/h | -0.5 % | ✓ |  |
-| | *Grund:* brems_100: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg | | | | | |
-| **Havelland Fatline** (cruiser) | 0–100 km/h | 4.4 s | 4.6 s | +5.1 % | ✓ | cwA +15 %, μ -10 %, Bremskraft -41 %, Übersetzung ×0.65, Wirkungsgrad -3 % |
-|  | Bremsweg 100 km/h | 44.0 m | 44.0 m | +0.0 % | ✓ |  |
-|  | Vmax | 180 km/h | 186 km/h | +3.1 % | ✗ |  |
+| | *Grund:* brems_50: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg | | | | | |
+| **Kiezflitzer 50** (roller_45) | 0–45 km/h | 8.0 s | 7.3 s | -9.2 % | ✗ | μ -10 %, Bremskraft -20 %, Wirkungsgrad -3 % |
+|  | Bremsweg 50 km/h | 12.0 m | 12.0 m | +0.0 % | ✓ |  |
+|  | Vmax | 45 km/h | 45 km/h | +0.4 % | ✓ |  |
+| | *Grund:* 0_45: zu schnell: auch mit längster Übersetzung | | | | | |
+| **Tegel Nackt 700** (motorrad_naked) | 0–100 km/h | 3.9 s | 4.0 s | +3.2 % | ✓ | cwA -15 %, μ -6 %, Bremskraft -10 %, Übersetzung ×1.60, Schaltzeit ×1.25, Wirkungsgrad +3 % |
+|  | Bremsweg 100 km/h | 40.0 m | 40.0 m | +0.0 % | ✓ |  |
+|  | Vmax | 214 km/h | 212 km/h | -0.8 % | ✓ |  |
+| **Tegel RR 1000** (superbike) | 0–100 km/h | 3.1 s | 2.9 s | -5.1 % | ✓ | μ +10 %, Bremskraft +60 %, Übersetzung ×0.70, Wirkungsgrad -3 % |
+|  | Bremsweg 100 km/h | 36.0 m | 37.2 m | +3.2 % | ✓ |  |
+|  | Vmax | 299 km/h | 299 km/h | -0.1 % | ✓ |  |
+| **Havelland Fatline** (cruiser) | 0–100 km/h | 4.4 s | 4.7 s | +6.3 % | ✓ | cwA +15 %, μ -8 %, Bremskraft -10 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
+|  | Bremsweg 100 km/h | 44.0 m | 44.0 m | -0.0 % | ✓ |  |
+|  | Vmax | 180 km/h | 189 km/h | +5.3 % | ✗ |  |
 | | *Grund:* vmax: Leistung zu groß für das Ziel, auch mit cwA +15 % | | | | | |
 | **Havel Mini 65** (kleinwagen_65ps) | 0–100 km/h | 14.4 s | 15.3 s | +6.2 % | ✓ | cwA +4 %, μ -5 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×0.75, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 38.0 m | 38.4 m | +1.0 % | ✓ |  |
@@ -48,7 +49,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Spree Ronda Sport+** (hot_hatch) | 0–100 km/h | 6.2 s | 5.8 s | -6.9 % | ✓ | μ -8 %, Übersetzung ×1.60, Schaltzeit ×1.50 |
 |  | Bremsweg 100 km/h | 34.0 m | 34.0 m | -0.1 % | ✓ |  |
 |  | Querbeschl. | 1.00 g | 0.99 g | -0.01 g | ✓ |  |
-|  | Vmax | 250 km/h | 248 km/h | -0.6 % | ✓ |  |
+|  | Vmax | 250 km/h | 250 km/h | -0.2 % | ✓ |  |
 | **Spree Pendler Diesel** (kombi_diesel) | 0–100 km/h | 9.3 s | 8.8 s | -5.3 % | ✓ | cwA -9 %, μ -7 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×1.50 |
 |  | Bremsweg 100 km/h | 36.0 m | 36.4 m | +1.2 % | ✓ |  |
 |  | Querbeschl. | 0.90 g | 0.91 g | +0.01 g | ✓ |  |
@@ -64,7 +65,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Teltower T5 Allrad** (business_limo) | 0–100 km/h | 4.8 s | 5.0 s | +4.0 % | ✓ | μ -10 %, Bremskraft +60 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 34.0 m | 34.5 m | +1.4 % | ✓ |  |
 |  | Querbeschl. | 0.95 g | 0.97 g | +0.02 g | ✓ |  |
-|  | Vmax | 250 km/h | 249 km/h | -0.4 % | ✓ |  |
+|  | Vmax | 250 km/h | 250 km/h | -0.0 % | ✓ |  |
 | **Spree Tiga 150** (suv_kompakt) | 0–100 km/h | 9.1 s | 9.3 s | +1.6 % | ✓ | cwA -1 %, μ -10 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 37.0 m | 37.6 m | +1.7 % | ✓ |  |
 |  | Querbeschl. | 0.85 g | 0.88 g | +0.03 g | ✓ |  |
@@ -76,7 +77,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Grunewald Kommandant 500** (gelaendewagen) | 0–100 km/h | 5.4 s | 5.6 s | +4.3 % | ✓ | μ -1 %, Bremskraft +60 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 40.0 m | 40.4 m | +0.9 % | ✓ |  |
 |  | Querbeschl. | 0.80 g | 0.81 g | +0.01 g | ✓ |  |
-|  | Vmax | 210 km/h | 209 km/h | -0.5 % | ✓ |  |
+|  | Vmax | 210 km/h | 210 km/h | -0.0 % | ✓ |  |
 | **Spree Kasten 6** (transporter_kasten) | 0–100 km/h | 11.4 s | 11.3 s | -0.4 % | ✓ | cwA -9 %, μ -4 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 40.0 m | 41.3 m | +3.3 % | ✓ |  |
 |  | Querbeschl. | 0.75 g | 0.79 g | +0.04 g | ✓ |  |
@@ -88,7 +89,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Voltwerk Kiez 3** (e_kompakt) | 0–100 km/h | 7.3 s | 7.7 s | +5.4 % | ✓ | μ +4 %, Bremskraft +60 %, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 35.0 m | 35.7 m | +1.9 % | ✓ |  |
 |  | Querbeschl. | 0.90 g | 0.93 g | +0.03 g | ✓ |  |
-|  | Vmax | 160 km/h | 159 km/h | -0.6 % | ✓ |  |
+|  | Vmax | 160 km/h | 159 km/h | -0.3 % | ✓ |  |
 | **Voltwerk Blitz Tri** (e_performance) | 0–100 km/h | 2.1 s | 2.6 s | +25.8 % | ✗ | cwA -15 %, μ -8 %, Bremskraft +9 %, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 34.0 m | 34.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 1.00 g | 1.00 g | -0.00 g | ✓ |  |
@@ -119,7 +120,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 |  | 0–200 km/h | 6.1 s | 5.8 s | -4.2 % | ✓ |  |
 |  | Bremsweg 100 km/h | 31.0 m | 31.0 m | -0.0 % | ✓ |  |
 |  | Querbeschl. | 1.30 g | 1.30 g | -0.00 g | ✓ |  |
-|  | Vmax | 420 km/h | 419 km/h | -0.3 % | ✓ |  |
+|  | Vmax | 420 km/h | 420 km/h | -0.1 % | ✓ |  |
 | **Voltwerk Blitzschlag** (hypercar_elektro) | 0–100 km/h | 2.0 s | 2.2 s | +8.7 % | ✗ | cwA -15 %, μ +10 %, Bremskraft -13 %, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 30.0 m | 30.0 m | -0.0 % | ✓ |  |
 |  | Querbeschl. | 1.30 g | 1.30 g | -0.00 g | ✓ |  |
@@ -132,7 +133,7 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Tempelhof Fohlen V8** (muscle_modern) | 0–100 km/h | 4.6 s | 4.6 s | +0.0 % | ✓ | μ -7 %, Bremskraft -4 %, Übersetzung ×1.20, Schaltzeit ×1.25 |
 |  | Bremsweg 100 km/h | 34.0 m | 34.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 1.00 g | 1.00 g | -0.00 g | ✓ |  |
-|  | Vmax | 250 km/h | 249 km/h | -0.4 % | ✓ |  |
+|  | Vmax | 250 km/h | 250 km/h | -0.0 % | ✓ |  |
 | **Lausitz Seiten 15** (drift_coupe) | 0–100 km/h | 4.6 s | 4.5 s | -2.2 % | ✓ | cwA +15 %, μ +1 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×1.50 |
 |  | Bremsweg 100 km/h | 34.0 m | 35.3 m | +3.7 % | ✓ |  |
 |  | Querbeschl. | 1.00 g | 1.03 g | +0.03 g | ✓ |  |
@@ -154,82 +155,82 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Oberlausitz L75 Verteiler** (lkw_75t) | 0–80 km/h | 22.0 s | 22.2 s | +0.9 % | ✓ | μ -10 %, Bremskraft -42 %, Übersetzung ×1.60, Schaltzeit ×0.50, Wirkungsgrad +3 % |
 |  | Bremsweg 80 km/h | 48.0 m | 48.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 0.55 g | 0.61 g | +0.06 g | ✗ |  |
-|  | Vmax | 89 km/h | 88 km/h | -0.8 % | ✓ |  |
+|  | Vmax | 89 km/h | 89 km/h | +0.1 % | ✓ |  |
 | | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Oberlausitz Fernlast 48** (sattelzug_40t) | 0–80 km/h | 40.0 s | 49.1 s | +22.7 % | ✗ | μ -10 %, Bremskraft -50 %, Übersetzung ×1.50, Schaltzeit ×0.50, Wirkungsgrad +3 % |
 |  | Bremsweg 80 km/h | 56.0 m | 55.0 m | -1.8 % | ✓ |  |
 |  | Querbeschl. | 0.35 g | 0.54 g | +0.19 g | ✗ |  |
-|  | Vmax | 89 km/h | 88 km/h | -0.8 % | ✓ |  |
+|  | Vmax | 89 km/h | 89 km/h | +0.1 % | ✓ |  |
 | | *Grund:* 0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk Presse 26** (muellwagen) | 0–50 km/h | 20.0 s | 19.1 s | -4.4 % | ✓ | μ -10 %, Bremskraft -50 %, Übersetzung ×1.45, Schaltzeit ×1.50, Wirkungsgrad -3 % |
 |  | Bremsweg 50 km/h | 24.0 m | 22.1 m | -8.1 % | ✗ |  |
 |  | Querbeschl. | 0.40 g | 0.54 g | +0.14 g | ✗ |  |
-|  | Vmax | 85 km/h | 84 km/h | -1.0 % | ✓ |  |
+|  | Vmax | 85 km/h | 85 km/h | +0.1 % | ✓ |  |
 | | *Grund:* brems_50: Bremsweg kürzer als das Ziel, auch mit Bremskraft −50 %; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk Stadtbus 12** (stadtbus) | 0–50 km/h | 15.0 s | 14.7 s | -2.3 % | ✓ | μ -7 %, Bremskraft -28 %, Übersetzung ×1.60, Schaltzeit ×1.50 |
 |  | Bremsweg 50 km/h | 27.0 m | 27.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 0.45 g | 0.60 g | +0.15 g | ✗ |  |
-|  | Vmax | 80 km/h | 79 km/h | -0.7 % | ✓ |  |
+|  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
 | | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk Doppelstock** (doppeldecker) | 0–50 km/h | 18.0 s | 17.2 s | -4.6 % | ✓ | μ -10 %, Bremskraft -31 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad -3 % |
 |  | Bremsweg 50 km/h | 28.0 m | 28.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 0.40 g | 0.55 g | +0.15 g | ✗ |  |
-|  | Vmax | 80 km/h | 79 km/h | -0.9 % | ✓ |  |
+|  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
 | | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk Gelenk 18** (gelenkbus) | 0–50 km/h | 17.0 s | 18.0 s | +6.0 % | ✓ | μ -10 %, Bremskraft -31 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 50 km/h | 28.0 m | 28.0 m | -0.0 % | ✓ |  |
 |  | Querbeschl. | 0.45 g | 0.55 g | +0.10 g | ✗ |  |
-|  | Vmax | 80 km/h | 79 km/h | -0.8 % | ✓ |  |
+|  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
 | | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk E-Stadtbus 12** (e_bus) | 0–50 km/h | 12.0 s | 12.1 s | +0.5 % | ✓ | μ +3 %, Bremskraft -32 %, Wirkungsgrad +3 % |
 |  | Bremsweg 50 km/h | 26.0 m | 26.0 m | -0.0 % | ✓ |  |
 |  | Querbeschl. | 0.45 g | 0.66 g | +0.21 g | ✗ |  |
-|  | Vmax | 80 km/h | 79 km/h | -1.2 % | ✓ |  |
+|  | Vmax | 80 km/h | 79 km/h | -0.6 % | ✓ |  |
 | | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
-| **Lausitz Kolibri** (zweitakter) | Vmax | 107 km/h | 105 km/h | -1.6 % | ✓ | – |
-| **Havel Piccolo** (kleinwagen) | Vmax | 170 km/h | 168 km/h | -0.9 % | ✓ | – |
-| **Spree Ronda** (kompakt) | Vmax | 210 km/h | 209 km/h | -0.7 % | ✓ | – |
-| **Teltower T6** (limousine) | Vmax | 240 km/h | 239 km/h | -0.5 % | ✓ | – |
-| **Teltower T6 Droschke** (taxi) | Vmax | 210 km/h | 209 km/h | -0.7 % | ✓ | – |
-| **Märker Allwetter** (kombi) | Vmax | 230 km/h | 229 km/h | -0.6 % | ✓ | – |
-| **Spree Kasten** (transporter) | Vmax | 160 km/h | 158 km/h | -1.1 % | ✓ | – |
-| **Voltwerk E-Terra** (elektro) | Vmax | 220 km/h | 219 km/h | -0.5 % | ✓ | – |
-| **Grunewald Keiler** (gelaende) | Vmax | 190 km/h | 189 km/h | -0.7 % | ✓ | – |
-| **Oberbaum Furia** (sportwagen) | Vmax | 300 km/h | 298 km/h | -0.5 % | ✓ | – |
-| **Wannsee Boxer 6** (heckcoupe) | Vmax | 290 km/h | 289 km/h | -0.5 % | ✓ | – |
-| **Spree Ronda Sport** (hothatch) | Vmax | 250 km/h | 249 km/h | -0.5 % | ✓ | – |
-| **Köpenick Spyder** (roadster) | Vmax | 205 km/h | 203 km/h | -0.8 % | ✓ | – |
-| **Tempelhof Stier V8** (musclecar) | Vmax | 250 km/h | 249 km/h | -0.4 % | ✓ | – |
-| **Adlershof Kanzler** (oldtimer) | Vmax | 150 km/h | 148 km/h | -1.0 % | ✓ | – |
-| **Grunewald Kipper** (pickup) | Vmax | 180 km/h | 178 km/h | -0.8 % | ✓ | – |
-| **Havel Kiezbus** (kleinbus) | Vmax | 115 km/h | 114 km/h | -1.1 % | ✓ | – |
-| **Märker Schotter** (rallye) | Vmax | 230 km/h | 229 km/h | -0.5 % | ✓ | – |
-| **Oberbaum Tempesta** (supersport) | Vmax | 325 km/h | 324 km/h | -0.4 % | ✓ | – |
-| **Tempelhof GT 40** (gtcoupe) | Vmax | 318 km/h | 317 km/h | -0.5 % | ✓ | – |
-| **Adlershof Flèche** (leichtbau) | Vmax | 250 km/h | 249 km/h | -0.6 % | ✓ | – |
-| **Voltwerk Blitz GT** (elektrosport) | Vmax | 260 km/h | 259 km/h | -0.4 % | ✓ | – |
-| **Spree Großraum 316** (sprinter) | Vmax | 160 km/h | 158 km/h | -1.0 % | ✓ | – |
+| **Lausitz Kolibri** (zweitakter) | Vmax | 107 km/h | 107 km/h | -0.5 % | ✓ | – |
+| **Havel Piccolo** (kleinwagen) | Vmax | 170 km/h | 170 km/h | -0.2 % | ✓ | – |
+| **Spree Ronda** (kompakt) | Vmax | 210 km/h | 210 km/h | -0.2 % | ✓ | – |
+| **Teltower T6** (limousine) | Vmax | 240 km/h | 240 km/h | -0.1 % | ✓ | – |
+| **Teltower T6 Droschke** (taxi) | Vmax | 210 km/h | 210 km/h | -0.1 % | ✓ | – |
+| **Märker Allwetter** (kombi) | Vmax | 230 km/h | 230 km/h | -0.1 % | ✓ | – |
+| **Spree Kasten** (transporter) | Vmax | 160 km/h | 160 km/h | -0.3 % | ✓ | – |
+| **Voltwerk E-Terra** (elektro) | Vmax | 220 km/h | 219 km/h | -0.3 % | ✓ | – |
+| **Grunewald Keiler** (gelaende) | Vmax | 190 km/h | 190 km/h | -0.2 % | ✓ | – |
+| **Oberbaum Furia** (sportwagen) | Vmax | 300 km/h | 300 km/h | -0.1 % | ✓ | – |
+| **Wannsee Boxer 6** (heckcoupe) | Vmax | 290 km/h | 290 km/h | -0.1 % | ✓ | – |
+| **Spree Ronda Sport** (hothatch) | Vmax | 250 km/h | 250 km/h | -0.1 % | ✓ | – |
+| **Köpenick Spyder** (roadster) | Vmax | 205 km/h | 205 km/h | -0.2 % | ✓ | – |
+| **Tempelhof Stier V8** (musclecar) | Vmax | 250 km/h | 250 km/h | -0.0 % | ✓ | – |
+| **Adlershof Kanzler** (oldtimer) | Vmax | 150 km/h | 150 km/h | -0.3 % | ✓ | – |
+| **Grunewald Kipper** (pickup) | Vmax | 180 km/h | 180 km/h | -0.2 % | ✓ | – |
+| **Havel Kiezbus** (kleinbus) | Vmax | 115 km/h | 115 km/h | -0.2 % | ✓ | – |
+| **Märker Schotter** (rallye) | Vmax | 230 km/h | 230 km/h | -0.1 % | ✓ | – |
+| **Oberbaum Tempesta** (supersport) | Vmax | 325 km/h | 325 km/h | -0.1 % | ✓ | – |
+| **Tempelhof GT 40** (gtcoupe) | Vmax | 318 km/h | 318 km/h | -0.1 % | ✓ | – |
+| **Adlershof Flèche** (leichtbau) | Vmax | 250 km/h | 250 km/h | -0.1 % | ✓ | – |
+| **Voltwerk Blitz GT** (elektrosport) | Vmax | 260 km/h | 259 km/h | -0.2 % | ✓ | – |
+| **Spree Großraum 316** (sprinter) | Vmax | 160 km/h | 160 km/h | -0.3 % | ✓ | – |
 | **Havel Kasten Hoch** (hochdach) | Vmax | 180 km/h | 162 km/h | -10.0 % | ✗ | cwA -15 % |
 | | *Grund:* vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 180 km/h größer als 90 kW × Wirkungsgrad) | | | | | |
-| **Märker RS Avant** (powerkombi) | Vmax | 280 km/h | 279 km/h | -0.3 % | ✓ | – |
-| **Teltower T4 Tourer** (familienkombi) | Vmax | 225 km/h | 224 km/h | -0.7 % | ✓ | – |
-| **Teltower T5** (business) | Vmax | 250 km/h | 249 km/h | -0.4 % | ✓ | – |
-| **Teltower T3 RS** (sportlimo) | Vmax | 290 km/h | 289 km/h | -0.4 % | ✓ | – |
-| **Grunewald Senator** (luxus) | Vmax | 250 km/h | 249 km/h | -0.3 % | ✓ | – |
-| **Wannsee Coupé 240** (coupe) | Vmax | 285 km/h | 284 km/h | -0.4 % | ✓ | – |
-| **Lausitz Hachi** (leichtcoupe) | Vmax | 226 km/h | 225 km/h | -0.5 % | ✓ | – |
-| **Grunewald Kommandant** (gklasse) | Vmax | 210 km/h | 209 km/h | -0.5 % | ✓ | – |
-| **Grunewald Förster 110** (defender) | Vmax | 191 km/h | 190 km/h | -0.6 % | ✓ | – |
-| **Lausitz Taiga** (niva) | Vmax | 142 km/h | 140 km/h | -1.2 % | ✓ | – |
+| **Märker RS Avant** (powerkombi) | Vmax | 280 km/h | 280 km/h | -0.0 % | ✓ | – |
+| **Teltower T4 Tourer** (familienkombi) | Vmax | 225 km/h | 225 km/h | -0.2 % | ✓ | – |
+| **Teltower T5** (business) | Vmax | 250 km/h | 250 km/h | -0.0 % | ✓ | – |
+| **Teltower T3 RS** (sportlimo) | Vmax | 290 km/h | 290 km/h | -0.0 % | ✓ | – |
+| **Grunewald Senator** (luxus) | Vmax | 250 km/h | 250 km/h | +0.0 % | ✓ | – |
+| **Wannsee Coupé 240** (coupe) | Vmax | 285 km/h | 285 km/h | -0.1 % | ✓ | – |
+| **Lausitz Hachi** (leichtcoupe) | Vmax | 226 km/h | 226 km/h | -0.1 % | ✓ | – |
+| **Grunewald Kommandant** (gklasse) | Vmax | 210 km/h | 210 km/h | -0.1 % | ✓ | – |
+| **Grunewald Förster 110** (defender) | Vmax | 191 km/h | 191 km/h | -0.1 % | ✓ | – |
+| **Lausitz Taiga** (niva) | Vmax | 142 km/h | 141 km/h | -0.4 % | ✓ | – |
 | **Spree Tiga** (kompaktsuv) | Vmax | 200 km/h | 198 km/h | -1.0 % | ✓ | – |
-| **Oberbaum Cayo** (sportsuv) | Vmax | 245 km/h | 244 km/h | -0.6 % | ✓ | – |
-| **Teltower TX7** (grosssuv) | Vmax | 243 km/h | 242 km/h | -0.6 % | ✓ | – |
-| **Tegel Blitz 1000** (motorcycle) | Vmax | 240 km/h | 239 km/h | -0.6 % | ✓ | – |
-| **Kiezflitzer 125** (scooter) | Vmax | 95 km/h | 94 km/h | -1.0 % | ✓ | – |
-| **Teltower T6 Streife** (police) | Vmax | 240 km/h | 239 km/h | -0.5 % | ✓ | – |
-| **Spree Kasten RTW** (ambulance) | Vmax | 140 km/h | 139 km/h | -0.7 % | ✓ | – |
-| **Spree Kasten Paket** (delivery) | Vmax | 145 km/h | 144 km/h | -0.9 % | ✓ | – |
-| **Oberlausitz L75** (truck) | Vmax | 100 km/h | 99 km/h | -1.1 % | ✓ | – |
-| **Kiezwerk Presse 26** (garbage) | Vmax | 85 km/h | 84 km/h | -0.7 % | ✓ | – |
-| **Kiezwerk Stadtbus 12** (bus) | Vmax | 90 km/h | 89 km/h | -0.7 % | ✓ | – |
+| **Oberbaum Cayo** (sportsuv) | Vmax | 245 km/h | 245 km/h | -0.1 % | ✓ | – |
+| **Teltower TX7** (grosssuv) | Vmax | 243 km/h | 243 km/h | -0.1 % | ✓ | – |
+| **Tegel Blitz 1000** (motorcycle) | Vmax | 240 km/h | 240 km/h | -0.2 % | ✓ | – |
+| **Kiezflitzer 125** (scooter) | Vmax | 95 km/h | 95 km/h | -0.1 % | ✓ | – |
+| **Teltower T6 Streife** (police) | Vmax | 240 km/h | 240 km/h | -0.1 % | ✓ | – |
+| **Spree Kasten RTW** (ambulance) | Vmax | 140 km/h | 140 km/h | -0.1 % | ✓ | – |
+| **Spree Kasten Paket** (delivery) | Vmax | 145 km/h | 145 km/h | -0.2 % | ✓ | – |
+| **Oberlausitz L75** (truck) | Vmax | 100 km/h | 100 km/h | -0.2 % | ✓ | – |
+| **Kiezwerk Presse 26** (garbage) | Vmax | 85 km/h | 85 km/h | +0.2 % | ✓ | – |
+| **Kiezwerk Stadtbus 12** (bus) | Vmax | 90 km/h | 90 km/h | +0.1 % | ✓ | – |
 

@@ -1175,7 +1175,8 @@ pub fn input_from(keys: &Keys, driving: bool, b: &crate::bindings::Bindings) -> 
     Input {
         move_x: if driving { 0. } else { lx },
         move_y: if driving { 0. } else { ly },
-        sprint: !driving && b.held(keys, A::Sprint),
+        // zu Fuß und auf dem Fahrrad (Ausdauer)
+        sprint: b.held(keys, A::Sprint),
         walk_slow: !driving && b.held(keys, A::Slow),
         throttle: if driving {
             pedal(b, keys, A::Throttle, THROTTLE_GAMMA)
@@ -1239,6 +1240,20 @@ pub fn combat_input(
         aim_y: ry as f64,
         aim_world: None,
     }
+}
+
+/// Zweirad: Schräglage (rad, positiv = nach rechts), Nickwinkel (Wheelie positiv) und ob es gestürzt liegt.
+fn two_wheel_pose(c: &berlin_sim::car::Car) -> (f32, f32, bool) {
+    let lying = c
+        .phys
+        .as_ref()
+        .is_some_and(|s| s.fallen.is_some() && c.driver.is_none());
+    let (lean, pitch) = c
+        .dyn_state
+        .as_ref()
+        .filter(|_| c.driver.is_some())
+        .map_or((0., 0.), |d| (d.lean, d.wheelie - d.stoppie));
+    (lean as f32, pitch as f32, lying)
 }
 
 /// Nicken und Wanken des gefahrenen Autos (vehicles.js bodyShift): Bremsen taucht vorn ein, Kurven drücken nach
@@ -2510,9 +2525,22 @@ impl Game for Play {
                 color: [0., 0., 0., 0.28],
             });
             if c.kind_info().bike || c.kind_info().moto {
+                // Schräglage, Wheelie/Stoppie und Sturz aus der Fahrphysik: von oben wird das Rad in Schräglage
+                // schmaler und wandert zur Kurveninnenseite (der Fahrer weiter als der Rahmen), im Wheelie wirkt es
+                // kürzer; gestürzt liegt es flach
+                let (lean, pitch, lying) = two_wheel_pose(c);
+                let (rx, ry) = (-fy, fx);
+                let (sl, cl) = (lean.sin(), lean.cos());
+                let len = hw * pitch.abs().cos();
+                let back = (hw - len) * pitch.signum();
+                let (bx, by) = (x - fx * back + rx * sl * 2., y - fy * back + ry * sl * 2.);
                 out.push(Body {
-                    center: [x, y],
-                    half: [hw, hh],
+                    center: [bx, by],
+                    half: if lying {
+                        [hw, hh * 2.2]
+                    } else {
+                        [len, hh * (0.55 + 0.45 * cl)]
+                    },
                     angle: a,
                     shape: 0.,
                     depth,
@@ -2520,16 +2548,20 @@ impl Game for Play {
                 });
                 // Zweirad: Fahrer mit Helm (geparkt ohne Fahrer)
                 if c.driver.is_some() && !c.wrecked {
+                    let (ox, oy) = (rx * sl * 6., ry * sl * 6.);
                     out.push(Body {
-                        center: [x - fx * hw * 0.15, y - fy * hw * 0.15],
-                        half: [4., 5.5],
+                        center: [bx - fx * len * 0.15 + ox, by - fy * len * 0.15 + oy],
+                        half: [4., 5.5 * (0.7 + 0.3 * cl)],
                         angle: a,
                         shape: 1.,
                         depth: depth - 0.0002,
                         color: rgba(0x2b2f3a, 1.),
                     });
                     out.push(Body {
-                        center: [x - fx * hw * 0.05, y - fy * hw * 0.05],
+                        center: [
+                            bx - fx * len * 0.05 + ox * 1.4,
+                            by - fy * len * 0.05 + oy * 1.4,
+                        ],
                         half: [3.2, 3.2],
                         angle: 0.,
                         shape: 1.,

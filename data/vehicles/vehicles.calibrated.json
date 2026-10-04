@@ -47,12 +47,12 @@
   "cruiser": {
     "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
     "_ok": false,
-    "bremskraft": 0.5865480422973632,
+    "bremskraft": 0.9023557662963868,
     "cwA": 1.15,
-    "mu": 0.9,
+    "mu": 0.92,
     "schalt": 1.0,
-    "uebersetzung": 0.6500000000000001,
-    "wirkungsgrad": 0.97
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
   },
   "defender": {
     "_ok": true,
@@ -139,10 +139,18 @@
     "uebersetzung": 1.0,
     "wirkungsgrad": 1.0
   },
+  "escooter": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
   "escooter_entdrosselt": {
-    "_grund": "brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter",
-    "_ok": false,
-    "bremskraft": 0.5,
+    "_ok": true,
+    "bremskraft": 0.5086713790893553,
     "cwA": 0.85,
     "mu": 0.9,
     "schalt": 1.0,
@@ -150,8 +158,9 @@
     "wirkungsgrad": 0.97
   },
   "escooter_performance": {
-    "_ok": true,
-    "bremskraft": 1.0,
+    "_grund": "brems_50: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
+    "_ok": false,
+    "bremskraft": 1.6,
     "cwA": 0.85,
     "mu": 1.1,
     "schalt": 1.0,
@@ -159,9 +168,9 @@
     "wirkungsgrad": 1.0
   },
   "fahrrad_city": {
-    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 32 km/h größer als 800 W × Wirkungsgrad)",
+    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 32 km/h größer als 800 W × Wirkungsgrad)",
     "_ok": false,
-    "bremskraft": 0.5,
+    "bremskraft": 0.5416154861450195,
     "cwA": 0.85,
     "mu": 0.9,
     "schalt": 1.0,
@@ -444,11 +453,11 @@
   },
   "motorrad_naked": {
     "_ok": true,
-    "bremskraft": 1.0,
+    "bremskraft": 0.9028593063354493,
     "cwA": 0.85,
-    "mu": 0.9,
-    "schalt": 0.5,
-    "uebersetzung": 1.1500000000000001,
+    "mu": 0.9400000000000001,
+    "schalt": 1.25,
+    "uebersetzung": 1.6,
     "wirkungsgrad": 1.03
   },
   "muellwagen": {
@@ -570,9 +579,9 @@
     "wirkungsgrad": 1.0
   },
   "rennrad": {
-    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Zweirad bremst an der Überschlaggrenze (Stoppie); die Bremskraft-Schraube wirkt erst darunter; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad)",
+    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad)",
     "_ok": false,
-    "bremskraft": 0.5,
+    "bremskraft": 0.5848569869995117,
     "cwA": 0.85,
     "mu": 0.9,
     "schalt": 1.0,
@@ -589,13 +598,14 @@
     "wirkungsgrad": 1.0
   },
   "roller_45": {
-    "_ok": true,
-    "bremskraft": 1.0,
+    "_grund": "0_45: zu schnell: auch mit längster Übersetzung",
+    "_ok": false,
+    "bremskraft": 0.8036996841430664,
     "cwA": 1.0,
-    "mu": 0.91,
+    "mu": 0.9,
     "schalt": 1.0,
     "uebersetzung": 1.0,
-    "wirkungsgrad": 1.0
+    "wirkungsgrad": 0.97
   },
   "sattelzug_40t": {
     "_grund": "0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
@@ -672,14 +682,13 @@
     "wirkungsgrad": 1.0
   },
   "superbike": {
-    "_grund": "brems_100: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
-    "_ok": false,
+    "_ok": true,
     "bremskraft": 1.6,
     "cwA": 1.0,
     "mu": 1.1,
     "schalt": 1.0,
-    "uebersetzung": 1.6,
-    "wirkungsgrad": 1.0
+    "uebersetzung": 0.7000000000000001,
+    "wirkungsgrad": 0.97
   },
   "supercar_awd": {
     "_grund": "quer_g: Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt)",

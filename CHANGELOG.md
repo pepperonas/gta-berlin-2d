@@ -8,6 +8,17 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 5: Zweiräder (Fahrrad, E-Scooter, Roller, Motorrad) fahren über ein
+  eigenes Schräglagenmodell. Die Lenkung legt das Rad mit begrenzter Rate in die Kurve (höchstens bis zur
+  Bodenfreiheit). Zu viel Schräglage für die Haftung lässt es wegrutschen. Der Fahrer fliegt dann ab, landet
+  benommen und verletzt sich je nach Tempo; das Rad liegt.
+  - Wheelie und Stoppie über die Kippgrenzen; die Wheelie-Control des Superbikes hält kurze Wheelies, ohne sie
+    überschlägt sich das Rad.
+  - Bremsen: die Vorderbremse trägt das meiste, ohne ABS stürzt ein blockiertes Vorderrad.
+  - Fahrrad: Sprint mit der Sprint-Taste, Puste als Balken unter der Gesundheit.
+  - Berlin: flach gequerte Straßenbahnschienen (unter 25°, nass öfter) und Bordsteine an kleinen Rädern werfen
+    ab; Motorräder drehen auf losem Untergrund leicht das Heck heraus.
+  - Neuer Datensatz „Flitz Max“ (zugelassener E-Scooter, 20 km/h).
 - Native Rust-Portierung, Fahrphysik Phase 4: Untergrund und Wetter je Rad. Belag aus der Karte (Asphalt,
   Kopfstein, Platten, unbefestigt, Gehweg, Gras), Straßenbahnschienen und Pfützen unter jedem Rad, dazu Nässe,
   Wasserfilm bei Starkregen auf Hauptstraßen, Schnee (Hauptstraßen festgefahren bzw. Matsch, Nebenstraßen

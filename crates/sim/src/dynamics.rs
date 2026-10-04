@@ -53,6 +53,8 @@ pub struct Controls {
     pub brake: f64,
     pub steer: f64,
     pub handbrake: bool,
+    /// Fahrrad: Sprint (Ausdauer)
+    pub sprint: bool,
 }
 /// Untergrund (car.js `SURFACE`): Rollwiderstand, Haftung, Höchsttempo.
 #[derive(Debug, Clone, Copy, PartialEq)]

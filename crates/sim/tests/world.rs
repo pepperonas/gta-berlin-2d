@@ -2195,3 +2195,91 @@ fn freezing_rain_lays_glaze_with_a_warning() {
     assert!(w.weather.glaze > 0., "Glatteis");
     assert!(warned, "Ankündigung");
 }
+
+/// Fahrphysik Phase 5: Motorrad im Regen zu tief in die Kurve – es rutscht weg, der Fahrer fliegt ab.
+#[test]
+fn motorcycle_lowsides_on_wet_road_and_throws_the_rider() {
+    let mut w = world(8);
+    let (px, py) = (w.player.x, w.player.y);
+    // lange gerade Spur ohne Verkehr
+    let lane = w
+        .lanes
+        .lanes
+        .values()
+        .filter(|l| {
+            (l.pts[1].0 - l.pts[0].0).hypot(l.pts[1].1 - l.pts[0].1) > 500.
+                && (l.pts[0].0 - px).hypot(l.pts[0].1 - py) < 3000.
+        })
+        .min_by_key(|l| l.id)
+        .expect("gerade Spur")
+        .clone();
+    w.cars.clear();
+    w.peds.clear();
+    w.car_target = 0;
+    w.ped_target = 0;
+    let (a, b) = (lane.pts[0], lane.pts[1]);
+    let ang = (b.1 - a.1).atan2(b.0 - a.0);
+    w.cars.push(berlin_sim::car::Car::new(
+        9001,
+        a.0,
+        a.1,
+        ang,
+        0xb3261e,
+        Role::Traffic,
+        "motorcycle",
+    ));
+    (w.player.x, w.player.y) = (a.0 - ang.sin() * 14., a.1 + ang.cos() * 14.);
+    w.force_weather = Some("rain");
+    w.weather.wet = 1.;
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert_eq!(w.player.in_car, Some(9001));
+    // nasse Straße: traktionsbegrenzt (rund 0,5 g)
+    run(
+        &mut w,
+        150,
+        Input {
+            throttle: 0.8,
+            ..idle()
+        },
+    );
+    let c = w.car(9001).unwrap();
+    assert!(c.phys.is_some(), "Motorrad fährt über die Fahrphysik");
+    assert!(c.speed() * 0.36 > 35., "{} km/h", c.speed() * 0.36);
+    // volle Schräglage auf nasser Straße
+    for _ in 0..240 {
+        run(
+            &mut w,
+            1,
+            Input {
+                throttle: 0.6,
+                steer: 1.,
+                ..idle()
+            },
+        );
+        if w.player.in_car.is_none() {
+            break;
+        }
+    }
+    assert_eq!(w.player.in_car, None, "abgeworfen");
+    assert!(w.player.stun > 0.);
+    let c = w.car(9001).unwrap();
+    assert!(c.phys.as_ref().is_some_and(|s| s.fallen.is_some()));
+}
+
+#[test]
+fn rail_groove_risk_depends_on_angle_and_wet() {
+    use berlin_sim::world::groove_risk;
+    let deg = |d: f64| d.to_radians();
+    assert_eq!(groove_risk(deg(0.), deg(60.), 1.), 0.);
+    assert!(groove_risk(deg(0.), deg(5.), 1.) > groove_risk(deg(0.), deg(20.), 1.));
+    assert!(groove_risk(deg(0.), deg(5.), 1.) > groove_risk(deg(0.), deg(5.), 0.));
+    // Gleis in Gegenrichtung zählt genauso
+    assert!((groove_risk(deg(0.), deg(180.), 1.) - groove_risk(deg(0.), deg(0.), 1.)).abs() < 1e-9);
+}

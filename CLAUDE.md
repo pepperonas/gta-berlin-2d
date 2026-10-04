@@ -45,6 +45,8 @@ Holding brake at standstill engages reverse (stop brake tests at vx ≤ 0). Rend
 writes lerped poses before drawing and restores them in `end_frame` — never keep state from inside a frame.
 Phase 4: per-wheel grip — `sim/surface.rs` (pure mix of `surfaces.json` ids) + `World::wheel_env` (pavement,
 rails, puddles, curbs, winter tyres) → `car.env` → `vphys::Env.wheel` [FL, FR, RL, RR].
+Phase 5: two-wheelers run `sim/twowheel.rs` (lean model, falls → `World::throw_rider`); every player vehicle with a
+data record uses vphys (`car::vphys_vehicle` maps bicycle/escooter kinds), `dynamics.rs` is only a fallback.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

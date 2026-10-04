@@ -137,6 +137,10 @@ pub fn draw(
             );
         }
         health(h, &w.player.combat, mx, 720. - my - 6., MINI, w.time);
+        // Fahrrad: Puste fürs Sprinten unter der Gesundheit
+        if let Some((left, tired)) = bike_breath(w) {
+            breath(h, left, tired, mx, 720. - my + 2., MINI, w.time);
+        }
     }
     ride_bar(w, h);
     // unten rechts zu Fuß: Waffe und Munition (im Zug keine Waffe)
@@ -623,6 +627,31 @@ pub fn draw(
 }
 
 /// Lebensleiste unter der Minikarte (hud.js drawHealth): grün → gelb → rot, unter 25 % blinkt sie.
+/// Puste des Fahrrads (Rest 0…1, erschöpft), wenn der Spieler eines fährt.
+pub fn bike_breath(w: &berlin_sim::world::World) -> Option<(f64, bool)> {
+    let c = w.player.in_car.and_then(|id| w.car(id))?;
+    if c.kind != "bicycle" {
+        return None;
+    }
+    let s = c.phys.as_ref()?;
+    Some((1. - s.exertion, s.tired))
+}
+
+/// Ausdauerbalken (blau; erschöpft blinkt er grau).
+pub fn breath(h: &mut Hud, left: f64, tired: bool, x: f32, y: f32, w: f32, t: f64) {
+    h.rect(x, y, w, 5., [0., 0., 0., 0.6], 0.);
+    let blink = tired && (t * 3.).floor() as i64 % 2 == 0;
+    let col = if blink {
+        [0.6, 0.62, 0.66, 1.]
+    } else {
+        [0.42, 0.7, 0.98, 1.]
+    };
+    let k = left.clamp(0., 1.) as f32;
+    if k > 0. {
+        h.rect(x + 1., y + 1., (w - 2.) * k, 3., col, 0.);
+    }
+}
+
 pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f32, t: f64) {
     let hp = (c.hp / berlin_sim::combat::PLAYER_HP).clamp(0., 1.) as f32;
     h.rect(x, y, w, 6., [0., 0., 0., 0.6], 0.);

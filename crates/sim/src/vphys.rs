@@ -106,6 +106,8 @@ pub struct Ground {
     pub water_mm: f64,
     /// Bordstein, über den das Rad in diesem Schritt fährt (Höhe in m, 0 = keiner)
     pub curb: f64,
+    /// Straßenbahnschiene unter dem Rad, flach gequert: Sturzgefahr für Zweiräder 0…1 (Winkel und Nässe)
+    pub groove: f64,
 }
 impl Ground {
     pub const DRY: Ground = Ground {
@@ -115,6 +117,7 @@ impl Ground {
         rough: 0.,
         water_mm: 0.,
         curb: 0.,
+        groove: 0.,
     };
     /// Haftbeiwert relativ zu trockenem Asphalt samt Reifenfaktor
     pub fn grip(&self) -> f64 {
@@ -212,6 +215,14 @@ pub struct State {
     pub curb_hits: u32,
     /// Profiltiefe als Faktor (neu 1, abgefahren 0,8; 0 = neu)
     pub tread: f64,
+    /// Zweirad: Schräglage (rad, positiv = nach links), Nickwinkel (rad, Wheelie positiv, Stoppie negativ),
+    /// gestürzt (Ursache), Erschöpfung vom Sprinten (0 frisch … 1 leer), Schiene schon geprüft
+    pub lean: f64,
+    pub pitch: f64,
+    pub fallen: Option<crate::twowheel::Fall>,
+    pub exertion: f64,
+    pub tired: bool,
+    pub groove_seen: bool,
 }
 impl State {
     pub fn speed(&self) -> f64 {
@@ -227,7 +238,7 @@ impl State {
     }
 }
 
-fn smooth(a: f64, b: f64, x: f64) -> f64 {
+pub(crate) fn smooth(a: f64, b: f64, x: f64) -> f64 {
     let t = ((x - a) / (b - a)).clamp(0., 1.);
     t * t * (3. - 2. * t)
 }
@@ -258,7 +269,7 @@ pub fn shift_torque(kind: &str) -> f64 {
     }
 }
 
-fn drive_force(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) -> f64 {
+pub(crate) fn drive_force(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) -> f64 {
     let th = inp.throttle.clamp(0., 1.);
     let eta = v.efficiency;
     let r = v.wheel_r;
@@ -334,8 +345,10 @@ fn drive_force(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) -> 
         return -f * ((REV_MAX - speed) / 0.5).clamp(0., 1.);
     }
     // Begrenzer
+    // (regelt um den Grenzwert herum, ±0,15 m/s – ein früheres Ausblenden ließ Roller bei 44,5 statt 45 km/h
+    // hängen)
     match v.limiter {
-        Some(l) => f * ((l - speed) / 0.5).clamp(0., 1.),
+        Some(l) => f * ((l + 0.15 - speed) / 0.3).clamp(0., 1.),
         None => f,
     }
 }
@@ -363,7 +376,7 @@ pub fn mass_factor(v: &Vehicle, s: &State) -> f64 {
 }
 
 /// Automatik: hochschalten nahe n_max bei Volllast, früher bei Teillast; runterschalten bei niedriger Drehzahl.
-fn shift(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) {
+pub(crate) fn shift(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) {
     let n_gears = v.gearbox.ratios.len();
     if n_gears <= 1 || !matches!(v.engine.power, Power::Curve(_)) || v.gearbox.cvt || s.reverse {
         return;
@@ -390,6 +403,11 @@ fn shift(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) {
 
 /// Ein Schritt über `dt` (beliebig; intern in 1/120 s bzw. 1/240 s).
 pub fn step(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: f64) {
+    // Zweiräder: eigenes Modell über die Schräglage (Phase 5)
+    if v.two_wheel {
+        crate::twowheel::step(v, feel, s, inp, env, dt);
+        return;
+    }
     let mut left = dt;
     while left > 1e-9 {
         let h = if s.speed() > FAST { STEP / 2. } else { STEP }.min(left);

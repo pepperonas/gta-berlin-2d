@@ -1642,3 +1642,24 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
 - Nicht umgesetzt (keine Daten): Bremsschwellen, Laub (keine Jahreszeit), Wasser in Unterführungen,
   Durchfahrtshöhen; sichtbar trocknende Fahrspuren und Reif-Schimmer fehlen noch in der Darstellung.
 
+## Fahrphysik Phase 5: Zweiräder (05.10.2026)
+
+- **`sim/twowheel.rs`** (rein): `vphys::step` leitet Zweiräder hierher. Kinematisch mit Schräglage: Wunschkrümmung
+  aus Lenkung → Wunsch-Schräglage `atan(v²κ/g)` (geklemmt auf `max_schraeglage`), Rate `LEAN_RATE/(1+v/25)`;
+  gefahren wird `g·tan(φ)/v²`, unter 3–6 m/s direkt die Lenkung. Lowsider, wenn |φ| > `lean_limit(μ, ax)`
+  (Reibungskreis) · 1,03. Wheelie ab `g·l_h/h`, Stoppie ab `g·l_v/h`, Nickwinkel `State.pitch`; Wheelie-Control
+  hält bei `WHEELIE_CONTROL`, über `FLIP` Überschlag. Vorderbremse ≥ 60 %, ohne ABS blockiert das Vorderrad →
+  Sturz (außer langsam und geradeaus). Fahrrad: `exertion`/`tired`, Sprint `SPRINT_S`, Erholung `RECOVER_S`.
+  Motorrad auf losem Untergrund: `SLIDE_YAW`. Sturz: `State.fallen` (`Fall::Lowside/FrontLock/Flip/Rail/Curb`).
+- **Spiel:** alle Spielerfahrzeuge mit Datensatz fahren über `vphys` (`car::vphys_vehicle`; Fahrrad →
+  `fahrrad_city`, E-Scooter → neuer `escooter` mit 20 km/h). `World::throw_rider` setzt den Fahrer bei einem Sturz
+  voraus ab (benommen, Schaden nach Tempo), das Rad bleibt liegend (`two_wheel_pose` in `play.rs`); wieder
+  aufsteigen richtet es auf (`phys` wird zurückgesetzt). Schienen: `World::groove_risk` (unter 25°, nass höher),
+  Kreuzungswinkel aus `Transit::tram_track_angle`. Sprint-Taste wirkt jetzt auch im Fahrzeug
+  (`Controls.sprint`), Puste-Balken `hud::breath`.
+- **Kalibrierung:** Zweiräder fährt ein „Testfahrer“ (Wheelie an der Grenze, Bremsen an der Blockiergrenze);
+  Querbeschleunigung jetzt auch für Zweiräder. Begrenzer regeln ±0,15 m/s um den Grenzwert (Roller erreichte
+  vorher nur 44,5 km/h). 183 von 207 Zielwerten.
+- Darstellung: in Schräglage schmaler und zur Kurveninnenseite verschoben (Fahrer weiter als Rahmen), im Wheelie
+  kürzer. `dynamics.rs` ist nur noch Rückfall für Modelle ohne Datensatz.
+

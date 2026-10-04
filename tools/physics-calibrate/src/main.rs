@@ -94,7 +94,7 @@ fn measure(v: &Vehicle, cal: &Calibration, feel: &Feel, keys: &[&str]) -> BTreeM
         let kmh: f64 = k[6..].parse().unwrap_or(100.);
         out.extend(calibrate::brake(&vv, feel, kmh).values);
     }
-    if want("quer_g") && !v.two_wheel {
+    if want("quer_g") {
         out.extend(calibrate::lateral(&vv, feel).values);
     }
     out
@@ -116,7 +116,6 @@ fn keys_of<'a>(v: &'a Vehicle, prefix: &[&str]) -> Vec<&'a str> {
         .keys()
         .map(String::as_str)
         .filter(|k| prefix.iter().any(|p| k.starts_with(p)))
-        .filter(|k| !(v.two_wheel && *k == "quer_g"))
         .collect()
 }
 
@@ -240,9 +239,6 @@ fn calibrate_one(v: &Vehicle, feel: &Feel) -> Outcome {
     for k in &all {
         let t = v.targets[*k];
         let Some(&a) = measured.get(*k) else {
-            if *k == "quer_g" && v.two_wheel {
-                reasons.push("quer_g: Zweirad-Modell folgt in Phase 5".into());
-            }
             continue;
         };
         if (a - t).abs() <= tol(k, t) {

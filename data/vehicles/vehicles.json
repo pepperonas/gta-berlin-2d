@@ -82,6 +82,47 @@
   }
  },
  {
+  "id": "escooter",
+  "name": "Flitz Max",
+  "klasse": "zweirad_elektro",
+  "vorbild": "Ninebot-Max-Klasse, zugelassen (20 km/h)",
+  "masse": 105,
+  "lbh": [
+   1.2,
+   0.5,
+   1.2
+  ],
+  "radstand": 0.95,
+  "cg_h": 1.05,
+  "vorn": 0.45,
+  "motor": {
+   "typ": "elektro",
+   "kw": 0.35,
+   "nm": 15
+  },
+  "reifen": {
+   "typ": "scooter_klein",
+   "breite_mm": 60,
+   "kpa": 300,
+   "zoll": 10
+  },
+  "aero": {
+   "cwA": 0.55
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 3.5
+  },
+  "max_schraeglage": 35,
+  "ziel": {
+   "vmax": 20
+  },
+  "limiter": 20
+ },
+ {
   "id": "escooter_entdrosselt",
   "name": "Flitz Max (offen)",
   "klasse": "zweirad_elektro",

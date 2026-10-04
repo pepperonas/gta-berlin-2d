@@ -270,6 +270,18 @@ impl Transit {
             s.tram && seg_dist2(x, y, s.a.0, s.a.1, s.b.0, s.b.1) < r * r
         })
     }
+    /// Richtung (rad) des nächsten Straßenbahngleises näher als r an (x, y).
+    pub fn tram_track_angle(&mut self, x: f64, y: f64, r: f64) -> Option<f64> {
+        let mut hits = Vec::new();
+        self.hash.query(&Rect::around(x, y, r), &mut hits);
+        hits.into_iter()
+            .map(|h| self.segs[h as usize])
+            .filter(|s| s.tram)
+            .map(|s| (seg_dist2(x, y, s.a.0, s.a.1, s.b.0, s.b.1), s))
+            .filter(|(d2, _)| *d2 < r * r)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, s)| (s.b.1 - s.a.1).atan2(s.b.0 - s.a.0))
+    }
     /// Abschnitte von Straßenbahnwegen im Rechteck (je Weg einmal).
     pub fn tram_segments(&mut self, r: &Rect) -> Vec<(Pt, Pt)> {
         let mut hits = Vec::new();

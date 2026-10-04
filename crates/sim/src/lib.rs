@@ -42,6 +42,7 @@ pub mod traffic;
 pub mod transit;
 pub mod transitlive;
 pub mod tunnel;
+pub mod twowheel;
 pub mod vehdata;
 pub mod vphys;
 pub mod weather;

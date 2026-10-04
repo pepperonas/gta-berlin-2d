@@ -34,6 +34,19 @@ fn sample(t: f64, s: &State) -> Sample {
         dist: s.dist,
     }
 }
+/// Zweirad wie bei Zeitschriften-Messungen gefahren: der Testfahrer hält den Wheelie an der Grenze und bremst
+/// an der Blockiergrenze (auch ohne ABS) – sonst endete jede Vollgas- bzw. Vollbremsung im Sturz.
+fn tester(v: &Vehicle) -> std::borrow::Cow<'_, Vehicle> {
+    if v.two_wheel {
+        let mut t = v.clone();
+        t.wheelie_control = true;
+        t.brake.abs = true;
+        std::borrow::Cow::Owned(t)
+    } else {
+        std::borrow::Cow::Borrowed(v)
+    }
+}
+
 fn start(v: &Vehicle) -> State {
     State {
         load: v.calib_load,
@@ -68,6 +81,7 @@ pub fn accel_marks(v: &Vehicle) -> Vec<f64> {
 /// Beschleunigung aus dem Stand, Volllast (Launch Control und Traktionskontrolle, soweit vorhanden). Gestartet wird
 /// wie bei Zeitschriften-Messungen mit Bremse und Gas: der Turbolader ist beim Lösen der Bremse gespannt.
 pub fn accel(v: &Vehicle, feel: &Feel) -> Run {
+    let v = &*tester(v);
     let marks = accel_marks(v);
     let mut s = start(v);
     s.boost = 1.;
@@ -129,6 +143,7 @@ pub fn vmax(v: &Vehicle, feel: &Feel) -> Run {
 
 /// Bremsweg aus `kmh` bis zum Stand, Vollbremsung, inklusive Aufbauzeit.
 pub fn brake(v: &Vehicle, feel: &Feel, kmh: f64) -> Run {
+    let v = &*tester(v);
     let mut s = start(v);
     // passenden Gang einlegen (Motorbremse wie im Fahrbetrieb)
     s.vx = kmh / 3.6;

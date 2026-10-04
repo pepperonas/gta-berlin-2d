@@ -224,6 +224,7 @@ pub fn ground(db: &VehicleDb, tire: &Tire, mix: &Mix) -> Ground {
         rough: mix.rough,
         water_mm: mix.water_mm,
         curb: 0.,
+        groove: 0.,
     }
 }
 
