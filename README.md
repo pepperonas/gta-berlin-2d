@@ -7,8 +7,10 @@ seit Phase 3 spielbar: Kollision (SAT), Fahrphysik mit Einspurmodell/ESP/ABS,
 KI-Verkehr mit Ampeln und Vorfahrt, Passanten, die Mission „Kisten für den Kiez“
 und Spielstände als JSON-Datei; seit Phase 4 Tag und Nacht mit Schatten,
 Laternen und Scheinwerfern (`--uhr 22:30`, Taste T: +1 Stunde); seit Phase 5
-synthetisierter Klang (Motoren, Reifen, Verkehr, Stadt; Taste M, `--stumm`).
-HUD-Texte, Waffen und Nahverkehr folgen; das Browser-Spiel bleibt die vollständige Referenz.
+synthetisierter Klang (Motoren, Reifen, Verkehr, Stadt; Taste M, `--stumm`),
+dazu HUD, Gamepad und Wetter (Regen, Schnee, Nebel, Gewitter, Glätte;
+`--wetter heavysnow`, Taste N). Karten, Menüs, Waffen und Nahverkehr folgen;
+das Browser-Spiel bleibt die vollständige Referenz.
 
 ```bash
 cargo run --release

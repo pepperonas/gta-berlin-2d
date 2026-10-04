@@ -1,6 +1,6 @@
 //! Umgebungsklang an der Kamera (Port der in der Simulation vorhandenen Teile von `ambience.js`): Stadtrauschen,
-//! Verkehr, Vögel in Grün und Bäumen bei Tag, Wasser am Ufer, Dämpfung im Auto. Nachtleben, Hochbahn, Martinshörner,
-//! Regen und Sturm folgen mit Wetter, Nahverkehr und Einsatzfahrzeugen.
+//! Verkehr, Vögel in Grün und Bäumen bei Tag, Wasser am Ufer, Regen, Wind und Böen, Dämpfung im Auto und durch
+//! Schnee. Nachtleben, Hochbahn und Martinshörner folgen mit Nahverkehr und Einsatzfahrzeugen.
 use crate::city::{CircleKind, PolyKind, Solid, bounds_of};
 use crate::collision::Rect;
 use crate::world::World;
@@ -17,6 +17,8 @@ pub struct Mix {
     pub water: f64,
     pub rain: f64,
     pub wind: f64,
+    /// Böenstärke 0…1 (hebt das Windband und lässt Kanten pfeifen)
+    pub gust: f64,
     /// Dämpfung von außen (Karosserie, Schneedecke)
     pub muffle: f64,
     pub in_car: bool,
@@ -101,14 +103,25 @@ pub fn ambience_at(w: &mut World) -> Mix {
         .player_car()
         .is_some_and(|c| !crate::carmodels::is_open_kind(c.kind));
     let night = wrap(w.clock) < 360. || wrap(w.clock) > 1260.;
-    let hush = 1. - 0.45 * w.weather.snow.clamp(0., 1.);
+    let sky = w.sky.p;
+    let hush = 1. - 0.45 * w.weather.snow.clamp(0., 1.) - 0.2 * sky.snow.clamp(0., 1.);
+    let gust = crate::weather::gust_at(sky.storm, w.time);
     Mix {
         hum: if night { 0.35 } else { 0.6 } * hush,
         traffic: (traffic / 2.).clamp(0., 1.) * hush,
-        birds: (green.min(1.) * bird_level(w.clock)).clamp(0., 1.),
+        // bei Regen, Sturm und Schnee schweigen die Vögel
+        birds: (green.min(1.)
+            * bird_level(w.clock)
+            * (1. - (sky.rain + sky.storm + sky.snow).min(1.)))
+        .clamp(0., 1.),
         water: water * (0.4 + if night { 0.2 } else { 0. }),
-        rain: 0.,
-        wind: 0.,
+        rain: sky.rain.min(1.6),
+        wind: (sky.storm * gust * 0.8 + 0.15 * sky.snow * sky.storm).clamp(0., 1.),
+        gust: if sky.storm > 0. {
+            ((gust - 0.2) / 1.6).clamp(0., 1.)
+        } else {
+            0.
+        },
         muffle: ((if in_car { 0.65 } else { 0. }) + 0.35 * w.weather.snow.clamp(0., 1.))
             .clamp(0., 1.),
         in_car,

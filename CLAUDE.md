@@ -22,6 +22,7 @@ rules in `sim/{enginevoice,soundscape,ambience}.rs`; `crates/audio` (`berlin-aud
 (`output.rs`); `game/sound.rs` builds frames. `cargo run --release -- --audio-wav x.wav` renders a measured test
 drive offline. HUD: `engine/hud.rs` (font8x8 bitmap atlas, screen-space instances) laid out by `game/hud.rs` in
 720-line base units; gamepad: `engine/pad.rs` (gilrs) merged with keys in `game/play.rs input_from`;
+weather: `sim/weather.rs` (pure, seed + time) stepped by `World::step_weather`, drawn by `game/weatherfx.rs`;
 `crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
 colors, and tessellates meshes on a dedicated streaming thread. It owns shared
 features by global IDs and releases far tiles (maximum 64 resident). The engine

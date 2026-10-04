@@ -42,6 +42,8 @@ pub enum Sfx {
     MissionFail,
     Carjack,
     Footstep(Footstep, f32),
+    /// Donner: Lautstärke 0…1, nah (trockener Knall vor dem Grollen)
+    Thunder(f32, bool),
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -102,7 +104,11 @@ struct Shot {
     tone: Option<(Osc, f32, f32)>, // Oszillator, Startfrequenz, Endfrequenz
     noise: Option<Noise>,
     filter: Option<Biquad>,
+    /// Grollen: Hüllkurve aus Stützpunkten (Zeit, Pegel) und Filter-Gleiten (Start, Ende)
+    rumble: Option<Rumble>,
 }
+/// Stützpunkte (Zeit, Pegel), Filterfrequenz am Anfang und am Ende.
+type Rumble = (Vec<(f32, f32)>, f32, f32);
 
 struct EngineVoice {
     bus: Smooth,
@@ -171,7 +177,10 @@ struct Ambience {
     rain: NoiseLayer,
     rain_low: NoiseLayer,
     wind: NoiseLayer,
+    whistle: NoiseLayer,
     next_chirp: f64,
+    drops: f64,
+    last: f64,
 }
 
 pub struct Synth {
@@ -275,7 +284,10 @@ impl Synth {
             rain: l(Highpass, 2600., 0.7),
             rain_low: l(Bandpass, 900., 0.5),
             wind: l(Bandpass, 380., 1.4),
+            whistle: l(Bandpass, 900., 12.),
             next_chirp: 0.,
+            drops: 0.,
+            last: 0.,
         };
         Self {
             sr,
@@ -616,6 +628,26 @@ impl Synth {
         );
         set(&mut a.rain_low.gain, 0.05 * (rain - 0.6).max(0.));
         set(&mut a.wind.gain, 0.11 * m.wind);
+        // Wind: Band steigt mit den Böen, bei starken Böen pfeift es an Kanten
+        a.wind.freq.set(260. + m.gust as f32 * 520., 0.5, sr);
+        a.whistle
+            .gain
+            .set(0.03 * (m.wind * (m.gust - 0.35).max(0.)) as f32, 0.4, sr);
+        a.whistle.freq.set(700. + m.gust as f32 * 900., 0.6, sr);
+        // Regentropfen auf Blech, Pfützen und Blättern (audio.js: je Viertelsekunde bis 22 Tropfen)
+        let since = (self.t - a.last).clamp(0., 0.5);
+        a.last = self.t;
+        a.drops += rain.min(1.6) * 14. * if m.in_car { 0.4 } else { 1. } * 4. * since;
+        while self.amb.drops >= 1. {
+            self.amb.drops -= 1.;
+            let (at, f, d) = (
+                self.rng.unit() * 0.25,
+                1800. + self.rng.unit() * 5000.,
+                0.012 + self.rng.unit() * 0.02,
+            );
+            let gain = 0.012 + self.rng.unit() * 0.02 * rain.min(1.) as f32;
+            self.burst(d, f, gain, FilterType::Bandpass, 3., at, 0., Dest::Outside);
+        }
         self.muffle_f
             .set(18000. * 0.04f32.powf(m.muffle as f32), 0.3, sr);
         // Vogelstimmen: kurze Tonfolgen, je mehr Grün, desto öfter
@@ -669,6 +701,7 @@ impl Synth {
             tone: Some((Osc::new(wave, freq), freq, end)),
             noise: None,
             filter: (lowpass > 0.).then(|| Biquad::new(FilterType::Lowpass, lowpass, 0.)),
+            rumble: None,
         });
     }
     #[allow(clippy::too_many_arguments)]
@@ -696,6 +729,7 @@ impl Synth {
             tone: None,
             noise: Some(Noise::new(seed)),
             filter: Some(Biquad::new(kind, freq, q)),
+            rumble: None,
         });
     }
 
@@ -778,6 +812,38 @@ impl Synth {
                 }
             }
             Sfx::Carjack => self.tone(700., 0.3, Saw, 0.05, 0., 400., 0., M),
+            Sfx::Thunder(loud, near) => {
+                let dur = if near { 5.5 } else { 7. + self.rng.unit() * 3. };
+                if near {
+                    self.burst(0.35, 3800., 0.5 * loud, Highpass, 0.7, 0., 0., M);
+                    self.burst(0.8, 900., 0.45 * loud, Lowpass, 0.7, 0., 0., M);
+                }
+                // Grollen in Wellen (Echos an Häusern und Wolken)
+                let mut pts = vec![(0f32, 0.0001f32)];
+                let mut at = if near { 0.15 } else { 0.3 };
+                for k in 0..5 {
+                    let peak = 0.55 * loud * (1. - k as f32 * 0.15) * (0.6 + self.rng.unit() * 0.4);
+                    pts.push((at + 0.25, peak));
+                    at += 0.5 + self.rng.unit() * 0.9;
+                    pts.push((at, peak * 0.35));
+                }
+                pts.push((dur, 0.0001));
+                let seed = (self.rng.unit() * 1e9) as u32 | 1;
+                self.shots.push(Shot {
+                    start: self.t,
+                    env: Env {
+                        gain: 1.,
+                        attack: 0.001,
+                        dur,
+                    },
+                    dest: M,
+                    pan: 0.,
+                    tone: None,
+                    noise: Some(Noise::new(seed)),
+                    filter: Some(Biquad::new(Lowpass, if near { 420. } else { 160. }, 0.)),
+                    rumble: Some((pts, if near { 420. } else { 160. }, 70.)),
+                });
+            }
             Sfx::Footstep(kind, k) => match kind {
                 Footstep::Snow => {
                     for i in 0..4 {
@@ -873,7 +939,8 @@ impl Synth {
                 + a.water.next(sr, block)
                 + a.rain.next(sr, block)
                 + a.rain_low.next(sr, block)
-                + a.wind.next(sr, block);
+                + a.wind.next(sr, block)
+                + a.whistle.next(sr, block);
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
             or += amb * c;
@@ -895,10 +962,20 @@ impl Synth {
                     (None, Some(n)) => n.tick(),
                     _ => 0.,
                 };
+                let mut gain = s.env.at(lt);
+                if let Some((pts, f0, f1)) = &s.rumble {
+                    let u = (lt / s.env.dur).min(1.);
+                    if let Some(f) = &mut s.filter
+                        && block
+                    {
+                        f.set_freq(*f0 * (*f1 / *f0).powf(u));
+                    }
+                    gain = envelope(pts, lt);
+                }
                 if let Some(f) = &mut s.filter {
                     v = f.process(v, sr);
                 }
-                v *= s.env.at(lt);
+                v *= gain;
                 let (pl, pr) = pan(s.pan);
                 let (l, r) = (
                     v * pl * std::f32::consts::SQRT_2,
@@ -934,6 +1011,22 @@ impl Synth {
         self.shots
             .retain(|s| (t - s.start) < s.env.dur as f64 + 0.05);
     }
+}
+
+/// Stückweise lineare Hüllkurve (Web Audio `linearRampToValueAtTime`).
+fn envelope(pts: &[(f32, f32)], t: f32) -> f32 {
+    for w in pts.windows(2) {
+        let ((t0, a), (t1, b)) = (w[0], w[1]);
+        if t <= t1 {
+            let u = if t1 > t0 {
+                ((t - t0) / (t1 - t0)).clamp(0., 1.)
+            } else {
+                1.
+            };
+            return a + (b - a) * u;
+        }
+    }
+    0.
 }
 
 #[cfg(test)]

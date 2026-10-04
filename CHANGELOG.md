@@ -35,6 +35,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   und Gang, Fahrzeugname, Zielpfeil, Hinweise, Briefing, Ergebnis) und Gamepad über `gilrs` mit der Belegung der
   Browserfassung. `--im-auto` startet im eigenen Auto.
 
+- Native Rust-Fassung: Wetter (`sim/weather.rs` nach `weather.js`): Dreistundenblöcke, Wind und Böen, Blitze und
+  Donner, Temperatur, Nässe/Schnee/Glätte auf der Straße mit Haftung und Sturmböen. Im Bild gedämpftes Tageslicht,
+  Regen, Schnee, Nebelschleier und Blitze; im HUD Wetter, Temperatur und Warnschild; Donner und Regen im Klang.
+  `--wetter ART` und Taste N.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

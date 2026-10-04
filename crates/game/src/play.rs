@@ -25,7 +25,13 @@ pub struct Play {
 
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
 pub fn lighting_at(minutes: f64) -> Lighting {
-    let l = light_at(minutes);
+    lighting_of(&light_at(minutes))
+}
+/// Tageslicht der Welt mit Wetter (Wolken nehmen Schatten, Regen/Nebel machen den Tag grau, Schnee hellt auf).
+pub fn world_light(w: &World) -> berlin_sim::daylight::Light {
+    berlin_sim::weather::weather_light(&light_at(w.clock), &w.sky.p, w.weather.snow)
+}
+pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
     let (az, el) = (l.azimuth as f32, l.elevation as f32);
     Lighting {
         sun: [az.sin() * el.cos(), -az.cos() * el.cos(), el.sin()],
@@ -183,6 +189,23 @@ impl Game for Play {
             });
         }
         let w2 = &mut self.world;
+        if keys.pressed.contains(&KeyCode::KeyN) {
+            // Wetter durchschalten: Tagesverlauf → klar → … → Schneesturm → Tagesverlauf
+            let kinds = berlin_sim::weather::KINDS;
+            let next = match w2.force_weather {
+                None => Some(kinds[0]),
+                Some(k) => kinds
+                    .iter()
+                    .position(|x| *x == k)
+                    .and_then(|i| kinds.get(i + 1))
+                    .copied(),
+            };
+            w2.force_weather = next;
+            let text = next
+                .map(|k| format!("Wetter: {}", berlin_sim::weather::label(k)))
+                .unwrap_or_else(|| "Wetter: Tagesverlauf".into());
+            w2.notice = Some(berlin_sim::world::Notice { text, t: 1.8 });
+        }
         if keys.pressed.contains(&KeyCode::KeyT) {
             w2.clock = (w2.clock + 60.) % 1440.;
             w2.notice = Some(berlin_sim::world::Notice {
@@ -396,6 +419,7 @@ impl Game for Play {
                 color: rgba(0xe0ac69, 1.),
             });
         }
+        crate::weatherfx::bodies(w, out);
     }
     fn status(&self) -> String {
         let w = &self.world;
@@ -451,13 +475,26 @@ impl Game for Play {
         out: &mut berlin_engine::hud::Hud,
     ) {
         let engine = self.world.player_car().map(|_| self.listener.engine());
-        crate::hud::draw(&self.world, engine.as_ref(), camera, viewport, out);
+        crate::weatherfx::overlay(&self.world, out);
+        let warn = self.world.road_warning();
+        crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
     }
     fn lighting(&self) -> Option<Lighting> {
-        Some(lighting_at(self.world.clock))
+        let mut l = lighting_of(&world_light(&self.world));
+        // Blitze hellen alles kurz auf
+        let flash = berlin_sim::weather::flash_total(
+            self.world.seed,
+            self.world.time,
+            self.world.sky.p.thunder,
+        ) as f32;
+        if flash > 0. {
+            l.ambient = l.ambient.map(|a| (a + flash * 0.8).min(1.6));
+            l.dark *= 1. - flash.min(1.);
+        }
+        Some(l)
     }
     fn lights(&mut self, out: &mut Vec<LightSource>) {
-        let l = light_at(self.world.clock);
+        let l = world_light(&self.world);
         let k = l.dark as f32;
         if k <= 0. {
             return;

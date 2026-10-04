@@ -16,6 +16,7 @@ pub struct Listener {
     engine: EngineState,
     engine_car: Option<u32>,
     prev_step: f64,
+    thunder_t: Option<f64>,
 }
 
 impl Listener {
@@ -74,7 +75,7 @@ impl Listener {
             f.vehicle = Vehicle {
                 active: true,
                 in_car: !open,
-                rain: 0.,
+                rain: w.sky.p.rain as f32,
                 engine: (!c.kind_info().bike).then_some(self.engine),
                 tires: Some(tires),
             };
@@ -98,6 +99,14 @@ impl Listener {
         f.voices = self
             .voices
             .near(w, (cx, cy, lvx, lvy), 4, 500., pc.as_ref().map(|c| c.id));
+        // Donner: Einschläge seit dem letzten Bild (aus Seed und Zeit, wie der Blitz im Bild)
+        let t0 = self.thunder_t.unwrap_or(w.time);
+        for (loud, near) in
+            berlin_sim::weather::thunder_between(w.seed, t0, w.time, w.sky.p.thunder)
+        {
+            f.sfx.push(Sfx::Thunder(loud as f32, near));
+        }
+        self.thunder_t = Some(w.time);
         f.ambience = ambience_at(w);
         f
     }
@@ -152,5 +161,29 @@ mod tests {
         );
         assert!(f.ambience.in_car && f.ambience.muffle > 0.6);
         assert!(f.voices.len() <= 4 && f.voices.iter().all(|v| v.id != pc && v.gain >= 0.));
+    }
+
+    #[test]
+    fn thunder_and_rain_reach_the_mix() {
+        let root = berlin_map_loader::default_data_root();
+        let city = City::open(&root, Box::new(DiskSource::new(root.clone()))).unwrap();
+        let mut w = World::new(city, 5, 4, 4);
+        w.force_weather = Some("thunder");
+        let mut l = Listener::default();
+        let mut thunder = 0;
+        for _ in 0..(90. / DT) as usize {
+            w.update(&Input::default(), DT);
+            let f = l.frame(&mut w, DT);
+            thunder += f
+                .sfx
+                .iter()
+                .filter(|s| matches!(s, Sfx::Thunder(..)))
+                .count();
+            assert!(f.ambience.rain > 0.5);
+        }
+        assert!(
+            (1..=40).contains(&thunder),
+            "90 s Gewitter = {thunder} Donner"
+        );
     }
 }

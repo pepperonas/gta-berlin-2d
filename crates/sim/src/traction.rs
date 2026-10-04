@@ -41,6 +41,13 @@ pub const ICE: Traction = Traction {
 pub const BRIDGE_ICE: f64 = 1.5;
 pub const RAIL_WET: f64 = 0.75;
 pub const RAIL_ICE: f64 = 0.6;
+/// Sturmböen: Schub (px/s²), Schwelle des Böenfaktors, Faktor auf Brücken, Anteil für das selbst gefahrene Auto.
+pub const GUST_PUSH: f64 = 45.;
+pub const GUST_THRESHOLD: f64 = 0.9;
+pub const GUST_BRIDGE: f64 = 1.6;
+/// ab dieser Böenbeschleunigung (px/s²) warnt das HUD vor Sturm
+pub const GUST_WARN: f64 = 8.;
+pub const GUST_DYNAMIC: f64 = 0.35;
 
 /// Aquaplaning: ab Tempo (px/s), Dauer (s) und Restfaktoren.
 pub struct Aqua;

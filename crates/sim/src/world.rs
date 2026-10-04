@@ -115,7 +115,17 @@ pub struct World {
     pub clock: f64,
     pub day: u32,
     pub day_count: u32,
+    /// Boden: Nässe, Schneedecke, Glätte (0…1)
     pub weather: GroundWeather,
+    /// Himmel: aktuelles Wetterbild aus weather.rs
+    pub sky: crate::weather::Weather,
+    /// Temperatur in °C
+    pub temp: f64,
+    /// erzwungenes Wetterbild (Befehlszeile/Taste) statt des Tagesverlaufs
+    pub force_weather: Option<&'static str>,
+    /// Wetter folgt dem Tagesverlauf (sonst bleibt es klar und der Boden trocken)
+    pub weather_cycle: bool,
+    pub seed: u32,
     pub player: Player,
     pub player_car_id: Option<u32>,
     pub mission: Mission,
@@ -181,6 +191,11 @@ impl World {
             day: START_DAY,
             day_count: 0,
             weather: GroundWeather::default(),
+            sky: crate::weather::weather_at(seed, 0, CLOCK_START, Some("clear")),
+            temp: crate::weather::temperature_at(seed, 0, CLOCK_START, None),
+            force_weather: None,
+            weather_cycle: true,
+            seed,
             player: Player {
                 x: 0.,
                 y: 0.,
@@ -842,18 +857,94 @@ impl World {
         }
     }
 
-    fn apply_weather(&mut self, i: usize) {
+    fn apply_weather(&mut self, i: usize, dt: f64) {
         let c = &self.cars[i];
         if c.role == Role::Curb && c.driver.is_none() {
             return;
         }
         let w = self.weather;
-        if w.wet == 0. && w.snow == 0. && w.ice == 0. {
+        let storm = self.sky.p.storm;
+        if w.wet == 0. && w.snow == 0. && w.ice == 0. && storm <= 0. {
             self.cars[i].traction = crate::traction::DRY;
             return;
         }
         let cond = road_condition(&mut self.city, &w, c.x, c.y, c.lvl());
         self.cars[i].traction = traction_of(&cond);
+        // Sturmböe schiebt fahrende Autos quer (traction.js gustPush)
+        let (ax, ay) = self.gust_accel(&self.cars[i]);
+        let c = &mut self.cars[i];
+        c.vx += ax * dt;
+        c.vy += ay * dt;
+    }
+
+    /// Beschleunigung durch eine Sturmböe (px/s²): Brücken stärker, kleine Autos mehr, das Fahrdynamikmodell
+    /// des Spielers bekommt nur einen Teil (es reagiert über die Reifen selbst).
+    pub fn gust_accel(&self, c: &Car) -> (f64, f64) {
+        let storm = self.sky.p.storm;
+        let (wx, wy) = self.sky.wind;
+        let wl = wx.hypot(wy);
+        if storm <= 0. || wl <= 0. || c.speed() < 5. {
+            return (0., 0.);
+        }
+        let g = crate::weather::gust_at(storm, self.time) - crate::traction::GUST_THRESHOLD;
+        if g <= 0. {
+            return (0., 0.);
+        }
+        let a = crate::traction::GUST_PUSH
+            * storm
+            * g
+            * if c.lvl() >= 1 {
+                crate::traction::GUST_BRIDGE
+            } else {
+                1.
+            }
+            / ((c.hw * c.hh) / 210.)
+            * if c.driver == Some(Driver::Player) && c.kind_info().top.is_none() {
+                crate::traction::GUST_DYNAMIC
+            } else {
+                1.
+            };
+        (wx / wl * a, wy / wl * a)
+    }
+
+    /// Warnschild für den Fahrer (traction.js roadWarning): nur im eigenen Fahrzeug.
+    pub fn road_warning(&mut self) -> Option<&'static str> {
+        let c = self.player_car()?.clone();
+        if c.aqua > 0. {
+            return Some("Aquaplaning!");
+        }
+        let cond = road_condition(&mut self.city, &self.weather, c.x, c.y, c.lvl());
+        if cond.ice > 0.2 {
+            return Some("Glätte");
+        }
+        if cond.snow > 0.2 {
+            return Some("Schnee");
+        }
+        let (ax, ay) = self.gust_accel(&c);
+        if ax.hypot(ay) > crate::traction::GUST_WARN {
+            return Some("Sturm");
+        }
+        (cond.wet > 0.3).then_some("Nässe")
+    }
+
+    /// Wetterbild, Temperatur und Boden (Nässe, Schneedecke, Glätte) einen Schritt weiter.
+    pub fn step_weather(&mut self, dt: f64) {
+        use crate::weather as wx;
+        let force = if self.weather_cycle {
+            self.force_weather
+        } else {
+            Some("clear")
+        };
+        self.sky = wx::weather_at(self.seed, self.day_count, self.clock, force);
+        let g = &mut self.weather;
+        g.wet = wx::step_wet(g.wet, self.sky.p.rain.min(1.), dt);
+        let snow_was = g.snow;
+        g.snow = wx::step_snow(snow_was, &self.sky.p, dt);
+        if g.snow < snow_was {
+            g.wet = g.wet.max((g.snow * 1.5).min(1.)); // Tauwetter: Matsch und nasse Straßen
+        }
+        self.temp = wx::temperature_at(self.seed, self.day_count, self.clock, self.force_weather);
+        g.ice = wx::step_ice(g.ice, g.wet, self.temp, dt);
     }
 
     /// Ein Simulationsschritt.
@@ -876,6 +967,7 @@ impl World {
             self.day = (self.day + 1) % 7;
             self.day_count += 1;
         }
+        self.step_weather(dt);
         if let Some(n) = self.notice.as_mut() {
             n.t -= dt;
             if n.t <= 0. {
@@ -1001,7 +1093,7 @@ impl World {
                 (c.vx, c.vy, c.ang_vel) = (0., 0., 0.);
                 continue;
             }
-            self.apply_weather(i);
+            self.apply_weather(i, dt);
             let c = &self.cars[i];
             let ground = self.city.surface_at(c.x, c.y, Some(c.lvl()));
             let c = &mut self.cars[i];

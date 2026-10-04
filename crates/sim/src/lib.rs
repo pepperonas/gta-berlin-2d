@@ -21,4 +21,5 @@ pub mod save;
 pub mod soundscape;
 pub mod traction;
 pub mod traffic;
+pub mod weather;
 pub mod world;

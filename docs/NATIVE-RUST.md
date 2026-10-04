@@ -351,7 +351,7 @@ sprinten), View Ton an/aus. Tastatur und Controller lassen sich mischen; ausgele
 `--im-auto` setzt den Spieler beim Start ins eigene Auto (für Aufnahmen und Tests).
 
 **Noch offen:** Minikarte und große Karte, Pausenmenü und Titelbildschirm, Tastensymbole je Eingabegerät, Waffen-
-und Lebensanzeige (keine Kämpfe portiert), Wetterwarnungen. Ein echter Controller wurde nicht angeschlossen; die
+und Lebensanzeige (keine Kämpfe portiert). Ein echter Controller wurde nicht angeschlossen; die
 Belegung ist per Unit-Test geprüft, die gilrs-Anbindung nur durch einen Start ohne Controller.
 
 ### Validierung am 04.10.2026
@@ -360,3 +360,42 @@ Formatprüfung, Clippy mit `-D warnings` und alle 82 Rust-Tests erfolgreich. Neu
 Atlas hat die Glyphen, proportionale Breiten und Ausrichtung, Skalierung mit der Fensterhöhe; Formatierung von
 Zeit und Geldbeträgen; Tastenflanken des Controllers; Mischung von Tastatur und Controller samt Totzone.
 GPU-Aufnahmen bei Tag zu Fuß und nachts im Auto visuell kontrolliert.
+
+## Wetter (04.10.2026)
+
+**Simulation** (`sim/weather.rs`, Port von `weather.js`): elf Wetterarten in Dreistundenblöcken mit 45 Minuten
+Überblendung, Tagestypen (normal, wechselhaft, Winter) aus Seed und Spieltag, Wolkenzug, Böen, Blitzeinschläge und
+Donner als reine Funktionen von Seed und Spielzeit, Temperatur je Tag und Uhrzeit. Die Welt schreibt Nässe,
+Schneedecke und Glätte fort (`World::step_weather`), die Reifenhaftung kommt aus `traction.rs`. Sturmböen
+schieben fahrende Autos quer (`World::gust_accel`, auf Brücken stärker); `World::road_warning` liefert das
+Warnschild wie `roadWarning` (Aquaplaning, Glätte, Schnee, Sturm, Nässe).
+
+**Bild** (`game/weatherfx.rs`, vereinfacht gegenüber `wetfx.js`): Das Tageslicht wird mit `weather_light`
+gedämpft, sodass Wolken die Schatten nehmen und Regen und Nebel den Tag grau machen. Regenstriche fallen schräg
+nach dem Wind, Schneeflocken pendeln. Beide entstehen aus Hashes und Spielzeit, ohne Partikellisten. Nebel legt
+einen Schleier über das Bild, Blitze hellen Szene und Bild kurz auf. Das HUD zeigt Wetter und Temperatur neben
+der Uhr und das Warnschild links vom Tacho.
+
+**Klang:** Regen auf dem Dach im Auto, Regenrauschen, Tropfen und Wind mit Böenpfeifen in der Umgebung. Donner
+grollt mit Hüllkurve und Filtergleiten, nahe Einschläge krachen.
+
+**Bedienung:** `--wetter ART` legt ein Wetter fest. Erlaubt sind clear, cloudy, overcast, rain, heavyrain, storm,
+thunder, fog, densefog, snow und heavysnow. Taste N schaltet vom Tagesverlauf durch alle Arten und zurück.
+
+Aufnahmen: [Starkregen](images/native/weather-heavyrain.png), [Schneesturm](images/native/weather-heavysnow.png).
+
+**Noch offen:** Diese Effekte aus `wetfx.js` fehlen noch:
+- nasse Straßen mit Pfützen und Spiegelungen
+- Schneedecke und Matsch am Boden sowie Reifenspuren
+- Wolkenschatten und Bodennebel als Rauschmuster
+- Regenvorhänge
+- Leuchtreklame
+
+### Validierung am 04.10.2026
+
+Formatprüfung, Clippy mit `-D warnings` und alle 86 Rust-Tests sind erfolgreich. Neu geprüft:
+- Wetterfunktionen gegen Referenzwerte der JS-Fassung
+- verschneite Straße mit Warnschild und stumpfen Reifen im eigenen Auto, danach Trocknen bei klarem Wetter
+- 90 s Gewitter mit Donner und Regen im Klangmix
+
+GPU-Aufnahmen bei Starkregen, Schneesturm und dichtem Nebel wurden visuell kontrolliert.

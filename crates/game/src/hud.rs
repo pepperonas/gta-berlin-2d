@@ -49,7 +49,14 @@ fn prompt(h: &mut Hud, text: &str, y: f32) {
     h.text(text, cx, y, 19., WHITE, Align::Center, true);
 }
 
-pub fn draw(w: &World, engine: Option<&EngineState>, camera: &Camera, viewport: Vec2, h: &mut Hud) {
+pub fn draw(
+    w: &World,
+    engine: Option<&EngineState>,
+    warn: Option<&str>,
+    camera: &Camera,
+    viewport: Vec2,
+    h: &mut Hud,
+) {
     let (mx, my) = MARGIN;
     if w.loading {
         let (bw, bh) = (360., 56.);
@@ -77,10 +84,12 @@ pub fn draw(w: &World, engine: Option<&EngineState>, camera: &Camera, viewport: 
     );
     let night = w.clock >= 1230. || w.clock < 330.;
     let clock = format!(
-        "{} {} {}",
+        "{} {} {}  {} · {:.0} °C",
         if night { "☾" } else { "☀" },
         DAYS[w.day as usize % 7],
-        format_clock(w.clock)
+        format_clock(w.clock),
+        berlin_sim::weather::label(w.sky.kind),
+        w.temp
     );
     h.text(
         &clock,
@@ -140,6 +149,42 @@ pub fn draw(w: &World, engine: Option<&EngineState>, camera: &Camera, viewport: 
     let car = w.player_car();
     if let Some(c) = car {
         let (cx, cy, rad) = (h.width - mx - 56., 720. - my - 68., 54.);
+        // Warnschild (Wetter an der Stelle) links vom Tacho
+        if let Some(text) = warn {
+            let tw = h.text_width(text, 14.).max(100.) + 44.;
+            let (x, y) = (cx - rad * 1.3 - tw - 14., cy - 13.);
+            let blink = text == "Aquaplaning!" && (w.time * 6.).floor() as i64 % 2 == 0;
+            h.rect(
+                x,
+                y,
+                tw,
+                26.,
+                if blink {
+                    [1., 0.31, 0.24, 0.88]
+                } else {
+                    [1., 0.75, 0.16, 0.88]
+                },
+                4.,
+            );
+            h.text(
+                "⚠",
+                x + 12.,
+                y + 19.,
+                14.,
+                [0.1, 0.1, 0.1, 1.],
+                Align::Left,
+                false,
+            );
+            h.text(
+                text,
+                x + 32.,
+                y + 18.,
+                14.,
+                [0.1, 0.1, 0.1, 1.],
+                Align::Left,
+                false,
+            );
+        }
         h.ellipse(cx, cy, rad * 1.3, rad * 1.3, [0., 0., 0., 0.32]);
         let (a0, span) = (PI * 0.75, PI * 1.5);
         let kmh = (c.speed() * 0.36).round();

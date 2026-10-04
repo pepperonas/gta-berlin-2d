@@ -489,3 +489,42 @@ fn lamps_stand_on_sidewalks() {
     let again = berlin_sim::lamps::LampCache::default().near(&mut w.city, x, y, 1500.);
     assert_eq!(lamps.len(), again.len());
 }
+
+#[test]
+fn weather_covers_the_road_and_warns_the_driver() {
+    let mut w = world(7);
+    w.force_weather = Some("heavysnow");
+    run(&mut w, 600, idle());
+    assert_eq!(w.sky.kind, "heavysnow");
+    assert!(
+        w.weather.snow > 0.01,
+        "Schneedecke wächst: {}",
+        w.weather.snow
+    );
+    assert!(w.temp < 2., "Schneewetter ist kalt: {}", w.temp);
+    // zu Fuß keine Warnung, im eigenen Auto auf verschneiter Straße schon
+    assert_eq!(w.road_warning(), None);
+    w.weather.snow = 0.8;
+    let pc = w.player_car_id.expect("eigenes Auto");
+    let (x, y) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    (w.player.x, w.player.y) = (x + 15., y);
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert!(w.player.in_car.is_some());
+    let warn = w.road_warning();
+    assert!(matches!(warn, Some("Schnee" | "Glätte")), "{warn:?}");
+    // Schnee macht die Reifen stumpf
+    let tr = w.car(pc).unwrap().traction;
+    assert!(tr.lat < 1. && tr.brake < 1., "{tr:?}");
+    // klares Wetter: Straßen trocknen, kein Schild
+    w.force_weather = Some("clear");
+    w.weather = Default::default();
+    run(&mut w, 60, idle());
+    assert_eq!(w.road_warning(), None);
+}
