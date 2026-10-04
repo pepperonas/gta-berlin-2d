@@ -60,6 +60,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Diablo-Schema zu Fuß (Standard, ←/→ in der Steuerungstafel, `settings.json`): Klick läuft
   mit Wegsuche (`sim/footpath.rs`) hin, greift Personen an, steigt in Autos ein; Strg + Klick greift am Platz an.
   Smoke-Tests und Aufnahmen ignorieren Eingaben.
+- Native Rust-Fassung: Polizei und Rettungsdienst (`sim/services.rs` nach `services.js`): Tote rufen einen
+  Rettungswagen, Schüsse einen Streifenwagen; Zielfahrt über den Spurgraph, Martinshorn und Blaulicht (nachts als
+  Lichtquelle), gelegentliche Vorbeifahrten.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

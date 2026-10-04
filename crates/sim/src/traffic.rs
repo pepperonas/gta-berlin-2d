@@ -60,6 +60,89 @@ pub struct Ai {
     pub blink: i8,
     pub light: Option<Light>,
     next_uid: u64,
+    /// Zielfahrt (Einsatz): Restentfernung je Spur zum Ziel
+    pub field: Option<std::sync::Arc<GoalField>>,
+    /// Sondersignal: fährt langsam über Rot
+    pub urgent: bool,
+}
+
+/// Entfernungsfeld über den Spurgraph zum Zielspurstück (traffic.js goalField).
+#[derive(Debug, Clone, PartialEq)]
+pub struct GoalField {
+    pub dist: HashMap<LaneId, f64>,
+    pub goal: LaneId,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Dijkstra rückwärts vom Zielspurstück, begrenzt auf ein Rechteck um Start und Ziel. Wer ein Ziel hat, nimmt an
+/// jeder Kreuzung die Nachfolgespur mit der kleinsten Restentfernung.
+pub fn goal_field(
+    lanes: &mut LaneGraph,
+    city: &City,
+    from: Pt,
+    to: Pt,
+    margin: f64,
+) -> Option<GoalField> {
+    use std::cmp::Reverse;
+    let goal = lanes
+        .nearest_lane(to.0, to.1, None, 400., true)
+        .or_else(|| lanes.nearest_lane(to.0, to.1, None, 1500., true))?
+        .lane;
+    let (x0, y0) = (from.0.min(to.0) - margin, from.1.min(to.1) - margin);
+    let (x1, y1) = (from.0.max(to.0) + margin, from.1.max(to.1) + margin);
+    let ids: Vec<LaneId> = lanes
+        .lanes
+        .values()
+        .filter(|l| {
+            let p = l.pts[0];
+            p.0 >= x0 && p.0 <= x1 && p.1 >= y0 && p.1 <= y1
+        })
+        .map(|l| l.id)
+        .collect();
+    let mut prev: HashMap<LaneId, Vec<LaneId>> = HashMap::new();
+    for &l in &ids {
+        for n in lanes.next(city, l, false) {
+            prev.entry(n).or_default().push(l);
+        }
+    }
+    let len = |lanes: &LaneGraph, id: LaneId| lanes.lane(id).map_or(f64::INFINITY, |l| l.len);
+    let mut dist: HashMap<LaneId, f64> = HashMap::from([(goal, 0.)]);
+    let mut heap = std::collections::BinaryHeap::new();
+    heap.push(Reverse((0u64, goal)));
+    while let Some(Reverse((dk, l))) = heap.pop() {
+        let d = f64::from_bits(dk);
+        if d > dist.get(&l).copied().unwrap_or(f64::INFINITY) {
+            continue;
+        }
+        for &p in prev.get(&l).map(Vec::as_slice).unwrap_or(&[]) {
+            let nd = d + len(lanes, p);
+            if nd < dist.get(&p).copied().unwrap_or(f64::INFINITY) {
+                dist.insert(p, nd);
+                heap.push(Reverse((nd.to_bits(), p)));
+            }
+        }
+    }
+    Some(GoalField {
+        dist,
+        goal,
+        x: to.0,
+        y: to.1,
+    })
+}
+/// Ziel setzen (Einsatzort); die schon geplante Route bleibt, ab dann wählt sie jeden Nachfolger zum Ziel hin.
+pub fn set_goal(car: &mut Car, lanes: &mut LaneGraph, city: &City, to: Pt) -> bool {
+    let from = (car.x, car.y);
+    let Some(ai) = car.ai.as_mut() else {
+        return false;
+    };
+    match goal_field(lanes, city, from, to, 6000.) {
+        Some(f) => {
+            ai.field = Some(std::sync::Arc::new(f));
+            true
+        }
+        None => false,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +278,8 @@ impl Ai {
             blink: 0,
             light: None,
             next_uid: 0,
+            field: None,
+            urgent: false,
         }
     }
     fn append_lane(&mut self, lanes: &LaneGraph, city: &City, lane: LaneId, from_s: f64) {
@@ -240,7 +325,18 @@ impl Ai {
         rng: &mut Rng,
         forced: Option<LaneId>,
     ) -> bool {
-        let Some(next) = forced.or_else(|| lanes.choose_next(city, self.lane, rng)) else {
+        let toward = self.field.as_ref().and_then(|f| {
+            lanes
+                .next(city, self.lane, false)
+                .into_iter()
+                .filter_map(|n| f.dist.get(&n).map(|d| (*d, n)))
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .map(|(_, n)| n)
+        });
+        let Some(next) = forced
+            .or(toward)
+            .or_else(|| lanes.choose_next(city, self.lane, rng))
+        else {
             return false;
         };
         let (Some(cur), Some(nl)) = (lanes.lane(self.lane), lanes.lane(next)) else {
@@ -373,6 +469,8 @@ pub fn replan(car: &mut Car, lanes: &mut LaneGraph, city: &City, rng: &mut Rng) 
     if let (Some(k), Some(ai)) = (keep, car.ai.as_mut()) {
         ai.cruise_k = k.cruise_k;
         ai.hold = k.hold;
+        ai.field = k.field;
+        ai.urgent = k.urgent;
     }
 }
 
@@ -706,7 +804,12 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
         if dist < 400. {
             let light = signal_state(cx.city, st.v, st.heading, cx.time);
             let brake_dist = vf * vf / (2. * 300. * kb);
-            if light == Light::Red || (light == Light::Yellow && dist > brake_dist + 10.) {
+            if ai.urgent {
+                // Sondersignal: über Rot nur langsam
+                if light != Light::Green && dist < 60. {
+                    target = target.min(70.);
+                }
+            } else if light == Light::Red || (light == Light::Yellow && dist > brake_dist + 10.) {
                 target = target.min((2. * 90. * kb * (dist - 15.).max(0.)).sqrt());
             }
             ai.light = Some(light);

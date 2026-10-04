@@ -74,6 +74,8 @@ pub struct Ped {
     pub fight_t: f64,
     pub hit_cd: f64,
     pub punch: f64,
+    /// Tote: Rettungsdienst schon alarmiert
+    pub reported: bool,
 }
 
 pub fn walkable(e: &Edge) -> bool {
@@ -222,6 +224,7 @@ pub fn create_ped(id: u32, city: &mut City, sw: &mut Sidewalks, spot: Spot, rng:
         fight_t: 0.,
         hit_cd: 0.,
         punch: 0.,
+        reported: false,
     }
 }
 

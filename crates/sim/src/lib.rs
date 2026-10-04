@@ -20,6 +20,7 @@ pub mod mission;
 pub mod pedestrians;
 pub mod roadgraph;
 pub mod save;
+pub mod services;
 pub mod soundscape;
 pub mod stats;
 pub mod traction;

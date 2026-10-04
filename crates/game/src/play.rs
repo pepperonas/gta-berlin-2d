@@ -933,6 +933,38 @@ impl Game for Play {
                     });
                 }
             }
+            // Blaulicht: Balken auf dem Dach, links/rechts im Wechsel (8 Takte/s), leuchtender Hof
+            if (c.siren || c.blue) && !c.wrecked {
+                let ph = (w.time * 8.).floor() as i64 % 2;
+                let bx = if c.kind == "ambulance" { hw - 16. } else { -2. };
+                let (rx, ry) = (-fy, fx);
+                for side in [-1f32, 1.] {
+                    let on = (side < 0.) == (ph == 0);
+                    let (px, py) = (x + fx * bx + rx * side * 2.5, y + fy * bx + ry * side * 2.5);
+                    out.push(Body {
+                        center: [px, py],
+                        half: [2.5, 2.],
+                        angle: a,
+                        shape: 0.,
+                        depth: depth - 0.0006,
+                        color: if on {
+                            [0.29, 0.64, 1., 1.]
+                        } else {
+                            [0.07, 0.23, 0.48, 1.]
+                        },
+                    });
+                    if on {
+                        out.push(Body {
+                            center: [px, py],
+                            half: [9., 9.],
+                            angle: 0.,
+                            shape: 1.,
+                            depth: depth - 0.0007,
+                            color: [0.31, 0.63, 1., 0.35],
+                        });
+                    }
+                }
+            }
             if c.cargo {
                 out.push(Body {
                     center: [x - fx * hw * 0.55, y - fy * hw * 0.55],
@@ -1293,6 +1325,18 @@ impl Game for Play {
                 pad: 0.,
             });
             push(out, fx, fy, 34., [1., 0.94, 0.82], 0.6 * k);
+            if c.siren || c.blue {
+                // Blaulicht leuchtet die Umgebung im Takt an
+                let on = (w.time * 8.).floor() as i64 % 2 == 0;
+                push(
+                    out,
+                    c.x,
+                    c.y,
+                    140.,
+                    [0.3, 0.55, 1.],
+                    if on { 0.9 } else { 0.35 } * k,
+                );
+            }
             let braking = c.controls.brake > 0.1;
             push(
                 out,

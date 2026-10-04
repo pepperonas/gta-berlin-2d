@@ -22,7 +22,13 @@ pub struct Mix {
     /// Dämpfung von außen (Karosserie, Schneedecke)
     pub muffle: f64,
     pub in_car: bool,
+    /// nächstes Martinshorn: Lautstärke 0…1 und ob gerade der hohe Ton
+    pub siren: f64,
+    pub siren_high: bool,
 }
+
+/// so weit hört man ein Martinshorn (px)
+pub const SIREN_HEAR: f64 = 3000.;
 
 fn wrap(m: f64) -> f64 {
     ((m % 1440.) + 1440.) % 1440.
@@ -106,6 +112,20 @@ pub fn ambience_at(w: &mut World) -> Mix {
     let sky = w.sky.p;
     let hush = 1. - 0.45 * w.weather.snow.clamp(0., 1.) - 0.2 * sky.snow.clamp(0., 1.);
     let gust = crate::weather::gust_at(sky.storm, w.time);
+    // Martinshorn: das nächste Einsatzfahrzeug mit Sondersignal (bis 300 m hörbar)
+    let (mut siren, mut siren_high) = (0f64, false);
+    let mut nearest = f64::INFINITY;
+    for c in &w.cars {
+        if !c.siren {
+            continue;
+        }
+        let d = (c.x - cx).hypot(c.y - cy);
+        if d < SIREN_HEAR && d < nearest {
+            nearest = d;
+            siren = (1. - d / SIREN_HEAR).powi(2);
+            siren_high = crate::services::siren_high(w.time + c.id as f64 * 0.37);
+        }
+    }
     Mix {
         hum: if night { 0.35 } else { 0.6 } * hush,
         traffic: (traffic / 2.).clamp(0., 1.) * hush,
@@ -114,6 +134,8 @@ pub fn ambience_at(w: &mut World) -> Mix {
             * bird_level(w.clock)
             * (1. - (sky.rain + sky.storm + sky.snow).min(1.)))
         .clamp(0., 1.),
+        siren,
+        siren_high,
         water: water * (0.4 + if night { 0.2 } else { 0. }),
         rain: sky.rain.min(1.6),
         wind: (sky.storm * gust * 0.8 + 0.15 * sky.snow * sky.storm).clamp(0., 1.),

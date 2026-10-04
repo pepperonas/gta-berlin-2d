@@ -948,3 +948,96 @@ fn click_walks_attacks_and_enters() {
     run(&mut w, 1200, idle());
     assert_eq!(w.player.in_car, Some(pc), "eingestiegen");
 }
+
+#[test]
+fn a_dead_body_calls_an_ambulance_that_takes_it_away() {
+    use berlin_sim::services::Phase;
+    let mut w = world(41);
+    run(&mut w, 10, idle());
+    let i = ped_in_front(&mut w, 30.);
+    let id = w.peds[i].id;
+    w.peds[i].state = PedState::Dead;
+    let mut seen_siren = false;
+    let mut on_scene = false;
+    for _ in 0..(200. / DT) as usize {
+        w.update(&idle(), DT);
+        for c in w.cars.iter().filter(|c| c.kind == "ambulance") {
+            seen_siren |= c.siren;
+            on_scene |= c.duty.is_some_and(|d| d.phase == Phase::Scene) && c.blue;
+        }
+        if !w.peds.iter().any(|p| p.id == id) {
+            break;
+        }
+    }
+    assert!(seen_siren, "Rettungswagen mit Martinshorn alarmiert");
+    assert!(on_scene, "hält am Einsatzort mit Blaulicht");
+    assert!(!w.peds.iter().any(|p| p.id == id), "nimmt den Toten mit");
+}
+
+#[test]
+fn a_gunshot_calls_the_police() {
+    use berlin_sim::combat::CombatInput;
+    let mut w = world(42);
+    run(&mut w, 10, idle());
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: CombatInput {
+                weapon_slot: 4,
+                ..Default::default()
+            },
+            ..idle()
+        },
+    );
+    run(&mut w, 20, idle());
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: CombatInput {
+                fire: true,
+                fire_pressed: true,
+                ..Default::default()
+            },
+            ..idle()
+        },
+    );
+    assert_eq!(
+        w.emergency.incidents.len(),
+        1,
+        "Schuss meldet einen Einsatz"
+    );
+    // zweiter Schuss gleich danach: kein zweiter Streifenwagen (45 s Pause)
+    run(&mut w, 20, idle());
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: CombatInput {
+                fire: true,
+                fire_pressed: true,
+                ..Default::default()
+            },
+            ..idle()
+        },
+    );
+    assert_eq!(w.emergency.incidents.len(), 1);
+    run(&mut w, (12. / DT) as usize, idle());
+    let police: Vec<_> = w
+        .cars
+        .iter()
+        .filter(|c| c.kind == "police" && c.duty.is_some())
+        .collect();
+    assert_eq!(police.len(), 1, "ein Streifenwagen unterwegs");
+    assert!(
+        police[0].siren
+            && police[0]
+                .ai
+                .as_ref()
+                .is_some_and(|a| a.urgent && a.field.is_some())
+    );
+    // entsteht außer Sicht
+    let p = police[0];
+    assert!((p.x - w.camera.x).abs() > 1000. || (p.y - w.camera.y).abs() > 600.);
+}

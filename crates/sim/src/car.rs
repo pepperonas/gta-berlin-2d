@@ -69,6 +69,11 @@ pub struct Car {
     pub horn_was: bool,
     /// beschossen (von wo): world.rs lässt den KI-Fahrer aussteigen und fliehen
     pub shot_at: Option<(f64, f64)>,
+    /// Einsatzfahrzeug: Martinshorn, Blaulicht (am Einsatzort ohne Horn), Einsatz und ob er erledigt ist
+    pub siren: bool,
+    pub blue: bool,
+    pub duty: Option<crate::services::Duty>,
+    pub done: bool,
     pub skid: f64,
     pub spin: f64,
     pub level: LevelState,
@@ -117,6 +122,10 @@ impl Car {
             horn: false,
             horn_was: false,
             shot_at: None,
+            siren: false,
+            blue: false,
+            duty: None,
+            done: false,
             skid: 0.,
             spin: 0.,
             level: LevelState::default(),

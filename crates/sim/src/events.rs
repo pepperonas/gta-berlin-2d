@@ -113,4 +113,9 @@ pub enum Event {
     WeaponSwitch {
         weapon: &'static str,
     },
+    /// Rettungswagen hat Tote mitgenommen
+    PickupBody {
+        x: f64,
+        y: f64,
+    },
 }

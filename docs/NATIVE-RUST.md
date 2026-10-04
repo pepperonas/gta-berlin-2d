@@ -585,7 +585,6 @@ Pistole und schießt auf den nächsten Passanten.
 **Noch offen:**
 - Klicksteuerung zum Laufen (Diablo-Schema)
 - Waffenrad
-- Polizei und Rettungsdienst (`services.js`)
 - Waffen-Statistik je Waffe
 - Radfahrer als Ziele (keine Räder portiert)
 
@@ -659,3 +658,42 @@ Kacheln getestet:
 - Klick auf den Boden: die Figur kommt an.
 - Klick auf eine Person: hinlaufen und treffen.
 - Doppelklick aufs eigene Auto: einsteigen.
+
+## Polizei und Rettungsdienst (04.10.2026)
+
+`sim/services.rs` ist ein Port von `services.js`:
+- **Tote:** Ein Toter auf der Straße alarmiert nach 12 s einen Rettungswagen. Tote nahe einem schon laufenden
+  Einsatz werden zusammengefasst.
+- **Schüsse:** Ein Schuss alarmiert nach 9 s einen Streifenwagen, höchstens einen je 45 s. Je Art sind höchstens
+  zwei Fahrzeuge gleichzeitig unterwegs.
+- **Anfahrt:** Einsatzfahrzeuge entstehen außer Sicht (100–200 m vom Ziel, nicht im Bild) und fahren
+  mit Martinshorn über eine **Zielfahrt** zum Einsatzort.
+  - Zielfahrt (`traffic::goal_field`/`set_goal`): Dijkstra rückwärts vom Zielspurstück über den Spurgraph, im
+    Rechteck um Start und Ziel. An jeder Kreuzung wählt die Route die Nachfolgespur mit der kleinsten
+    Restentfernung.
+  - Mit Sondersignal fahren sie über Rot nur langsam und 30 % schneller als normal.
+- **Einsatzort:** Der Rettungswagen hält 14 s mit Blaulicht und nimmt die Toten im Umkreis von 15 m mit. Danach
+  fährt er mit Martinshorn weiter. Der Streifenwagen hält 18 s.
+- **Abbruch und Abbau:** Ohne Ankunft nach 150 s wird der Einsatz abgebrochen. Fertige Fahrzeuge verschwinden
+  außer Sicht.
+- **Vorbeifahrten:** Alle 150–330 s fährt ein Einsatz einfach an der Kamera vorbei, als Stadtgeräusch.
+- **Bild:** Blaulichtbalken auf dem Dach im Wechsel; nachts leuchtet das Blaulicht die Umgebung an.
+- **Klang:** Martinshorn des nächsten Fahrzeugs bis 300 m, 440/585 Hz im 1,2-s-Wechsel, hinter der Dämpfung
+  „draußen“.
+
+`World::put_npc_car` setzt KI-Autos beliebiger Art auf eine Spur; `World::services = false` schaltet die Einsätze
+ab.
+
+**Noch offen:**
+- Arbeitshalte von Paketwagen und Müllauto (es gibt noch keine Fahrzeugarten im Verkehr)
+- Polizei verfolgt den Spieler nicht (im Browser auch nicht)
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 110 Rust-Tests laufen erfolgreich. Neu auf echten
+Kacheln getestet:
+- Ein Toter ruft einen Rettungswagen mit Martinshorn. Der hält mit Blaulicht am Einsatzort und nimmt den Toten
+  mit.
+- Ein Schuss meldet genau einen Einsatz, der zweite gleich danach keinen. Nach 12 s fährt ein Streifenwagen mit
+  Martinshorn und Zielfahrt, entstanden außer Sicht.
+
+Außerdem wächst die Frist des Smoke-Tests jetzt mit der Bildzahl (30 s plus Bilder/30), damit lange Aufnahmen
+möglich sind.

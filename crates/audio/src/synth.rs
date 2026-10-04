@@ -190,6 +190,9 @@ struct Ambience {
     rain_low: NoiseLayer,
     wind: NoiseLayer,
     whistle: NoiseLayer,
+    /// Martinshorn (Dreieck, tief/hoch im Wechsel)
+    siren: Osc,
+    siren_g: Smooth,
     next_chirp: f64,
     drops: f64,
     last: f64,
@@ -297,6 +300,8 @@ impl Synth {
             rain_low: l(Bandpass, 900., 0.5),
             wind: l(Bandpass, 380., 1.4),
             whistle: l(Bandpass, 900., 12.),
+            siren: Osc::new(Wave::Triangle, 440.),
+            siren_g: Smooth::new(0.),
             next_chirp: 0.,
             drops: 0.,
             last: 0.,
@@ -646,6 +651,12 @@ impl Synth {
             .gain
             .set(0.03 * (m.wind * (m.gust - 0.35).max(0.)) as f32, 0.4, sr);
         a.whistle.freq.set(700. + m.gust as f32 * 900., 0.6, sr);
+        a.siren_g.set(0.07 * m.siren as f32, 0.15, sr);
+        if m.siren > 0. {
+            a.siren
+                .freq
+                .set(if m.siren_high { 585. } else { 440. }, 0.02, sr);
+        }
         // Regentropfen auf Blech, Pfützen und Blättern (audio.js: je Viertelsekunde bis 22 Tropfen)
         let since = (self.t - a.last).clamp(0., 0.5);
         a.last = self.t;
@@ -983,7 +994,8 @@ impl Synth {
                 + a.rain.next(sr, block)
                 + a.rain_low.next(sr, block)
                 + a.wind.next(sr, block)
-                + a.whistle.next(sr, block);
+                + a.whistle.next(sr, block)
+                + a.siren.next(sr, 0.) * a.siren_g.tick();
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
             or += amb * c;

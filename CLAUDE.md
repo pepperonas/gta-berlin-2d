@@ -11,7 +11,7 @@ streaming, surfaces, walls, levels data; `DiskSource`/`ThreadedSource`), `levels
 + `carmodels.rs` + `traction.rs`, `roadgraph.rs` (lanes, signals), `traffic.rs` (AI + reservations kept in
 `Reservations`, AI reads an `Agent` snapshot), `pedestrians.rs`, `mission.rs`, `save.rs` (JS-compatible JSON
 file, atomic write), `world.rs`. Positions are f64. Integration tests on real tiles: `crates/sim/tests/world.rs`;
-`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: bikes, transit, stations, life spots, emergency services, weapon wheel. Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
+`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: bikes, transit, stations, life spots, weapon wheel. Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
 (pure, tested), `map_loader` emits per-building `ShadowVertex` wall quads, `engine/lightpass.rs` + `lighting.wgsl`
 render a shadow mask (vertex extrusion along the sun, tree crowns from the atlas) and a half-res lightmap, then
 apply both with a fullscreen triangle at depth 0.5 (ground/cars behind, roofs/crowns in front get ambient only).
@@ -27,7 +27,7 @@ schematic) inside a viewport/scissor rect between HUD items `..split` and `split
 big map: `map_loader/overview.rs` (overview.json → `OverlayMesh`, line widths in screen px) uploaded once via
 `Game::take_overview`, drawn by `overlay.wgsl` through `Hud::overview_inset`; labels in `game/bigmap.rs`;
 combat: `sim/combat.rs` (`Player.combat`, `Input.combat`, fighters = `PedState::Fight`, knock-out → hospital),
-effects in `game/effects.rs`; Diablo clicks: `World::click_control` + `sim/footpath.rs` (A*), scheme in `settings.json`; smoke/capture runs get no input; screens: `play::Screen` (Title/Playing/Paused/Controls/Stats) + `game/menu.rs`, stats in `sim/stats.rs` → `stats.json`; Esc belongs to the game (`Game::quit` ends);
+effects in `game/effects.rs`; services: `sim/services.rs` (incidents → `put_npc_car` + `traffic::set_goal` goal field, `Ai.urgent`), siren in `Mix`; Diablo clicks: `World::click_control` + `sim/footpath.rs` (A*), scheme in `settings.json`; smoke/capture runs get no input; screens: `play::Screen` (Title/Playing/Paused/Controls/Stats) + `game/menu.rs`, stats in `sim/stats.rs` → `stats.json`; Esc belongs to the game (`Game::quit` ends);
 `crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
 colors, and tessellates meshes on a dedicated streaming thread. It owns shared
 features by global IDs and releases far tiles (maximum 64 resident). The engine

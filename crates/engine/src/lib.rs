@@ -467,11 +467,13 @@ impl ApplicationHandler for App {
                         return;
                     }
                 }
+                // Frist: 30 s zum Laden plus die Bildzahl bei 30 Bildern/s (lange Aufnahmen)
+                let limit = 30 + self.smoke_frames.unwrap_or(0) as u64 / 30;
                 if self.smoke_frames.is_some()
-                    && self.smoke_started.elapsed() > Duration::from_secs(30)
+                    && self.smoke_started.elapsed() > Duration::from_secs(limit)
                 {
                     self.error = Some(anyhow::anyhow!(
-                        "Karten-Smoke-Test: Timeout nach 30 Sekunden"
+                        "Karten-Smoke-Test: Timeout nach {limit} Sekunden"
                     ));
                     event_loop.exit();
                     return;

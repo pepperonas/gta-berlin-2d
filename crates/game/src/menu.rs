@@ -399,11 +399,7 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("Hupe (im Auto) · Nachladen (zu Fuß)", "X", "H · R"),
     ("Angreifen / Schießen · Treten", "RT · B", "Strg · V"),
     ("Waffe wechseln", "RB / LB", "Q · 1–6"),
-    (
-        "Zielen",
-        "Rechter Stick",
-        "Maus (Diablo: Strg)",
-    ),
+    ("Zielen", "Rechter Stick", "Maus (Diablo: Strg)"),
     ("Stadtplan", "Ansicht-Taste", "Tab"),
     ("Uhr +1 Stunde · Wetter wechseln", "–", "T · N"),
     ("Ton umschalten · Speichern", "–", "M · F5"),

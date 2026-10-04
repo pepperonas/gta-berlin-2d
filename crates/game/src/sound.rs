@@ -73,7 +73,8 @@ impl Listener {
                 | Event::Notice(_)
                 | Event::Blood { .. }
                 | Event::Kill { .. }
-                | Event::WeaponHit { .. } => None,
+                | Event::WeaponHit { .. }
+                | Event::PickupBody { .. } => None,
             };
             if let Some((sfx, gain)) = s
                 && gain > 0.02

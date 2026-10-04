@@ -172,6 +172,9 @@ pub struct World {
     pub best_time: Option<f64>,
     pub camera: Camera,
     pub res: Reservations,
+    /// Blaulichteinsätze (services.rs); aus = ruhige Testwelt
+    pub services: bool,
+    pub emergency: crate::services::Emergency,
     pub knocked: Knocked,
     pub esp: bool,
     pub abs: bool,
@@ -263,6 +266,8 @@ impl World {
                 zoom: 1.,
             },
             res: Reservations::default(),
+            services: true,
+            emergency: crate::services::Emergency::new(0.5),
             knocked: Knocked::new(),
             esp: true,
             abs: true,
@@ -424,8 +429,62 @@ impl World {
                 continue;
             }
             let color = CAR_COLORS[self.rng.index(CAR_COLORS.len())];
+            return self.put_npc_car_colored(lane, s, x, y, "car", color);
+        }
+        None
+    }
+
+    /// KI-Auto der Art `kind` auf eine Spur setzen (Engstelle wird beansprucht); Farbe aus der Art.
+    pub fn put_npc_car(
+        &mut self,
+        lane: crate::roadgraph::LaneId,
+        s: f64,
+        x: f64,
+        y: f64,
+        kind: &'static str,
+    ) -> Option<u32> {
+        let free = {
+            let agents: Vec<Agent> = self.cars.iter().map(Agent::of).collect();
+            let mut ev = Vec::new();
+            let mut ctx = Ctx {
+                city: &mut self.city,
+                lanes: &mut self.lanes,
+                agents: &agents,
+                walkers: &[],
+                agent_grid: None,
+                walker_grid: None,
+                player_on_foot: None,
+                rng: &mut self.rng,
+                time: self.time,
+                res: &mut self.res,
+                events: &mut ev,
+            };
+            narrow_free(&mut ctx, lane)
+        };
+        if !free {
+            return None;
+        }
+        let color = crate::carmodels::kind(kind)
+            .colors
+            .first()
+            .copied()
+            .unwrap_or(0xcccccc);
+        self.put_npc_car_colored(lane, s, x, y, kind, color)
+    }
+    fn put_npc_car_colored(
+        &mut self,
+        lane: crate::roadgraph::LaneId,
+        s: f64,
+        x: f64,
+        y: f64,
+        kind: &'static str,
+        color: u32,
+    ) -> Option<u32> {
+        let agents: Vec<Agent> = self.cars.iter().map(Agent::of).collect();
+        let mut ev = Vec::new();
+        {
             let id = self.new_car_id();
-            let mut car = Car::new(id, x, y, 0., color, Role::Traffic, "car");
+            let mut car = Car::new(id, x, y, 0., color, Role::Traffic, kind);
             place_on_lane(
                 &mut car,
                 &mut self.lanes,
@@ -453,9 +512,14 @@ impl World {
             };
             claim_narrow(&mut ctx, id, lane, seg);
             self.cars.push(car);
-            return Some(id);
+            Some(id)
         }
-        None
+    }
+
+    /// Auto entfernen (Reservierungen freigeben).
+    pub fn remove_car(&mut self, id: u32) {
+        drop_claims(&mut self.res, id);
+        self.cars.retain(|c| c.id != id);
     }
 
     fn spawn_ped(&mut self, min_r: f64, max_r: f64) -> Option<u32> {
@@ -485,6 +549,7 @@ impl World {
                 || c.cargo
                 || matches!(c.role, Role::Parked | Role::Curb)
                 || c.driver == Some(Driver::Player)
+                || (c.duty.is_some() && !c.done)
         };
         let stuck = |c: &Car| {
             c.driver == Some(Driver::Npc)
@@ -1561,6 +1626,7 @@ impl World {
         }
 
         self.update_peds(dt);
+        crate::services::manage_emergency(self, dt);
         self.manage_population();
         self.manage_parked();
         self.update_mission(input, dt);
