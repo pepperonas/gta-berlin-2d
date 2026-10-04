@@ -38,8 +38,69 @@ struct Splat {
     age: f32,
 }
 
+/// Art eines Reifenpartikels (worldfx.js tireEffect)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kick {
+    Smoke,
+    Dust,
+    Spray,
+    Snow,
+}
+impl Kick {
+    fn color(self) -> [f32; 3] {
+        match self {
+            Kick::Dust => [0.678, 0.604, 0.475],
+            Kick::Smoke => [0.694, 0.722, 0.733],
+            Kick::Spray => [0.745, 0.871, 0.898],
+            Kick::Snow => [0.937, 0.961, 0.973],
+        }
+    }
+}
+/// Welche Wolke ein Reifen aufwirbelt: Schnee, Gischt bei Nässe oder im Wasser, Staub auf Gras und Gehweg, auf
+/// trockenem Asphalt nur beim Driften Qualm.
+pub fn tire_effect(
+    ground: berlin_sim::city::Ground,
+    wet: f64,
+    snow: f64,
+    hard: bool,
+) -> Option<Kick> {
+    use berlin_sim::city::Ground as G;
+    if snow > 0.2 {
+        Some(Kick::Snow)
+    } else if wet > 0.2 || ground == G::Water {
+        Some(Kick::Spray)
+    } else if matches!(ground, G::Grass | G::Sidewalk) {
+        Some(Kick::Dust)
+    } else {
+        hard.then_some(Kick::Smoke)
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Particle {
+    kind: Kick,
+    at: [f32; 2],
+    v: [f32; 2],
+    size: f32,
+    life: f32,
+    max: f32,
+}
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Skid {
+    a: [f32; 2],
+    b: [f32; 2],
+    life: f32,
+}
+const PARTICLES_MAX: usize = 360;
+const SKIDS_MAX: usize = 600;
+const SKID_S: f32 = 8.;
+
 #[derive(Debug, Default)]
 pub struct Effects {
+    particles: Vec<Particle>,
+    skids: std::collections::VecDeque<Skid>,
+    /// Ausstoß je Auto (Bruchteile tragen über Schritte), letzter Reifenpunkt für Bremsspuren
+    emit: std::collections::HashMap<u32, f32>,
+    last_skid: std::collections::HashMap<(u32, i8), [f32; 2]>,
     tracers: Vec<Tracer>,
     flashes: Vec<Flash>,
     puffs: Vec<Puff>,
@@ -111,6 +172,112 @@ impl Effects {
             }
         }
     }
+    /// Reifen (worldfx.js update, render.js Bremsspuren): Wolken je nach Untergrund und Wetter, Qualm aus
+    /// beschädigten Autos, Bremsspuren beim Rutschen, Vollbremsen oder mit Handbremse.
+    pub fn tires(&mut self, w: &mut berlin_sim::world::World, dt: f32) {
+        let dt = dt.clamp(0., 0.1);
+        let (cx, cy) = (w.camera.x, w.camera.y);
+        let (wet, snow) = (w.weather.wet, w.weather.snow);
+        let mut live = std::collections::HashSet::new();
+        for c in &w.cars {
+            if (c.x - cx).abs() > 1600. || (c.y - cy).abs() > 1100. || c.lvl() > 0 {
+                continue;
+            }
+            let speed = c.speed();
+            let (co, si) = (c.angle.cos() as f32, c.angle.sin() as f32);
+            let (x, y, hw, hh) = (c.x as f32, c.y as f32, c.hw as f32, c.hh as f32);
+            // Rauch aus dem Motorraum eines beschädigten oder zerstörten Autos
+            if c.health < 35. || c.wrecked {
+                self.seq = self.seq.wrapping_add(1);
+                let h = |m: f64| hash01(self.seq as f64 * 7.13 + m) as f32;
+                if h(1.) < if c.wrecked { 0.35 } else { 0.15 } {
+                    self.add(Particle {
+                        kind: Kick::Smoke,
+                        at: [x + co * hw * 0.7, y + si * hw * 0.7],
+                        v: [(h(2.) - 0.5) * 10., -18.],
+                        size: 4.,
+                        life: 1.4,
+                        max: 1.4,
+                    });
+                }
+            }
+            if speed < 30. {
+                continue;
+            }
+            let hard = c.skid > 0.2
+                || (c.controls.handbrake && speed > 60.)
+                || (c.controls.brake > 0.8 && speed > 150. && c.driver.is_some());
+            // Bremsspuren an den Hinterrädern
+            for side in [-1i8, 1] {
+                let sd = side as f32;
+                let p = [
+                    x - co * (hw - 6.) - si * sd * (hh - 3.),
+                    y - si * (hw - 6.) + co * sd * (hh - 3.),
+                ];
+                if hard && snow < 0.2 {
+                    if let Some(l) = self.last_skid.get(&(c.id, side))
+                        && (l[0] - p[0]).hypot(l[1] - p[1]) < 30.
+                    {
+                        self.skids.push_back(Skid {
+                            a: *l,
+                            b: p,
+                            life: SKID_S,
+                        });
+                    }
+                    self.last_skid.insert((c.id, side), p);
+                } else {
+                    self.last_skid.remove(&(c.id, side));
+                }
+            }
+            if !hard && wet <= 0.2 && snow <= 0.2 {
+                continue;
+            }
+            let ground = w.city.surface_at(c.x, c.y, Some(c.lvl()));
+            let Some(kind) = tire_effect(ground, wet, snow, hard) else {
+                continue;
+            };
+            live.insert(c.id);
+            let next =
+                self.emit.get(&c.id).copied().unwrap_or(0.) + dt * if hard { 14. } else { 8. };
+            self.emit.insert(c.id, next.fract());
+            let (vx, vy) = (c.vx as f32, c.vy as f32);
+            for _ in 0..next as usize {
+                for sd in [-1f32, 1.] {
+                    self.add(Particle {
+                        kind,
+                        at: [
+                            x - co * hw * 0.65 - si * sd * hh,
+                            y - si * hw * 0.65 + co * sd * hh,
+                        ],
+                        v: [vx * 0.12 - si * sd * 9., vy * 0.12 + co * sd * 9.],
+                        size: if kind == Kick::Smoke { 7. } else { 4. },
+                        life: if kind == Kick::Smoke { 1.2 } else { 0.65 },
+                        max: if kind == Kick::Smoke { 1.2 } else { 0.65 },
+                    });
+                }
+            }
+        }
+        self.emit.retain(|id, _| live.contains(id));
+        for q in &mut self.particles {
+            q.life -= dt;
+            q.at[0] += q.v[0] * dt;
+            q.at[1] += q.v[1] * dt;
+            q.size += dt * if q.kind == Kick::Smoke { 13. } else { 7. };
+        }
+        self.particles.retain(|q| q.life > 0.);
+        for k in &mut self.skids {
+            k.life -= dt;
+        }
+        while self.skids.front().is_some_and(|k| k.life <= 0.) || self.skids.len() > SKIDS_MAX {
+            self.skids.pop_front();
+        }
+    }
+    fn add(&mut self, p: Particle) {
+        if self.particles.len() >= PARTICLES_MAX {
+            self.particles.remove(0);
+        }
+        self.particles.push(p);
+    }
     pub fn click_ring(&mut self, at: (f64, f64)) {
         self.ring = Some(([at.0 as f32, at.1 as f32], RING_S));
     }
@@ -153,6 +320,37 @@ impl Effects {
     }
     /// Blut am Boden (vor den Figuren), Leuchtspuren, Mündungsfeuer und Staub über allem Bewegten.
     pub fn bodies(&self, out: &mut Vec<Body>) {
+        // Bremsspuren: dunkle Gummistriche, die nach 8 s verblassen
+        for (i, k) in self.skids.iter().enumerate() {
+            let (dx, dy) = (k.b[0] - k.a[0], k.b[1] - k.a[1]);
+            let len = dx.hypot(dy);
+            if len < 0.3 {
+                continue;
+            }
+            out.push(Body {
+                center: [(k.a[0] + k.b[0]) / 2., (k.a[1] + k.b[1]) / 2.],
+                half: [len / 2. + 0.6, 1.3],
+                angle: dy.atan2(dx),
+                shape: 4.,
+                depth: 0.8395 + i as f32 * 1e-8,
+                color: [0.06, 0.06, 0.065, 0.32 * (k.life / SKID_S).min(1.)],
+            });
+        }
+        // Reifenwolken: weicher Fleck, der aufquillt und vergeht
+        for q in &self.particles {
+            let age = 1. - q.life / q.max;
+            let a = (std::f32::consts::PI * age).sin()
+                * if q.kind == Kick::Smoke { 0.55 } else { 0.75 };
+            let c = q.kind.color();
+            out.push(Body {
+                center: q.at,
+                half: [q.size, q.size],
+                angle: 0.,
+                shape: 3.,
+                depth: 0.59,
+                color: [c[0], c[1], c[2], a * 0.65],
+            });
+        }
         for s in &self.splats {
             // trocknet nach: wird dunkler und verblasst gegen Ende
             let k = (s.age / BLOOD_KEEP).min(1.);
@@ -287,5 +485,24 @@ mod tests {
         );
         fx.step(BLOOD_KEEP);
         assert_eq!(fx.blood_count(), 0);
+    }
+}
+
+#[cfg(test)]
+mod tire_tests {
+    use super::*;
+    use berlin_sim::city::Ground as G;
+
+    #[test]
+    fn tire_effect_by_ground_and_weather() {
+        assert_eq!(
+            tire_effect(G::Road, 0., 0., false),
+            None,
+            "trocken, ohne Drift: nichts"
+        );
+        assert_eq!(tire_effect(G::Road, 0., 0., true), Some(Kick::Smoke));
+        assert_eq!(tire_effect(G::Grass, 0., 0., false), Some(Kick::Dust));
+        assert_eq!(tire_effect(G::Road, 0.5, 0., false), Some(Kick::Spray));
+        assert_eq!(tire_effect(G::Road, 0.5, 0.5, true), Some(Kick::Snow));
     }
 }

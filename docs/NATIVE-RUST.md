@@ -1223,3 +1223,14 @@ Port von `grime.js`:
   Schieferdächern, **Ruß** auf Blech und Flachdach.
 - **Wasser:** wandernde, funkelnde Lichtreflexe (Zeilen gegeneinander versetzt, kein Raster)
   ([Bild](images/native/wasser.png), Oberbaumbrücke; [Straße](images/native/gebrauchsspuren.png)).
+
+## Reifeneffekte und Bremsspuren (04.10.2026)
+
+Port von `worldfx.js` und den Bremsspuren aus `render.js`, in `game/effects.rs` (`Effects::tires`):
+- **Reifenwolken** je nach Untergrund und Wetter (`tire_effect`, getestet): Schneestaub bei Schneedecke, Gischt bei
+  Nässe oder im Wasser, Staub auf Gras und Gehweg, auf trockenem Asphalt nur beim Driften Qualm. Ausstoß je Auto
+  zeitbasiert (8 bzw. 14 je Sekunde), Teilchen quellen auf und vergehen; höchstens 360.
+- **Rauch** aus dem Motorraum beschädigter (unter 35 %) und zerstörter Autos.
+- **Bremsspuren** an den Hinterrädern beim Rutschen, Vollbremsen ab 150 px/s oder mit Handbremse (nicht im Schnee,
+  dort gibt es die Reifenspuren der Schneedecke), dunkle Striche, die nach 8 s verblassen; höchstens 600.
+Rein darstellend: Streuung aus Hashes, nie aus dem Welt-Zufall.

@@ -8,6 +8,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Reifenqualm, Staub, Gischt und Schneestaub, Rauch aus beschädigten Autos und Bremsspuren.
 - Native Rust-Portierung: Gebrauchsspuren – Ölband je Fahrstreifen, Kontaktschatten am Hausfuß, Schmutz am Boden,
   Moos und Ruß auf Dächern, funkelnde Reflexe auf dem Wasser.
 - Native Rust-Portierung: jedes Fahrzeugmodell mit eigenem Bild aus einem beim Start gerasterten Atlas (Lack,

@@ -1957,6 +1957,7 @@ impl Game for Play {
         }
         self.fx.ingest(&self.world.events);
         self.fx.step(dt as f32);
+        self.fx.tires(&mut self.world, dt as f32);
         self.trails
             .record(&self.world.cars, self.world.time, self.world.weather.snow);
         let view =
