@@ -107,6 +107,10 @@ pub trait Game {
     fn lights(&mut self, _out: &mut Vec<LightSource>) {}
     /// Anzeigen über dem Bild; `camera` + `viewport` rechnen Weltpunkte in Bildschirm-Pixel um.
     fn hud(&mut self, _camera: &camera::Camera, _viewport: Vec2, _out: &mut hud::Hud) {}
+    /// Will das Spiel beendet werden (Menü „Beenden“)?
+    fn quit(&self) -> bool {
+        false
+    }
     /// Stadtplan für die große Karte; wird einmal abgeholt und hochgeladen.
     fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
         None
@@ -264,7 +268,8 @@ impl ApplicationHandler for App {
                         }
                         self.keys.insert(key);
                         match key {
-                            KeyCode::Escape => event_loop.exit(),
+                            // mit Spiel gehört Esc dem Spiel (Pause/Zurück), sonst beendet es den Betrachter
+                            KeyCode::Escape if self.game.is_none() => event_loop.exit(),
                             KeyCode::Digit1 if self.game.is_none() => self.camera.zoom = 0.72,
                             KeyCode::Digit2 if self.game.is_none() => self.camera.zoom = 1.0,
                             KeyCode::Digit3 if self.game.is_none() => self.camera.zoom = 2.0,
@@ -321,6 +326,10 @@ impl ApplicationHandler for App {
                         self.pressed.clear();
                         self.pads.edges = pad::Pad::default();
                         self.accumulator -= step;
+                    }
+                    if game.quit() {
+                        event_loop.exit();
+                        return;
                     }
                     let (position, zoom) = game.camera();
                     self.camera.position = position;

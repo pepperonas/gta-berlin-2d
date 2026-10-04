@@ -44,6 +44,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: große Karte (Tab/View): Stadtplan aus `overview.json` mit eigener Linien-/Flächen-Pipeline,
   Zoom 1–64, Beschriftung von Bezirken, Ortsteilen, Kiezen und Bahnhöfen ohne Überlappung; `--stadtplan ZOOM`.
   Die View-Taste schaltet jetzt die Karte statt des Tons (Ton: M).
+- Native Rust-Fassung: Titelbildschirm (lebende Stadt, Skyline; Fortsetzen/Neues Spiel/Steuerung/Beenden),
+  Pausenmenü (Esc/P/Menü-Taste; Speichern, Mission neu starten, Hauptmenü) und Steuerungstafel. Ohne Option
+  startet das Spiel im Titel; `--new`, `--fortsetzen`, `--bildschirm pause|steuerung`.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

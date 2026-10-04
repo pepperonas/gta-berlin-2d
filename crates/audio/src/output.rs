@@ -76,6 +76,12 @@ impl Audio {
             s.apply(f);
         }
     }
+    /// Einzelnes Geräusch sofort abspielen (Menüklick).
+    pub fn play(&self, s: crate::synth::Sfx) {
+        if let Ok(mut synth) = self.synth.lock() {
+            synth.play(s);
+        }
+    }
     pub fn toggle_mute(&self) -> bool {
         self.synth
             .lock()

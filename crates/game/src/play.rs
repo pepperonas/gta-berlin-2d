@@ -24,6 +24,41 @@ pub struct Play {
     pub bigmap: crate::bigmap::BigMap,
     /// HUD-Breite des letzten Bildes (Basiseinheiten), für die Kartenbedienung im Simulationsschritt
     hud_width: f32,
+    pub screen: Screen,
+    menu: crate::menu::Menu,
+    root: std::path::PathBuf,
+    seed: u32,
+    /// Stick-Stellung des letzten Schritts (Menüauswahl per Stick als Flanke)
+    stick_prev: f32,
+    quit: bool,
+}
+
+/// Bildschirm (game.js): Titel mit laufender Stadt dahinter, Spiel, Pause, Steuerungstafel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    Title,
+    Playing,
+    Paused,
+    /// Steuerung; merkt sich, wohin „Zurück“ führt
+    Controls(bool),
+}
+
+/// Wie das Programm startet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Start {
+    Title,
+    New,
+    Continue,
+}
+
+fn fresh_world(root: &Path, seed: u32) -> Result<World> {
+    let city = City::open(root, Box::new(ThreadedSource::new(root)?))?;
+    Ok(World::new(
+        city,
+        seed,
+        berlin_sim::world::TRAFFIC_CARS,
+        berlin_sim::world::TRAFFIC_PEDS,
+    ))
 }
 
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
@@ -47,20 +82,27 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
 }
 
 impl Play {
-    pub fn new(root: &Path, seed: u32, save: Option<FileStorage>, sound: bool) -> Result<Self> {
-        let city = City::open(root, Box::new(ThreadedSource::new(root)?))?;
-        let mut world = World::new(
-            city,
-            seed,
-            berlin_sim::world::TRAFFIC_CARS,
-            berlin_sim::world::TRAFFIC_PEDS,
-        );
-        if let Some(st) = &save
-            && let Some(data) = read_save(st as &dyn Storage)
-        {
-            eprintln!("Spielstand geladen: {}", st.path.display());
-            world.apply_save(data);
-        }
+    pub fn new(
+        root: &Path,
+        seed: u32,
+        save: Option<FileStorage>,
+        sound: bool,
+        start: Start,
+    ) -> Result<Self> {
+        let mut world = fresh_world(root, seed)?;
+        let saved = save.as_ref().and_then(|st| read_save(st as &dyn Storage));
+        let screen = match (start, saved) {
+            (Start::Title, _) => Screen::Title,
+            (Start::Continue, Some(data)) => {
+                eprintln!("Spielstand geladen");
+                world.apply_save(data);
+                Screen::Playing
+            }
+            _ => Screen::Playing,
+        };
+        let has_save = save
+            .as_ref()
+            .is_some_and(|st| read_save(st as &dyn Storage).is_some());
         let bigmap = match berlin_map_loader::overview::Overview::read(root) {
             Ok(ov) => crate::bigmap::BigMap::new(ov),
             Err(e) => {
@@ -91,20 +133,182 @@ impl Play {
             },
             listener: Default::default(),
             auto_enter: false,
+            screen,
+            menu: crate::menu::title_menu(has_save),
+            root: root.to_path_buf(),
+            seed,
+            stick_prev: 0.,
+            quit: false,
         })
     }
-    pub fn set_storage(&mut self, st: FileStorage) {
-        self.storage = Some(st);
+    fn save(&mut self) -> bool {
+        let Some(st) = self.storage.as_mut() else {
+            return false;
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.);
+        match write_save(st, &self.world.make_save(now)) {
+            Ok(()) => {
+                eprintln!("Spielstand gespeichert: {}", st.path.display());
+                true
+            }
+            Err(e) => {
+                eprintln!("Speichern fehlgeschlagen: {e:#}");
+                false
+            }
+        }
     }
-    fn save(&mut self) {
-        if let Some(st) = self.storage.as_mut() {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.);
-            match write_save(st, &self.world.make_save(now)) {
-                Ok(()) => eprintln!("Spielstand gespeichert: {}", st.path.display()),
-                Err(e) => eprintln!("Speichern fehlgeschlagen: {e:#}"),
+    fn has_save(&self) -> bool {
+        self.storage
+            .as_ref()
+            .is_some_and(|st| read_save(st as &dyn Storage).is_some())
+    }
+    /// Neues Spiel oder gespeichertes fortsetzen: frische Welt (eigene Stadt-Kacheln), Klang zurücksetzen.
+    pub fn start(&mut self, resume: bool) {
+        match fresh_world(&self.root, self.seed) {
+            Ok(mut w) => {
+                if resume
+                    && let Some(data) = self
+                        .storage
+                        .as_ref()
+                        .and_then(|st| read_save(st as &dyn Storage))
+                {
+                    w.apply_save(data);
+                    w.notice = Some(berlin_sim::world::Notice {
+                        text: "Spielstand geladen".into(),
+                        t: 2.,
+                    });
+                }
+                w.force_weather = self.world.force_weather;
+                self.world = w;
+                self.listener = Default::default();
+                self.lamps = LampCache::default();
+                self.saved_for = self.world.completed as u32;
+                self.bigmap.open = false;
+                self.screen = Screen::Playing;
+            }
+            Err(e) => eprintln!("Neue Welt nicht ladbar: {e:#}"),
+        }
+    }
+    pub fn pause(&mut self) {
+        self.screen = Screen::Paused;
+        self.menu = crate::menu::pause_menu();
+    }
+    fn ui_sound(&self) {
+        if let Some(a) = &self.audio {
+            a.play(berlin_audio::synth::Sfx::Ui);
+        }
+    }
+    /// Menübildschirme; `true` = der Schritt ist damit erledigt.
+    fn step_screens(&mut self, keys: &Keys, dt: f64) -> bool {
+        use crate::menu::{Action, Pick};
+        let mk = crate::menu::MenuKeys::from(keys, self.stick_prev);
+        self.stick_prev = keys.pad.ly;
+        // solange Kacheln fehlen, steht die Welt ohnehin still; weiterladen auch in den Menüs
+        if self.world.loading && matches!(self.screen, Screen::Paused | Screen::Controls(false)) {
+            self.world.update(&Input::default(), dt);
+        }
+        match self.screen {
+            Screen::Playing => {
+                let pause = keys.pressed.contains(&KeyCode::Escape)
+                    || keys.pressed.contains(&KeyCode::KeyP)
+                    || keys.pad_pressed.menu;
+                if pause && self.bigmap.open && !keys.pad_pressed.menu {
+                    self.bigmap.open = false;
+                    return false;
+                }
+                if pause && !self.world.loading {
+                    self.pause();
+                    self.ui_sound();
+                    if let Some(a) = &self.audio {
+                        a.apply(&berlin_audio::synth::Frame::default());
+                    }
+                    return true;
+                }
+                false
+            }
+            Screen::Title => {
+                if !self.world.loading {
+                    match self.menu.input(mk) {
+                        Some(Pick::Choose(Action::Continue)) => {
+                            self.ui_sound();
+                            self.start(true)
+                        }
+                        Some(Pick::Choose(Action::New)) => {
+                            self.ui_sound();
+                            self.start(false)
+                        }
+                        Some(Pick::Choose(Action::Controls)) => {
+                            self.screen = Screen::Controls(true)
+                        }
+                        Some(Pick::Choose(Action::Quit)) => self.quit = true,
+                        Some(_) => self.ui_sound(),
+                        None => {}
+                    }
+                }
+                // die Stadt hinter dem Titel lebt weiter (ohne Spieler-Eingaben)
+                if self.screen == Screen::Title {
+                    self.world.update(&Input::default(), dt);
+                    let frame = self.listener.frame(&mut self.world, dt);
+                    if let Some(a) = &self.audio {
+                        a.apply(&frame);
+                    }
+                }
+                true
+            }
+            Screen::Paused => {
+                match self.menu.input(mk) {
+                    Some(Pick::Back | Pick::Choose(Action::Resume)) => {
+                        self.screen = Screen::Playing
+                    }
+                    Some(Pick::Choose(Action::Save)) => {
+                        let ok = self.save();
+                        self.world.notice = Some(berlin_sim::world::Notice {
+                            text: (if ok {
+                                "Spiel gespeichert"
+                            } else {
+                                "Speichern fehlgeschlagen"
+                            })
+                            .into(),
+                            t: 2.,
+                        });
+                        self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Choose(Action::Restart)) => {
+                        self.world.restart_mission();
+                        self.world.notice = Some(berlin_sim::world::Notice {
+                            text: "Mission neu gestartet".into(),
+                            t: 2.,
+                        });
+                        self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
+                    Some(Pick::Choose(Action::Title)) => {
+                        self.screen = Screen::Title;
+                        self.menu = crate::menu::title_menu(self.has_save());
+                    }
+                    _ => {}
+                }
+                if mk.up || mk.down || mk.confirm || mk.back {
+                    self.ui_sound();
+                }
+                true
+            }
+            Screen::Controls(from_title) => {
+                if mk.back || mk.confirm {
+                    self.ui_sound();
+                    self.screen = if from_title {
+                        Screen::Title
+                    } else {
+                        Screen::Paused
+                    };
+                }
+                if from_title {
+                    self.world.update(&Input::default(), dt);
+                }
+                true
             }
         }
     }
@@ -188,6 +392,9 @@ impl Game for Play {
         DT
     }
     fn step(&mut self, keys: &Keys, dt: f64) {
+        if self.step_screens(keys, dt) {
+            return;
+        }
         if keys.pressed.contains(&KeyCode::F5) {
             self.save();
         }
@@ -270,7 +477,16 @@ impl Game for Play {
     }
     fn camera(&self) -> (Vec2, f32) {
         let c = self.world.camera;
+        if matches!(self.screen, Screen::Title | Screen::Controls(true)) {
+            // langsame Kreisfahrt über dem Kiez (main.js demo-Kamera, kleiner Radius: geladene Kacheln)
+            let t = self.world.time;
+            let (x, y) = (c.x + (t * 0.05).cos() * 900., c.y + (t * 0.07).sin() * 600.);
+            return (Vec2::new(x as f32, y as f32), 0.8);
+        }
         (Vec2::new(c.x as f32, c.y as f32), c.zoom as f32)
+    }
+    fn quit(&self) -> bool {
+        self.quit
     }
     fn bodies(&self, out: &mut Vec<Body>) {
         let w = &self.world;
@@ -502,12 +718,31 @@ impl Game for Play {
         let engine = self.world.player_car().map(|_| self.listener.engine());
         crate::weatherfx::overlay(&self.world, out);
         self.hud_width = out.width;
+        match self.screen {
+            Screen::Title => {
+                crate::menu::draw_title(out, &self.menu, self.world.loading);
+                return;
+            }
+            Screen::Controls(_) => {
+                crate::menu::draw_controls(out);
+                return;
+            }
+            _ => {}
+        }
         if self.bigmap.open {
             self.bigmap.draw(&self.world, out);
             return;
         }
         let warn = self.world.road_warning();
         crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
+        if self.screen == Screen::Paused {
+            crate::menu::draw_pause(
+                out,
+                &self.menu,
+                self.world.completed as u32,
+                self.world.best_time,
+            );
+        }
     }
     fn lighting(&self) -> Option<Lighting> {
         let mut l = lighting_of(&world_light(&self.world));
@@ -654,10 +889,10 @@ impl Game for Play {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use berlin_engine::pad::Pad;
+    use std::collections::HashSet;
     #[test]
     fn gamepad_and_keys_merge() {
-        use berlin_engine::pad::Pad;
-        use std::collections::HashSet;
         assert_eq!(radial_deadzone(0.1, 0.1, 0.22), (0., 0.));
         let (x, y) = radial_deadzone(1., 0., 0.22);
         assert!((x - 1.).abs() < 1e-6 && y == 0.);
@@ -708,5 +943,76 @@ mod tests {
         assert!(night.dark > 0.9 && night.shadow_strength == 0. && night.ambient[0] < 0.5);
         let eve = lighting_at(19. * 60.);
         assert!(eve.shadow[0] > 0.5 && eve.shadow_len > noon.shadow_len);
+    }
+    #[test]
+    fn screens_title_pause_save_and_continue() {
+        let dir = std::env::temp_dir().join(format!("gta-berlin-screens-{}", std::process::id()));
+        let path = dir.join("save.json");
+        let _ = std::fs::remove_file(&path);
+        let root = berlin_map_loader::default_data_root();
+        let mut p =
+            Play::new(&root, 4, Some(FileStorage::new(&path)), false, Start::Title).unwrap();
+        let none = HashSet::new();
+        let mut press = |p: &mut Play, k: Option<KeyCode>| {
+            let pressed: HashSet<KeyCode> = k.into_iter().collect();
+            p.step(
+                &Keys {
+                    held: &none,
+                    pressed: &pressed,
+                    pad: Pad::default(),
+                    pad_pressed: Pad::default(),
+                },
+                DT,
+            );
+        };
+        let wait = |p: &mut Play, press: &mut dyn FnMut(&mut Play, Option<KeyCode>)| {
+            let t0 = std::time::Instant::now();
+            while p.world.loading && t0.elapsed().as_secs() < 30 {
+                press(p, None);
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            assert!(!p.world.loading, "Welt lädt nicht");
+        };
+        wait(&mut p, &mut press);
+        assert_eq!(p.screen, Screen::Title);
+        // ohne Spielstand: „Fortsetzen“ aus, Auswahl auf „Neues Spiel“
+        assert!(!p.menu.items[0].enabled);
+        let t = p.world.time;
+        press(&mut p, None);
+        assert!(p.world.time > t, "die Stadt hinter dem Titel läuft");
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::Playing);
+        wait(&mut p, &mut press);
+        // Esc pausiert, die Welt steht
+        press(&mut p, Some(KeyCode::Escape));
+        assert_eq!(p.screen, Screen::Paused);
+        let t = p.world.time;
+        press(&mut p, None);
+        assert_eq!(p.world.time, t);
+        // Spiel speichern
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::Playing);
+        assert!(path.exists(), "Spielstand geschrieben");
+        // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
+        press(&mut p, Some(KeyCode::KeyP));
+        for _ in 0..4 {
+            press(&mut p, Some(KeyCode::ArrowDown));
+        }
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::Title);
+        assert!(p.menu.items[0].enabled && p.menu.index == 0);
+        // Steuerung und zurück
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::Controls(true));
+        press(&mut p, Some(KeyCode::Escape));
+        assert_eq!(p.screen, Screen::Title);
+        // Beenden
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert!(p.quit());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

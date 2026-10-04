@@ -1,5 +1,6 @@
 mod bigmap;
 mod hud;
+mod menu;
 mod play;
 mod sound;
 mod weatherfx;
@@ -24,6 +25,8 @@ fn main() -> Result<()> {
     let mut check_map = false;
     let mut free = false;
     let mut new_game = false;
+    let mut resume = false;
+    let mut screen: Option<String> = None;
     let mut seed = 1989u32;
     let mut check_sim: Option<f64> = None;
     let mut save_path = None;
@@ -128,6 +131,17 @@ fn main() -> Result<()> {
             }
             "--free" => free = true,
             "--new" => new_game = true,
+            "--fortsetzen" => resume = true,
+            "--bildschirm" => {
+                let v = args
+                    .next()
+                    .context("--bildschirm erwartet pause oder steuerung")?;
+                ensure!(
+                    v == "pause" || v == "steuerung",
+                    "--bildschirm erwartet pause oder steuerung"
+                );
+                screen = Some(v);
+            }
             "--seed" => seed = args.next().context("Wert für --seed fehlt")?.parse()?,
             "--save" => {
                 save_path = Some(std::path::PathBuf::from(
@@ -147,8 +161,8 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--audio-wav DATEI [--audio-seconds N]]\n\
-Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung] [--audio-wav DATEI [--audio-seconds N]]\n\
+Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
                 return Ok(());
@@ -222,15 +236,22 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         .unwrap_or_else(|| {
             berlin_sim::save::FileStorage::new(berlin_sim::save::FileStorage::default_path())
         });
-    let play = if new_game {
-        // neues Spiel: vorhandenen Stand nicht laden, aber beim Speichern überschreiben
-        let mut p = play::Play::new(&options.data_root, seed, None, sound)?;
-        p.set_storage(storage);
-        p
+    // Start: Titelbildschirm; --new beginnt sofort neu, --fortsetzen lädt den Stand (Aufnahme-/Testoptionen
+    // wie --im-auto und --stadtplan springen ebenfalls direkt ins Spiel)
+    let start = if new_game {
+        play::Start::New
+    } else if resume || in_car || stadtplan.is_some() || screen.is_some() {
+        play::Start::Continue
     } else {
-        play::Play::new(&options.data_root, seed, Some(storage), sound)?
+        play::Start::Title
     };
+    let play = play::Play::new(&options.data_root, seed, Some(storage), sound, start)?;
     let mut play = play;
+    match screen.as_deref() {
+        Some("pause") => play.pause(),
+        Some("steuerung") => play.screen = play::Screen::Controls(false),
+        _ => {}
+    }
     play.auto_enter = in_car;
     play.world.force_weather = force_weather;
     if let Some(z) = stadtplan {

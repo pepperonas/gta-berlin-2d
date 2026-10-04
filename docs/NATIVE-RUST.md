@@ -456,3 +456,51 @@ Aufnahmen: [ganz Berlin](images/native/stadtplan-1.png), [Kreuzberg, Zoom 12](im
 - Stufen und Überlappungsfreiheit der Beschriftung
 
 GPU-Aufnahmen bei Zoom 1 und 12 wurden visuell kontrolliert.
+
+## Titelbildschirm und Pausenmenü (04.10.2026)
+
+Bildschirme nach `game.js`/`hud.js` (`game/menu.rs`, Zustand `play::Screen`):
+- **Titel:** Die Stadt läuft dahinter, ohne Spieler-Eingaben, mit langsam kreisender Kamera. Darüber stehen
+  die Schrift „GTA BERLIN“, eine Skyline mit Fernsehturm, die Version und der OSM-Hinweis. Das Menü bietet
+  Fortsetzen (nur mit lesbarem Spielstand), Neues Spiel, Steuerung und Beenden.
+- **Pause:** Esc, P oder die Menü-Taste öffnen sie; die Welt steht still. Im Kopf stehen erledigte Aufträge und
+  die Bestzeit. Das Menü bietet Weiterspielen, Spiel speichern, Mission neu starten, Steuerung und Zum
+  Hauptmenü. Esc oder B geht zurück ins Spiel. Ist der Stadtplan offen, schließt Esc zuerst ihn.
+- **Steuerung:** eine Tafel mit der nativen Belegung; die Spaltenbreiten werden aus der Bitmapschrift gemessen.
+
+Bedienung in allen Menüs:
+- **Auswahl:** ↑/↓, W/S, Steuerkreuz oder Stick; deaktivierte Einträge werden übersprungen, am Ende springt die
+  Auswahl wieder an den Anfang.
+- **Bestätigen:** Enter, Leertaste, E oder A.
+- **Zurück:** Esc, Rücktaste oder B.
+- **Klang:** Jede Auswahl spielt einen UI-Klick.
+
+**Neues Spiel und Fortsetzen** bauen jeweils eine frische Welt mit eigener Stadt; „Fortsetzen“ spielt den
+Spielstand ein.
+
+Mit Spiel beendet Esc die Engine nicht mehr; das Spiel meldet `Game::quit` (Menü „Beenden“). Der Betrachter
+`--free` beendet weiter mit Esc.
+
+**Startoptionen:**
+- ohne Option: Titelbildschirm
+- `--new`: sofort ein neues Spiel
+- `--fortsetzen`: sofort weiter mit dem Spielstand
+- `--im-auto`, `--stadtplan` und `--bildschirm pause|steuerung` springen ebenfalls ins Spiel; die letzte
+  Option ist für Aufnahmen gedacht.
+
+Aufnahmen: [Titel](images/native/menu-title.png), [Pause](images/native/menu-pause.png),
+[Steuerung](images/native/menu-steuerung.png).
+
+**Noch offen:**
+- Statistik-Bildschirm
+- Ergebnis-Menü mit „Erneut versuchen / Frei weiterspielen“ (das Ergebnis bestätigt weiter E/A)
+- Maus in Menüs
+- Einstellungen
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 94 Rust-Tests laufen erfolgreich. Neu getestet:
+- Menülogik: deaktivierte Einträge überspringen, Umlauf, Bestätigen und Zurück
+- Bildschirme im 720er-Rahmen, Steuerungstafel passt in 16:9
+- ein Spieldurchlauf auf echten Kacheln: Titel → Neues Spiel → Pause (Welt steht) → Speichern (Datei
+  geschrieben) → Hauptmenü mit „Fortsetzen“ → Steuerung → Beenden
+
+GPU-Aufnahmen aller drei Bildschirme wurden visuell kontrolliert.

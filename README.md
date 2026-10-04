@@ -9,12 +9,14 @@ und Spielstände als JSON-Datei; seit Phase 4 Tag und Nacht mit Schatten,
 Laternen und Scheinwerfern (`--uhr 22:30`, Taste T: +1 Stunde); seit Phase 5
 synthetisierter Klang (Motoren, Reifen, Verkehr, Stadt; Taste M, `--stumm`),
 dazu HUD, Gamepad und Wetter (Regen, Schnee, Nebel, Gewitter, Glätte;
-`--wetter heavysnow`, Taste N), Minikarte und Stadtplan (Tab). Karten, Menüs, Waffen und Nahverkehr folgen;
+`--wetter heavysnow`, Taste N), Minikarte, Stadtplan (Tab), Titelbildschirm und
+Pausenmenü. Waffen und Nahverkehr folgen;
 das Browser-Spiel bleibt die vollständige Referenz.
 
 ```bash
-cargo run --release
-cargo run --release -- --new          # ohne gespeicherten Stand beginnen
+cargo run --release                   # Titelbildschirm (Fortsetzen / Neues Spiel / Steuerung / Beenden)
+cargo run --release -- --new          # sofort neu beginnen (Stand wird beim Speichern überschrieben)
+cargo run --release -- --fortsetzen   # sofort mit dem gespeicherten Stand weiterspielen
 cargo run --release -- --check-sim 120  # Simulation ohne Fenster
 cargo run -- --free                   # freie Kartenansicht (Phase 2)
 cargo test --workspace
@@ -24,7 +26,7 @@ cargo run -- --check-map
 Zu Fuß: WASD/Pfeile, Shift sprinten, Alt langsam. F ein-/aussteigen, E Aktion
 (halten = Kisten einladen). Im Auto: W/S Gas/Bremse (gehalten: rückwärts), A/D
 lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
-erledigten Auftrag wird automatisch gespeichert. Mausrad zoomt, Esc beendet.
+erledigten Auftrag wird automatisch gespeichert. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller: linker Stick, RT/LT Gas/Bremse, Y ein-/aussteigen, A Aktion, B/RB Handbremse, X Hupe.
 Details und Plattformgrenzen: [Native Architektur und Build](docs/NATIVE-RUST.md).
 Die folgenden Browser-/UWP-Anleitungen beziehen sich auf den bisherigen Prototyp.
