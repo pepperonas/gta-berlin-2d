@@ -76,6 +76,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Teleport per Klick auf den Stadtplan mit Rückfrage und Ortsnamen; lädt das Ziel nach,
   landet zu Fuß auf dem Gehweg und im Auto auf einer Fahrspur. `city.rs` liest dazu POIs, Hausnummern,
   Stadtmöbel, Einwohnerdichte sowie Bezirke und Ortsteile.
+- Native Rust-Fassung: Stadtleben. Tagesrhythmus (`rhythm.rs`): Zielbevölkerung nach Uhrzeit, Wochentag,
+  Verkehrszählung, Einwohnerdichte und Lokalen. Lebensorte (`life.rs`): Wartende, Raucher, Clubschlange,
+  Späti-Runde, Cafégäste, Schaufenstergucker, Straßenmusik, Bänke und Decken im Park (neuer Passantenzustand
+  `Hang`). Tauben und Enten (`animals.rs`), die auffliegen bzw. wegschwimmen, und abgestellte E-Roller.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

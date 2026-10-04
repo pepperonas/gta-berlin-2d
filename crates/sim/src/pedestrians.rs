@@ -29,6 +29,8 @@ pub enum PedState {
     Dead,
     /// wehrt sich gegen die Spielfigur (combat.rs)
     Fight,
+    /// steht, sitzt oder liegt an einem Platz des Stadtlebens (life.rs)
+    Hang,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CrossTarget {
@@ -76,6 +78,9 @@ pub struct Ped {
     pub punch: f64,
     /// Tote: Rettungsdienst schon alarmiert
     pub reported: bool,
+    /// Platz des Stadtlebens (bleibt nach dem Aufscheuchen gesetzt, `world.rs` gibt ihn frei)
+    pub hang: Option<crate::life::Hang>,
+    pub hang_t: f64,
 }
 
 pub fn walkable(e: &Edge) -> bool {
@@ -225,6 +230,8 @@ pub fn create_ped(id: u32, city: &mut City, sw: &mut Sidewalks, spot: Spot, rng:
         hit_cd: 0.,
         punch: 0.,
         reported: false,
+        hang: None,
+        hang_t: 0.,
     }
 }
 
@@ -587,6 +594,22 @@ pub fn update_ped(p: &mut Ped, cx: &mut PedCtx, dt: f64) {
                 p.return_best = f64::INFINITY;
             } else {
                 move_with_collision(p, dx / d * v, dy / d * v, cx);
+            }
+        }
+        PedState::Hang => {
+            // an seinem Platz: kleine Bewegungen, der Blick wandert
+            if let Some(hg) = &p.hang {
+                (p.x, p.y) = (hg.x, hg.y);
+                p.hang_t += dt;
+                let k = p.id as f64 * 1.7;
+                use crate::life::Act;
+                let calm = matches!(hg.act, Act::Queue | Act::Wait);
+                p.facing = hg.face + (p.hang_t * 0.6 + k).sin() * if calm { 0.25 } else { 0.45 };
+                if calm || hg.act == Act::Music {
+                    p.step = (p.hang_t * 1.5 + k).sin() * 3.; // Tippeln
+                }
+            } else {
+                p.state = PedState::Walk;
             }
         }
         PedState::Dead => {

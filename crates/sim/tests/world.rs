@@ -591,6 +591,13 @@ fn statistics_track_distance_time_and_entering() {
     assert_eq!(game, total, "beide Stände bekommen dasselbe");
 }
 
+/// Stadtleben abschalten (die Späti-Runde steht sonst um die Figur herum).
+fn calm(w: &mut World) {
+    w.day_rhythm = false;
+    w.peds.retain(|p| p.state != PedState::Hang);
+    w.hangers.clear();
+}
+
 /// Passanten vor die Spielfigur stellen und ruhig halten (für Treffertests).
 fn ped_in_front(w: &mut World, dist: f64) -> usize {
     let (x, y, lvl) = (w.player.x, w.player.y, w.player.level.lvl);
@@ -613,6 +620,7 @@ fn shooting_and_melee_hurt_pedestrians() {
     use berlin_sim::events::Event;
     let mut w = world(21);
     run(&mut w, 10, idle());
+    calm(&mut w);
     // eine freie Schusslinie nach Osten suchen (die Figur steht an einer Straße)
     let lvl = w.player.level.lvl;
     let (mut ang, mut found) = (0., false);
@@ -1218,4 +1226,77 @@ fn location_names_and_pois() {
     );
     assert!(w.city.density_at(g.x, g.y) >= 0.);
     eprintln!("Späti: {name} ({:?})", w.city.district_at(g.x, g.y));
+}
+
+#[test]
+fn city_life_animals_and_day_rhythm() {
+    use berlin_sim::animals::State as Bird;
+    use berlin_sim::life::Act;
+    let mut w = world(81);
+    assert!(w.day_rhythm, "Standardbevölkerung = Tagesrhythmus");
+    run(&mut w, 5, idle());
+    // Ort und Uhrzeit bestimmen die Zielbevölkerung: nachts um 4 weniger als am Nachmittag
+    w.clock = 4. * 60.;
+    w.set_targets();
+    let night = (w.car_target, w.ped_target);
+    w.clock = 17. * 60.;
+    w.set_targets();
+    let day = (w.car_target, w.ped_target);
+    assert!(night.0 < day.0 && night.1 < day.1, "{night:?} vs {day:?}");
+    // Freitagabend am Späti: Stammgäste mit Flasche, dazu weitere Plätze ringsum
+    w.clock = 21. * 60.;
+    w.day = 4;
+    w.manage_life(true);
+    let hang: Vec<_> = w
+        .peds
+        .iter()
+        .filter(|p| p.state == PedState::Hang)
+        .collect();
+    assert!(hang.len() >= 5, "{} Leute an Plätzen", hang.len());
+    assert!(hang.iter().any(|p| {
+        p.hang
+            .as_ref()
+            .is_some_and(|h| h.group == "spaeti" && h.act == Act::Drink)
+    }));
+    assert!(w.hangers.len() == hang.len());
+    // sie bleiben an ihrem Platz
+    let p0 = hang[0].id;
+    let at = |w: &World| {
+        let p = w.peds.iter().find(|p| p.id == p0).unwrap();
+        (p.x, p.y)
+    };
+    let before = at(&w);
+    run(&mut w, 60, idle());
+    let after = at(&w);
+    assert!((before.0 - after.0).hypot(before.1 - after.1) < 1e-9);
+    // Tiere: Tauben und Enten im Umkreis, ein Schuss scheucht die nahen auf
+    w.manage_animals(true);
+    assert!(!w.animals.is_empty(), "Tauben in Kreuzberg");
+    let a = w
+        .animals
+        .iter()
+        .position(|a| a.state == Bird::Peck)
+        .expect("pickende Taube");
+    let (ax, ay) = (w.animals[a].x, w.animals[a].y);
+    (w.player.x, w.player.y) = (ax + 20., ay);
+    run(&mut w, 2, idle());
+    let key = w.animals[a].key.clone();
+    assert!(
+        w.animals
+            .iter()
+            .filter(|b| b.key == key)
+            .any(|b| b.state == Bird::Fly),
+        "Figur zu nah: der Schwarm fliegt auf"
+    );
+    // Aufgescheuchte Lebensplatz-Gäste werden normale Passanten
+    let i = w
+        .peds
+        .iter()
+        .position(|p| p.state == PedState::Hang)
+        .unwrap();
+    let (px, py) = (w.peds[i].x, w.peds[i].y);
+    berlin_sim::pedestrians::scare(&mut w.peds[i], (px + 30., py), 2.);
+    let id = w.peds[i].id;
+    w.manage_life(true);
+    assert!(!w.hangers.values().any(|&h| h == id), "Platz freigegeben");
 }

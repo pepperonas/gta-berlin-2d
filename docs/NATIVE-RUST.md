@@ -802,3 +802,35 @@ Behoben: Der Dialog wurde über dem offenen Plan nie gezeichnet, weil `hud()` do
 
 **Validierung:** Integrationstests für Teleport zu Fuß und im Auto (frei von Gebäuden, Bevölkerung am neuen Ort,
 außerhalb = nichts) und für Ortsnamen, Ortsteil, POIs und Dichte; 119 Rust-Tests.
+
+## Stadtleben (04.10.2026)
+
+Vier Teile, alle nur bei der Standardbevölkerung (`World::day_rhythm`; Tests mit festen Zahlen bleiben ruhig):
+- **Tagesrhythmus (`rhythm.rs`, nach `rhythm.js`):** Verkehrs- und Menschenkurven für Werktag und Wochenende,
+  Nachtleben (die Nacht zählt bis 6 Uhr zum Vortag), örtlicher Verkehr aus den Kfz-Zählungen der Kanten,
+  Wohndichte, Läden und Lokale im Umkreis. `World::set_targets` stellt alle 2 s die Zielzahlen um die Kamera;
+  Regen, Nebel, Schnee und Sturm drücken die Passanten (`people_factor`). Überzählige verschwinden außer Sicht,
+  einer je Schritt. `traffic_scale`/`ped_scale` sind für die Befehlszeile vorbereitet.
+- **Lebensorte (`life.rs`, nach `life.js`):** deterministisch aus Ort, Stunde und Wochentag. Wartende an
+  Haltestellen, Straßenmusik am U-Bahnhof, Raucher vor Bars, Schlange vor Clubs (Fr/Sa-Nacht), Leute mit Flasche
+  am Späti, Cafégäste, Plaudernde vor Imbissen, Schaufenstergucker, Sitzende auf OSM-Bänken und Gruppen auf Decken
+  in großen Grünflächen; dazu die Runde vor Kalles Späti. Die Vorplätze (Gehweg vor dem POI, Blick zur Straße)
+  und Bankrichtungen sind gecacht. `World::manage_life` setzt daraus Passanten im neuen Zustand `PedState::Hang`
+  (stehen am Platz, Blick wandert, Tippeln beim Warten); neue entstehen außer Sicht, beim Aufbau eines Ortes
+  sofort. Wer erschreckt wird, flieht wie alle und geht danach normal weiter; sein Platz wird frei.
+- **Tiere (`animals.rs`, nach `animals.js`):** Taubenschwärme vor Imbissen, Cafés und Bahnhöfen sowie auf
+  Plätzen, Enten ufernah auf großen Gewässern. Tauben picken und fliegen bei Spielfigur, schnellen Autos,
+  Fliehenden, Schüssen und Hupen auf (Schatten nach Flughöhe), landen woanders; Enten schwimmen weg.
+- **Abgestellte E-Roller (`bikes.rs parked_scooters`):** aus der Kanten-ID an der Hauswandseite des Gehwegs,
+  jeder fünfte liegt. `World::scooters` hält sie für die Kanten um die Kamera (nur Darstellung).
+
+Darstellung (`play.rs life_bodies`, `hang_bodies`): Bank und Decke je Gruppe, Liegende, Flasche, Zigarettenglut,
+Gitarre; Tauben (wenige weiß oder braun) mit Flügelschlag, Enten mit grünem Kopf bzw. braun. Aufnahme Freitag
+22 Uhr am Späti: [Bild](images/native/stadtleben.png).
+
+Noch offen: die Auslastung echter Bars (Nachtleben-Feed) sowie Jogger und Hundehalter (die Rust-Passanten haben
+noch keine Personentypen).
+
+**Validierung:** Unit-Tests für Kurven, Nachtleben, Tätigkeiten je Uhrzeit, Gruppenanordnung und Parkbelegung;
+Integrationstest auf echten Kacheln (Nacht < Nachmittag, Späti-Runde am Freitagabend, Plätze bleiben stehen,
+Tauben fliegen bei Annäherung auf, aufgescheuchte Gäste geben den Platz frei); 124 Rust-Tests.

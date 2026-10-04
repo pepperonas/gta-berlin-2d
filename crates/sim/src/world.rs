@@ -2,8 +2,7 @@
 //! einem deterministischen Simulationsschritt. Eingaben kommen als abstrakter Zustand ([`Input`]), Ausgaben als
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
 //!
-//! Noch nicht portiert (spätere Phasen): Waffen/Nahkampf, Tagesrhythmus und Wetterverlauf, Räder/Tiere/Linienverkehr,
-//! Aufenthaltsorte, Einsatzfahrzeuge, U-Bahnhöfe, Klick-Steuerung.
+//! Noch nicht portiert: Linienverkehr und U-Bahnhöfe, Bar-Auslastung (Nachtleben-Feed), Jogger und Hundehalter.
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
 use crate::city::{City, Ground, Solid, point_along};
@@ -191,6 +190,24 @@ pub struct World {
     pub veh_info: Option<(u32, f64)>,
     pub car_target: usize,
     pub ped_target: usize,
+    /// Tagesrhythmus: Zielbevölkerung nach Uhrzeit, Wochentag und Ort, Stadtleben und Tiere (nur bei der
+    /// Standardbevölkerung; Tests mit festen Zahlen bleiben ruhig)
+    pub day_rhythm: bool,
+    /// Dichte-Faktoren für Verkehr und Passanten (Befehlszeile)
+    pub traffic_scale: f64,
+    pub ped_scale: f64,
+    /// Tauben und Enten (animals.rs) und ihre Schwarmplätze
+    pub animals: Vec<crate::animals::Animal>,
+    pub flocks: std::collections::BTreeMap<String, (crate::animals::Kind, f64, f64)>,
+    /// Stadtleben: Platzschlüssel → Passanten-ID
+    pub hangers: std::collections::BTreeMap<String, u32>,
+    life_cache: crate::life::LifeCache,
+    /// abgestellte E-Roller je Kante um die Kamera (nur Darstellung)
+    pub scooters: std::collections::BTreeMap<i64, Vec<crate::bikes::ParkedScooter>>,
+    scoot_t: f64,
+    rhythm_t: f64,
+    life_t: f64,
+    anim_t: f64,
     pub loading: bool,
     populated: bool,
     pending_save: Option<SaveData>,
@@ -284,6 +301,18 @@ impl World {
             veh_info: None,
             car_target: cars,
             ped_target: peds,
+            day_rhythm: cars == TRAFFIC_CARS && peds == TRAFFIC_PEDS,
+            traffic_scale: 1.,
+            ped_scale: 1.,
+            animals: Vec::new(),
+            flocks: Default::default(),
+            hangers: Default::default(),
+            life_cache: Default::default(),
+            scooters: Default::default(),
+            scoot_t: -99.,
+            rhythm_t: -99.,
+            life_t: -99.,
+            anim_t: -99.,
             loading: true,
             populated: false,
             bikes: Vec::new(),
@@ -368,6 +397,12 @@ impl World {
     }
     fn populate(&mut self) {
         self.populated = true;
+        if self.day_rhythm {
+            self.set_targets();
+            self.rhythm_t = self.time;
+        }
+        self.manage_life(true);
+        self.manage_animals(true);
         for _ in 0..self.car_target {
             self.spawn_traffic(120., SPAWN_MAX);
         }
@@ -378,6 +413,202 @@ impl World {
             self.spawn_bike(120., SPAWN_MAX);
         }
     }
+    /// Zielbevölkerung aus Tagesrhythmus und Ort; bei Regen und Nebel gehen weniger Menschen raus.
+    pub fn set_targets(&mut self) {
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (c, p) = crate::rhythm::population_targets(
+            &mut self.city,
+            cx,
+            cy,
+            self.clock,
+            self.day,
+            (TRAFFIC_CARS, TRAFFIC_PEDS),
+        );
+        self.car_target = (c as f64 * self.traffic_scale).round() as usize;
+        let min = if self.ped_scale == 0. { 0. } else { 4. };
+        self.ped_target = (p as f64 * crate::weather::people_factor(&self.sky.p) * self.ped_scale)
+            .round()
+            .max(min) as usize;
+    }
+
+    /// Stadtleben: Passanten mit Tätigkeit an ihren Plätzen halten (life.rs). Neue entstehen nur außer Sicht, außer
+    /// direkt nach dem Aufbau eines Ortes (Spielbeginn, Teleport); wer nicht mehr gebraucht wird, geht außer Sicht.
+    pub fn manage_life(&mut self, all: bool) {
+        use crate::life;
+        if !self.day_rhythm || (!all && self.time - self.life_t < life::EVERY) {
+            return;
+        }
+        self.life_t = self.time;
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        let in_view = |x: f64, y: f64| {
+            (x - cx).abs() < life::VIEW_HALF_X && (y - cy).abs() < life::VIEW_HALF_Y
+        };
+        let want = life::life_spots(
+            &mut self.city,
+            &mut self.life_cache,
+            cx,
+            cy,
+            self.clock,
+            self.day,
+            life::RADIUS,
+        );
+        let keys: HashSet<&str> = want.iter().map(|s| s.key.as_str()).collect();
+        let mut drop_ids = Vec::new();
+        self.hangers.retain(|key, id| {
+            let Some(p) = self.peds.iter().find(|p| p.id == *id) else {
+                return false;
+            };
+            if p.state != PedState::Hang {
+                return false; // aufgescheucht: geht als normaler Passant weiter
+            }
+            let far = (p.x - cx).hypot(p.y - cy) > life::DESPAWN;
+            if far || (!keys.contains(key.as_str()) && !in_view(p.x, p.y)) {
+                drop_ids.push(*id);
+                return false;
+            }
+            true
+        });
+        self.peds.retain(|p| !drop_ids.contains(&p.id));
+        for s in want {
+            if self.hangers.contains_key(&s.key) || self.hangers.len() >= life::MAX_HANGERS {
+                continue;
+            }
+            if !all && in_view(s.x, s.y) {
+                continue;
+            }
+            let Some(sp) = crate::pedestrians::nearest_spot(
+                &mut self.city,
+                &mut self.sidewalks,
+                s.x,
+                s.y,
+                200.,
+            ) else {
+                continue;
+            };
+            let id = self.next_ped;
+            self.next_ped += 1;
+            let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
+            (p.x, p.y, p.facing, p.state) = (s.x, s.y, s.face, PedState::Hang);
+            p.dead_t = 0.;
+            self.hangers.insert(s.key.clone(), id);
+            p.hang = Some(s);
+            self.peds.push(p);
+        }
+    }
+
+    /// Tiere um die Kamera halten (alle 0,5 s): fehlende Schwärme außer Sicht aufstellen, ferne abbauen.
+    pub fn manage_animals(&mut self, all: bool) {
+        use crate::animals::{self as an, Kind, State};
+        use crate::life::{DESPAWN, VIEW_HALF_X, VIEW_HALF_Y};
+        if !self.day_rhythm || (!all && self.time - self.anim_t < an::EVERY) {
+            return;
+        }
+        self.anim_t = self.time;
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        let in_view = |x: f64, y: f64| {
+            (x - cx).abs() < VIEW_HALF_X + 60. && (y - cy).abs() < VIEW_HALF_Y + 60.
+        };
+        let spots = an::animal_spots(&mut self.city, &mut self.life_cache, cx, cy, an::RADIUS);
+        let want: HashSet<&str> = spots.iter().map(|s| s.key.as_str()).collect();
+        self.animals.retain(|a| {
+            let far = (a.x - cx).hypot(a.y - cy) > DESPAWN;
+            let flown = a.state == State::Fly && !in_view(a.x, a.y);
+            !(far || flown || (!want.contains(a.key.as_str()) && !in_view(a.x, a.y)))
+        });
+        self.flocks
+            .retain(|k, f| want.contains(k.as_str()) || in_view(f.1, f.2));
+        let mut ducks = self.flocks.values().filter(|f| f.0 == Kind::Duck).count();
+        let mut pigeons = self.flocks.len() - ducks;
+        for s in &spots {
+            if self.flocks.contains_key(&s.key) {
+                continue;
+            }
+            let full = if s.kind == Kind::Duck {
+                ducks >= an::MAX_DUCKS
+            } else {
+                pigeons >= an::MAX_FLOCKS
+            };
+            if full || (!all && in_view(s.x, s.y)) {
+                continue;
+            }
+            self.flocks.insert(s.key.clone(), (s.kind, s.x, s.y));
+            if s.kind == Kind::Duck {
+                ducks += 1;
+            } else {
+                pigeons += 1;
+            }
+            for i in 0..s.n {
+                let b = an::make_bird(&mut self.rng, s, i);
+                self.animals.push(b);
+            }
+        }
+        // aufgescheuchte Schwärme kommen erst wieder, wenn ihr Platz außer Sicht ist
+        let animals = &self.animals;
+        self.flocks
+            .retain(|k, f| animals.iter().any(|a| &a.key == k) || in_view(f.1, f.2));
+    }
+
+    /// Abgestellte E-Roller der Kanten um die Kamera (alle 0,5 s, rein aus den Kanten-IDs).
+    pub fn manage_scooters(&mut self) {
+        if self.time - self.scoot_t < 0.5 {
+            return;
+        }
+        self.scoot_t = self.time;
+        let (cx, cy) = (self.camera.x, self.camera.y);
+        let near: HashSet<i64> = self
+            .city
+            .edge_segs
+            .query(&Rect::around(cx, cy, 1300.))
+            .into_iter()
+            .filter_map(|h| self.city.edge_segs.get(h).edge)
+            .filter(|id| self.city.edges.get(id).is_some_and(|e| e.lvl < 1))
+            .collect();
+        self.scooters.retain(|id, _| near.contains(id));
+        for id in near {
+            if !self.scooters.contains_key(&id) {
+                let v = crate::bikes::parked_scooters(&mut self.city, &mut self.sidewalks, id);
+                self.scooters.insert(id, v);
+            }
+        }
+    }
+
+    fn update_animals(&mut self, dt: f64) {
+        use crate::animals::{SCARE_CAR, SCARE_PERSON};
+        if self.animals.is_empty() {
+            return;
+        }
+        let mut threats = Vec::new();
+        if self.player.in_car.is_none() && !self.player.combat.dead {
+            threats.push((self.player.x, self.player.y, SCARE_PERSON));
+        }
+        for c in &self.cars {
+            if c.vx.abs() + c.vy.abs() > 60. {
+                threats.push((c.x, c.y, SCARE_CAR + c.hw));
+            }
+        }
+        for p in &self.peds {
+            if p.state == PedState::Flee {
+                threats.push((p.x, p.y, 35.));
+            }
+        }
+        let shots: Vec<(f64, f64)> = self
+            .events
+            .iter()
+            .filter_map(|e| match *e {
+                Event::Shot { x, y, .. } | Event::Horn { x, y, .. } => Some((x, y)),
+                _ => None,
+            })
+            .collect();
+        crate::animals::update_animals(
+            &mut self.animals,
+            &mut self.city,
+            &mut self.rng,
+            &threats,
+            &shots,
+            dt,
+        );
+    }
+
     /// Radfahrer: ein Anteil der Fußgänger-Zielzahl, bei Regen, Schnee und Sturm weniger (nur mit Tagesrhythmus).
     pub fn bike_target(&self) -> usize {
         if !self.rhythm {
@@ -624,6 +855,10 @@ impl World {
         });
         self.peds.clear();
         self.bikes.clear();
+        self.animals.clear();
+        self.flocks.clear();
+        self.scooters.clear();
+        self.hangers.clear();
         self.populated = false;
     }
 
@@ -845,6 +1080,11 @@ impl World {
 
     fn manage_population(&mut self) {
         let (cx, cy) = (self.camera.x, self.camera.y);
+        if self.day_rhythm && self.time - self.rhythm_t >= 2. {
+            // Tageszeit und Ort bestimmen, wie viel los ist
+            self.rhythm_t = self.time;
+            self.set_targets();
+        }
         let keep = |w: &World, c: &Car| {
             Some(c.id) == w.player_car_id
                 || Some(c.id) == w.player.in_car
@@ -881,10 +1121,37 @@ impl World {
         if npc < self.car_target {
             self.spawn_traffic(SPAWN_MIN, SPAWN_MAX);
         }
+        // weniger los als eben (Tageszeit, anderer Ort): Überzählige außer Sicht verschwinden lassen, eins je Schritt
+        if self.day_rhythm && npc > self.car_target + 2 {
+            let i = self.cars.iter().position(|c| {
+                c.driver == Some(Driver::Npc)
+                    && !keep(self, c)
+                    && (c.x - cx).hypot(c.y - cy) > SPAWN_MIN
+            });
+            if let Some(i) = i {
+                drop_claims(&mut self.res, self.cars[i].id);
+                self.cars.remove(i);
+            }
+        }
+        let walkers = self
+            .peds
+            .iter()
+            .filter(|q| q.state == PedState::Walk && q.hang.is_none())
+            .count();
+        if self.day_rhythm && walkers > self.ped_target + 4 {
+            let i = self.peds.iter().position(|q| {
+                q.state == PedState::Walk
+                    && q.hang.is_none()
+                    && (q.x - cx).hypot(q.y - cy) > SPAWN_MIN
+            });
+            if let Some(i) = i {
+                self.peds.remove(i);
+            }
+        }
         if self
             .peds
             .iter()
-            .filter(|p| p.state != PedState::Dead)
+            .filter(|p| p.state != PedState::Dead && p.hang.is_none())
             .count()
             < self.ped_target
         {
@@ -2162,6 +2429,10 @@ impl World {
         crate::services::manage_emergency(self, dt);
         self.manage_population();
         self.manage_parked();
+        self.manage_life(false);
+        self.manage_animals(false);
+        self.update_animals(dt);
+        self.manage_scooters();
         self.update_mission(input, dt);
         self.update_camera(dt);
     }

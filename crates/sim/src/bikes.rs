@@ -450,3 +450,60 @@ mod tests {
         assert_eq!(b.shirt(), RIDER_SHIRTS[3]);
     }
 }
+
+/// Abgestellter E-Roller am Gehweg (Darstellung).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ParkedScooter {
+    pub x: f64,
+    pub y: f64,
+    pub angle: f64,
+    pub lying: bool,
+    pub seed: i64,
+}
+
+/// Abgestellte E-Roller am Gehweg einer Kante (bikes.js parkedScooters): deterministisch aus der Kanten-ID, an der
+/// Hauswandseite des Gehwegs, nie im Haus oder auf der Fahrbahn; jeder fünfte liegt umgekippt.
+pub fn parked_scooters(
+    city: &mut City,
+    sw: &mut crate::pedestrians::Sidewalks,
+    eid: i64,
+) -> Vec<ParkedScooter> {
+    use crate::math::hash01;
+    let mut out = Vec::new();
+    let Some(e) = city.edges.get(&eid) else {
+        return out;
+    };
+    if !(crate::pedestrians::walkable(e) && e.cls <= 8) {
+        return out;
+    }
+    let (s, eid64) = (city.scale, e.id);
+    let id = eid64 as f64;
+    let pts = e.pts.clone();
+    let (w0, w1) = sw.walk_range(city, eid);
+    let n = ((w1 - w0) / (90. * s) + hash01(id * 7. + 3.) * 1.3)
+        .floor()
+        .max(0.) as usize;
+    for k in 0..n {
+        let kf = k as f64;
+        let side: i8 = if hash01(id * 13. + kf) < 0.5 { 1 } else { -1 };
+        let Some(off) = sw.offset(city, eid, side) else {
+            continue;
+        };
+        let st = w0 + hash01(id * 31. + kf * 7.) * (w1 - w0);
+        let p = point_along(&pts, st);
+        let o = off + 0.8 * s;
+        let (x, y) = (p.x - p.uy * o * side as f64, p.y + p.ux * o * side as f64);
+        if city.in_building(x, y).is_some() || city.on_road(x, y, 0., None).is_some() {
+            continue;
+        }
+        let lying = hash01(id * 17. + kf) < 0.2;
+        out.push(ParkedScooter {
+            x,
+            y,
+            angle: p.uy.atan2(p.ux) + (hash01(id + kf * 3.) - 0.5) * if lying { 3. } else { 0.8 },
+            lying,
+            seed: eid64 * 10 + k as i64,
+        });
+    }
+    out
+}

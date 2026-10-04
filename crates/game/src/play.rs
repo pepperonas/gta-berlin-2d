@@ -731,6 +731,233 @@ fn demo_combat_input(w: &World, input: &mut Input) {
 
 /// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
 /// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+/// Stadtleben am Boden: abgestellte E-Roller, Tauben und Enten (fliegende Tauben über den Dächern).
+fn life_bodies(w: &World, near: &dyn Fn(f64, f64) -> bool, out: &mut Vec<Body>) {
+    use berlin_sim::animals::{Kind, State};
+    const SCOOTER: [u32; 4] = [0x1abc9c, 0xe84393, 0x55efc4, 0x6c5ce7];
+    for sc in w.scooters.values().flatten().filter(|s| near(s.x, s.y)) {
+        let (x, y, a) = (sc.x as f32, sc.y as f32, sc.angle as f32);
+        let (fx, fy) = (a.cos(), a.sin());
+        out.push(Body {
+            center: [x + 0.5, y + 1.],
+            half: [7.5, if sc.lying { 3. } else { 2. }],
+            angle: a,
+            shape: 0.,
+            depth: 0.6205,
+            color: [0., 0., 0., 0.22],
+        });
+        out.push(Body {
+            center: [x - fx, y - fy],
+            half: [6., 1.5],
+            angle: a,
+            shape: 0.,
+            depth: 0.6203,
+            color: rgba(0x2d3436, 1.),
+        });
+        out.push(Body {
+            center: [x + fx * 5.5, y + fy * 5.5],
+            half: [1.5, 1.2],
+            angle: a,
+            shape: 0.,
+            depth: 0.6202,
+            color: rgba(SCOOTER[(sc.seed.rem_euclid(4)) as usize], 1.),
+        });
+        // Lenkstange: steht quer, liegt längs
+        let (lx, ly) = if sc.lying {
+            (x + fx * 6.2 - fy * 4.5, y + fy * 6.2 + fx * 4.5)
+        } else {
+            (x + fx * 6.2, y + fy * 6.2)
+        };
+        out.push(Body {
+            center: [lx, ly],
+            half: [
+                if sc.lying { 0.7 } else { 4.5 },
+                if sc.lying { 4.5 } else { 0.7 },
+            ],
+            angle: a + std::f32::consts::FRAC_PI_2 * if sc.lying { 0. } else { 1. },
+            shape: 0.,
+            depth: 0.6201,
+            color: rgba(0x111111, 1.),
+        });
+    }
+    for b in w.animals.iter().filter(|b| near(b.x, b.y)) {
+        let fly = matches!(b.state, State::Fly | State::Land);
+        let z = b.z as f32;
+        let (x, y, a) = (b.x as f32, b.y as f32 - z * 0.6, b.facing as f32);
+        let (fx, fy) = (a.cos(), a.sin());
+        let depth = if fly { 0.06 } else { 0.6195 };
+        // Schatten am Boden, im Flug nach Höhe versetzt
+        out.push(Body {
+            center: [b.x as f32 + z * 0.35 + 1., b.y as f32 + z * 0.5 + 1.5],
+            half: [4., 2.5],
+            angle: a,
+            shape: 1.,
+            depth: 0.6199,
+            color: [0., 0., 0., if fly { 0.18 } else { 0.2 }],
+        });
+        if b.kind == Kind::Duck {
+            let drake = b.seed % 2 == 0;
+            out.push(Body {
+                center: [x, y],
+                half: [5., 3.],
+                angle: a,
+                shape: 1.,
+                depth,
+                color: rgba(if drake { 0x8d8f86 } else { 0x8a6d4e }, 1.),
+            });
+            out.push(Body {
+                center: [x + fx * 4.5, y + fy * 4.5],
+                half: [2., 2.],
+                angle: 0.,
+                shape: 1.,
+                depth: depth - 0.0001,
+                color: rgba(if drake { 0x1f6f43 } else { 0x7a5b3c }, 1.),
+            });
+            out.push(Body {
+                center: [x + fx * 6.6, y + fy * 6.6],
+                half: [1.3, 0.8],
+                angle: a,
+                shape: 1.,
+                depth: depth - 0.0002,
+                color: rgba(0xe1a32a, 1.),
+            });
+            continue;
+        }
+        let r = berlin_sim::math::hash01(b.seed as f64);
+        let g = if r < 0.15 {
+            0xf2f2f2
+        } else if r < 0.3 {
+            0x6d5a4c
+        } else {
+            0x7d8491
+        };
+        if fly {
+            let wing = (b.flap as f32 * 26.).sin() * 5. + 2.;
+            out.push(Body {
+                center: [x - fx, y - fy],
+                half: [1.6, wing.abs() + 3.],
+                angle: a,
+                shape: 1.,
+                depth: depth + 0.0001,
+                color: shade(rgba(g, 1.), 0.85),
+            });
+        }
+        out.push(Body {
+            center: [x, y],
+            half: [3.6, 2.2],
+            angle: a,
+            shape: 1.,
+            depth,
+            color: rgba(g, 1.),
+        });
+        out.push(Body {
+            center: [x + fx * 3., y + fy * 3.],
+            half: [1.5, 1.5],
+            angle: 0.,
+            shape: 1.,
+            depth: depth - 0.0001,
+            color: rgba(0x5d6d7e, 1.),
+        });
+    }
+}
+
+/// Haltung am Lebensplatz: Sitzen auf der Bank, Liegen auf der Decke, Flasche, Zigarette, Gitarre.
+/// `true` = vollständig gezeichnet (sonst die normale Figur, Zubehör schon dazu gelegt).
+fn hang_bodies(
+    p: &berlin_sim::pedestrians::Ped,
+    h: &berlin_sim::life::Hang,
+    out: &mut Vec<Body>,
+) -> bool {
+    use berlin_sim::life::Act;
+    let (x, y, a) = (p.x as f32, p.y as f32, p.facing as f32);
+    let (fx, fy) = (a.cos(), a.sin());
+    let depth = 0.618;
+    match h.act {
+        Act::Lie => {
+            // Decke einmal je Gruppe (die erste Person), Leute strahlenförmig darauf
+            if h.key.ends_with(":0") {
+                let hue = berlin_sim::math::hash01(h.gx + h.gy);
+                let col =
+                    [0xc0392b, 0x2980b9, 0xf1c40f, 0x16a085, 0x8e44ad][(hue * 5.) as usize % 5];
+                out.push(Body {
+                    center: [h.gx as f32, h.gy as f32],
+                    half: [17., 13.],
+                    angle: (hue * 3.) as f32,
+                    shape: 0.,
+                    depth: 0.6208,
+                    color: rgba(col, 0.92),
+                });
+            }
+            out.push(Body {
+                center: [x - fx * 4., y - fy * 4.],
+                half: [8.5, 4.5],
+                angle: a,
+                shape: 1.,
+                depth,
+                color: rgba(p.shirt, 1.),
+            });
+            out.push(Body {
+                center: [x - fx * 13., y - fy * 13.],
+                half: [3., 3.],
+                angle: 0.,
+                shape: 1.,
+                depth: depth - 0.0002,
+                color: rgba(p.skin, 1.),
+            });
+            true
+        }
+        Act::Sit if h.bench => {
+            if h.key.ends_with(":0") {
+                let ba = (h.face - std::f64::consts::FRAC_PI_2) as f32;
+                out.push(Body {
+                    center: [h.gx as f32, h.gy as f32],
+                    half: [14., 3.5],
+                    angle: ba,
+                    shape: 0.,
+                    depth: 0.6207,
+                    color: rgba(0x7a5230, 1.),
+                });
+                out.push(Body {
+                    center: [h.gx as f32 - fx * 4., h.gy as f32 - fy * 4.],
+                    half: [14., 1.2],
+                    angle: ba,
+                    shape: 0.,
+                    depth: 0.6206,
+                    color: rgba(0x4b3420, 1.),
+                });
+            }
+            out.push(Body {
+                center: [x + fx * 2.5, y + fy * 2.5],
+                half: [3.5, 4.],
+                angle: a,
+                shape: 0.,
+                depth: depth + 0.0002,
+                color: rgba(0x2c3e50, 1.),
+            });
+            false
+        }
+        Act::Drink | Act::Smoke | Act::Music => {
+            let (r, col, half) = match h.act {
+                Act::Drink => (6., 0x2e7d32, [1.3, 1.3]),
+                Act::Smoke => (6.5, 0xff8a3d, [0.9, 0.9]),
+                _ => (6., 0x9c6b3a, [4.5, 2.5]),
+            };
+            // rechte Hand vor dem Körper
+            let (sx, sy) = (-fy, fx);
+            out.push(Body {
+                center: [x + fx * r + sx * 2.5, y + fy * r + sy * 2.5],
+                half,
+                angle: a + if h.act == Act::Music { 0.6 } else { 0. },
+                shape: 1.,
+                depth: depth - 0.0003,
+                color: rgba(col, 1.),
+            });
+            false
+        }
+        _ => false,
+    }
+}
+
 fn bike_bodies(b: &berlin_sim::bikes::Bike, _t: f64, out: &mut Vec<Body>) {
     use berlin_sim::bikes::{Kind, State};
     let depth = if b.level.lvl >= 1 { 0.551 } else { 0.619 };
@@ -1387,9 +1614,16 @@ impl Game for Play {
         for b in w.bikes.iter().filter(|b| near(b.x, b.y)) {
             bike_bodies(b, w.time, out);
         }
+        life_bodies(w, &near, out);
         for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
             let depth = if p.level.lvl >= 1 { 0.549 } else { 0.618 };
             let (x, y, a) = (p.x as f32, p.y as f32, p.facing as f32);
+            if p.state == PedState::Hang
+                && let Some(h) = &p.hang
+                && hang_bodies(p, h, out)
+            {
+                continue;
+            }
             if p.state == PedState::Dead {
                 // liegt in Sturzrichtung: Körper lang, Kopf voraus
                 let f = p.fall as f32;

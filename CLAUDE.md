@@ -11,7 +11,7 @@ streaming, surfaces, walls, levels data; `DiskSource`/`ThreadedSource`), `levels
 + `carmodels.rs` + `traction.rs`, `roadgraph.rs` (lanes, signals), `traffic.rs` (AI + reservations kept in
 `Reservations`, AI reads an `Agent` snapshot), `pedestrians.rs`, `mission.rs`, `save.rs` (JS-compatible JSON
 file, atomic write), `world.rs`. Positions are f64. Integration tests on real tiles: `crates/sim/tests/world.rs`;
-`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: transit, stations, life spots, parked e-scooters, console, nightlife. Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
+`cargo run --release -- --check-sim 120` runs it headless. Not yet ported: transit, stations, console, nightlife feed (bars), joggers/dog walkers. City life: `sim/rhythm.rs` (population targets), `sim/life.rs` (life spots, ped state `Hang`), `sim/animals.rs`, parked e-scooters (`bikes.rs parked_scooters`); all gated by `World::day_rhythm` (default population only). Phase 4 lighting: `sim/daylight.rs` + `sim/lamps.rs`
 (pure, tested), `map_loader` emits per-building `ShadowVertex` wall quads, `engine/lightpass.rs` + `lighting.wgsl`
 render a shadow mask (vertex extrusion along the sun, tree crowns from the atlas) and a half-res lightmap, then
 apply both with a fullscreen triangle at depth 0.5 (ground/cars behind, roofs/crowns in front get ambient only).
