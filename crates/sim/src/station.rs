@@ -36,6 +36,11 @@ pub const POI_ENTRANCE: f64 = 150.;
 pub const GROUP: f64 = 450.;
 /// px: Bahnhöfe um die Figur (Eingänge zeichnen und prüfen)
 pub const NEAR: f64 = 1800.;
+/// px: Umsteigetreppe in der Bahnsteigmitte (Länge entlang, Abstand zu den Endtreppen)
+pub const TRANSFER_L: f64 = 60.;
+pub const TRANSFER_KEEP: f64 = 70.;
+/// px: Bahnsteige gleichen Namens bis zu diesem Abstand bilden einen Bahnhof (Umsteigen)
+pub const COMPLEX: f64 = 900.;
 const TILE_COLORS: [u32; 8] = [
     0xd9c27a, 0x7fb3a0, 0xc77b5e, 0x8aa6c9, 0xe3ddcc, 0xb58db8, 0x9fb86a, 0xd69a5a,
 ];
@@ -119,6 +124,42 @@ pub struct Station {
     pub color: u32,
     pub halts: Vec<Halt>,
     pub exits: Vec<Exit>,
+    /// echte Ebene relativ zur Straße (recherchiert oder geschätzt): +1 Hochbahn, 0 ebenerdig, −1 … −3 Tunnel
+    pub level: i8,
+    /// unter freiem Himmel (Hochbahn, ebenerdig, Einschnitt): die Stadt bleibt sichtbar
+    pub open_air: bool,
+    /// Ebene der Figur auf dem Bahnsteig in der Karte (Tunnel −2, sonst die Gleisebene)
+    pub lvl: i8,
+    /// Treppen zu den anderen Bahnsteigen desselben Bahnhofs
+    pub transfers: Vec<Transfer>,
+}
+/// Umsteigetreppe zu einem anderen Bahnsteig desselben Bahnhofs: Ziel, Lage auf diesem Bahnsteig (u), Ebene und
+/// Linien dort.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transfer {
+    pub to: String,
+    pub u: f64,
+    pub level: i8,
+    pub lines: Vec<String>,
+}
+impl Transfer {
+    /// „▼ U7 · Ebene −2“
+    pub fn label(&self, from: i8) -> String {
+        let arrow = if self.level > from { "▲" } else { "▼" };
+        format!(
+            "{arrow} {} · {}",
+            self.lines.join(" "),
+            level_name(self.level)
+        )
+    }
+}
+/// „Ebene −2“, „Hochbahn“, „Straßenebene“ (Ebene 0).
+pub fn level_name(level: i8) -> String {
+    match level {
+        0 => "Straßenebene".into(),
+        l if l > 0 => format!("Ebene +{l}"),
+        l => format!("Ebene −{}", -l),
+    }
 }
 impl Station {
     /// Welt → Bahnhofsrahmen (u entlang, v quer, rechts positiv).
@@ -138,12 +179,26 @@ impl Station {
         let mut out = Vec::new();
         let mut u = -(lim / PILLAR_STEP).floor() * PILLAR_STEP;
         while u <= lim {
-            if u.abs() > 40. {
+            if u.abs() > 40. && self.transfers.iter().all(|t| (u - t.u).abs() > TRANSFER_L) {
                 out.push(u);
             }
             u += PILLAR_STEP;
         }
         out
+    }
+    /// Steht die Figur auf einer Umsteigetreppe?
+    pub fn transfer_at(&self, x: f64, y: f64) -> Option<&Transfer> {
+        let (u, v) = self.to_local(x, y);
+        self.transfers
+            .iter()
+            .find(|t| (u - t.u).abs() < TRANSFER_L / 2. && v.abs() < STAIR_W / 2.)
+    }
+    /// Ankunftsplatz neben der Umsteigetreppe, die vom Bahnsteig `from` herführt (zur Bahnsteigmitte hin).
+    pub fn transfer_arrival(&self, from: &str) -> Option<(f64, f64, f64)> {
+        let t = self.transfers.iter().find(|t| t.to == from)?;
+        let side = if t.u > 0. { -1. } else { 1. };
+        let (x, y) = self.to_world(t.u + side * (TRANSFER_L / 2. + 18.), 0.);
+        Some((x, y, self.axis + if side < 0. { PI } else { 0. }))
     }
     /// Figur im Bahnhof halten (Bahnsteigkanten, Säulen); liefert den Rahmenpunkt.
     pub fn keep_inside(&self, x: &mut f64, y: &mut f64, r: f64) -> (f64, f64) {
@@ -299,6 +354,58 @@ fn platform_underground(city: &mut City, tr: &Transit, stops: &[&StopIt]) -> Opt
     Some(true)
 }
 
+/// Bahnsteige gleichen Namens zu einem Bahnhof verbinden: geschätzte Tunnelebenen entzerren (zwei Tunnelbahnsteige
+/// ohne Recherche liegen nicht auf derselben Ebene, wenn sie sich kreuzen) und je Paar eine Umsteigetreppe dort, wo
+/// der andere Bahnsteig liegt (über bzw. unter ihm), nicht an den Endtreppen und nicht auf der Fahrgastinfo.
+fn link_complex(list: &mut [Station]) {
+    let n = list.len();
+    let near = |a: &Station, b: &Station| (a.x - b.x).hypot(a.y - b.y) < COMPLEX + a.hl + b.hl;
+    // Ebenen: ohne Recherche je weiterem Tunnelbahnsteig eine Ebene tiefer
+    for i in 0..n {
+        if list[i].open_air
+            || crate::stationlevels::curated_level(&list[i].name, &list[i].lines).is_some()
+        {
+            continue;
+        }
+        let mut lv = list[i].level;
+        while (0..i).any(|j| !list[j].open_air && near(&list[i], &list[j]) && list[j].level == lv) {
+            lv -= 1;
+        }
+        list[i].level = lv.max(-4);
+    }
+    for i in 0..n {
+        let mut trs: Vec<Transfer> = Vec::new();
+        for j in 0..n {
+            if i == j || !near(&list[i], &list[j]) {
+                continue;
+            }
+            let (a, b) = (&list[i], &list[j]);
+            let lim = (a.hl - STAIR_L - TRANSFER_KEEP).max(0.);
+            let (mut u, _) = a.to_local(b.x, b.y);
+            u = u.clamp(-lim, lim);
+            // weg von den Tafeln der Fahrgastinfo (±hl/3) und von schon gesetzten Treppen
+            for _ in 0..8 {
+                let clash = [-a.hl / 3., a.hl / 3.]
+                    .iter()
+                    .any(|&bu| (u - bu).abs() < 58. + TRANSFER_L / 2.)
+                    || trs.iter().any(|t| (u - t.u).abs() < TRANSFER_L + 10.);
+                if !clash {
+                    break;
+                }
+                u = if u > 0. { u - 40. } else { u + 40. };
+                u = u.clamp(-lim, lim);
+            }
+            trs.push(Transfer {
+                to: b.id.clone(),
+                u,
+                level: b.level,
+                lines: b.lines.clone(),
+            });
+        }
+        list[i].transfers = trs;
+    }
+}
+
 impl World {
     /// Eingang am nächsten Gehweg zu (wx, wy); `here`: der Punkt selbst, wenn man dort gehen kann.
     fn entrance_at(&mut self, axis: f64, wx: f64, wy: f64, e: i8, here: bool) -> Exit {
@@ -346,9 +453,12 @@ impl World {
         }
         let mut groups: Vec<G> = Vec::new();
         for st in its {
+            // gleiche Richtung – oder dieselbe Linie (Bahnhof in der Kurve: die Winkel der Muster streuen)
+            let line = &tr.patterns[st.pid].name;
             let found = groups.iter_mut().position(|g| {
                 g.key == st.key
-                    && ang_diff(g.axis, st.angle) < 0.45
+                    && (ang_diff(g.axis, st.angle) < 0.45
+                        || g.stops.iter().any(|s| tr.patterns[s.pid].name == *line))
                     && (g.x - st.x).hypot(g.y - st.y) < GROUP
             });
             match found {
@@ -363,11 +473,35 @@ impl World {
                 }),
             }
         }
+        // Gruppen mit gemeinsamer Linie zusammenlegen (die Zuordnung oben hängt von der Reihenfolge ab)
+        let mut merged = true;
+        while merged {
+            merged = false;
+            'outer: for i in 0..groups.len() {
+                for j in i + 1..groups.len() {
+                    let share = groups[j].stops.iter().any(|a| {
+                        groups[i]
+                            .stops
+                            .iter()
+                            .any(|b| tr.patterns[a.pid].name == tr.patterns[b.pid].name)
+                    });
+                    if share && (groups[i].x - groups[j].x).hypot(groups[i].y - groups[j].y) < GROUP
+                    {
+                        let g = groups.remove(j);
+                        // die Richtung der größeren Gruppe gilt
+                        if g.stops.len() > groups[i].stops.len() {
+                            groups[i].axis = g.axis;
+                        }
+                        groups[i].stops.extend(g.stops);
+                        merged = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
         let mut out = Vec::new();
         for g in groups {
-            if !platform_underground(&mut self.city, tr, &g.stops)? {
-                continue;
-            }
+            let underground = platform_underground(&mut self.city, tr, &g.stops)?;
             let mut axis = g.axis;
             if axis.cos() < 0. {
                 axis -= PI; // Schrift auf den Schildern nicht kopfüber
@@ -429,7 +563,41 @@ impl World {
                 color,
                 halts,
                 exits: Vec::new(),
+                level: 0,
+                open_air: !underground,
+                lvl: -2,
+                transfers: Vec::new(),
             };
+            if !underground {
+                // Gleisebene der Karte am Bahnsteig (Hochbahn ≥ 1): die höchste unter fünf Punkten entlang des
+                // Bahnsteigs (im Bahnhof sind Gleise oft ohne Brückenmerkmal, davor und dahinter auf dem Viadukt);
+                // die echte Ebene ggf. aus der Recherche
+                let map = (-2..=2)
+                    .filter_map(|k| {
+                        let u = k as f64 * hl / 2.;
+                        crate::tunnel::rail_level_at(
+                            &mut self.city,
+                            cx + ax * u,
+                            cy + ay * u,
+                            crate::tunnel::PROBE * 2.,
+                        )
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    .max(0);
+                st.lvl = map;
+                st.level = map;
+            }
+            if let Some(l) = crate::stationlevels::curated_level(&st.name, &st.lines) {
+                st.level = l;
+                // Hochbahn laut Recherche, auch wo die Karte die Gleise im Bahnhof ohne Brückenmerkmal führt
+                // (Alexanderplatz: Viadukt davor und dahinter, im Bahnhof Ebene 0)
+                if !underground && l > 0 {
+                    st.lvl = st.lvl.max(l);
+                }
+            } else if underground {
+                st.level = -1;
+            }
             for e in [-1i8, 1] {
                 let u = e as f64 * (hl - STAIR_L / 2.);
                 let ex = self.entrance_at(axis, cx + ax * u, cy + ay * u, e, false);
@@ -463,6 +631,7 @@ impl World {
             }
             out.push(st);
         }
+        link_complex(&mut out);
         Some(out)
     }
 
@@ -509,6 +678,17 @@ impl World {
     }
     pub fn station_by_id(&self, id: &str) -> Option<&Station> {
         self.stations.by_id.get(id)
+    }
+    /// Bahnsteig, auf dem die Figur steht.
+    pub fn current_station(&self) -> Option<&Station> {
+        self.player
+            .inside
+            .as_ref()
+            .and_then(|i| self.stations.by_id.get(&i.id))
+    }
+    /// Auf einem Bahnsteig unter Tage (die Stadt ist dann nicht zu sehen).
+    pub fn in_tunnel_station(&self) -> bool {
+        self.current_station().is_some_and(|s| !s.open_air)
     }
 
     /// Züge am Bahnsteig: haltende stehen mit der Spitze am Bahnsteigende, ein- und ausfahrende gleiten entlang.
@@ -682,14 +862,43 @@ impl World {
                 return;
             };
             let e = stn.stair_at(self.player.x, self.player.y);
-            if e == 0 {
+            let transfer = stn.transfer_at(self.player.x, self.player.y).cloned();
+            if e == 0 && transfer.is_none() {
                 if let Some(i) = self.player.inside.as_mut() {
                     i.guard = false;
                 }
                 return;
             }
             if ins.guard {
-                return; // gerade heruntergekommen: erst von der Treppe gehen
+                return; // gerade angekommen: erst von der Treppe gehen
+            }
+            if let Some(t) = transfer {
+                // Umsteigen: auf den anderen Bahnsteig, neben dessen Treppe hierher
+                let Some(to) = self.station_by_id(&t.to).cloned() else {
+                    return;
+                };
+                let Some((x, y, a)) = to.transfer_arrival(&stn.id) else {
+                    return;
+                };
+                (self.player.x, self.player.y, self.player.angle) = (x, y, a);
+                self.player.level.lvl = to.lvl;
+                self.player.click = None;
+                self.player.inside = Some(Inside {
+                    id: to.id.clone(),
+                    guard: true,
+                });
+                self.notice = Some(Notice {
+                    text: format!("{} · {}", to.lines.join(" "), level_name(to.level)),
+                    t: 2.,
+                });
+                self.events.push(Event::StationTransfer {
+                    x,
+                    y,
+                    name: to.name.clone(),
+                    level: to.level,
+                    lines: to.lines.clone(),
+                });
+                return;
             }
             let ex = &stn.exits[if e < 0 { 0 } else { 1 }];
             self.player.inside = None;
@@ -717,7 +926,7 @@ impl World {
         };
         let (x, y, a) = stn.arrival_at(ex.e);
         (self.player.x, self.player.y, self.player.angle) = (x, y, a);
-        self.player.level.lvl = -2;
+        self.player.level.lvl = stn.lvl;
         self.player.click = None;
         self.player.inside = Some(Inside {
             id: stn.id.clone(),
@@ -821,7 +1030,7 @@ impl World {
         stn.keep_inside(&mut x, &mut y, PLAYER_RADIUS);
         self.player.ride = None;
         (self.player.x, self.player.y) = (x, y);
-        self.player.level.lvl = -2;
+        self.player.level.lvl = stn.lvl;
         self.player.click = None;
         self.player.inside = Some(Inside {
             id: stn.id.clone(),
@@ -868,6 +1077,10 @@ mod tests {
             color: 0,
             halts: vec![],
             exits: vec![],
+            level: -1,
+            open_air: false,
+            lvl: -2,
+            transfers: vec![],
         };
         let (wx, wy) = st.to_world(120., -30.);
         let (u, v) = st.to_local(wx, wy);

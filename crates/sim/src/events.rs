@@ -70,6 +70,14 @@ pub enum Event {
         y: f64,
         name: String,
     },
+    /// Umsteigen über eine Treppe zu einem anderen Bahnsteig desselben Bahnhofs
+    StationTransfer {
+        x: f64,
+        y: f64,
+        name: String,
+        level: i8,
+        lines: Vec<String>,
+    },
     StationExit {
         x: f64,
         y: f64,

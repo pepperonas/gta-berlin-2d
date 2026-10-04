@@ -221,17 +221,15 @@ impl Play {
         out: &mut berlin_engine::hud::Hud,
     ) {
         let engine = self.world.player_car().map(|_| self.listener.engine());
-        if let Some(st) = self
-            .world
-            .player
-            .inside
-            .as_ref()
-            .and_then(|i| self.world.station_by_id(&i.id))
-            .cloned()
-        {
+        let station = self.world.current_station().cloned();
+        if let Some(st) = station.as_ref().filter(|s| !s.open_air) {
             // im U-Bahnhof: der Bahnhof statt der Stadt (kein Wetter, kein Himmel)
-            crate::underground::draw_station(&self.world, &st, camera, viewport, out);
+            crate::underground::draw_station(&self.world, st, camera, viewport, out);
         } else {
+            // Hochbahn, ebenerdig, Einschnitt: der Bahnsteig über der sichtbaren Stadt, das Wetter darüber
+            if let Some(st) = &station {
+                crate::underground::draw_station(&self.world, st, camera, viewport, out);
+            }
             crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
             crate::weatherfx::storm_overlay(&self.world, camera, viewport, out);
             crate::weatherfx::overlay(&self.world, out);
@@ -2371,6 +2369,17 @@ impl Game for Play {
         let view =
             berlin_sim::collision::Rect::around(self.world.camera.x, self.world.camera.y, 2600.);
         self.trains = self.world.transit_visible(view);
+        // auf einem Bahnsteig unter freiem Himmel zeichnet der Bahnsteig seine Züge selbst (an seinen Gleisen)
+        if let Some(st) = self.world.current_station().filter(|s| s.open_air) {
+            let reach = st.hl + st.l;
+            self.trains.retain(|t| {
+                !st.lines.contains(&t.line)
+                    || t.cars.iter().all(|c| {
+                        let (u, v) = st.to_local(c.x, c.y);
+                        u.abs() > reach || v.abs() > berlin_sim::station::WALL + 60.
+                    })
+            });
+        }
         self.tram_segs = self.world.tram_track_segments(view);
         berlin_sim::stats::track_step(
             &mut [&mut self.stats, &mut self.stats_total],
@@ -2807,7 +2816,7 @@ impl Game for Play {
             return;
         }
         let w = &self.world;
-        if !matches!(self.screen, Screen::Playing | Screen::Paused) || w.player.inside.is_some() {
+        if !matches!(self.screen, Screen::Playing | Screen::Paused) || w.in_tunnel_station() {
             return;
         }
         // render.js drawCovered: alle Bewegten, knapp vor ihren eigenen Teilen (sie verdecken sich nicht selbst)
@@ -3019,7 +3028,7 @@ impl Game for Play {
             let w = &mut self.world;
             let (cx, cy) = (w.camera.x, w.camera.y);
             let view = 1500. / w.camera.zoom.max(0.5);
-            self.street_lamps = if w.player.inside.is_some() {
+            self.street_lamps = if w.in_tunnel_station() {
                 Vec::new()
             } else {
                 self.lamps.near(&mut w.city, cx, cy, view)
@@ -3072,7 +3081,7 @@ impl Game for Play {
         let neon_k = ((l.dark as f32 - 0.25) * 3.).clamp(0., 1.);
         self.neon.signs.clear();
         self.neon.alpha = neon_k;
-        if self.world.player.inside.is_none() {
+        if !self.world.in_tunnel_station() {
             let t = self.world.time;
             // nächste zuerst: die Obergrenze für Schriftzüge soll das Bild treffen, nicht den Rand
             let mut pois = self.world.city.pois_near(cx, cy, view + 250.);

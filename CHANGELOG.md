@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Bahnhöfe auf ihren echten Ebenen. Jeder S-/U-Bahn-Halt hat einen begehbaren Bahnsteig,
+  Hochbahnsteige liegen über der sichtbaren Stadt. Bahnsteige gleichen Namens bilden einen Bahnhof mit
+  Umsteigetreppen („▼ U7 · Ebene −2“); die anderen Ebenen scheinen durch. Ebenen für 54 große Umsteigebahnhöfe
+  recherchiert (`data/station-levels.json`, mit Quellen), z. B. Alexanderplatz S +1, U2 −1, U8 −2, U5 −3.
 - Native Rust-Portierung: Klang der S- und U-Bahn neu. Im Zug: Rollgeräusch und Fahrmotor-Surren nach Tempo (laut
   beim Anfahren und Bremsen), Schienenstöße je Achse, Fahrtwind, im Tunnel lautere Röhre mit Nachhall,
   Bremsquietschen vor dem Halt, Druckluft beim Halten, Warnton vor der Abfahrt, leises Summen im Stand. Im

@@ -468,8 +468,15 @@ pub fn draw(
         && let Some((st, _, _)) =
             w.entrance_near(w.player.x, w.player.y, berlin_sim::station::REACH)
     {
+        let way = if st.level > 0 {
+            "Hinauf"
+        } else if st.level == 0 {
+            "Zum Bahnsteig"
+        } else {
+            "Hinunter"
+        };
         hint = Some(format!(
-            "F: Hinunter zur {}-Bahn {}",
+            "F: {way} zur {}-Bahn {}",
             if st.sbahn { "S" } else { "U" },
             st.name
         ));

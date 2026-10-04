@@ -112,7 +112,10 @@ impl RailAudio {
         // --- im U-Bahnhof
         let inside = w.player.inside.as_ref().map(|i| i.id.clone());
         if let Some(st) = inside.and_then(|id| w.station_by_id(&id).cloned()) {
-            mix.hall = HALL_STATION;
+            // Halle nur unter Tage; auf der Hochbahn verklingt nichts
+            if !st.open_air {
+                mix.hall = HALL_STATION;
+            }
             let (px, py) = (w.player.x, w.player.y);
             let (pu, pv) = st.to_local(px, py);
             let trains = w.trains_at(&st);

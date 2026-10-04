@@ -280,19 +280,34 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
         let p = v.px(x, y);
         h.quad_px(p.x, p.y, hu as f32 * k, hv as f32 * k, a, c, 0.);
     };
-    h.rect(0., 0., h.width, 720., rgb(0x0e0f12, 1.), 0.);
     let (hl, half, track, wall) = (st.hl, stn::HALF, stn::TRACK, stn::WALL);
     let end = hl + 30.;
-    quad(h, 0., 0., end + 40., wall + 30., rgb(0x26282d, 1.));
     let tile = rgb(st.color, 1.);
-    quad(h, 0., 0., end, wall, tile);
-    // Fugen der Fliesen (gröber als im Browser)
-    let mut fv = track + 22.;
-    while fv <= wall {
+    if st.open_air {
+        // Hochbahn, ebenerdig, Einschnitt: Bahnkörper (Viadukt bzw. Schotter) mit Geländer, die Stadt drumherum
+        let deck = track + 26.;
+        quad(h, 3., 5., end + 60., deck + 2., [0., 0., 0., 0.3]);
+        quad(h, 0., 0., end + 60., deck, rgb(0x5a5751, 1.));
         for s in [-1., 1.] {
-            quad(h, 0., s * fv, end, 0.3, [0., 0., 0., 0.12]);
+            quad(h, 0., s * deck, end + 60., 1.6, rgb(0x2e3035, 1.));
+            let mut u = -end - 60.;
+            while u < end + 60. {
+                quad(h, u, s * deck, 1.2, 2.4, rgb(0x2e3035, 1.));
+                u += 24.;
+            }
         }
-        fv += 12.;
+    } else {
+        h.rect(0., 0., h.width, 720., rgb(0x0e0f12, 1.), 0.);
+        quad(h, 0., 0., end + 40., wall + 30., rgb(0x26282d, 1.));
+        quad(h, 0., 0., end, wall, tile);
+        // Fugen der Fliesen (gröber als im Browser)
+        let mut fv = track + 22.;
+        while fv <= wall {
+            for s in [-1., 1.] {
+                quad(h, 0., s * fv, end, 0.3, [0., 0., 0., 0.12]);
+            }
+            fv += 12.;
+        }
     }
     // Gleisbetten mit Schwellen, Schienen und Stromschiene
     for s in [-1., 1.] {
@@ -307,22 +322,26 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
         }
         quad(h, 0., s * (track + 16.), end, 1.5, rgb(0x6b6f76, 1.));
     }
-    // Namensschilder an den Wänden hinter den Gleisen
+    // Namensschilder an den Wänden hinter den Gleisen (unter freiem Himmel steht der Name in der Kopfzeile)
     let mut signs = Vec::new();
-    let mut u = -hl + 120.;
-    while u <= hl - 120. {
-        for s in [-1., 1.] {
-            let w_ = (st.name.chars().count() as f64 * 8. + 16.).max(90.);
-            quad(h, u, s * (wall - 14.), w_ / 2., 9., rgb(0x0f3b73, 1.));
-            signs.push(st.to_world(u, s * (wall - 14.)));
+    if !st.open_air {
+        let mut u = -hl + 120.;
+        while u <= hl - 120. {
+            for s in [-1., 1.] {
+                let w_ = (st.name.chars().count() as f64 * 8. + 16.).max(90.);
+                quad(h, u, s * (wall - 14.), w_ / 2., 9., rgb(0x0f3b73, 1.));
+                signs.push(st.to_world(u, s * (wall - 14.)));
+            }
+            u += 240.;
         }
-        u += 240.;
     }
     // Züge am Bahnsteig
     let trains = w.trains_at(st);
     for t in &trains {
         for (i, c) in t.cars.iter().enumerate() {
-            if c.0.abs() > end + c.2 {
+            // unter Tage verschwinden die Wagen in den Tunnelmündern, oben fahren sie über den Bahnsteig hinaus
+            let lim = if st.open_air { end + st.l } else { end + c.2 };
+            if c.0.abs() > lim {
                 continue;
             }
             let (x, y) = st.to_world(c.0, c.1);
@@ -343,11 +362,13 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
         }
     }
     // Tunnelmünder
-    for s in [-1., 1.] {
-        for kk in [-1., 1.] {
-            let (x, y) = st.to_world(s * (end + 6.), kk * track);
-            let p = v.px(x, y);
-            h.ellipse_px(p.x, p.y, 10. * k, 26. * k, a, rgb(0x050506, 1.));
+    if !st.open_air {
+        for s in [-1., 1.] {
+            for kk in [-1., 1.] {
+                let (x, y) = st.to_world(s * (end + 6.), kk * track);
+                let p = v.px(x, y);
+                h.ellipse_px(p.x, p.y, 10. * k, 26. * k, a, rgb(0x050506, 1.));
+            }
         }
     }
     // Bahnsteig: Terrazzo, weiße Kanten, Leitlinien, Treppen
@@ -393,6 +414,23 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
         let lw = (label.chars().count() as f64 * 6.4 + 22.).max(80.);
         quad(h, lu, -sw / 2. - 12.5, lw / 2., 7.5, rgb(0x123f7a, 1.));
         exit_labels.push((st.to_world(lu, -sw / 2. - 12.5), label));
+    }
+    // Umsteigetreppen zu den anderen Bahnsteigen (hinauf bzw. hinunter, mit Ziel)
+    for t in &st.transfers {
+        let (tl, sw) = (stn::TRANSFER_L, stn::STAIR_W);
+        quad(h, t.u, 0., tl / 2., sw / 2., rgb(0x5f6b78, 1.));
+        let mut su = t.u - tl / 2. + 4.;
+        while su < t.u + tl / 2. {
+            quad(h, su, 0., 0.6, sw / 2. - 2., rgb(0x8796a6, 1.));
+            su += 6.;
+        }
+        for s in [-1., 1.] {
+            quad(h, t.u, s * sw / 2., tl / 2., 1., rgb(0xe8e4da, 1.));
+        }
+        let label = t.label(st.level);
+        let lw = (label.chars().count() as f64 * 6.4 + 22.).max(80.);
+        quad(h, t.u, sw / 2. + 12.5, lw / 2., 7.5, rgb(0x123f7a, 1.));
+        exit_labels.push((st.to_world(t.u, sw / 2. + 12.5), label));
     }
     // Säulen mit Lichtschein
     for pu in st.pillars() {
@@ -446,6 +484,48 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
         );
         h.ellipse_px(p.x, p.y, 3. * k, 3. * k, 0., rgb(0xe0ac69, 1.));
     }
+    // die anderen Bahnsteige des Bahnhofs, durchscheinend (darüber bzw. darunter), mit Linie und Ebene
+    let mut ghosts = Vec::new();
+    for t in &st.transfers {
+        let Some(o) = w.station_by_id(&t.to) else {
+            continue;
+        };
+        let oa = o.axis as f32;
+        let oq = |h: &mut Hud, u: f64, vv: f64, hu: f64, hv: f64, c: [f32; 4]| {
+            let (x, y) = o.to_world(u, vv);
+            let p = v.px(x, y);
+            h.quad_px(p.x, p.y, hu as f32 * k, hv as f32 * k, oa, c, 0.);
+        };
+        let below = o.level < st.level;
+        let tint = if below {
+            [0.35, 0.55, 0.95, 0.16]
+        } else {
+            [0.95, 0.8, 0.45, 0.16]
+        };
+        oq(h, 0., 0., o.hl, stn::TRACK + 12., tint);
+        for s in [-1., 1.] {
+            oq(
+                h,
+                0.,
+                s * stn::HALF,
+                o.hl,
+                1.2,
+                [tint[0], tint[1], tint[2], 0.5],
+            );
+            oq(
+                h,
+                0.,
+                s * stn::TRACK,
+                o.hl,
+                0.8,
+                [tint[0], tint[1], tint[2], 0.35],
+            );
+        }
+        ghosts.push((
+            o.to_world(o.hl * 0.45, 0.),
+            format!("{} · {}", o.lines.join(" "), stn::level_name(o.level)),
+        ));
+    }
     // Figur
     let pl = &w.player;
     let p = v.px(pl.x, pl.y);
@@ -460,7 +540,7 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
     );
     h.ellipse_px(p.x, p.y, 3.2 * k, 3.2 * k, 0., rgb(0xe0ac69, 1.));
     // Dunkel zu den Tunneln hin
-    for s in [-1., 1.] {
+    for s in [-1., 1.].into_iter().filter(|_| !st.open_air) {
         let (x, y) = st.to_world(s * (end + 30.), 0.);
         let q = v.px(x, y);
         h.blob_px(
@@ -492,6 +572,24 @@ pub fn draw_station(w: &World, st: &Station, cam: &Camera, vp: Vec2, h: &mut Hud
     for (pos, label) in &exit_labels {
         txt(h, *pos, label, 9., [1.; 4]);
     }
+    for (pos, label) in &ghosts {
+        txt(h, *pos, label, 9., [1., 1., 1., 0.75]);
+    }
+    // wo man ist: Bahnhof, Linien, Ebene
+    h.text(
+        &format!(
+            "{} · {} · {}",
+            st.name,
+            st.lines.join(" "),
+            stn::level_name(st.level)
+        ),
+        h.width / 2.,
+        128.,
+        16.,
+        [1., 1., 1., 0.92],
+        Align::Center,
+        true,
+    );
     for &(bx, by) in &boards {
         let p = v.px(bx, by);
         let size = (8. * k / h.scale).clamp(7., 14.);

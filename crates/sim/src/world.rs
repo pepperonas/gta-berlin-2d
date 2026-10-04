@@ -2325,8 +2325,13 @@ impl World {
             self.player.level_init = true;
         } else if self.player.ride.is_some() {
             // im Wagen: update_ride setzt die Ebene (Gleis, Tunnel)
-        } else if self.player.inside.is_some() {
-            self.player.level.lvl = -2; // im U-Bahnhof
+        } else if let Some(st) = self
+            .player
+            .inside
+            .as_ref()
+            .and_then(|i| self.stations.by_id.get(&i.id))
+        {
+            self.player.level.lvl = st.lvl; // auf dem Bahnsteig (Tunnel −2, Hochbahn wie das Gleis)
         } else if !self.player.level_init {
             self.player.level.lvl =
                 initial_level(&mut self.city, self.player.x, self.player.y, None, 30.);

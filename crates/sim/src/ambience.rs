@@ -134,7 +134,7 @@ pub fn bird_level(minutes: f64) -> f64 {
 pub fn ambience_at(w: &mut World) -> Mix {
     let (cx, cy) = (w.camera.x, w.camera.y);
     // im U-Bahnhof: gedämpftes Grundrauschen der Halle, Züge rumpeln laut, von oben kommt kaum etwas an
-    if w.player.inside.is_some() {
+    if w.in_tunnel_station() {
         return Mix {
             hum: 0.5,
             muffle: 0.9,

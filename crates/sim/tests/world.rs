@@ -1823,6 +1823,140 @@ fn walkable_ubahn_station_at_kottbusser_tor() {
     assert!((w.player.x - out.x).hypot(w.player.y - out.y) < 1.);
 }
 
+/// Alle Bahnsteige eines Bahnhofs (Figur hinteleportiert, Kacheln geladen).
+fn complex(w: &mut World, name: &str) -> Vec<berlin_sim::station::Station> {
+    use berlin_sim::world::TeleportSpot;
+    let ov = berlin_map_loader::overview::Overview::read(&root()).unwrap();
+    let s = ov
+        .stations
+        .iter()
+        .find(|s| s.name.contains(name))
+        .unwrap_or_else(|| panic!("{name} nicht im Stadtplan"));
+    let Some(TeleportSpot::Spot { x, y, angle, .. }) =
+        w.find_teleport_spot(s.at.x as f64, s.at.y as f64)
+    else {
+        panic!("Teleport {name}")
+    };
+    w.teleport_to(x, y, angle);
+    run(w, 60, idle());
+    let mut list: Vec<_> = w
+        .stations_near(w.player.x, w.player.y, 2500.)
+        .into_iter()
+        .filter(|s| s.name == name)
+        .collect();
+    list.sort_by_key(|s| -s.level);
+    eprintln!(
+        "{name}: {:?}",
+        list.iter()
+            .map(|s| (
+                s.lines.join(" "),
+                s.level,
+                s.open_air,
+                s.lvl,
+                s.transfers.len()
+            ))
+            .collect::<Vec<_>>()
+    );
+    list
+}
+
+#[test]
+fn interchange_stations_stack_their_platforms_on_real_levels() {
+    use berlin_sim::transit::Transit;
+    let mut w = world(77);
+    w.set_transit(Transit::read(&root()).expect("transit.json"));
+    let has = |s: &berlin_sim::station::Station, l: &str| s.lines.iter().any(|x| x == l);
+    // Hermannplatz: U8 direkt unter der Straße, U7 darunter
+    let hp = complex(&mut w, "Hermannplatz");
+    let u8 = hp.iter().find(|s| has(s, "U8")).expect("U8");
+    let u7 = hp.iter().find(|s| has(s, "U7")).expect("U7");
+    assert_eq!((u8.level, u7.level), (-1, -2));
+    assert!(!u8.open_air && !u7.open_air);
+    assert!(
+        u8.transfers.iter().any(|t| t.to == u7.id) && u7.transfers.iter().any(|t| t.to == u8.id)
+    );
+    // Alexanderplatz: S-Bahn auf dem Viadukt (offen), darunter U2, U8, U5
+    let ax = complex(&mut w, "Alexanderplatz");
+    let s = ax.iter().find(|s| has(s, "S5")).expect("S-Bahn");
+    assert!(
+        s.open_air && s.level == 1 && s.lvl >= 1,
+        "S-Bahn oben: {s:?}"
+    );
+    let lv = |l: &str| ax.iter().find(|s| has(s, l)).map(|s| s.level);
+    assert_eq!(
+        (lv("U2"), lv("U8"), lv("U5")),
+        (Some(-1), Some(-2), Some(-3))
+    );
+    for p in &ax {
+        assert_eq!(
+            p.transfers.len(),
+            ax.len() - 1,
+            "{} erreicht alle anderen",
+            p.lines.join(" ")
+        );
+        // Umsteigetreppen liegen auf dem Bahnsteig, nicht auf den Endtreppen
+        for t in &p.transfers {
+            assert!(
+                t.u.abs() <= p.hl - berlin_sim::station::STAIR_L - 30.,
+                "{t:?}"
+            );
+        }
+    }
+    // Kottbusser Tor: U1 auf dem Viadukt, U8 im Tunnel – hinauf, umsteigen, zurück
+    let kt = complex(&mut w, "Kottbusser Tor");
+    let up = kt.iter().find(|s| has(s, "U1")).expect("U1").clone();
+    let down = kt.iter().find(|s| has(s, "U8")).expect("U8").clone();
+    assert!(up.open_air && up.level == 1 && up.lvl >= 1);
+    assert!(!down.open_air && down.level == -2);
+    let ex = up.exits[0].clone();
+    (w.player.x, w.player.y) = (ex.x + 5., ex.y);
+    run(&mut w, 31, idle());
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    // der nächste Eingang kann zum U1- oder zum U8-Bahnsteig führen: dort beginnen, wo man ist
+    let here = w.current_station().expect("auf dem Bahnsteig").clone();
+    assert_eq!(w.player.level.lvl, here.lvl);
+    let other = if here.id == up.id { &down } else { &up };
+    let tr = here
+        .transfers
+        .iter()
+        .find(|t| t.to == other.id)
+        .expect("Treppe")
+        .clone();
+    run(&mut w, 30, idle()); // von der Ankunftstreppe weg
+    (w.player.x, w.player.y) = here.to_world(tr.u, 0.);
+    run(&mut w, 2, idle());
+    let now = w.current_station().expect("Bahnsteig").clone();
+    assert_eq!(now.id, other.id, "umgestiegen");
+    assert_eq!(w.player.level.lvl, other.lvl);
+    assert!(w.notice.as_ref().is_some_and(|n| n.text.contains("Ebene")));
+    // erst von der Treppe gehen, dann zurück
+    run(&mut w, 20, idle());
+    assert_eq!(
+        w.current_station().unwrap().id,
+        other.id,
+        "bleibt, solange man auf der Treppe steht"
+    );
+    let back = now
+        .transfers
+        .iter()
+        .find(|t| t.to == here.id)
+        .unwrap()
+        .clone();
+    let (ax2, ay2) = now.to_world(back.u + 200., 0.);
+    (w.player.x, w.player.y) = (ax2, ay2);
+    run(&mut w, 2, idle());
+    (w.player.x, w.player.y) = now.to_world(back.u, 0.);
+    run(&mut w, 2, idle());
+    assert_eq!(w.current_station().unwrap().id, here.id, "zurück");
+}
+
 #[test]
 fn pedestrian_kinds_joggers_and_dog_walkers() {
     use berlin_sim::figure::{Kind, Style};

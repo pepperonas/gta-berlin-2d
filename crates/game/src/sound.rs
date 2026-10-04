@@ -46,7 +46,9 @@ impl Listener {
                     Some((if hop { Sfx::Hit } else { Sfx::Door }, 1.))
                 }
                 Event::TrainTake { .. } => Some((Sfx::Door, 1.)),
-                Event::StationEnter { .. } | Event::StationExit { .. } => Some((Sfx::Door, 1.)),
+                Event::StationEnter { .. }
+                | Event::StationExit { .. }
+                | Event::StationTransfer { .. } => Some((Sfx::Door, 1.)),
                 Event::DoorsOpen { .. } => Some((Sfx::GongOpen, 1.)),
                 Event::DoorsClose => Some((Sfx::GongClose, 1.)),
                 Event::Tip { .. } => Some((Sfx::Pickup, 1.)),

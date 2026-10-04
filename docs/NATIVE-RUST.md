@@ -1448,3 +1448,62 @@ und keine Hoch/Runter-Pfeile – Aufzählungspunkte werden als kleine Quadrate g
 sieben Einträgen enger (`Menu::spacing`), damit es über der Fußzeile endet.
 [Reiter Spiel](images/native/ueber-das-spiel.png), [Lizenzen](images/native/ueber-lizenzen.png).
 `--bildschirm ueber|lizenzen|changelog` öffnet die Seite für Aufnahmen.
+
+## S- und U-Bahn: Raffung, Fahrprofil, Klang, Bahnhöfe auf ihren Ebenen (04.10.2026)
+
+**Raffung** (`sim/transit.rs`): Die Fahrplanuhr von S- und U-Bahn läuft dreimal so schnell wie die echte Zeit
+(`RAIL_PACE`). Tempo, Fahrzeit und der Countdown der Abfahrtsanzeigen folgen daraus: Die Anzeige zeigt weiter
+Fahrplanminuten, zählt aber dreimal so schnell herunter, und wenn sie 0 zeigt, fährt der Zug wirklich ein (Tempo
+und Countdown ließen sich nicht trennen, ohne dass „0 min“ und Ankunft auseinanderfallen). Zusätzlich fahren
+sechsmal so viele Züge wie im Fahrplan (`RAIL_TAKT`): die U8 (alle 5 min) kommt etwa alle 50 s. Halt am Bahnsteig
+8 echte Sekunden (`RAIL_DWELL_S`). Selbst gefahrene Züge sind gleich gerafft (Höchsttempo und Beschleunigung ×3); die
+Trinkgeld-Regel misst die Bremsstärke im ungerafften Maß. Bus und Straßenbahn bleiben unverändert.
+
+**Fahrprofil**: Zwischen zwei Halten fuhren Bahnen bisher mit gleichem Tempo und standen schlagartig. Jetzt
+trapezförmig (`run_profile`): je ein Viertel der Fahrzeit anfahren und bremsen, dazwischen Spitzentempo
+(Mittel / 0,75). Weg und Fahrzeit bleiben exakt die des Fahrplans; ein Test integriert das Tempo und prüft beides.
+
+**Klang** (`sim/railsound.rs` rein, `game/railaudio.rs`, `audio/synth.rs TrainVoice`, `dsp::Reverb`):
+- im Zug: Rollen (Band steigt mit dem Tempo), Grollen des Wagenkastens, Fahrmotor-Surren (Ton steigt mit dem
+  Tempo, laut beim Anfahren und elektrischen Bremsen, leise beim Rollen; S-Bahn tiefer), Fahrtwind bzw. Röhre im
+  Tunnel, Bremsquietschen unter 35 km/h beim Bremsen, Schienenstöße je Achse (30 m Schienen, vier Achsen je Wagen,
+  „ta-tak … ta-tak“), Summen im Stand, Druckluft beim Halten, drei Warntöne 2,4 s vor der Abfahrt (als Fahrgast);
+- im U-Bahnhof: Nachhall der Halle (Schroeder-Hall: vier gedämpfte Kammfilter, zwei Allpässe, ~1,5 s), der
+  lauteste Zug am Bahnsteig aus seiner Richtung (Anrollen, Quietschen beim Einfahren, Surren beim Abfahren), ferne
+  Züge grollen leise durch die Wände. Im Tunnel klingt die Fahrt mit schwächerem Hall nach.
+- `cargo run --release -- --audio-wav x.wav --audio-szene ubahn --audio-seconds 80` nimmt Hermannplatz auf: erst
+  der Bahnsteig, dann einsteigen und mitfahren, mit Protokoll je Sekunde. Gemessen: RMS im Stand −49 dBFS, bei voller
+  Fahrt im Tunnel −29 dBFS (die Autofahrt liegt bei −34 dBFS), Spitze −15 dBFS; in 80 s 99 Schienenstöße, 4×
+  Druckluft, 3× Warnton.
+
+**Bahnhöfe auf ihren Ebenen** (`sim/station.rs`, `sim/stationlevels.rs`, `data/station-levels.json`): Bisher wurde
+nur ein unterirdischer Halt zum begehbaren Bahnsteig, je Linie und Richtung einer, ohne Verbindung untereinander;
+am Alexanderplatz gab es drei getrennte U-Bahnhöfe, Hochbahnhöfe waren gar nicht begehbar. Jetzt:
+- **jeder S-/U-Bahn-Halt** bekommt einen Bahnsteig: unter Tage wie bisher (Fliesen, Tunnelmünder, Ansicht ersetzt
+  die Stadt), unter freiem Himmel (Hochbahn, ebenerdig, Einschnitt) als Bahnsteig über der sichtbaren Stadt mit
+  Bahnkörper und Geländer – dort zeichnet der Bahnsteig seine Züge selbst auf seinen Gleisen (über die ganze
+  Zuglänge, damit sie nicht seitlich springen), das Wetter liegt darüber;
+- **Ebenen**: für 54 große Umsteigebahnhöfe recherchiert (Wikipedia, berliner-untergrundbahn.de, OSM; Quellen und
+  31 als unsicher markierte Einträge in der Datei), z. B. Alexanderplatz S +1, U2 −1, U8 −2, U5 −3; Hermannplatz U8
+  −1, U7 −2; Kottbusser Tor U1 +1, U8 −2; Gleisdreieck U1 +2, U2 +1. Ohne Eintrag: Tunnel −1, jeder weitere
+  Tunnelbahnsteig am selben Bahnhof eine Ebene tiefer, oben die Gleisebene der Karte. Die Figur steht im Tunnel auf
+  Kartenebene −2, oben auf der Gleisebene – bzw. der recherchierten Hochlage, wo OSM die Gleise im Bahnhof ohne
+  Brückenmerkmal führt (Alexanderplatz: Viadukt 75 m davor und dahinter, im Bahnhof Ebene 0);
+- **Umsteigen**: alle Bahnsteige gleichen Namens bilden einen Bahnhof; je anderer Bahnsteig gibt es eine
+  Umsteigetreppe dort, wo er kreuzt (nicht an den Endtreppen, nicht auf der Fahrgastinfo), beschriftet
+  „▼ U7 · Ebene −2“. Darauftreten wechselt den Bahnsteig, neben der Gegentreppe; erst nach Verlassen der Treppe
+  geht es zurück. Die anderen Ebenen scheinen durch (darüber warm, darunter kühl, mit Linie und Ebene); oben steht
+  „Hermannplatz · U7 · Ebene −2“. An der Straße heißt es „F: Hinauf“ zur Hochbahn;
+- dabei behoben: Halte derselben Linie in einer Kurve zerfielen in zwei Bahnsteige (Alexanderplatz S-Bahn).
+Bilder: [Kottbusser Tor, U1 auf dem Viadukt](images/native/bahnhof-kottbusser-tor.png),
+[Hermannplatz, U7 unter der U8](images/native/bahnhof-hermannplatz.png),
+[Alexanderplatz, U2 über U8 und U5](images/native/bahnhof-alexanderplatz.png).
+
+**Abweichungen:** Bahnsteige sind weiterhin schematisch (ein Mittelbahnsteig je Linie und Richtung, Länge des
+längsten Zugs), keine Seitenbahnsteige, keine Zwischengeschosse; Richtungsbahnsteige übereinander (Nollendorfplatz,
+Jungfernheide) liegen auf einer Ebene. Die Schrift kennt jetzt ▲ ▼ ↑ ↓.
+
+Tests: Raffung (18 Abfahrten je echte Viertelstunde, Fahrzeit 80 statt 240 s, Zugfolge 50 s), Fahrprofil, Klang-
+schichten, Schienenstöße je Achse, Quietschen, Bahnsteigmischung, Druckluft/Warnton, Hall (erste Reflexion,
+−60 dB nach 1,5 s), Ebenentabelle; Integration auf echten Daten: Hermannplatz, Alexanderplatz (alle vier
+Bahnsteige verbunden, Treppen auf dem Bahnsteig), Kottbusser Tor (hinauf, umsteigen zum Tunnel, zurück).

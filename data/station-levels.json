@@ -1,0 +1,2181 @@
+{
+  "stand": "2026-10-04",
+  "quellenhinweis": "Recherche 2026-10-04 aus de/en.wikipedia (Rohtext, nur wörtliche Zitate), berliner-untergrundbahn.de, Wikipedia-Liste der Berliner U-Bahnhöfe und OpenStreetMap (Overpass: level/layer/bridge/embankment an railway=platform). 'level' = Spielebene relativ zur Straße an der Station (+2 zweite Hochebene, +1 Hochbahn/Damm, 0 ebenerdig, -1 Einschnitt/flacher Tunnel, -2/-3 tiefer); maßgeblich ist die relative Reihenfolge an derselben Station. OSM-'level' zählt Geschosse innerhalb des Bahnhofs (inkl. Verteilerebenen) und wurde nur als Beleg der Reihenfolge benutzt, nicht 1:1 übernommen. Wo eine Station unter/über einer Straßenbrücke liegt (Warschauer Straße, Hermannstraße, Lichtenberg, Westhafen), bezieht sich 'level' auf die Straße über/an der Station; Details in notes. 'unsicher: true' = Ebene, Bahnsteigart oder Lage nicht wörtlich belegt bzw. nur aus OSM abgeleitet.",
+  "stations": [
+    {
+      "name": "Alexanderplatz",
+      "osm_names": [
+        "S+U Alexanderplatz Bhf",
+        "Berlin Alexanderplatz",
+        "Alexanderplatz"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (S-Bahn am östlichen der zwei Mittelbahnsteige; westlicher = Regionalverkehr)",
+          "orientation": "NW-SO",
+          "notes": "Stadtbahnviadukt („Die Gleise verlaufen in Hochlage auf einem Viadukt annähernd in Südost–Nordwestrichtung“); „Die S-Bahn hält seit 1998 wieder ausschließlich am östlichen Bahnsteig“. OSM: level=1, layer=3.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Alexanderplatz"
+          ]
+        },
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Östlicher Arm des H-förmigen U-Bahnhofs (1913). Höhe relativ zur U8: Wikipedia nennt nur das H; OSM taggt U2 level=-1, U8 level=-3, U5 level=-5 → U2 flachste Ebene. Tiefe nicht gefunden; Bahnsteigart nur aus OSM (ein Bahnsteig-Objekt) und nicht textlich belegt; Richtung grob (parallel zur U8 im H).",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Alexanderplatz",
+            "OSM (Overpass, Abfrage 2026-10-04): relation railway=platform name=Alexanderplatz subway=yes level=-1 layer=-1"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "„Der U-Bahnhof der Linie D besteht aus einem Mittelbahnsteig, der sich an den Enden verjüngt und in der Mitte eine Breite von 18 Metern aufweist“; „In der Bahnsteigmitte befinden sich zwei Treppenläufe, die in die über dem Bahnsteig befindliche Ladenstraße führen. Vom Bahnsteig nach unten führen auch in der Mitte zwei Treppen, die zur Linie E (der heutigen U5) vermitteln.“ Parallel zur Stadtbahn. Ebene -2 relativ: unter der Ladenstraße, über der U5; dass die U8 tiefer liegt als die U2 stützt sich nur auf OSM (level -3 vs. -1). Tiefe nicht gefunden.",
+          "unsicher": true,
+          "sources": [
+            "https://www.berliner-untergrundbahn.de/bhf-ap.html",
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Alexanderplatz",
+            "OSM (Overpass, Abfrage 2026-10-04): way railway=platform subway=yes level=-3 layer=-3"
+          ]
+        },
+        {
+          "line": "U5",
+          "level": -3,
+          "depth_m": 11.25,
+          "platform": "2 Mittelbahnsteige, 4 Gleise (äußere Gleise für geplante U3 nach Weißensee)",
+          "orientation": "SW-NO",
+          "notes": "„die U5 auf der tiefer gelegenen Querebene“; „Dazwischen liegt eine Ebene tiefer der Bahnsteig der U5.“; „Der viergleisige Bahnhof wurde quer zu den bereits bestehenden Bahnhöfen angelegt“. Tiefste Ebene. OSM: zwei Bahnsteig-Ways level=-5.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Alexanderplatz",
+            "https://www.berliner-untergrundbahn.de/bhf-ap.html",
+            "OSM (Overpass, Abfrage 2026-10-04): 2 ways level=-5"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Ladenpassage/Fußgängerebene über dem U5-Bahnhof, verbindet U2 und U8 („Die Bahnsteige der U2 und U8 werden außerdem durch eine Ladenpassage über dem Bahnhof der U5 miteinander verbunden.“); liegt über dem U8-Bahnsteig (Treppen vom U8-Bahnsteig nach oben). Quelle: https://de.wikipedia.org/wiki/Bahnhof_Berlin_Alexanderplatz , https://www.berliner-untergrundbahn.de/bhf-ap.html"
+        }
+      ]
+    },
+    {
+      "name": "Friedrichstraße",
+      "osm_names": [
+        "S+U Friedrichstraße Bhf",
+        "Berlin Friedrichstraße",
+        "Friedrichstraße"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (Bahnsteig C; A und B = Regionalverkehr)",
+          "orientation": "O-W",
+          "notes": "„Die Bahnsteige liegen auf dem Stadtbahnviadukt“; Bahnsteige A, B, C von Süden nach Norden, S-Bahn am nördlichen Bahnsteig C in der kleineren Halle. OSM: S-Bahnsteig ref=5;6 level=3 layer=3 (Gebäude-Geschosszählung).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Friedrichstra%C3%9Fe"
+          ]
+        },
+        {
+          "line": "S1 S2 S25 S26",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (Bahnsteig D)",
+          "orientation": "N-S",
+          "notes": "Nord-Süd-S-Bahn-Tunnel, „auf der westlichen Seite unter dem Reichstagufer mit dem Bahnsteig D“, „unter dem westlichen Ende der Bahnsteighallen hindurchgetrieben“. Tiefe nicht gefunden. Liegt räumlich getrennt vom U6-Bahnhof (Verbindungsgang), daher keine direkte Über/Unter-Beziehung zur U6; OSM: level=-2 layer=-4 (U6: layer=-5) – Layer-Werte dort nicht durch Text belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Friedrichstra%C3%9Fe",
+            "https://signalarchiv.de/amp/Meldungen/10002300",
+            "OSM (Overpass, Abfrage 2026-10-04): relation ref=11;12 light_rail=yes level=-2 layer=-4"
+          ]
+        },
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": 6.65,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "„Zwischen den beiden Richtungsgleisen des U-Bahnhofs befindet sich, wegen der anschließenden Spreeunterfahrung in anderthalbfacher Tiefenlage, ein Mittelbahnsteig mit Zugängen an den Bahnsteigenden. Er liegt 6,65 m unter dem Straßenniveau“; BU: „Die Tiefenlage von rund 6,6 Metern machte es erforderlich, an den beiden Bahnsteigenden Treppen zu über dem U-Bahntunnel angeordneten Vorhallen anzulegen.“ Unter der Friedrichstraße, östliche Seite.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Friedrichstra%C3%9Fe",
+            "https://www.berliner-untergrundbahn.de/bhf-f.html"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Ebenerdige Zwischenetage/Empfangshalle unter dem Viadukt („In der weitläufigen Zwischenetage (ebenerdig) …“). Quelle: https://de.wikipedia.org/wiki/Bahnhof_Berlin_Friedrichstra%C3%9Fe"
+        },
+        {
+          "level": -1,
+          "notes": "U6: Vorhallen an beiden Bahnsteigenden über dem U-Bahn-Tunnel (6,6 m tiefer Bahnsteig). Quelle: https://www.berliner-untergrundbahn.de/bhf-f.html"
+        }
+      ]
+    },
+    {
+      "name": "Hermannplatz",
+      "osm_names": [
+        "U Hermannplatz"
+      ],
+      "platforms": [
+        {
+          "line": "U8",
+          "level": -1,
+          "depth_m": null,
+          "platform": "unbekannt",
+          "orientation": "N-S",
+          "notes": "„der zu diesem fast rechtwinklige Bahnsteig der U8 unmittelbar unter der Straßenebene“; „durch die sich der U8-Bahnsteig als Querriegel hindurchschiebt“ (U8 quert die U7-Halle). Bahnsteiglänge 130 m. OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Hermannplatz",
+            "https://en.wikipedia.org/wiki/Hermannplatz_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U7",
+          "level": -2,
+          "depth_m": 9.0,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "„Der ungefähr von Nordwest nach Südost verlaufende Bahnsteig der Linie U7 befindet sich in neun Metern Tiefe“; „Der Mittelbahnsteig der U7 besitzt eine Länge von 135 Metern … sowie eine Breite von bis zu 16,2 Metern.“ Große Halle, Decke 7,25 m über dem U7-Bahnsteig; erste Rolltreppen Berlins zwischen den Bahnsteigen. OSM level=-3.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Hermannplatz"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Kottbusser Tor",
+      "osm_names": [
+        "U Kottbusser Tor"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Hochbahn auf Viadukt über dem Platz (1928): „Der heutige Hochbahnhof erhielt einen 110 Meter langen und 11 Meter breiten Mittelbahnsteig.“ „Die Brückenkonstruktion weist zwischen den Pfeilern die außergewöhnliche Spannweite von 52,5 Meter auf.“ Höhe über Straße nicht separat gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Kottbusser_Tor",
+            "https://en.wikipedia.org/wiki/Kottbusser_Tor_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -2,
+          "depth_m": null,
+          "platform": "unbekannt (OSM: ein Bahnsteig-Objekt)",
+          "orientation": "NW-SO",
+          "notes": "„Der Untergrundbahnhof befindet sich im Niveau −1,5. Er ist leicht gekrümmt.“ „Darüber befindet sich, unterhalb des Straßenniveaus, eine Verteilerebene mit Schalterhalle“. „Die Überwindung des Höhenunterschiedes von 13,8 Meter zwischen dem Hoch- und dem Untergrundbahnsteig …“ (Höhenunterschied Hochbahnsteig↔U8-Bahnsteig = 13,8 m; Einzeltiefe nicht angegeben). OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Kottbusser_Tor"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerebene mit Schalterhalle unter Straßenniveau, über dem U8-Bahnsteig; Treppe + zwei Fahrtreppen zum Hochbahnsteig. Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Kottbusser_Tor"
+        }
+      ]
+    },
+    {
+      "name": "Gleisdreieck",
+      "osm_names": [
+        "U Gleisdreieck"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 2,
+          "depth_m": null,
+          "platform": "mittel (OSM ein Bahnsteig-Objekt; Bahnsteigart nicht textlich belegt)",
+          "orientation": "O-W",
+          "notes": "Turmbahnhof, obere Ebene auf Viadukt: „Der obere Bahnsteig der Linien U1 und U3 ist 110 Meter lang … Er liegt 15 Meter über der Straße.“ en.wiki: „The U1/U3 platform is at a higher level than, and perpendicular to, that of the U2.“ OSM level=2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Gleisdreieck",
+            "https://en.wikipedia.org/wiki/Gleisdreieck_(Berlin_U-Bahn)"
+          ],
+          "height_m": 15.0
+        },
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (OSM ein Bahnsteig-Objekt; „westliche Bahnsteigkante“ deutet auf Mittelbahnsteig)",
+          "orientation": "N-S",
+          "notes": "„Der untere Bahnsteig der Linie U2 ist 103 Meter lang und liegt zehn Meter über der Straße.“ Viadukt (Liste der U-Bahnhöfe: Lage „Viadukt“). OSM level=1.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Gleisdreieck",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe"
+          ],
+          "height_m": 10.0
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Zugang ebenerdig; beide Bahnsteige per Aufzug verbunden, Aufzug vom U2-Bahnsteig zur Straße. Kein eigenes Zwischengeschoss beschrieben. Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Gleisdreieck"
+        }
+      ]
+    },
+    {
+      "name": "Nollendorfplatz",
+      "osm_names": [
+        "U Nollendorfplatz"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "platform": "seiten (OSM: zwei Bahnsteige auf der Hochebene)",
+          "orientation": "O-W",
+          "notes": "„besteht aus einem Hochbahnhof mit einer großen Kuppelkonstruktion, an dem die Züge der U2 halten“; Liste: Lage „Viadukt“. Höhe nicht gefunden. Bahnsteigart nur aus OSM und dem Plural „Hochbahnsteigen“.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Nollendorfplatz",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OSM (Overpass, Abfrage 2026-10-04): 2 ways level=1 layer=1"
+          ]
+        },
+        {
+          "line": "U1 U3 (Richtung Warschauer Straße) + U4 (Richtung Innsbrucker Platz)",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (2 Gleise)",
+          "orientation": "O-W (ONO-WSW)",
+          "notes": "„ein zweigeschossiger unterirdischer Bahnhof (U1, U3, U4). Die beiden unterirdischen Bahnsteige liegen übereinander und sind durch Treppen verbunden.“ „Am oberen Bahnsteig halten auf einem Gleis die Züge der U1 und U3 Richtung Warschauer Straße, auf dem anderen Gleis kehren die Züge der U4“. Richtungsbahnsteige übereinander. Tiefe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Nollendorfplatz",
+            "OSM (Overpass, Abfrage 2026-10-04): level=-1"
+          ]
+        },
+        {
+          "line": "U1 U3 (Richtung Uhlandstraße/Krumme Lanke)",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel (2 Gleise, zweites Gleis nur Einsetzer U1)",
+          "orientation": "O-W (ONO-WSW)",
+          "notes": "„Am unteren Bahnsteig halten auf einem Gleis die Züge der U1 Richtung Uhlandstraße und der U3 Richtung Krumme Lanke, das andere Gleis wird nur in der Schwachverkehrszeit von Zügen der U1 genutzt“. Direkt unter dem oberen Tunnelbahnsteig. Tiefe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Nollendorfplatz",
+            "OSM (Overpass, Abfrage 2026-10-04): level=-2"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Bahnhofsvorhalle (Grenander) bzw. ebenerdige Halle des Hochbahnhofs; kein eigenes unterirdisches Zwischengeschoss beschrieben. Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Nollendorfplatz"
+        }
+      ]
+    },
+    {
+      "name": "Wittenbergplatz",
+      "osm_names": [
+        "U Wittenbergplatz"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U2 U3",
+          "level": -1,
+          "depth_m": null,
+          "platform": "3 Bahnsteige, 5 Gleise nebeneinander",
+          "orientation": "O-W (WNW-OSO)",
+          "notes": "„Der neue Bahnhof erhielt fünf Gleise an drei nebeneinander­liegenden Bahnsteigen“ („als einziger U-Bahnhof Berlins fünf nebeneinanderliegende Gleise“); alle auf einer Ebene, Lage „Tunnel“. „In der Mitte der Bahnsteige wurden Treppen angeordnet, die in eine darüberliegende Eingangshalle münden.“ Tiefe nicht gefunden. OSM: drei Bahnsteige level=-2 (Gebäudezählung).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Wittenbergplatz",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Eingangshalle (Empfangsgebäude auf dem Platz) über der Bahnsteigmitte, kein unterirdisches Zwischengeschoss. Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Wittenbergplatz"
+        }
+      ]
+    },
+    {
+      "name": "Hallesches Tor",
+      "osm_names": [
+        "U Hallesches Tor"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Hochbahnstation auf Viadukt „am Landwehrkanal“; je ein Bahnsteig je Richtung (Aufzüge „Bahnsteig U1 Richtung Uhlandstraße, Bahnsteig U1 Richtung Warschauer Straße“). Höhe nicht gefunden. OSM: zwei Bahnsteige ref 1/2, level=2 layer=1.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Hallesches_Tor",
+            "https://en.wikipedia.org/wiki/Hallesches_Tor_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (OSM: ein Bahnsteig ref=1;2)",
+          "orientation": "N-S",
+          "notes": "Tunnelbahnhof (1923), über langen Verbindungstunnel mit dem Hochbahnhof verbunden („ließ man einen langen Verbindungstunnel bauen“). Tiefe nicht gefunden; Bahnsteigart nur aus OSM.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Hallesches_Tor",
+            "OSM (Overpass, Abfrage 2026-10-04): way ref=1;2 level=-2 layer=-1"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Langer Verbindungstunnel Hochbahn↔U6 und „Vorhalle und zugleich Verteilerebene des Bahnhofs“ (Ebene nicht genau angegeben). Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Hallesches_Tor"
+        }
+      ]
+    },
+    {
+      "name": "Möckernbrücke",
+      "osm_names": [
+        "U Möckernbrücke"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Hochbahnhof auf Viadukt am Nordufer des Landwehrkanals; „die beiden Seitenbahnsteige des Hochbahnhofes“. Höhe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_M%C3%B6ckernbr%C3%BCcke",
+            "https://en.wikipedia.org/wiki/M%C3%B6ckernbr%C3%BCcke_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U7",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (OSM: ein Bahnsteig-Objekt)",
+          "orientation": "O-W",
+          "notes": "Unterirdischer Bahnhof (1966) am Südufer; Lage „Tunnel“ (Liste). Verbunden über „eine überdachte, verglaste, neun Meter breite Brücke über den Landwehrkanal“. Tiefe nicht gefunden; Bahnsteigart nur aus OSM.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_M%C3%B6ckernbr%C3%BCcke",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OSM (Overpass, Abfrage 2026-10-04): level=-2 layer=-2"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 1,
+          "notes": "Verglaste Fußgängerbrücke über den Landwehrkanal vom Hochbahnhof Richtung U7 (genaue Höhe nicht angegeben). Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_M%C3%B6ckernbr%C3%BCcke"
+        }
+      ]
+    },
+    {
+      "name": "Mehringdamm",
+      "osm_names": [
+        "U Mehringdamm"
+      ],
+      "platforms": [
+        {
+          "line": "U6 U7",
+          "level": -1,
+          "depth_m": null,
+          "platform": "2 Mittelbahnsteige (Richtungsbahnsteige), 4 Gleise auf einer Ebene",
+          "orientation": "N-S",
+          "notes": "„Der U-Bahnhof Mehringdamm liegt unterhalb der gleichnamigen Straße“; „Züge der U6 halten an den äußeren, Züge der U7 an den inneren Bahnsteigkanten“; „Seither wird der Bahnhof im Richtungsverkehr betrieben, wobei auf dem westlichen Bahnsteig stadtauswärts und auf dem östlichen in Richtung Innenstadt gefahren wird.“ en.wiki: Umstieg „on the same platform“. Bahnsteig-zu-Bahnsteig-Umstieg = gleiche Ebene. Tiefe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Mehringdamm",
+            "https://en.wikipedia.org/wiki/Mehringdamm_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "„Zwischenebenen des südlichen und nördlichen Ausgangs“ (nur Bildunterschrift; genaue Höhe unklar). Quelle: https://de.wikipedia.org/wiki/U-Bahnhof_Mehringdamm"
+        }
+      ]
+    },
+    {
+      "name": "Stadtmitte",
+      "osm_names": [
+        "U Stadtmitte"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (OSM: ein Bahnsteig-Objekt; nicht textlich belegt)",
+          "orientation": "O-W",
+          "notes": "Bahnsteig 1908 unter der Mohrenstraße, rund 160 m nördlich des U6-Bahnsteigs; über den „Mäusetunnel“ verbunden. Lage „Tunnel“. Tiefe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Stadtmitte",
+            "https://en.wikipedia.org/wiki/Stadtmitte_(Berlin_U-Bahn)",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe"
+          ]
+        },
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (nicht ausdrücklich belegt)",
+          "orientation": "N-S",
+          "notes": "„Der C-Linienbahnhof Stadtmitte liegt mittig unter der Straßenkreuzung Friedrichstraße/Leipziger Straße“; „80,5 Meter lang und hat eine Breite von 7,10 Metern“; „Am Südende erhielt der Bahnhof eine Vorhalle auf Niveau des Bahnsteiges“; Bauvorleistung für Treppen „zu einem tiefer gelegenen kreuzenden Bahnsteig“ (nie gebaute Leipziger-Straße-Linie). Tiefe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://www.berliner-untergrundbahn.de/bhf-mic.html",
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Stadtmitte"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verbindungstunnel „Mäusetunnel“ (ca. 160 m, „hat ein leichtes Gefälle“) zwischen U2- und U6-Bahnsteig. Quelle: https://www.berliner-untergrundbahn.de/bhf-mic.html"
+        }
+      ]
+    },
+    {
+      "name": "Hauptbahnhof",
+      "osm_names": [
+        "S+U Hauptbahnhof",
+        "Berlin Hauptbahnhof",
+        "Berlin Hauptbahnhof (Tief)"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (S-Bahn Gleis 15/16; insgesamt drei obere Bahnsteige)",
+          "orientation": "O-W (gekrümmt)",
+          "notes": "„Zwischen diesen Gleisbrücken befinden sich die drei oberen Bahnsteige in einer Höhe von rund zehn Metern über dem Straßenniveau.“ Aufgeständerte Stadtbahn-Ebene (Brückenbauwerke). Bahnhofsinterne Zählung: Obergeschoss +2. OSM: ref=15;16 light_rail level=2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Berlin_Hauptbahnhof",
+            "OSM (Overpass, Abfrage 2026-10-04): relation ref=15;16 level=2 layer=2"
+          ],
+          "height_m": 10.0
+        },
+        {
+          "line": "Regional-/Fernverkehr (Nord-Süd-Fernbahn), keine S-Bahn",
+          "level": -2,
+          "depth_m": 15.0,
+          "platform": "4 Mittelbahnsteige, 8 Gleise (Gl. 1–8)",
+          "orientation": "N-S",
+          "notes": "„Auf der unteren Gleisebene befinden sich vier Bahnsteige mit den acht Gleisen der Nord-Süd-Verbindung in einer Tiefe von 15 m.“ Bahnhofsintern „Tiefgeschoss (−2)“. Nur zur Einordnung der Ebenen aufgeführt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Berlin_Hauptbahnhof"
+          ]
+        },
+        {
+          "line": "U5",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "„Der U-Bahnhof liegt in der zweiten Tiefebene des Hauptbahnhofs östlich der Nord-Süd-Bahnsteige (Gleise 1–8).“ → gleiche Ebene wie die Tiefbahnsteige. Bahnsteighalle 140 m lang, 11 m hoch. Eigene Tiefe nicht angegeben. OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Berlin_Hauptbahnhof",
+            "OSM (Overpass, Abfrage 2026-10-04): way subway level=-2"
+          ]
+        },
+        {
+          "line": "S15",
+          "level": -2,
+          "depth_m": null,
+          "platform": "1 Gleis (Gleis 22), Bahnsteigart nicht gefunden",
+          "orientation": "N-S",
+          "notes": "Provisorischer S21-Bahnsteig: „Man entschied sich für die Errichtung eines provisorischen Bahnsteigs unter der Invalidenstraße“; S15 seit 15.06.2026 in Betrieb; Bahnsteig „at track 22 … directly next to U-Bahn line U5“ (Suchergebnis-Zusammenfassung, nicht wörtlich geprüft). Liegt nördlich, nicht im Hauptgebäude. Tiefe nicht gefunden; Ebene -2 nur nach OSM (level=-2, location=underground).",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/S21_(Berlin)",
+            "https://www.vbb.de/news/neue-s-bahn-linie-s15-startet-am-15-juni-2026/",
+            "https://en.wikipedia.org/wiki/S21_(Berlin)",
+            "OSM (Overpass, Abfrage 2026-10-04): relation ref=22 level=-2 location=underground"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Erdgeschoss/Empfangsebene; dazu Ebene +1 (Bügelbauten/Galerie) zwischen Straße und Stadtbahnsteigen. Quelle: https://de.wikipedia.org/wiki/Berlin_Hauptbahnhof"
+        },
+        {
+          "level": -1,
+          "notes": "Untergeschoss/Verteilerebene zwischen Erdgeschoss und Tiefbahnsteigen (bahnhofsintern -1). „Der Höhenunterschied zwischen der obersten und untersten Ebene beträgt 25 m.“ Quelle: https://de.wikipedia.org/wiki/Berlin_Hauptbahnhof"
+        }
+      ]
+    },
+    {
+      "name": "Potsdamer Platz",
+      "osm_names": [
+        "S+U Potsdamer Platz Bhf",
+        "Berlin Potsdamer Platz",
+        "Potsdamer Platz"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Ehem. U-Bahnhof Leipziger Platz (1907), „ältester weitgehend original erhaltene unterirdische U-Bahnhof“; „Im Jahr 2009 wurde ein Aufzug zum neun Meter breiten Mittelbahnsteig in Betrieb genommen“; „Es besteht keine unterirdische Wegeverbindung vom U-Bahnhof zum S- und Regionalbahnhof.“ Tiefe nicht gefunden (flach). OSM level=-1.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Potsdamer_Platz",
+            "OSM (Overpass, Abfrage 2026-10-04): relation subway level=-1"
+          ]
+        },
+        {
+          "line": "S1 S2 S25 S26",
+          "level": -2,
+          "depth_m": null,
+          "platform": "2 Mittelbahnsteige, 4 Gleise",
+          "orientation": "N-S",
+          "notes": "Nord-Süd-S-Bahn-Tunnel (1939): „Dieser besaß von Anfang an vier Gleise an zwei Mittelbahnsteigen“. Tiefe nicht gefunden. Relative Lage über dem Regionalbahnhof nur aus OSM (S level=-2, Regional level=-3) und daraus, dass die U3-Bauvorleistung „in der Höhe der Verteilerebenen des S-Bahnhofs“ liegt und Fenster „einen Blick auf die Bahnsteige des Regionalbahnhofs“ (tiefer) bieten.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Potsdamer_Platz",
+            "OSM (Overpass, Abfrage 2026-10-04): relations ref=11;12 und 13;14 level=-2"
+          ]
+        },
+        {
+          "line": "Regionalverkehr (Nord-Süd-Fernbahn), keine S-Bahn",
+          "level": -3,
+          "depth_m": 20.0,
+          "platform": "2 Mittelbahnsteige, 4 Gleise",
+          "orientation": "N-S",
+          "notes": "„Das 260 m lange, 50 m breite und (auf Gleisebene) 20 m unter dem Straßenniveau liegende Bauwerk weist zwei jeweils 240 m lange Mittelbahnsteige an den vier Gleisen auf.“ Nur zur Einordnung der Ebenen.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Potsdamer_Platz"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerebenen des S-Bahnhofs; auf derselben Höhe die nie in Betrieb genommene U3-Bauvorleistung (Ost-West, zwei Seitenbahnsteige, „in Querlage über den Bahnhöfen der Regionalbahn und der S-Bahn“). Quelle: https://de.wikipedia.org/wiki/Bahnhof_Berlin_Potsdamer_Platz"
+        }
+      ]
+    },
+    {
+      "name": "Brandenburger Tor",
+      "osm_names": [
+        "S+U Brandenburger Tor",
+        "Brandenburger Tor"
+      ],
+      "platforms": [
+        {
+          "line": "S1 S2 S25 S26",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "„Die Station … befindet sich in anderthalbfacher Tieflage unter der südlichen Fahrbahn des Boulevards Unter den Linden und verfügt über einen Mittelbahnsteig.“ Tiefe in Metern nicht gefunden. OSM level=-2 layer=-3.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Brandenburger_Tor",
+            "OSM (Overpass, Abfrage 2026-10-04): relation light_rail level=-2 layer=-3"
+          ]
+        },
+        {
+          "line": "U5",
+          "level": -2,
+          "depth_m": 17.0,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Bahnsteig 110 m lang mit doppelter Stützenreihe (Wikipedia). Baufirma: „It will be roughly 17 m below street level.“ / „approx. 11 m wide central platform“. Damit tiefer als der S-Bahnsteig (anderthalbfache Tieflage); OSM bestätigt: level=-3 layer=-4 (S: -2/-3). „Eine direkte Übergangsmöglichkeit zwischen S- und U-Bahnsteig … besteht nur auf der westlichen Seite.“",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Brandenburger_Tor",
+            "https://www.daub-ita.de/en/tunnel-projects/germany/metro-berlin-line-u55-brandenburg-gate-underground-railway-station/",
+            "OSM (Overpass, Abfrage 2026-10-04): relation subway level=-3 layer=-4"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Ostkreuz",
+      "osm_names": [
+        "S Ostkreuz",
+        "Berlin Ostkreuz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S8 S85 S9 (Ringbahn, Bahnsteig F)",
+          "level": 1,
+          "depth_m": null,
+          "height_m": 6,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Ringbahnsteig F auf Gleisbrücken über der Stadtbahnebene (Turmbahnhof), mit Bahnsteighalle. Wikipedia: 'Der S-Bahnsteig der Ringbahn lag in Nord-Süd-Richtung auf einer Brücke über den Gleisen der Stadtbahnebene'; obere Gleise 'etwa sechs Meter über dem Niveau der unteren Bahnsteige'. Höhe 6 m relativ zur Stadtbahnebene, nicht zur Straße. Bahnsteigart des Neubaus (Mittelbahnsteig) aus Vorgängerlage abgeleitet.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Ostkreuz"
+          ]
+        },
+        {
+          "line": "S3 S5 S7 S75 (Stadtbahn, Bahnsteige D und E)",
+          "level": 0,
+          "depth_m": null,
+          "platform": "2 Mittelbahnsteige (Richtungsbetrieb)",
+          "orientation": "O-W",
+          "notes": "Untere Ebene auf Geländeniveau: 'Der S-Bahnsteig lag auf Geländeniveau an den in Ost-West-Richtung verlaufenden S-Bahn-Gleisen'. Nach Umbau: 'Am nördlichen Bahnsteig halten die Züge in Richtung Innenstadt, am südlichen in Gegenrichtung'; die neuen Bahnsteige D/E 'liegen teilweise unter den Bahnsteigen der Ringbahn'.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Ostkreuz"
+          ]
+        },
+        {
+          "line": "Regionalverkehr (Bahnsteige A, B, C)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "Regionalbahnsteige",
+          "orientation": "gemischt (Ring- und Stadtbahn-Regionalgleise)",
+          "notes": "Obere Bahnsteige A, B, C liegen laut Wikipedia auf der oberen Ebene zusammen mit F (historischer Zustand zitiert); heutige genaue Zuordnung nicht im Detail geprüft.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Ostkreuz"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "Fußgängerbrücke (Neubau 2016–2018 nach historischem Vorbild) über die Stadtbahngleise mit Abgängen; Zugang bis Sonntagstraße. Höhenlage relativ zur Straße nicht belegt."
+        }
+      ]
+    },
+    {
+      "name": "Südkreuz",
+      "osm_names": [
+        "S Südkreuz",
+        "Berlin Südkreuz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S45 S46 (Ringbahn)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "'Auf der oberen Ebene verläuft in Südost-Nordwest-Richtung die Ringbahn, deren S-Bahnlinien an einem von der Ringbahnhalle überdachten Mittelbahnsteig halten.' Ringbahn liegt auf Bahndamm ('Der nördliche Zugang ging direkt durch den Bahndamm'). Damm, kein Viadukt (im Bahnhof Brücken über die Nord-Süd-Gleise).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_S%C3%BCdkreuz",
+            "https://en.wikipedia.org/wiki/Berlin_S%C3%BCdkreuz_station"
+          ]
+        },
+        {
+          "line": "S2 S25 S26 (Nord-Süd, Anhalter/Dresdner Bahn)",
+          "level": 0,
+          "depth_m": null,
+          "platform": "mittel (1 S-Bahnsteig; dazu 3 Mittelbahnsteige Fern/Regional)",
+          "orientation": "N-S",
+          "notes": "'Auf der unteren Ebene verläuft in Nord-Süd-Richtung die Nord-Süd-Fernbahn' … 'für den S-Bahn-Verkehr einer' (Mittelbahnsteig). Untere Ebene als ebenerdig angesetzt; Höhenlage relativ zum Straßenniveau (Sachsendamm, Hildegard-Knef-Platz) nicht explizit belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_S%C3%BCdkreuz"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "Je 2000 m² Eingangshallen östlich und westlich der Ringbahnhalle; Ebene nicht belegt."
+        }
+      ]
+    },
+    {
+      "name": "Westkreuz",
+      "osm_names": [
+        "S Westkreuz",
+        "Berlin Westkreuz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46 (Ringbahn)",
+          "level": 1,
+          "depth_m": null,
+          "height_m": 6,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Turmbahnhof. Ringbahnsteig 'liegt bei 42,08 m ü. NHN', 12,33 m breit, 160 m lang, mit Bahnsteighalle; Stadtbahnsteige bei 36,08 m ü. NHN → Ringbahnsteig 6,0 m über den Stadtbahnsteigen. Zugang von der Straße Am Westkreuz über eine Fußgängerbrücke über die Ring-Gütergleise, dann Treppe zum Ringbahnsteig, von dort Treppen hinab zu den Stadtbahnsteigen. Ebene relativ zum Straßenniveau nicht belegt (Lage +1 nur relativ zur Stadtbahn sicher).",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Westkreuz"
+          ]
+        },
+        {
+          "line": "S3 S5 S7 S9 (Stadtbahn)",
+          "level": 0,
+          "depth_m": null,
+          "platform": "2 Mittelbahnsteige (Richtungsbetrieb), Betriebsgleis dazwischen",
+          "orientation": "O-W",
+          "notes": "'zwei im Richtungsbetrieb genutzte Mittelbahnsteige', 36,08 m ü. NHN, 6 m unter dem Ringbahnsteig; westlich zweigleisige Kehranlage. Ob die Stadtbahn hier im Einschnitt oder ebenerdig relativ zur Umgebung liegt, nicht belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Westkreuz"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "Kein Zwischengeschoss; einziger Zugang über Fußgängerbrücke von der Straße Am Westkreuz direkt auf den Ringbahnsteig."
+        }
+      ]
+    },
+    {
+      "name": "Gesundbrunnen",
+      "osm_names": [
+        "S+U Gesundbrunnen",
+        "Berlin Gesundbrunnen"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S1 S2 S25 S26 (Ringbahn + Nord-Süd, Richtungsbahnsteige)",
+          "level": -1,
+          "depth_m": null,
+          "platform": "2 S-Bahn-Mittelbahnsteige im Richtungsbetrieb (4 S-Bahn-Gleise)",
+          "orientation": "O-W",
+          "notes": "Bahnanlagen im Einschnitt: 'Die Bahnanlagen wurden im Geländeeinschnitt unterhalb der gemauerten Badstraßenbrücke errichtet.' Richtungsbahnsteige: 'Zusammenlegung der Trassen und der Bau von Richtungsbahnsteigen' (Umsteigen Ring ↔ Nord-Süd am selben Bahnsteig). Einschnitt, kein Tunnel. Ausrichtung grob O-W (Ringbahngraben), nicht exakt vermessen.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Gesundbrunnen"
+          ]
+        },
+        {
+          "line": "Fern- und Regionalverkehr",
+          "level": -1,
+          "depth_m": null,
+          "platform": "Mittelbahnsteige",
+          "orientation": "O-W",
+          "notes": "Im selben Einschnitt wie die S-Bahn; Nord-Süd-Fernbahntunnel beginnt mit Rampe südlich des Bahnhofs.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Gesundbrunnen"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -2,
+          "depth_m": 14.75,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "'Aufgrund der Tieflage des U-Bahnhofs unter der Ringbahn – er liegt 14,75 m unterhalb der Straßenoberfläche'; berliner-untergrundbahn.de: 'Tiefenlage von 12 – 14 Metern unter dem Straßenniveau', unterquert den Ringbahngraben. '15 m breite Mittelbahnsteig', leicht geschwungen, 130 m. Unter Brunnenstraße/Badstraße (OSM: level=-3, layer=-3, Achse ca. 142° = NW-SO). Quellen nennen 14,75 bzw. 12–14 m.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Gesundbrunnen",
+            "https://www.berliner-untergrundbahn.de/bhf-gb.html",
+            "https://www.openstreetmap.org/way/228992098"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Breiter unterirdischer Durchgang unter allen Bahnsteigen; Empfangsgebäude auf 85 Stützen über dem Einschnitt am Hanne-Sobek-Platz (Straßenebene 0); Ostausgang zur Swinemünder Brücke. Ebene des Durchgangs relativ zur Straße nicht exakt belegt (unter den Einschnittgleisen wäre eher -2)."
+        }
+      ]
+    },
+    {
+      "name": "Schönhauser Allee",
+      "osm_names": [
+        "S+U Schönhauser Allee"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Hochbahnhof über dem S-Bahn-Einschnitt; 'Die U2-Hochbahn verläuft somit über dem im Einschnitt gelegenen S-Bahnhof.' (WebFetch-Zusammenfassung; Hochbahn-Ausführung durch berliner-untergrundbahn.de bestätigt: 'In der Schönhauser Allee wurde die Strecke als Hochbahn gebaut'). Mittelbahnsteig. Viadukt (Stahl) im Zuge der Schönhauser Allee; ob der Bahnsteig selbst auf Brücke über den Ringbahngraben oder auf Viadukt daneben liegt, nicht wörtlich belegt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Sch%C3%B6nhauser_Allee",
+            "https://www.berliner-untergrundbahn.de/s-u2.html"
+          ]
+        },
+        {
+          "line": "S41 S42 S8 S85 (Ringbahn)",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (2 Bahnsteiggleise)",
+          "orientation": "O-W",
+          "notes": "'Der im Geländeeinschnitt liegende Bahnhof der S-Bahn' – offener Einschnitt, kein Tunnel. Bahnsteigart als Mittelbahnsteig angenommen (2 Bahnsteiggleise, ein Bahnsteig), nicht wörtlich als 'Mittelbahnsteig' belegt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Sch%C3%B6nhauser_Allee"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Kein Zwischengeschoss belegt; Straßenebene (Schönhauser Allee über den Ringbahngraben) liegt zwischen U2 (oben) und S-Bahn (unten)."
+        }
+      ]
+    },
+    {
+      "name": "Warschauer Straße",
+      "osm_names": [
+        "S+U Warschauer Straße",
+        "S Warschauer Straße",
+        "U Warschauer Straße"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S75 S9 (Stadtbahn-Ost)",
+          "level": -1,
+          "depth_m": null,
+          "platform": "2 Mittelbahnsteige (Richtungsbetrieb)",
+          "orientation": "O-W",
+          "notes": "'Der Bahnhof der S-Bahn befindet sich unterhalb der Warschauer Brücke'; die Warschauer Straße 'verläuft in diesem Bereich auf der Warschauer Brücke über den Gleisen'. Gleise auf Geländeniveau der Bahnanlage, Straße auf Brücke darüber → relativ zur Straße -1 (kein Einschnitt im engeren Sinn, sondern Bahngelände unter Straßenbrücke). Empfangsgebäude auf der Ostseite der Brücke.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Warschauer_Stra%C3%9Fe"
+          ]
+        },
+        {
+          "line": "U1 U3",
+          "level": 0,
+          "depth_m": null,
+          "platform": "3 Bahnsteiggleise (Endbahnhof)",
+          "orientation": "NO-SW",
+          "notes": "Endbahnhof der Hochbahn, 'besteht aus einem 360 Meter langen und 26 Meter breiten gemauerten Viadukt', südlich der Warschauer Brücke parallel zur Warschauer Straße. Gemauerter Viadukt. Gegenüber dem Bahngelände erhöht (+1), gegenüber der hochgelegten Warschauer Brücke etwa gleich hoch (Fußgängersteg vom U-Bahnhof zum S-Bahn-Empfangsgebäude) – daher relativ zur Straße 0 angesetzt. OSM: level=1, layer=2 (Achse ca. 29° = NNO-SSW). Genaue Höhen nicht belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Warschauer_Stra%C3%9Fe",
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Warschauer_Stra%C3%9Fe",
+            "https://www.openstreetmap.org/way/379339107"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Empfangsgebäude der S-Bahn auf/an der Warschauer Brücke (Straßenebene), Treppen/Aufzüge hinab zu den Bahnsteigen; Fußgängersteg zum U-Bahnhof."
+        }
+      ]
+    },
+    {
+      "name": "Zoologischer Garten",
+      "osm_names": [
+        "S+U Zoologischer Garten",
+        "Berlin Zoologischer Garten"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9 (Stadtbahn)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Stadtbahnviadukt; S-Bahn 'eigene, abgetrennte Halle über einem Mittelbahnsteig, sie ist 169 Meter lang und 21 Meter breit'. Fern-/Regionalbahnsteige daneben ebenfalls auf dem Viadukt. Ausrichtung grob, nicht vermessen.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Zoologischer_Garten"
+          ]
+        },
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "NW-SO",
+          "notes": "'als Unterpflasterbahn nur wenige Meter unter der Straßenoberfläche'. berliner-untergrundbahn.de: ursprünglich 'einen einfachen Bahnhof mit zwei Seitenbahnsteigen'; ob nach dem Umbau ab 1958 weiter Seitenbahnsteige, nicht wörtlich belegt. Ausrichtung (Ernst-Reuter-Platz ↔ Wittenbergplatz) grob, nicht vermessen.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Zoologischer_Garten",
+            "https://www.berliner-untergrundbahn.de/met-b-zo.html"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "'Der unter dem Bahnsteig der Linie U2 liegende Bahnsteig der Linie U9 unterquert den gesamten Bahnhofsvorplatz annähernd parallel zum Fernbahnhof.' Mittelbahnsteig (1961). U2 und U9 'liegen L-förmig zueinander' / U9 'im rechten Winkel' gebaut. Ausrichtung aus 'parallel zum Fernbahnhof' abgeleitet.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Zoologischer_Garten",
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Zoologischer_Garten",
+            "https://www.berliner-untergrundbahn.de/met-b-zo.html"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerhallen am Hauptausgang Südseite 'auf der Ebene der U2' (Wikipedia U-Bahnhof Zoologischer Garten)."
+        }
+      ]
+    },
+    {
+      "name": "Hackescher Markt",
+      "osm_names": [
+        "S Hackescher Markt"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Auf dem gemauerten Stadtbahnviadukt: 'Der gemauerte Viadukt, auf dem die Strecke verläuft …'; 'Die Stadtbahnbögen unterhalb des Bahnhofs werden vorwiegend gastronomisch genutzt.' 'einen Mittelbahnsteig mit zwei Gleisen für die S-Bahn-Züge', 162 m, Halle über 104 m. Viadukt, kein Damm. Fernbahngleise ohne Bahnsteig. Ausrichtung grob (Viadukt in leichter Kurve).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Hackescher_Markt"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Yorckstraße",
+      "osm_names": [
+        "S+U Yorckstraße",
+        "S Yorckstraße (Großgörschenstraße)",
+        "S+U Yorckstr. (S2, S25, S26)"
+      ],
+      "platforms": [
+        {
+          "line": "S1 (Wannseebahn; Station 'Yorckstraße (Großgörschenstraße)', westlich)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "2 Bahnsteiggleise (Bahnsteigart nicht belegt)",
+          "orientation": "N-S",
+          "notes": "Eigenständige Station, 250 m von der S2-Station entfernt. Gleise in Hochlage: unmittelbar nördlich 'überqueren die Bahntrassen die Yorckstraße auf den denkmalgeschützten Yorckbrücken'; 2012 Aufzug zum Bahnsteig. Damm vs. Brückenbauwerk im Bahnsteigbereich nicht wörtlich belegt (Bahnsteig auf Holzstützen als Provisorium, en.wikipedia: 'provisional station with wooden pillars').",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Yorckstra%C3%9Fe",
+            "https://en.wikipedia.org/wiki/Berlin_Yorckstra%C3%9Fe_station"
+          ]
+        },
+        {
+          "line": "S2 S25 S26 (Anhalter Vorortbahn; Station 'Yorckstraße', östlich)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "2 Bahnsteiggleise (Bahnsteigart nicht belegt)",
+          "orientation": "N-S",
+          "notes": "Hochlage über der Yorckstraße (Yorckbrücken direkt nördlich); geplanter Aufzug 'stellt dann den barrierefreien Zugang von der Straßenebene zum S-Bahnsteig her' → Bahnsteig über Straßenniveau. Zugangsgebäude von 1903 (Karl Cornelius) an der Straße. Damm vs. Brücke nicht wörtlich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Yorckstra%C3%9Fe"
+          ]
+        },
+        {
+          "line": "U7",
+          "level": -1,
+          "depth_m": 7.1,
+          "platform": "mittel (zweireihige Stützen; Bahnsteigart nicht wörtlich belegt)",
+          "orientation": "O-W",
+          "notes": "'Der 110 Meter lange und 7,1 Meter unter der Erde befindliche Bahnsteig erhielt zweireihige Stützen.' Liegt zwischen den beiden S-Bahn-Stationen, unterfährt den S-Bahnhof Großgörschenstraße 'in einer S-Kurve'; Ausgänge zu beiden S-Bahnhöfen. Ausrichtung entlang Yorckstraße (grob O-W) nicht wörtlich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Yorckstra%C3%9Fe",
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Yorckstra%C3%9Fe"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "Kein gemeinsames Zwischengeschoss; die beiden S-Bahn-Stationen sind betrieblich getrennt (250 m), U7-Bahnhof dazwischen mit Ausgängen zu beiden."
+        }
+      ]
+    },
+    {
+      "name": "Jannowitzbrücke",
+      "osm_names": [
+        "S+U Jannowitzbrücke"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S5 S7 S9",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "'Vorortbahnhof auf dem Stadtbahnviadukt direkt neben der Spree'; 'der schmale Mittelbahnsteig des Vorortbahnhofes Jannowitzbrücke musste verbreitert werden'. Fernbahngleise liegen 'durch eine tragende Konstruktion direkt über der Spree'. Viadukt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Jannowitzbr%C3%BCcke"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "Liegt laut Wikipedia 'zwei Ebenen weiter unten' als der S-Bahnsteig, mit Zwischengeschoss dazwischen; Strecke unterquert die Spree schräg. Bahnsteigart: nur indirekt (Stationslisten: 1 Bahnsteig) → Mittelbahnsteig unsicher. Tiefe nicht gefunden. Level -1 abgeleitet: 'zwei Ebenen' sind relativ zum S-Bahnsteig gemeint (S +1, Zwischengeschoss, U8); wegen Spreeunterquerung evtl. tiefer – nicht belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Jannowitzbr%C3%BCcke",
+            "https://en.wikipedia.org/wiki/List_of_Berlin_U-Bahn_stations"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "'das zwischen U- und S-Bahn befindliche Zwischengeschoss' (1989 Grenzübergang), Verteilerebene; ob ebenerdig unter dem Viadukt oder unter Straßenniveau, nicht belegt."
+        }
+      ]
+    },
+    {
+      "name": "Eberswalder Straße",
+      "osm_names": [
+        "U Eberswalder Straße"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'eine Hochbahnstation der U-Bahn-Linie U2', 'auf dem Mittelstreifen der Schönhauser Allee', 'einen Mittelbahnsteig mit zwei Abgängen', 110 m; Bahnsteighalle in genieteter Stahlbauweise. Stahlviadukt (kein Damm). Höhe nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Eberswalder_Stra%C3%9Fe"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Bernauer Straße",
+      "osm_names": [
+        "U Bernauer Straße"
+      ],
+      "platforms": [
+        {
+          "line": "U8",
+          "level": -1,
+          "depth_m": 4.5,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'etwa vier bis fünf Meter unter der Brunnenstraße' (depth_m = Mittelwert), südlich der Kreuzung mit der Bernauer Straße; Mittelbahnsteig 8 m breit, 130 m lang. Flacher Tunnel.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Bernauer_Stra%C3%9Fe"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": null,
+          "notes": "'Die Ausgänge führen direkt auf die Straße, es gibt keine Zwischenebene.'"
+        }
+      ]
+    },
+    {
+      "name": "Bismarckstraße",
+      "osm_names": [
+        "U Bismarckstraße"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Oberer Bahnsteig unter der Bismarckstraße; Wikipedia: 'am oberen Bahnsteig ... verkehrt hier die U2'. Zwei 4,5 m breite Seitenbahnsteige.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Bismarckstraße"
+          ]
+        },
+        {
+          "line": "U7",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'Den unteren Teil des Bahnhofs, an dem die Züge der Linie U7 halten'; 110 m x 11,6 m Mittelbahnsteig; Bahnsteige 'genau im rechten Winkel übereinander' unter der Kreuzung Wilmersdorfer Straße/Bismarckstraße. Richtung aus Straßenlage (Wilmersdorfer Str.) abgeleitet.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Bismarckstraße",
+            "https://en.wikipedia.org/wiki/Bismarckstra%C3%9Fe_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Berliner Straße",
+      "osm_names": [
+        "U Berliner Straße"
+      ],
+      "platforms": [
+        {
+          "line": "U9",
+          "level": -1,
+          "depth_m": 7,
+          "platform": "seiten",
+          "orientation": "N-S",
+          "notes": "Unter der Bundesallee; zwei Seitenbahnsteige beidseits des Bundesallee-Autotunnels (Ausstieg links wie beim Mittelbahnsteig). en.wikipedia: 'Only seven metres beyond the street there is the platform of the U9'. Turmbahnhof, rechtwinklig zur U7.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Berliner_Straße",
+            "https://en.wikipedia.org/wiki/Berliner_Stra%C3%9Fe_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U7",
+          "level": -2,
+          "depth_m": 12,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "en.wikipedia: 'Only five metres beyond the U9 platform there is the platform of the U7' -> ca. 12 m. U9-Bahnsteige über den U7-Bahnsteig verbunden. Bahnsteigart U7 (Mittelbahnsteig) und Richtung (unter Berliner Straße) nicht wörtlich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://en.wikipedia.org/wiki/Berliner_Stra%C3%9Fe_(Berlin_U-Bahn)",
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Berliner_Straße"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Spichernstraße",
+      "osm_names": [
+        "U Spichernstraße"
+      ],
+      "platforms": [
+        {
+          "line": "U3",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "'die beiden Seitenbahnsteige der Linie U3 unter der Spichernstraße'; obere Ebene.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Spichernstraße",
+            "https://en.wikipedia.org/wiki/Spichernstra%C3%9Fe_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'Der Bahnsteig der Linie U9 befindet sich unter der Bundesallee', 8,85 m breiter Mittelbahnsteig; en.wikipedia: 'the U9 portion, which lies deeper underground'.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Spichernstraße",
+            "https://en.wikipedia.org/wiki/Spichernstra%C3%9Fe_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Kurfürstendamm",
+      "osm_names": [
+        "U Kurfürstendamm"
+      ],
+      "platforms": [
+        {
+          "line": "U1",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "'am oberen Bahnsteig ... nachträglich eingefügt ... besitzt daher zwei Seitenbahnsteige'. Unter dem Kurfürstendamm (Richtung abgeleitet).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Kurfürstendamm"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'Der tiefer liegende Mittelbahnsteig der ... Linie G (heute: U9)', bis 10,73 m breit. Unter Joachimsthaler Straße (Richtung abgeleitet).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Kurfürstendamm"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Leopoldplatz",
+      "osm_names": [
+        "U Leopoldplatz"
+      ],
+      "platforms": [
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "NW-SO",
+          "notes": "Ursprünglich 1923 Mittelbahnsteig, beim U9-Bau zu zwei Seitenbahnsteigen umgebaut. Unter der Müllerstraße (Richtung abgeleitet). Obere Ebene, da U9 'the second, deeper platform'.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Leopoldplatz",
+            "https://en.wikipedia.org/wiki/Leopoldplatz_(Berlin_U-Bahn)"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NO-SW",
+          "notes": "'Mittelbahnsteig für die Linie U9 liegt im rechten Winkel zu dem der Linie U6'; en: 'the second, deeper platform ... U9'. Richtung aus Rechtwinkligkeit abgeleitet.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Leopoldplatz",
+            "https://en.wikipedia.org/wiki/Leopoldplatz_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Osloer Straße",
+      "osm_names": [
+        "U Osloer Straße"
+      ],
+      "platforms": [
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": null,
+          "orientation": null,
+          "notes": "'Eine Ebene tiefer [als das Zwischengeschoss] befindet sich der Bahnsteig für die U9' (einfache Tieflage). Bahnsteigart und Richtung nicht belegt. Turmbahnhof mit drei Ebenen.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Osloer_Straße"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -3,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": null,
+          "notes": "'in zweieinhalbfacher Tieflage der 18,5 Meter breite Mittelbahnsteig der U8'. Richtung nicht belegt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Osloer_Straße"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "'In halber Tieflage befindet sich ein großzügig angelegtes Zwischengeschoss mit zahlreichen Zugängen'"
+        }
+      ]
+    },
+    {
+      "name": "Görlitzer Bahnhof",
+      "osm_names": [
+        "U Görlitzer Bahnhof"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 1,
+          "depth_m": null,
+          "height_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Hochbahnhof auf Viadukt 'über dem Mittelstreifen der Skalitzer Straße'; zwei Seitenbahnsteige, westlicher Teil unter Tonnendach; Zugangstreppe mittig unter der Hochbahntrasse am Westende. Viadukt (nicht Damm).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Görlitzer_Bahnhof"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Schlesisches Tor",
+      "osm_names": [
+        "U Schlesisches Tor"
+      ],
+      "platforms": [
+        {
+          "line": "U1 U3",
+          "level": 1,
+          "depth_m": null,
+          "height_m": 6,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "'Züge ... sechs Meter über dem Straßenniveau'; Hochbahnhof in der Mitte des Platzes; zwei Seitenbahnsteige (109 m). Im unteren Teil (ebenerdig) eine Aufenthaltshalle mit Läden. Viadukt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Schlesisches_Tor"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Ebenerdige Halle unter dem Hochbahnhof (historisch Restaurant Torkrug, Läden)"
+        }
+      ]
+    },
+    {
+      "name": "Bülowstraße",
+      "osm_names": [
+        "U Bülowstraße"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "height_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Hochbahnhof (1902) in der Bülowstraße zwischen Potsdamer Straße und Steinmetzstraße, auf voller Länge überdacht, Aufzüge zu den Seitenbahnsteigen. Viadukt (Mittelstreifen der Straße).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Bülowstraße"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Mendelssohn-Bartholdy-Park",
+      "osm_names": [
+        "U Mendelssohn-Bartholdy-Park"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": 1,
+          "depth_m": null,
+          "height_m": null,
+          "platform": "seiten",
+          "orientation": "N-S",
+          "notes": "'Als typischer Hochbahnhof erhielt er ... eine Halle'; zwei Seitenbahnsteige je 113 m; liegt auf/nahe der Rampe zum Tunnelmund Richtung Potsdamer Platz, nördliches Ende überbaut (Hotel). Höhe unbekannt, vermutlich gering wegen Rampenlage – daher unsicher, ob +1 oder nur leicht erhöht.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Mendelssohn-Bartholdy-Park",
+            "https://en.wikipedia.org/wiki/Mendelssohn-Bartholdy-Park_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Kaiserdamm",
+      "osm_names": [
+        "U Kaiserdamm"
+      ],
+      "platforms": [
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "O-W",
+          "notes": "Tunnelbahnhof (en.wikipedia: 'Structure type: Underground') nahe Kreuzung Kaiserdamm/Königin-Elisabeth-Straße; zwei Seitenbahnsteige 109 x 3,5 m. Tiefe nicht belegt (flache Unterpflasterlage typisch, nicht zitiert). Messe Nord/ICC ca. 200 m entfernt, Fußweg.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Kaiserdamm",
+            "https://en.wikipedia.org/wiki/Kaiserdamm_(Berlin_U-Bahn)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Zwischengeschoss an der westlichen Seite des Bahnhofs (laut Wikipedia), genaue Höhenlage nicht belegt"
+        }
+      ]
+    },
+    {
+      "name": "Messe Nord/ICC",
+      "osm_names": [
+        "S Messe Nord/ICC",
+        "S Messe Nord/ZOB"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Ringbahn verläuft 'in-between the carriageways of the parallel Bundesautobahn 100'; 1 Mittelbahnsteig; Zugang von Fußgänger- und Straßenbrücken, Empfangsgebäude am Nord- und Südende. Einschnittlage aus den Brückenzugängen abgeleitet, nicht wörtlich belegt. Station heißt seit 2024 offiziell 'Messe Nord/ZOB'.",
+          "unsicher": true,
+          "sources": [
+            "https://en.wikipedia.org/wiki/Messe_Nord/ZOB_station",
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Messe_Nord/ICC"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Bundesplatz",
+      "osm_names": [
+        "S+U Bundesplatz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46",
+          "level": 0,
+          "depth_m": null,
+          "platform": null,
+          "orientation": "O-W",
+          "notes": "Ringbahn an der Kreuzung mit der Bundesallee, die im Autotunnel unter Ringbahn und Stadtautobahn hindurchführt. Lage der Gleise (ebenerdig/Einschnitt/Damm) und Bahnsteigart NICHT belegt; Ebene 0 nur Annahme.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Bundesplatz"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -1,
+          "depth_m": null,
+          "platform": "seiten",
+          "orientation": "N-S",
+          "notes": "Zwei getrennte Tunnel 'östlich und westlich des Autotunnels der Bundesallee unter der Ringbahn und der Stadtautobahn hindurchgeführt'; je ein Seitenbahnsteig, an beiden Enden über Vorhallen verbunden. Liegt sicher unter der Ringbahn; Tiefe nicht belegt.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/U-Bahnhof_Bundesplatz",
+            "https://en.wikipedia.org/wiki/Berlin_Bundesplatz_station"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Vorhallen an beiden Enden der U9-Bahnsteige verbinden die getrennten Richtungsbahnsteige"
+        }
+      ]
+    },
+    {
+      "name": "Heidelberger Platz",
+      "osm_names": [
+        "S+U Heidelberger Platz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46",
+          "level": -1,
+          "depth_m": null,
+          "platform": null,
+          "orientation": "O-W",
+          "notes": "Ringbahn 'in a very deep cutting' (Einschnitt, kein Tunnel), Mecklenburgische Straße auf Brücke darüber. Bahnsteigart nicht belegt; 1993 S-Bahnsteig verlegt und direkter Übergang zur U-Bahn gebaut.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Heidelberger_Platz",
+            "https://en.wikipedia.org/wiki/Berlin_Heidelberger_Platz_station"
+          ]
+        },
+        {
+          "line": "U3",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Tunnelbahnhof unter dem Ringbahn-Einschnitt, 'Profil doppelt so tief' wie üblich; Mittelbahnsteig mit Vorhallen an beiden Enden, Kreuzgratgewölbe. 'direkter Zugang zur darunterliegenden U-Bahn'. Genaue Tiefe in m nicht gefunden.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Heidelberger_Platz",
+            "https://en.wikipedia.org/wiki/Berlin_Heidelberger_Platz_station"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Westhafen",
+      "osm_names": [
+        "S+U Westhafen",
+        "S Westhafen",
+        "U Westhafen"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42",
+          "level": 0,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Ringbahnsteig östlich/unterhalb der Putlitzbrücke; Zugang 'über je eine Treppe pro Straßenseite' von der Brücke herab. Die Bahn liegt also etwa auf Geländeniveau, die Straße (Putlitzstraße) auf einer Brücke darüber. OSM: level=0, layer=-1. Dritte Bahnsteigkante für die Siemensbahn geplant. Ob es ein leichter Einschnitt ist, ist nicht belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Westhafen",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        },
+        {
+          "line": "U9",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Tunnel (Liste der U-Bahnhöfe: Lage 'Tunnel'), 110 m Bahnsteig, liegt nordwestlich unter dem Westende des S-Bahnsteigs (direkter Zugang). Bahnsteigart nur aus OSM abgeleitet (eine Bahnsteigfläche zwischen zwei Gleisen). OSM taggt den Bahnsteig level=-2 (Zählung inkl. Zugangsebene).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Westhafen",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Kein eigenes Verteilergeschoss belegt; Übergang S↔U seit 1975 bzw. über die Bahnsteigverlängerung nach Westen. Wahrscheinlich nur Zugangsbauwerk – unbelegt."
+        }
+      ]
+    },
+    {
+      "name": "Wedding",
+      "osm_names": [
+        "S+U Wedding",
+        "S Wedding",
+        "U Wedding"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S15",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NO-SW",
+          "notes": "Ringbahn 1889/90 'höher gelegt' auf 'Viaduktbögen' (wie Stadtbahn); denkmalgeschützte Anlage 'aus Bahnhof, Ringbahn-Viadukt und Empfangsgebäude'. Also Viadukt, nicht Damm. Bahnsteigart aus OSM (eine Fläche, Gleise 1;2).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Wedding",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "'unter der Müllerstraße liegende U-Bahnhof', 80 m Mittelbahnsteig (Original 1923).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Wedding",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": []
+    },
+    {
+      "name": "Jungfernheide",
+      "osm_names": [
+        "S+U Jungfernheide",
+        "Berlin Jungfernheide",
+        "U Jungfernheide"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46 (+ Regionalbahnsteig RB/RE)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Zugänge 'durch Fußgängertunnel' unter den Gleisen auf Max-Dohrn- und Olbersstraße → Gleise erhöht; OSM level=1. Ob Damm oder Brücke ist nicht ausdrücklich belegt (wahrscheinlich Damm). S-Bahn und Regionalverkehr haben je einen Bahnsteig nebeneinander.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Jungfernheide",
+            "https://en.wikipedia.org/wiki/Berlin_Jungfernheide_station",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U7 (Richtung Rudow)",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel (nur westliche Kante genutzt)",
+          "orientation": "N-S",
+          "notes": "Zwei Bahnsteige ÜBEREINANDER: 'Heute halten am oberen Bahnsteig die Züge in Richtung Rudow'. Östliche Kante beider Ebenen war für die U5 (Tegel) vorgesehen und ist ungenutzt; Teile sind Feuerwehr-Übungsanlage. BVG-Kürzel Jho (oben).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Jungfernheide",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        },
+        {
+          "line": "U7 (Richtung Rathaus Spandau)",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel (nur westliche Kante genutzt)",
+          "orientation": "N-S",
+          "notes": "'am unteren Bahnsteig die Züge in Richtung Rathaus Spandau'. Richtungsbahnsteige übereinander. BVG-Kürzel Jhu (unten).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Jungfernheide",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Östlicher Fußgängertunnel unter den S-Bahn-Gleisen auf Straßenniveau dient als Zugang zum U-Bahnhof (Aufzug verbindet beide U-Bahnsteige mit der Vorhalle)."
+        }
+      ]
+    },
+    {
+      "name": "Neukölln",
+      "osm_names": [
+        "S+U Neukölln",
+        "S Neukölln",
+        "U Neukölln"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S45 S46 S47",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "1890 wurden 'Trasse und der Bahnhof Rixdorf auf einen aufgeschütteten Damm verlegt'; Karl-Marx-Straße per Brücke gequert. Damm. Bahnsteigart aus OSM.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Neuk%C3%B6lln",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U7",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Tunnel unter der Karl-Marx-Straße, kreuzt die Ringbahn (Grenander, 1930). Bahnsteigart nur aus OSM (eine Fläche). OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Neuk%C3%B6lln",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "'Empfangshalle und gleichzeitig Verteilerebene' (gemeinsames Zugangsbauwerk S/U, nach Vorbild Tempelhof); Höhenlage nicht ausdrücklich angegeben, vermutlich Straßenniveau unter dem Damm."
+        }
+      ]
+    },
+    {
+      "name": "Hermannstraße",
+      "osm_names": [
+        "S+U Hermannstraße",
+        "S Hermannstraße",
+        "U Hermannstraße"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S45 S46 S47",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "EINSCHNITT (kein Tunnel): 1993 neu 'unter die Hermannbrücke gesetzt'; en.wiki: 'under the bridge where Hermannstraße crosses the S-Bahn cutting'. OSM level=-1. Empfangsgebäude beidseits an der Brücke.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Hermannstra%C3%9Fe",
+            "https://en.wikipedia.org/wiki/Berlin_Hermannstra%C3%9Fe_station",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        },
+        {
+          "line": "U8",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Tunnel UNTER dem S-Bahn-Einschnitt: 'Die tiefe Lage aufgrund der Unterquerung der S-Bahn' (deshalb 1940 Luftschutzbunker); Übergänge 'zum darüberliegenden S-Bahnsteig'. 110 m Mittelbahnsteig, Endbahnhof mit 320 m Kehranlage. Tiefe in m nicht angegeben.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Hermannstra%C3%9Fe",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Zugangsgebäude an der Hermannbrücke (Straßenniveau auf der Brücke), Rolltreppen/Aufzug hinab zum S-Bahnsteig."
+        }
+      ]
+    },
+    {
+      "name": "Tempelhof",
+      "osm_names": [
+        "S+U Tempelhof",
+        "S Tempelhof",
+        "U Tempelhof"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S45 S46 S47",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "'befindet sich auf einem Bahndamm' an der Kreuzung Tempelhofer Damm/A100 (Bahnbrücken über den Tempelhofer Damm). Damm. Bahnsteigart aus OSM (ref 1;2, eine Fläche). Strecke hier WNW-OSO.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Tempelhof",
+            "https://en.wikipedia.org/wiki/Berlin-Tempelhof_station",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U6",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'unter dem Tempelhofer Damm südlich der Ringbahn'; erstes gemeinsames S/U-Zugangsbauwerk Berlins (Grenander 1929). Bahnsteigart aus OSM. OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Tempelhof",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "'open mezzanine galleries at both ends of the platform' (en.wiki) – offene Galerien über den Bahnsteigenden, kein durchgehendes Geschoss."
+        }
+      ]
+    },
+    {
+      "name": "Innsbrucker Platz",
+      "osm_names": [
+        "S+U Innsbrucker Platz",
+        "S Innsbrucker Platz",
+        "U Innsbrucker Platz"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S46",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Ringbahn auf Brücke über Hauptstraße/Damm; Bahnsteig erreichbar über 'eine Treppe' und 'einen Schrägaufzug' (hinauf). OSM level=1, Brücken layer 1–2. Damm vs. Brückenlage des Bahnsteigs nicht ausdrücklich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Innsbrucker_Platz",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U4",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Tunnel, 90 m Mittelbahnsteig (Schöneberger U-Bahn 1910), Gleise enden stumpf (Südtunnel durch A100-Bau abgetrennt). Strecke NNW-SSO.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Innsbrucker_Platz",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "'Zwischen der Straßenoberfläche und dem Autobahntunnel wurde ein großes Verteilergeschoss angelegt' (A100-Tunnel darunter, ca. Ebene -2). Darunter ('unter dem Autobahntunnel unter der Hauptstraße') liegt ein ungenutzter U10-Bahnhofsrohbau (ca. Ebene -3, kein Betrieb)."
+        }
+      ]
+    },
+    {
+      "name": "Frankfurter Allee",
+      "osm_names": [
+        "S+U Frankfurter Allee",
+        "S Frankfurter Allee",
+        "U Frankfurter Allee"
+      ],
+      "platforms": [
+        {
+          "line": "S41 S42 S8 S85",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Ringbahn quert die Frankfurter Allee auf einer Brücke ('die alte Ringbahn-Brücke'); der Bahnsteig liegt neben der Brücke ('the S-Bahn platform would need to be on the bridge' – ist es also nicht). OSM: level=1, embankment=yes → Damm. 'Neben einem Mittelbahnsteig' (1890/91).",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Frankfurter_Allee",
+            "https://en.wikipedia.org/wiki/Berlin_Frankfurter_Allee_station",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U5",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "'In der U-Bahn-Station unterhalb der gleichnamigen Straße'; Kehranlagen östlich und westlich. Bahnsteigart nur aus OSM (eine Fläche). OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Frankfurter_Allee",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Zwischengeschoss über dem U5-Bahnsteig (Aufzug 'zwischen Bahnsteig und Zwischengeschoss', Zugang Ring-Center). Liegt zwischen Straße und U-Bahnsteig."
+        }
+      ]
+    },
+    {
+      "name": "Lichtenberg",
+      "osm_names": [
+        "S+U Lichtenberg",
+        "Berlin-Lichtenberg",
+        "U Lichtenberg"
+      ],
+      "platforms": [
+        {
+          "line": "S5 S7 S75 (+ Fern-/Regionalbahnsteige)",
+          "level": 0,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NO-SW",
+          "notes": "Bahnanlagen auf Geländeniveau; die Frankfurter Allee quert sie auf der 'Lichtenberger Brücke' (Treppenabgänge 'auf das Bahnhofsniveau'). OSM: level=0. Straße also ÜBER der Bahn.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Lichtenberg",
+            "https://en.wikipedia.org/wiki/Berlin-Lichtenberg_station",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        },
+        {
+          "line": "U5",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Tunnel unter den Bahnanlagen; ursprünglich 'hohe Halle mit zwei Reihen Stützpfeilern', seit den 1950ern Zwischendecke → nur 2,8 m hoch; Fußgängertunnel liegt 'über dem U-Bahnhof' (Pfeiler ragen hinein). Bahnsteigart nur aus OSM. OSM level=-2.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Lichtenberg",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Fußgängertunnel/Verteilerebene direkt über dem U5-Bahnsteig im selben Bauwerk (eingezogene Zwischendecke); von dort Zugang zu S- und Fernbahnsteigen. Bahnsteigart U5 'unsicher', weil nur aus OSM abgeleitet."
+        }
+      ]
+    },
+    {
+      "name": "Wuhletal",
+      "osm_names": [
+        "S+U Wuhletal"
+      ],
+      "platforms": [
+        {
+          "line": "S5 + U5 (stadteinwärts)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (S außen, U innen)",
+          "orientation": "O-W",
+          "notes": "'Der Bahnhof liegt auf dem Damm der bestehenden S-Bahn'; zwei Mittelbahnsteige nach Richtung gepaart: nördlicher stadteinwärts. S-Bahn an den Außenkanten, U-Bahn an den Innenkanten → bahnsteiggleicher Umstieg auf GLEICHER Ebene. 160 m (längste Bahnsteige des U-Bahn-Netzes). Liste: Lage 'Damm'.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Wuhletal",
+            "https://en.wikipedia.org/wiki/Berlin_Wuhletal_station",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "S5 + U5 (stadtauswärts)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel (S außen, U innen)",
+          "orientation": "O-W",
+          "notes": "Südlicher Mittelbahnsteig, stadtauswärts. Gleiche Ebene wie der Nordbahnsteig.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Wuhletal",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": 0,
+          "notes": "Kein Zwischengeschoss; Damm wird von der Wuhle und 'zwei Fußgängertunneln' unterquert (Zugänge)."
+        }
+      ]
+    },
+    {
+      "name": "Rathaus Steglitz",
+      "osm_names": [
+        "S+U Rathaus Steglitz",
+        "S Rathaus Steglitz",
+        "U Rathaus Steglitz"
+      ],
+      "platforms": [
+        {
+          "line": "S1",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Gleise 1884–86 'in Hochlage verlegt'; 'Zwei Durchgänge führen unter den Gleisen, von ihnen führen Treppen zum S-Bahnsteig' → Damm (OSM level=1, Brücke). Bahnsteigart aus OSM (ref 1;2). Richtung NNO-SSW.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Rathaus_Steglitz",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U9",
+          "level": -2,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "Doppelstöckiger Tunnel für U9/U10 unter der Schloßstraße; die U9 nutzt 'die Gleise der U10 mit einem Mittelbahnsteig'. BVG-Kürzel 'Rzu' (u = untere Ebene, laut Liste); OSM: U9 level=-2/layer -2…-3. Die eigentlichen U9-Seitenbahnsteige (obere Ebene, ca. -1) sind nur Rohbau.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin_Rathaus_Steglitz",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Unterirdisches Verteilergeschoss/Ladenpassage (Zugang unter der Autobahn A103) mit Wegen zu Kreisel und Rathaus; daneben ungenutzte U9-Seitenbahnsteige (Rohbau, früher Senatslager). 'unsicher' bei U9: Zuordnung obere/untere Ebene stützt sich auf Kürzel Rzu + OSM, Fließtext sagt es nicht ausdrücklich."
+        }
+      ]
+    },
+    {
+      "name": "Wittenau",
+      "osm_names": [
+        "S+U Wittenau",
+        "S Wittenau (Wilhelmsruher Damm)",
+        "U Wittenau"
+      ],
+      "platforms": [
+        {
+          "line": "S1 S85",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NW-SO",
+          "notes": "Nordbahn; OSM: level=1, Brücke über den Wilhelmsruher Damm. Wikipedia nennt die Höhenlage nicht ausdrücklich; Damm wahrscheinlich, aber unbelegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Wittenau_(Wilhelmsruher_Damm)",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U8",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "'liegt unterhalb des Wilhelmsruher Damms', am Südausgang des S-Bahnhofs (Rümmler, 1994). Bahnsteigart nur aus OSM. OSM level=-2.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Wittenau_(Wilhelmsruher_Damm)",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerebene über dem U8-Bahnsteig (Bildunterschrift 'Verteilerebene', 'Zugang zur Verteilerebene')."
+        }
+      ]
+    },
+    {
+      "name": "Rathaus Spandau",
+      "osm_names": [
+        "S+U Rathaus Spandau",
+        "Berlin-Spandau",
+        "U Rathaus Spandau"
+      ],
+      "platforms": [
+        {
+          "line": "S3 S9 (+ Fern-/Regionalbahnsteige)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "O-W",
+          "notes": "Bahnhof Berlin-Spandau: Empfangshalle 'unter den Gleisen', Bahnsteigtunnel → Hochlage auf Damm (OSM level=1). Der Vorgängerbahnhof hatte 'Bahnsteige in Dammlage'. Zwei S-Bahn-Bahnsteiggleise; Mittelbahnsteig wahrscheinlich, nicht ausdrücklich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Spandau",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U7",
+          "level": -1,
+          "depth_m": null,
+          "platform": "2 mittel",
+          "orientation": "N-S",
+          "notes": "In Deckelbauweise (flach); 'zwei Mittelbahnsteige', U7 an den Mittelgleisen, die äußeren Kleinprofil-Tröge leer (Vorleistung U2). Galerie am Südende überspannt die Bahnsteige. OSM level=-2. Strecke NNO-SSW.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Spandau",
+            "https://en.wikipedia.org/wiki/Rathaus_Spandau_(Berlin_U-Bahn)",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerebene/Galerie am Südende über den Bahnsteigen."
+        }
+      ]
+    },
+    {
+      "name": "Pankow",
+      "osm_names": [
+        "S+U Pankow",
+        "S Pankow",
+        "U Pankow"
+      ],
+      "platforms": [
+        {
+          "line": "S2 S8 S85 (S26)",
+          "level": 1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "NO-SW",
+          "notes": "Stettiner Bahn quert die Berliner Straße auf einer Brücke (OSM layer=1/bridge); Bahnsteig 'nach Art der Berliner Stadtbahnstationen' (Insel). Damm vs. Viadukt nicht ausdrücklich belegt.",
+          "unsicher": true,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Pankow",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ],
+          "height_m": null
+        },
+        {
+          "line": "U2",
+          "level": -1,
+          "depth_m": null,
+          "platform": "mittel",
+          "orientation": "N-S",
+          "notes": "'Unterhalb des S-Bahnhofs befindet sich seit 2000 der U-Bahnhof Pankow' (Endbahnhof). Bahnsteigart nur aus OSM. OSM level=-2. Strecke NNW-SSO.",
+          "unsicher": false,
+          "sources": [
+            "https://de.wikipedia.org/wiki/Bahnhof_Berlin-Pankow",
+            "https://de.wikipedia.org/wiki/Liste_der_Berliner_U-Bahnh%C3%B6fe",
+            "OpenStreetMap (Overpass-Abfrage 2026-10-04: railway=platform/subway/light_rail, Tags level/layer/bridge/tunnel/embankment)"
+          ]
+        }
+      ],
+      "zwischengeschoss": [
+        {
+          "level": -1,
+          "notes": "Verteilerebene (Bildunterschrift 'Altes Empfangsgebäude mit Zugang zur Verteilerebene'); Lage zwischen Straße und U2-Bahnsteig."
+        }
+      ]
+    }
+  ]
+}
