@@ -2352,6 +2352,44 @@ impl Game for Play {
         }
         let tint = [0.92, 0.97, 1., 0.5];
         let rim = [0.25, 0.85, 1., 0.85];
+        // alle anderen: blasse Umrisse (render.js drawCovered), knapp vor ihren eigenen Teilen
+        let (cx, cy) = (w.camera.x, w.camera.y);
+        let view = 2200. / w.camera.zoom.max(0.5);
+        let near = |x: f64, y: f64| (x - cx).abs() < view && (y - cy).abs() < view * 0.7;
+        let pale = [0.85, 0.88, 0.92, 0.28];
+        let own = w.player_car().map(|c| c.id);
+        for c in w
+            .cars
+            .iter()
+            .filter(|c| near(c.x, c.y) && Some(c.id) != own)
+        {
+            let depth = if c.lvl() >= 1 { 0.547 } else { 0.617 };
+            out.push(Body {
+                center: [c.x as f32, c.y as f32],
+                half: [c.hw as f32, c.hh as f32],
+                angle: c.angle as f32,
+                shape: 0.,
+                depth,
+                color: pale,
+            });
+        }
+        for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
+            if matches!(
+                p.state,
+                berlin_sim::pedestrians::PedState::Dead | berlin_sim::pedestrians::PedState::Hang
+            ) {
+                continue;
+            }
+            let depth = if p.level.lvl >= 1 { 0.5485 } else { 0.6175 };
+            out.push(Body {
+                center: [p.x as f32, p.y as f32],
+                half: [4.5, 6.5],
+                angle: p.facing as f32,
+                shape: 1.,
+                depth,
+                color: pale,
+            });
+        }
         if let Some(c) = w.player_car() {
             let depth = if c.lvl() >= 1 { 0.547 } else { 0.617 };
             let (hw, hh) = (c.hw as f32, c.hh as f32);

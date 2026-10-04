@@ -1100,8 +1100,8 @@ Silhouette liegt minimal vor den eigenen Teilen, damit sie über der frei sichtb
 `--bildschirm verdeckt` stellt die Figur nördlich eines Hauses ab ([Bild](images/native/silhouette.png),
 vergrößert). Gegenprobe ohne Verdeckung: kein Umriss.
 
-**Abweichungen:** JS zeigt Silhouetten auch für Autos, Passanten, Räder und Straßenbahnwagen; hier nur für die
-Spielfigur und ihr Fahrzeug.
+Andere Autos und Passanten erscheinen unter Verdeckendem als blasse Umrisse. **Abweichung:** Räder und
+Straßenbahnwagen bekommen keine Silhouette.
 
 ## Kirchenglocken (04.10.2026)
 
