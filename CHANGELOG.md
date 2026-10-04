@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: S- und U-Bahn gerafft. Die Züge fahren dreimal so schnell, die Abfahrtsanzeigen zeigen
+  weiter Fahrplanminuten, zählen aber dreimal so schnell herunter, und es fahren sechsmal so viele Züge wie im
+  Fahrplan (U8 etwa alle 50 s statt alle 5 min). Halt am Bahnsteig 8 s. Gilt auch für selbst gefahrene Züge
+  (Tempo und Beschleunigung ×3); Bus und Straßenbahn bleiben unverändert.
 - Native Rust-Portierung: Menüeintrag „Über das Spiel“ (Titel- und Pausenmenü) mit drei Reitern: Spiel
   (Version, Entwicklung, Hinweise, Technik), Lizenzen (Datenquellen und alle 326 Rust-Pakete mit Lizenz) und
   Changelog. Alles aus Repo-Dateien gelesen; ein Test prüft die Paketliste gegen `Cargo.lock`. Der Titelbildschirm

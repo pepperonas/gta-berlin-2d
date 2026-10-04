@@ -20,13 +20,16 @@ pub const HURT_FROM: f64 = 40. / 0.36;
 pub const STUN: f64 = 1.2;
 pub const HURT: f64 = 10.;
 
-/// Fahrphysik je Bahnart: Höchsttempo (px/s), Anfahren, Bremse, Notbremse (px/s²).
+/// Fahrphysik je Bahnart: Höchsttempo (px/s), Anfahren, Bremse, Notbremse (px/s²). S- und U-Bahn sind wie der
+/// Fahrplan gerafft (`Mode::pace`): Tempo und Beschleunigung ×3, Anfahr- und Bremszeiten bleiben gleich.
 pub fn drive_params(mode: Mode) -> (f64, f64, f64, f64) {
-    match mode {
+    let k = mode.pace();
+    let (v, a, b, e) = match mode {
         Mode::Tram => (60. / 0.36, 13., 15., 25.),
         Mode::SBahn => (100. / 0.36, 10., 12., 25.),
         _ => (70. / 0.36, 11., 12., 25.),
-    }
+    };
+    (v * k, a * k, b * k, e * k)
 }
 pub const ROLL: f64 = 0.6;
 /// px: Haltebereich um eine Haltestelle, „genau“ gehalten
@@ -265,7 +268,7 @@ fn bus_cars(x: f64, y: f64, angle: f64) -> Vec<CarPos> {
     }]
 }
 
-/// Tempo aus dem Fahrplan: Abstand der Halte durch die Fahrzeit ohne Haltezeit.
+/// Tempo aus dem Fahrplan (px je echter Sekunde): Abstand der Halte durch die Fahrzeit ohne Haltezeit, gerafft.
 pub fn speed_of_pattern(p: &Pattern, tau: f64) -> f64 {
     let pos = position_at(p, tau);
     if pos.dwelling || pos.stop == 0 {
@@ -273,7 +276,7 @@ pub fn speed_of_pattern(p: &Pattern, tau: f64) -> f64 {
     }
     let i = pos.stop;
     let span = p.off[i] - p.off[i - 1];
-    (p.stops[i] - p.stops[i - 1]) / (span - p.dwell.min(span * 0.4)).max(1.)
+    p.mode.pace() * (p.stops[i] - p.stops[i - 1]) / (span - p.dwell.min(span * 0.4)).max(1.)
 }
 
 impl World {
@@ -1069,7 +1072,8 @@ impl World {
                 t.drive.door_t = 0.;
                 let first = !t.served.contains(&i);
                 let tip = if first {
-                    tip_for(dist, t.drive.max_decel())
+                    // sanft heißt: sanft im ungerafften Maß (S/U bremsen gerafft 3× stärker)
+                    tip_for(dist, t.drive.max_decel() / p.mode.pace())
                 } else {
                     0.
                 };
@@ -1180,13 +1184,20 @@ mod tests {
         for _ in 0..60 {
             step_drive(&mut d, &full, 1. / 60.);
         }
-        assert!((d.v - 11.).abs() < 0.01, "Anfahren 11 px/s² ({})", d.v);
+        // U-Bahn gerafft (×3): 33 px/s² Anfahren, 210 km/h Spiel-Höchsttempo
+        let k = crate::transit::RAIL_PACE;
+        assert!(
+            (d.v - 11. * k).abs() < 0.01,
+            "Anfahren 11·3 px/s² ({})",
+            d.v
+        );
         for _ in 0..60 * 60 {
             step_drive(&mut d, &full, 1. / 60.);
         }
         assert!(
-            (d.v - 70. / 0.36).abs() < 2. && d.v <= 70. / 0.36,
-            "Höchsttempo (asymptotisch)"
+            (d.v - 70. * k / 0.36).abs() < 2. * k && d.v <= 70. * k / 0.36,
+            "Höchsttempo (asymptotisch) {}",
+            d.v
         );
         // Zwangsbremsung: steht vor dem Hindernis
         let mut s = 0.;

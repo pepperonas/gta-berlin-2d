@@ -20,6 +20,13 @@ pub const BUS_LIVE: f64 = 2200.;
 pub const BUS_L: f64 = 120.;
 pub const BUS_W: f64 = 25.;
 pub const BUS_COLOR: u32 = 0xf0cf1f;
+/// S- und U-Bahn laufen gerafft: ihre Fahrplanuhr geht so viel schneller als die echte Zeit. Tempo, Fahrzeit und
+/// der Countdown der Anzeigen (in Fahrplanminuten) folgen daraus; die Anzeige zählt also schneller herunter.
+pub const RAIL_PACE: f64 = 3.;
+/// S- und U-Bahn fahren zusätzlich dichter: Abfahrten je echter Zeit gegenüber dem Fahrplan.
+pub const RAIL_TAKT: f64 = 6.;
+/// Haltezeit von S- und U-Bahn in echten Sekunden.
+pub const RAIL_DWELL_S: f64 = 8.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Mode {
@@ -39,15 +46,22 @@ impl Mode {
             _ => Mode::Other,
         }
     }
-    /// Haltezeit (s)
+    /// Haltezeit in Fahrplansekunden (S/U: `RAIL_DWELL_S` echte Sekunden)
     pub fn dwell(self) -> f64 {
         match self {
             Mode::Bus => 12.,
             Mode::Tram => 15.,
-            Mode::SBahn => 25.,
-            Mode::UBahn => 20.,
+            Mode::SBahn | Mode::UBahn => RAIL_DWELL_S * RAIL_PACE,
             Mode::Other => 15.,
         }
+    }
+    /// Fahrplansekunden je echter Sekunde
+    pub fn pace(self) -> f64 {
+        if self.rail() { RAIL_PACE } else { 1. }
+    }
+    /// Abfahrten je echter Zeit gegenüber dem Fahrplan
+    pub fn takt(self) -> f64 {
+        if self.rail() { RAIL_TAKT } else { 1. }
     }
     /// Wagen: Anzahl, Länge, Breite, Lücke (px)
     pub fn train(self) -> (usize, f64, f64, f64) {
@@ -378,13 +392,13 @@ pub fn position_at(p: &Pattern, tau: f64) -> Pos {
         done: false,
     }
 }
-/// Fahrtempo zwischen zwei Halten (px/s), 0 beim Halten.
+/// Fahrtempo zwischen zwei Halten (px je echter Sekunde), 0 beim Halten.
 pub fn speed_at(p: &Pattern, pos: &Pos) -> f64 {
     if pos.dwelling || pos.stop == 0 {
         return 0.;
     }
     let (a, b) = (pos.stop - 1, pos.stop);
-    (p.stops[b] - p.stops[a]) / (p.off[b] - p.off[a] - p.dwell).max(1.)
+    p.mode.pace() * (p.stops[b] - p.stops[a]) / (p.off[b] - p.off[a] - p.dwell).max(1.)
 }
 
 /// Virtuelles Fahrzeug eines Musters.
@@ -415,11 +429,12 @@ impl Veh {
 }
 
 /// Virtuelle Fahrzeuge beim ersten Verfolgen: gleichmäßig im aktuellen Takt verteilt (Phase fest je Muster).
+/// Abstand in Fahrplanzeit: echter Abstand (Fahrplantakt verdichtet) mal Raffung.
 pub fn initial_vehicles(p: &Pattern, per_hour: usize, seed: u32) -> Vec<Veh> {
     if per_hour == 0 {
         return Vec::new();
     }
-    let h = 3600. / per_hour as f64;
+    let h = 3600. * p.mode.pace() / (per_hour as f64 * p.mode.takt());
     let mut tau = hash01((p.id * 13) as f64 + seed as f64) * h;
     let mut out = Vec::new();
     while tau < p.duration {
@@ -491,7 +506,7 @@ pub fn advance(
 ) {
     for (&id, s) in st.tracked.iter_mut() {
         let p = &tr.patterns[id];
-        s.acc += dt * departures_per_hour(p, minutes, day) as f64 / 3600.;
+        s.acc += dt * p.mode.takt() * departures_per_hour(p, minutes, day) as f64 / 3600.;
         if s.acc >= 1. {
             s.acc -= 1.;
             s.n += 1;
@@ -505,7 +520,7 @@ pub fn advance(
                 v.delay += dt;
                 continue;
             }
-            v.tau += dt;
+            v.tau += dt * p.mode.pace();
         }
         s.veh.retain(|v| !v.gone && v.tau <= p.duration + p.dwell);
     }
@@ -635,5 +650,69 @@ mod tests {
         step_transit(&mut st2, &mut tr, (500., 0.), 610., 0, 1., 0.5, &mut stop);
         let t1: Vec<f64> = st2.tracked[&0].veh.iter().map(|v| v.tau).collect();
         assert_eq!(t0, t1);
+    }
+    /// Eine U-Bahn-Linie: 3 Halte à 1000 px, 120 s Fahrplanzeit je Abschnitt, Takt alle 5 min (12/h).
+    fn ubahn() -> Transit {
+        let deps: Vec<f64> = std::iter::once(600.)
+            .chain(std::iter::repeat_n(5., 11))
+            .collect();
+        Transit::from_json(&json!({
+            "v": 1, "attribution": "VBB",
+            "lines": [["U8", "ubahn", "#0a3c85"]],
+            "names": ["A", "B", "C"],
+            "shapes": [[0, 0, 2000, 0]],
+            "patterns": [{ "l": 0, "s": 0, "st": [0, 1000, 2000], "sn": [0, 1, 2], "off": [0, 120, 240],
+                           "d": [deps, [], []] }]
+        }))
+        .unwrap()
+    }
+    #[test]
+    fn rail_runs_faster_denser_and_dwells_eight_real_seconds() {
+        let mut tr = ubahn();
+        let p = tr.patterns[0].clone();
+        assert_eq!(p.mode.pace(), RAIL_PACE);
+        assert_eq!(departures_per_hour(&p, 630., 0), 12);
+        // Haltezeit: 8 echte Sekunden = 24 Fahrplansekunden
+        assert_eq!(p.dwell, RAIL_DWELL_S * RAIL_PACE);
+        // Tempo: 1000 px in (120 − 24) Fahrplansekunden, gerafft dreimal so schnell
+        let pos = position_at(&p, 50.);
+        assert!((speed_at(&p, &pos) - 3. * 1000. / 96.).abs() < 1e-9);
+        // ein Bus bleibt ungerafft
+        assert_eq!(Mode::Bus.pace(), 1.);
+        assert_eq!(Mode::Tram.takt(), 1.);
+        // eine echte Viertelstunde: 12/h × 6 = 72/h → 18 Abfahrten; die Fahrzeit 240 s dauert 80 echte Sekunden
+        let mut st = State::default();
+        let mut never = |_: &Pattern, _: &mut Veh, _: f64| false;
+        step_transit(&mut st, &mut tr, (500., 0.), 630., 0, 0., 0., &mut never);
+        st.tracked.get_mut(&0).unwrap().veh.clear();
+        let mut departed = 0;
+        let mut first: Option<(f64, f64)> = None; // (echte Abfahrtzeit, Ankunft am Endhalt)
+        for k in 0..(15 * 60 * 10) {
+            let t = k as f64 * 0.1;
+            let before = st.tracked[&0].n;
+            step_transit(&mut st, &mut tr, (500., 0.), 630., 0, 0.1, t, &mut never);
+            if st.tracked[&0].n > before {
+                departed += 1;
+                first.get_or_insert((t, f64::NAN));
+            }
+            if let Some(f) = first.as_mut()
+                && f.1.is_nan()
+                && st.tracked[&0]
+                    .veh
+                    .first()
+                    .is_some_and(|v| position_at(&p, v.tau).done)
+            {
+                f.1 = t;
+            }
+        }
+        assert!((17..=19).contains(&departed), "{departed} Abfahrten");
+        let (dep, arr) = first.unwrap();
+        assert!((arr - dep - 80.).abs() < 0.5, "Fahrzeit {} s", arr - dep);
+        // Zugfolge beim ersten Verfolgen: 3600 · 3 / (12 · 6) = 150 Fahrplansekunden = 50 echte Sekunden
+        let v = initial_vehicles(&p, 12, 0);
+        assert!(
+            v.windows(2)
+                .all(|w| (w[1].tau - w[0].tau - 150.).abs() < 1e-9)
+        );
     }
 }
