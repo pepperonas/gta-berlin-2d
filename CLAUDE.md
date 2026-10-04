@@ -34,6 +34,12 @@ features by global IDs and releases far tiles (maximum 64 resident). The engine
 uploads changed tile batches only and instances a procedural tree/decal atlas.
 `cargo run -- --check-map` validates every committed tile and polygon;
 `cargo run -- --capture /tmp/berlin.png` checks loaded-map rendering on the GPU.
+Vehicle physics (phases 1–2, not yet wired into the game): data in `data/vehicles/` (classes, tires, curves,
+schema; guide in its README), loader `sim/vehdata.rs`, core `sim/vphys.rs` (120 Hz single-track), test drives
+`sim/calibrate.rs`, tool `cargo run --release -p physics-calibrate` (writes `vehicles.calibrated.json` and
+`docs/kalibrierung/`). Never change mass/power/torque to hit a target; only the tool's screws. Rotational inertia
+reduces engine force only, never the tyre limit. Add new schema fields to `vehdata.rs KEYS` and
+`vehicle.schema.json` together (a test checks). Rerun the tool after any physics change.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

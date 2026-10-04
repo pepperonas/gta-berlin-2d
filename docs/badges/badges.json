@@ -1,18 +1,18 @@
 {
   "version": "0.46.0",
   "loc": {
-    "rust": 52242,
+    "rust": 54842,
     "wgsl": 562,
     "js": 26440,
     "csharp": 145
   },
   "tests": {
-    "rust": 216,
+    "rust": 229,
     "js": 476
   },
   "edition": "2024",
   "msrv": "1.95",
-  "crates": 5,
+  "crates": 6,
   "wgpu": "29.0.4",
   "winit": "0.30.13",
   "cpal": "0.18.2",

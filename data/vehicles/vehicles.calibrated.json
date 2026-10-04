@@ -1,0 +1,805 @@
+{
+  "ambulance": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "bus": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "business": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "business_limo": {
+    "_ok": true,
+    "bremskraft": 1.3122499465942388,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "coupe": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "cruiser": {
+    "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
+    "_ok": false,
+    "bremskraft": 0.5869970321655273,
+    "cwA": 1.15,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "defender": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "delivery": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "doppeldecker": {
+    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.685195732116699,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 0.97
+  },
+  "drift_coupe": {
+    "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
+    "_ok": false,
+    "bremskraft": 1.6,
+    "cwA": 1.15,
+    "mu": 1.01,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "e_bus": {
+    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.6787084579467773,
+    "cwA": 1.0,
+    "mu": 1.03,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.03
+  },
+  "e_kompakt": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 1.0,
+    "mu": 1.02,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.03
+  },
+  "e_performance": {
+    "_grund": "0_100: physikalisch nicht erreichbar: selbst konstante Spitzenleistung ohne Schaltpausen braucht 2.3 s",
+    "_ok": false,
+    "bremskraft": 0.757382392883301,
+    "cwA": 0.85,
+    "mu": 0.92,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.03
+  },
+  "elektro": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "elektrosport": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "escooter_entdrosselt": {
+    "_grund": "brems_25: Bremsweg kürzer als das Ziel, auch mit schwächerer Bremse",
+    "_ok": false,
+    "bremskraft": 0.5,
+    "cwA": 0.85,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 0.97
+  },
+  "escooter_performance": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 0.85,
+    "mu": 1.1,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "fahrrad_city": {
+    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Bremsweg kürzer als das Ziel, auch mit schwächerer Bremse; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 32 km/h größer als 800 W × Wirkungsgrad)",
+    "_ok": false,
+    "bremskraft": 0.5,
+    "cwA": 0.85,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 0.97
+  },
+  "familienkombi": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "garbage": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "gelaende": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "gelaendewagen": {
+    "_ok": true,
+    "bremskraft": 1.2171815872192386,
+    "cwA": 1.0,
+    "mu": 0.9900000000000001,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "gelenkbus": {
+    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.6902982711791992,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "gklasse": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "grosssuv": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "gtcoupe": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "heckcoupe": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "hochdach": {
+    "_grund": "vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 180 km/h größer als 90 kW × Wirkungsgrad)",
+    "_ok": false,
+    "bremskraft": 1.0,
+    "cwA": 0.85,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "hot_hatch": {
+    "_ok": true,
+    "bremskraft": 0.9380525588989261,
+    "cwA": 1.0,
+    "mu": 0.93,
+    "schalt": 1.25,
+    "uebersetzung": 1.5500000000000003,
+    "wirkungsgrad": 0.97
+  },
+  "hothatch": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "hypercar": {
+    "_ok": true,
+    "bremskraft": 0.8789831161499024,
+    "cwA": 1.0,
+    "mu": 1.1,
+    "schalt": 1.5,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 0.97
+  },
+  "hypercar_elektro": {
+    "_grund": "0_100: physikalisch nicht erreichbar: selbst konstante Spitzenleistung ohne Schaltpausen braucht 2.3 s",
+    "_ok": false,
+    "bremskraft": 0.8421533584594725,
+    "cwA": 0.85,
+    "mu": 1.1,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.03
+  },
+  "kastenwagen_35t": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 0.8852048873901367,
+    "mu": 0.9,
+    "schalt": 1.5,
+    "uebersetzung": 0.6000000000000001,
+    "wirkungsgrad": 0.97
+  },
+  "kleinbus": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "kleinwagen": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "kleinwagen_65ps": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 1.0353960037231444,
+    "mu": 0.9500000000000001,
+    "schalt": 0.75,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "kombi": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "kombi_diesel": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 0.914230537414551,
+    "mu": 0.92,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "kompakt": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "kompakt_benzin": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 0.9792913436889649,
+    "mu": 0.9700000000000001,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "kompakt_fuenf_felder": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 0.9987920761108398,
+    "mu": 1.0,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "kompaktsuv": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "leichtbau": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "leichtcoupe": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "limousine": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "lkw_75t": {
+    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.574966621398926,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 0.5,
+    "uebersetzung": 1.1500000000000001,
+    "wirkungsgrad": 1.03
+  },
+  "luxus": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "motorcycle": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "motorrad_naked": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 0.85,
+    "mu": 0.9,
+    "schalt": 0.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "muellwagen": {
+    "_grund": "brems_50: Bremsweg kürzer als das Ziel, auch mit schwächerer Bremse; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.5,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 1.5,
+    "uebersetzung": 1.4500000000000002,
+    "wirkungsgrad": 0.97
+  },
+  "muscle_klassik": {
+    "_ok": true,
+    "bremskraft": 0.5939416885375977,
+    "cwA": 1.15,
+    "mu": 0.9700000000000001,
+    "schalt": 1.0,
+    "uebersetzung": 1.35,
+    "wirkungsgrad": 1.0
+  },
+  "muscle_modern": {
+    "_ok": true,
+    "bremskraft": 0.9305791854858401,
+    "cwA": 1.0,
+    "mu": 0.93,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "musclecar": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "niva": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "oldtimer": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "oldtimer_kaefer": {
+    "_ok": true,
+    "bremskraft": 0.622731590270996,
+    "cwA": 1.0811128616333008,
+    "mu": 0.9400000000000001,
+    "schalt": 1.25,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "oldtimer_w123": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 1.138401985168457,
+    "mu": 1.02,
+    "schalt": 1.0,
+    "uebersetzung": 1.4500000000000002,
+    "wirkungsgrad": 1.03
+  },
+  "pickup": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "police": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "polizei_kombi": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 0.914230537414551,
+    "mu": 0.92,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "powerkombi": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "rallye": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "rennrad": {
+    "_grund": "0_25: Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel); brems_25: Bremsweg kürzer als das Ziel, auch mit schwächerer Bremse; vmax: Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad)",
+    "_ok": false,
+    "bremskraft": 0.5,
+    "cwA": 0.85,
+    "mu": 0.9,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 0.97
+  },
+  "roadster": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "roller_45": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 0.91,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "sattelzug_40t": {
+    "_grund": "0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.5,
+    "cwA": 1.0,
+    "mu": 0.9,
+    "schalt": 0.5,
+    "uebersetzung": 1.5000000000000004,
+    "wirkungsgrad": 1.03
+  },
+  "scooter": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "sportlimo": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "sportsuv": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "sportwagen": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "sportwagen_s": {
+    "_ok": true,
+    "bremskraft": 0.8765073776245116,
+    "cwA": 1.15,
+    "mu": 1.04,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "sprinter": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "stadtbus": {
+    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_ok": false,
+    "bremskraft": 0.7155927658081054,
+    "cwA": 1.0,
+    "mu": 0.93,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "superbike": {
+    "_grund": "brems_100: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
+    "_ok": false,
+    "bremskraft": 1.6,
+    "cwA": 1.0,
+    "mu": 1.1,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "supercar_awd": {
+    "_grund": "quer_g: Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt)",
+    "_ok": false,
+    "bremskraft": 0.8876691818237306,
+    "cwA": 1.15,
+    "mu": 1.1,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "supercar_rwd": {
+    "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
+    "_ok": false,
+    "bremskraft": 0.909879493713379,
+    "cwA": 1.15,
+    "mu": 1.06,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "supersport": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "suv_gross": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 1.15,
+    "mu": 0.93,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "suv_kompakt": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 0.9854963302612303,
+    "mu": 0.9,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "taxi": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "taxi_diesel": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 1.15,
+    "mu": 0.9400000000000001,
+    "schalt": 1.25,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "trabant": {
+    "_grund": "0_100: physikalisch nicht erreichbar: selbst konstante Spitzenleistung ohne Schaltpausen braucht 23.8 s",
+    "_ok": false,
+    "bremskraft": 0.7109014511108398,
+    "cwA": 1.15,
+    "mu": 0.9400000000000001,
+    "schalt": 0.5,
+    "uebersetzung": 0.7500000000000001,
+    "wirkungsgrad": 1.03
+  },
+  "transporter": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "transporter_kasten": {
+    "_ok": true,
+    "bremskraft": 1.6,
+    "cwA": 0.9142660140991211,
+    "mu": 0.9500000000000001,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
+  "truck": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  },
+  "turbo_s": {
+    "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
+    "_ok": false,
+    "bremskraft": 0.9236764907836914,
+    "cwA": 1.15,
+    "mu": 1.1,
+    "schalt": 1.0,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.0
+  },
+  "zweitakter": {
+    "_ok": true,
+    "bremskraft": 1.0,
+    "cwA": 1.0,
+    "mu": 1.0,
+    "schalt": 1.0,
+    "uebersetzung": 1.0,
+    "wirkungsgrad": 1.0
+  }
+}

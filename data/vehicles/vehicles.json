@@ -1,0 +1,3469 @@
+[
+ {
+  "id": "fahrrad_city",
+  "name": "Kiezrad Trekking",
+  "klasse": "zweirad_muskel",
+  "vorbild": "Trekkingrad",
+  "masse": 95,
+  "lbh": [
+   1.8,
+   0.6,
+   1.1
+  ],
+  "radstand": 1.1,
+  "cg_h": 1.05,
+  "vorn": 0.45,
+  "motor": {
+   "typ": "muskel",
+   "w_dauer": 200,
+   "w_sprint": 800
+  },
+  "reifen": {
+   "typ": "fahrrad",
+   "breite_mm": 40,
+   "kpa": 400
+  },
+  "aero": {
+   "cwA": 0.6
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 4.0
+  },
+  "max_schraeglage": 40,
+  "ziel": {
+   "0_25": 8.0,
+   "vmax": 32,
+   "brems_25": 4.8
+  }
+ },
+ {
+  "id": "rennrad",
+  "name": "Avus Carbon",
+  "klasse": "zweirad_muskel",
+  "vorbild": "Rennrad Carbon",
+  "masse": 88,
+  "lbh": [
+   1.7,
+   0.45,
+   1.0
+  ],
+  "radstand": 1.0,
+  "cg_h": 0.95,
+  "vorn": 0.42,
+  "motor": {
+   "typ": "muskel",
+   "w_dauer": 280,
+   "w_sprint": 1200
+  },
+  "reifen": {
+   "typ": "rennrad",
+   "breite_mm": 28,
+   "kpa": 600
+  },
+  "aero": {
+   "cwA": 0.32
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 5.0
+  },
+  "max_schraeglage": 45,
+  "ziel": {
+   "0_25": 5.5,
+   "vmax": 55,
+   "brems_25": 4.5
+  }
+ },
+ {
+  "id": "escooter_entdrosselt",
+  "name": "Flitz Max (offen)",
+  "klasse": "zweirad_elektro",
+  "vorbild": "Ninebot-Max-Klasse, entsperrt",
+  "masse": 105,
+  "lbh": [
+   1.2,
+   0.5,
+   1.2
+  ],
+  "radstand": 0.95,
+  "cg_h": 1.05,
+  "vorn": 0.45,
+  "motor": {
+   "typ": "elektro",
+   "kw": 0.9,
+   "nm": 25
+  },
+  "reifen": {
+   "typ": "scooter_klein",
+   "breite_mm": 60,
+   "kpa": 300,
+   "zoll": 10
+  },
+  "aero": {
+   "cwA": 0.55
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 3.5
+  },
+  "max_schraeglage": 35,
+  "ziel": {
+   "0_25": 5.0,
+   "vmax": 35,
+   "brems_25": 5.5
+  }
+ },
+ {
+  "id": "escooter_performance",
+  "name": "Flitz Duo",
+  "klasse": "zweirad_elektro",
+  "vorbild": "Dual-Motor-Scooter (Dualtron-Klasse)",
+  "masse": 126,
+  "lbh": [
+   1.3,
+   0.6,
+   1.25
+  ],
+  "radstand": 1.2,
+  "cg_h": 1.0,
+  "vorn": 0.45,
+  "motor": {
+   "typ": "elektro",
+   "kw": 5.4,
+   "nm": 120
+  },
+  "antrieb": "AWD",
+  "reifen": {
+   "typ": "scooter_offroad",
+   "breite_mm": 90,
+   "kpa": 280,
+   "zoll": 11
+  },
+  "aero": {
+   "cwA": 0.55
+  },
+  "bremse": {
+   "typ": "scheibe_hydraulisch",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 4.0
+  },
+  "max_schraeglage": 38,
+  "ziel": {
+   "0_50": 3.8,
+   "vmax": 80,
+   "brems_50": 13
+  }
+ },
+ {
+  "id": "roller_45",
+  "name": "Kiezflitzer 50",
+  "klasse": "zweirad_motor",
+  "vorbild": "50-ccm-Roller",
+  "masse": 175,
+  "lbh": [
+   1.8,
+   0.7,
+   1.15
+  ],
+  "radstand": 1.3,
+  "cg_h": 0.8,
+  "vorn": 0.42,
+  "motor": {
+   "typ": "zweitakt",
+   "kw": 3.0,
+   "nm": 4.5,
+   "n_max": 8000
+  },
+  "getriebe": {
+   "typ": "cvt"
+  },
+  "reifen": {
+   "typ": "roller",
+   "breite_mm": 110,
+   "kpa": 200,
+   "zoll": 12
+  },
+  "aero": {
+   "cwA": 0.5
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": false
+  },
+  "lenkung": {
+   "wendekreis": 3.8
+  },
+  "max_schraeglage": 42,
+  "limiter": 45,
+  "ziel": {
+   "0_45": 8.0,
+   "vmax": 45,
+   "brems_50": 12
+  }
+ },
+ {
+  "id": "motorrad_naked",
+  "name": "Tegel Nackt 700",
+  "klasse": "zweirad_motor",
+  "vorbild": "Yamaha MT-07",
+  "masse": 264,
+  "lbh": [
+   2.1,
+   0.8,
+   1.1
+  ],
+  "radstand": 1.4,
+  "cg_h": 0.75,
+  "vorn": 0.49,
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 54,
+   "nm": 67,
+   "n_max": 9500
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 6,
+   "schalt": 0.15
+  },
+  "reifen": {
+   "typ": "motorrad_touring"
+  },
+  "aero": {
+   "cwA": 0.45
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.75
+  },
+  "lenkung": {
+   "wendekreis": 5.6
+  },
+  "max_schraeglage": 48,
+  "ziel": {
+   "0_100": 3.9,
+   "vmax": 214,
+   "brems_100": 40
+  }
+ },
+ {
+  "id": "superbike",
+  "name": "Tegel RR 1000",
+  "klasse": "zweirad_motor",
+  "vorbild": "BMW S 1000 RR",
+  "masse": 277,
+  "lbh": [
+   2.07,
+   0.85,
+   1.15
+  ],
+  "radstand": 1.44,
+  "cg_h": 0.7,
+  "vorn": 0.52,
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 154,
+   "nm": 113,
+   "n_max": 14500
+  },
+  "getriebe": {
+   "typ": "manuell_quickshifter",
+   "gaenge": 6,
+   "schalt": 0.05
+  },
+  "reifen": {
+   "typ": "motorrad_sport"
+  },
+  "aero": {
+   "cwA": 0.3
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.8
+  },
+  "lenkung": {
+   "wendekreis": 6.6
+  },
+  "max_schraeglage": 58,
+  "wheelie_control": true,
+  "limiter": 299,
+  "ziel": {
+   "0_100": 3.1,
+   "vmax": 299,
+   "brems_100": 36
+  }
+ },
+ {
+  "id": "cruiser",
+  "name": "Havelland Fatline",
+  "klasse": "zweirad_motor",
+  "vorbild": "Harley-Davidson Fat Boy 114",
+  "masse": 397,
+  "lbh": [
+   2.4,
+   0.95,
+   1.1
+  ],
+  "radstand": 1.67,
+  "cg_h": 0.65,
+  "vorn": 0.45,
+  "motor": {
+   "typ": "v2_drehmoment",
+   "kw": 69,
+   "nm": 155,
+   "n_max": 5500
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 6,
+   "schalt": 0.25
+  },
+  "reifen": {
+   "typ": "cruiser"
+  },
+  "aero": {
+   "cwA": 0.6
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.65
+  },
+  "lenkung": {
+   "wendekreis": 6.7
+  },
+  "max_schraeglage": 30,
+  "ziel": {
+   "0_100": 4.4,
+   "vmax": 180,
+   "brems_100": 44
+  }
+ },
+ {
+  "id": "kleinwagen_65ps",
+  "name": "Havel Mini 65",
+  "klasse": "pkw_klein",
+  "vorbild": "VW up! 1.0 65 PS",
+  "masse": 1000,
+  "lbh": [
+   3.6,
+   1.64,
+   1.5
+  ],
+  "radstand": 2.42,
+  "spur": 1.42,
+  "cg_h": 0.55,
+  "vorn": 0.62,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 48,
+   "nm": 95,
+   "n_max": 6300
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 5,
+   "schalt": 0.35
+  },
+  "reifen": {
+   "typ": "eco",
+   "breite_mm": 165,
+   "kpa": 230
+  },
+  "aero": {
+   "cwA": 0.66
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": true,
+   "vorn": 0.72
+  },
+  "lenkung": {
+   "wendekreis": 9.8
+  },
+  "fahrwerk": {
+   "wank": 4.0,
+   "hz": 1.4,
+   "tau": 0.15
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.25,
+   "max_winkel": 35
+  },
+  "ziel": {
+   "0_100": 14.4,
+   "vmax": 164,
+   "brems_100": 38,
+   "quer_g": 0.85
+  }
+ },
+ {
+  "id": "kompakt_benzin",
+  "name": "Spree Ronda 1.5",
+  "klasse": "pkw_kompakt",
+  "vorbild": "VW Golf 8 1.5 eTSI DSG",
+  "masse": 1430,
+  "lbh": [
+   4.28,
+   1.79,
+   1.46
+  ],
+  "radstand": 2.62,
+  "spur": 1.55,
+  "cg_h": 0.55,
+  "vorn": 0.61,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 110,
+   "nm": 250,
+   "n_max": 6500,
+   "lag": 0.25,
+   "mildhybrid": true
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.12
+  },
+  "reifen": {
+   "typ": "sommer_std",
+   "breite_mm": 225,
+   "kpa": 240
+  },
+  "aero": {
+   "cwA": 0.62
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 10.9
+  },
+  "fahrwerk": {
+   "wank": 3.5,
+   "hz": 1.4,
+   "tau": 0.15
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.3,
+   "max_winkel": 40
+  },
+  "ziel": {
+   "0_100": 8.6,
+   "vmax": 224,
+   "brems_100": 35.0,
+   "quer_g": 0.95
+  }
+ },
+ {
+  "id": "kompakt_fuenf_felder",
+  "name": "Spree Ronda Basis",
+  "klasse": "pkw_kompakt",
+  "masse": 1300,
+  "kw": 81,
+  "ziel": {
+   "0_100": 10.5,
+   "vmax": 200
+  }
+ },
+ {
+  "id": "hot_hatch",
+  "name": "Spree Ronda Sport+",
+  "klasse": "pkw_kompakt",
+  "vorbild": "VW Golf 8 GTI",
+  "masse": 1530,
+  "lbh": [
+   4.29,
+   1.79,
+   1.46
+  ],
+  "radstand": 2.63,
+  "spur": 1.55,
+  "cg_h": 0.52,
+  "vorn": 0.62,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 180,
+   "nm": 370,
+   "n_max": 6800,
+   "lag": 0.2
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.1
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 235,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.64
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 10.9
+  },
+  "fahrwerk": {
+   "wank": 2.6,
+   "hz": 1.7,
+   "tau": 0.11
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.4,
+   "max_winkel": 45
+  },
+  "ziel": {
+   "0_100": 6.2,
+   "vmax": 250,
+   "brems_100": 34,
+   "quer_g": 1.0
+  },
+  "limiter": 250
+ },
+ {
+  "id": "kombi_diesel",
+  "name": "Spree Pendler Diesel",
+  "klasse": "pkw_mittel",
+  "vorbild": "VW Passat Variant 2.0 TDI 150 PS",
+  "masse": 1650,
+  "lbh": [
+   4.92,
+   1.85,
+   1.5
+  ],
+  "radstand": 2.84,
+  "spur": 1.58,
+  "cg_h": 0.56,
+  "vorn": 0.58,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "diesel",
+   "kw": 110,
+   "nm": 360,
+   "n_max": 4800,
+   "lag": 0.35
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.12
+  },
+  "reifen": {
+   "typ": "sommer_std",
+   "breite_mm": 215,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.66
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 11.7
+  },
+  "fahrwerk": {
+   "wank": 3.8,
+   "hz": 1.3,
+   "tau": 0.17
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.3,
+   "max_winkel": 40
+  },
+  "ziel": {
+   "0_100": 9.3,
+   "vmax": 223,
+   "brems_100": 36,
+   "quer_g": 0.9
+  }
+ },
+ {
+  "id": "polizei_kombi",
+  "name": "Spree Pendler Streife",
+  "basis": "kombi_diesel",
+  "vorbild": "Streifenwagen Kombi",
+  "sirene": true,
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  }
+ },
+ {
+  "id": "taxi_diesel",
+  "name": "Teltower T5 Droschke",
+  "klasse": "pkw_oberklasse",
+  "vorbild": "Mercedes E 220 d (W214)",
+  "masse": 1900,
+  "lbh": [
+   4.95,
+   1.88,
+   1.47
+  ],
+  "radstand": 2.96,
+  "spur": 1.6,
+  "cg_h": 0.54,
+  "vorn": 0.52,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel",
+   "kw": 145,
+   "nm": 440,
+   "n_max": 4600,
+   "lag": 0.3
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 9,
+   "schalt": 0.2
+  },
+  "reifen": {
+   "typ": "sommer_std",
+   "breite_mm": 225,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.55
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.66
+  },
+  "lenkung": {
+   "wendekreis": 11.6
+  },
+  "fahrwerk": {
+   "wank": 3.5,
+   "hz": 1.2,
+   "tau": 0.18
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.5,
+   "max_winkel": 50
+  },
+  "ziel": {
+   "0_100": 7.6,
+   "vmax": 238,
+   "brems_100": 35,
+   "quer_g": 0.9
+  }
+ },
+ {
+  "id": "business_limo",
+  "name": "Teltower T5 Allrad",
+  "klasse": "pkw_oberklasse",
+  "vorbild": "BMW 540i xDrive (G30)",
+  "masse": 1900,
+  "lbh": [
+   4.94,
+   1.87,
+   1.48
+  ],
+  "radstand": 2.98,
+  "spur": 1.6,
+  "cg_h": 0.52,
+  "vorn": 0.51,
+  "antrieb": "AWD",
+  "awd_vorn": 0.35,
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 250,
+   "nm": 450,
+   "n_max": 7000,
+   "lag": 0.18
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 8,
+   "schalt": 0.15
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 245,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.57
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.66
+  },
+  "lenkung": {
+   "wendekreis": 12.0,
+   "hinterachse": true
+  },
+  "fahrwerk": {
+   "wank": 3.0,
+   "hz": 1.4,
+   "tau": 0.14
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.6,
+   "max_winkel": 55
+  },
+  "ziel": {
+   "0_100": 4.8,
+   "vmax": 250,
+   "brems_100": 34,
+   "quer_g": 0.95
+  },
+  "limiter": 250
+ },
+ {
+  "id": "suv_kompakt",
+  "name": "Spree Tiga 150",
+  "klasse": "suv",
+  "vorbild": "VW Tiguan 1.5 eTSI 150 PS",
+  "masse": 1650,
+  "lbh": [
+   4.54,
+   1.86,
+   1.66
+  ],
+  "radstand": 2.68,
+  "spur": 1.58,
+  "cg_h": 0.65,
+  "vorn": 0.58,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 110,
+   "nm": 250,
+   "n_max": 6500,
+   "lag": 0.25
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.12
+  },
+  "reifen": {
+   "typ": "sommer_std",
+   "breite_mm": 235,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.8
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 11.5
+  },
+  "fahrwerk": {
+   "wank": 4.8,
+   "hz": 1.3,
+   "tau": 0.2
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.2,
+   "max_winkel": 35
+  },
+  "ziel": {
+   "0_100": 9.1,
+   "vmax": 207,
+   "brems_100": 37,
+   "quer_g": 0.85
+  }
+ },
+ {
+  "id": "suv_gross",
+  "name": "Teltower TX5 Diesel",
+  "klasse": "suv",
+  "vorbild": "BMW X5 xDrive30d",
+  "masse": 2250,
+  "lbh": [
+   4.92,
+   2.0,
+   1.75
+  ],
+  "radstand": 2.98,
+  "spur": 1.68,
+  "cg_h": 0.7,
+  "vorn": 0.51,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "typ": "diesel",
+   "kw": 210,
+   "nm": 670,
+   "n_max": 5000,
+   "lag": 0.3
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 8,
+   "schalt": 0.18
+  },
+  "reifen": {
+   "typ": "sommer_std",
+   "breite_mm": 275,
+   "kpa": 260
+  },
+  "aero": {
+   "cwA": 0.9
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.68
+  },
+  "lenkung": {
+   "wendekreis": 12.6
+  },
+  "fahrwerk": {
+   "wank": 4.5,
+   "hz": 1.3,
+   "tau": 0.2
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "drift": {
+   "faehigkeit": 0.35,
+   "max_winkel": 45
+  },
+  "ziel": {
+   "0_100": 6.1,
+   "vmax": 230,
+   "brems_100": 36,
+   "quer_g": 0.9
+  }
+ },
+ {
+  "id": "gelaendewagen",
+  "name": "Grunewald Kommandant 500",
+  "klasse": "offroad",
+  "vorbild": "Mercedes G 500 (W465)",
+  "masse": 2600,
+  "lbh": [
+   4.83,
+   1.93,
+   1.97
+  ],
+  "radstand": 2.89,
+  "spur": 1.64,
+  "cg_h": 0.85,
+  "vorn": 0.53,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 330,
+   "nm": 560,
+   "n_max": 6500,
+   "lag": 0.2
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 9,
+   "schalt": 0.2
+  },
+  "reifen": {
+   "typ": "at_offroad",
+   "breite_mm": 275,
+   "kpa": 260
+  },
+  "aero": {
+   "cwA": 1.25
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.65
+  },
+  "lenkung": {
+   "wendekreis": 13.6
+  },
+  "fahrwerk": {
+   "wank": 6.0,
+   "hz": 1.2,
+   "tau": 0.25,
+   "bordstein_immun": true
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "starr",
+  "drift": {
+   "faehigkeit": 0.35,
+   "max_winkel": 45
+  },
+  "ziel": {
+   "0_100": 5.4,
+   "vmax": 210,
+   "brems_100": 40,
+   "quer_g": 0.8
+  },
+  "limiter": 210
+ },
+ {
+  "id": "transporter_kasten",
+  "name": "Spree Kasten 6",
+  "klasse": "van",
+  "vorbild": "VW T6.1 2.0 TDI 150 PS DSG",
+  "masse": {
+   "leer": 2100,
+   "voll": 3000
+  },
+  "lbh": [
+   4.9,
+   1.9,
+   1.99
+  ],
+  "radstand": 3.0,
+  "spur": 1.62,
+  "cg_h": {
+   "leer": 0.8,
+   "voll": 0.95
+  },
+  "vorn": 0.55,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "diesel",
+   "kw": 110,
+   "nm": 340,
+   "n_max": 4600,
+   "lag": 0.35
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.15
+  },
+  "reifen": {
+   "typ": "transporter",
+   "breite_mm": 215,
+   "kpa": 380
+  },
+  "aero": {
+   "cwA": 1.25
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.68
+  },
+  "lenkung": {
+   "wendekreis": 11.9
+  },
+  "fahrwerk": {
+   "wank": 5.5,
+   "hz": 1.4,
+   "tau": 0.22
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.15,
+   "max_winkel": 30
+  },
+  "ziel": {
+   "0_100": 11.4,
+   "vmax": 182,
+   "brems_100": 40,
+   "quer_g": 0.75
+  }
+ },
+ {
+  "id": "kastenwagen_35t",
+  "name": "Spree Großraum 317",
+  "klasse": "van",
+  "vorbild": "Mercedes Sprinter 317 CDI",
+  "masse": {
+   "leer": 2400,
+   "voll": 3500
+  },
+  "lbh": [
+   5.93,
+   2.02,
+   2.36
+  ],
+  "radstand": 3.66,
+  "spur": 1.72,
+  "cg_h": {
+   "leer": 0.85,
+   "voll": 1.05
+  },
+  "vorn": 0.45,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel",
+   "kw": 125,
+   "nm": 400,
+   "n_max": 4400,
+   "lag": 0.35
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 9,
+   "schalt": 0.25
+  },
+  "reifen": {
+   "typ": "transporter",
+   "breite_mm": 235,
+   "kpa": 450
+  },
+  "aero": {
+   "cwA": 2.0
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.65
+  },
+  "lenkung": {
+   "wendekreis": 13.6
+  },
+  "fahrwerk": {
+   "wank": 6.0,
+   "hz": 1.5,
+   "tau": 0.25
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.15,
+   "max_winkel": 30
+  },
+  "ziel": {
+   "0_100": 15.0,
+   "vmax": 160,
+   "brems_100": 42,
+   "quer_g": 0.7
+  }
+ },
+ {
+  "id": "e_kompakt",
+  "name": "Voltwerk Kiez 3",
+  "klasse": "elektro",
+  "vorbild": "VW ID.3 Pro 150 kW",
+  "masse": 1900,
+  "lbh": [
+   4.26,
+   1.81,
+   1.56
+  ],
+  "radstand": 2.77,
+  "spur": 1.55,
+  "cg_h": 0.5,
+  "vorn": 0.44,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "elektro",
+   "kw": 150,
+   "nm": 310
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "reifen": {
+   "typ": "eco",
+   "breite_mm": 215,
+   "kpa": 270
+  },
+  "aero": {
+   "cwA": 0.62
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": true,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 10.2
+  },
+  "fahrwerk": {
+   "wank": 3.2,
+   "hz": 1.4,
+   "tau": 0.16
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 160,
+  "rekuperation_g": 0.12,
+  "drift": {
+   "faehigkeit": 0.35,
+   "max_winkel": 40
+  },
+  "ziel": {
+   "0_100": 7.3,
+   "vmax": 160,
+   "brems_100": 35,
+   "quer_g": 0.9
+  }
+ },
+ {
+  "id": "e_performance",
+  "name": "Voltwerk Blitz Tri",
+  "klasse": "elektro",
+  "vorbild": "Tesla Model S Plaid",
+  "masse": 2250,
+  "lbh": [
+   5.02,
+   1.96,
+   1.43
+  ],
+  "radstand": 2.96,
+  "spur": 1.66,
+  "cg_h": 0.46,
+  "vorn": 0.48,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "typ": "elektro",
+   "kw": 750,
+   "nm": 1420
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 285,
+   "kpa": 290
+  },
+  "aero": {
+   "cwA": 0.47
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.66
+  },
+  "lenkung": {
+   "wendekreis": 12.4
+  },
+  "fahrwerk": {
+   "wank": 2.5,
+   "hz": 1.5,
+   "tau": 0.12
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "vectoring",
+  "launch": true,
+  "rekuperation_g": 0.15,
+  "drift": {
+   "faehigkeit": 0.5,
+   "max_winkel": 50
+  },
+  "ziel": {
+   "0_100": 2.1,
+   "vmax": 282,
+   "brems_100": 34,
+   "quer_g": 1.0
+  }
+ },
+ {
+  "id": "sportwagen_s",
+  "name": "Wannsee Boxer 6 S",
+  "klasse": "sport",
+  "vorbild": "Porsche 911 Carrera S (992.1) PDK",
+  "masse": 1600,
+  "lbh": [
+   4.52,
+   1.85,
+   1.3
+  ],
+  "radstand": 2.45,
+  "spur": 1.58,
+  "cg_h": 0.45,
+  "vorn": 0.38,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 331,
+   "nm": 530,
+   "n_max": 7500,
+   "lag": 0.15
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 8,
+   "schalt": 0.08
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 305,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.61,
+   "clA": 0.05
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.62
+  },
+  "lenkung": {
+   "wendekreis": 11.2
+  },
+  "fahrwerk": {
+   "wank": 1.8,
+   "hz": 2.0,
+   "tau": 0.09
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.85,
+   "max_winkel": 60
+  },
+  "ziel": {
+   "0_100": 3.5,
+   "vmax": 308,
+   "brems_100": 31.5,
+   "quer_g": 1.1
+  }
+ },
+ {
+  "id": "turbo_s",
+  "name": "Wannsee Boxer 6 Turbo",
+  "klasse": "sport",
+  "vorbild": "Porsche 911 Turbo S (992.2)",
+  "masse": 1720,
+  "lbh": [
+   4.54,
+   1.9,
+   1.3
+  ],
+  "radstand": 2.45,
+  "spur": 1.63,
+  "cg_h": 0.44,
+  "vorn": 0.39,
+  "antrieb": "AWD",
+  "awd_vorn": 0.25,
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 523,
+   "nm": 800,
+   "n_max": 7200,
+   "lag": 0.08,
+   "e_turbo": true
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 8,
+   "schalt": 0.08
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 325,
+   "kpa": 260
+  },
+  "aero": {
+   "cwA": 0.66,
+   "clA": 0.15
+  },
+  "bremse": {
+   "typ": "keramik",
+   "abs": true,
+   "vorn": 0.62
+  },
+  "lenkung": {
+   "wendekreis": 10.9,
+   "hinterachse": true
+  },
+  "fahrwerk": {
+   "wank": 1.5,
+   "hz": 2.0,
+   "tau": 0.08
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.75,
+   "max_winkel": 55
+  },
+  "ziel": {
+   "0_100": 2.5,
+   "0_200": 8.4,
+   "vmax": 322,
+   "brems_100": 30,
+   "quer_g": 1.2
+  }
+ },
+ {
+  "id": "supercar_awd",
+  "name": "Oberbaum Tempesta Allrad",
+  "klasse": "supercar",
+  "vorbild": "Lamborghini Huracán EVO",
+  "masse": 1600,
+  "lbh": [
+   4.52,
+   1.93,
+   1.17
+  ],
+  "radstand": 2.62,
+  "spur": 1.67,
+  "cg_h": 0.42,
+  "vorn": 0.43,
+  "antrieb": "AWD",
+  "awd_vorn": 0.3,
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 470,
+   "nm": 600,
+   "n_max": 8500
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.08
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 305,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.7,
+   "clA": 0.3
+  },
+  "bremse": {
+   "typ": "keramik",
+   "abs": true,
+   "vorn": 0.62
+  },
+  "lenkung": {
+   "wendekreis": 11.5,
+   "hinterachse": true
+  },
+  "fahrwerk": {
+   "wank": 1.4,
+   "hz": 2.2,
+   "tau": 0.08
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "vectoring",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.7,
+   "max_winkel": 55
+  },
+  "ziel": {
+   "0_100": 2.9,
+   "vmax": 325,
+   "brems_100": 31,
+   "quer_g": 1.25
+  }
+ },
+ {
+  "id": "supercar_rwd",
+  "name": "Westend Pfeil 720",
+  "klasse": "supercar",
+  "vorbild": "McLaren 720S",
+  "masse": 1550,
+  "lbh": [
+   4.54,
+   1.93,
+   1.2
+  ],
+  "radstand": 2.67,
+  "spur": 1.65,
+  "cg_h": 0.42,
+  "vorn": 0.42,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 530,
+   "nm": 770,
+   "n_max": 8500,
+   "lag": 0.15
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.08
+  },
+  "reifen": {
+   "typ": "semi_slick",
+   "breite_mm": 305,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.62,
+   "clA": 0.45
+  },
+  "bremse": {
+   "typ": "keramik",
+   "abs": true,
+   "vorn": 0.62
+  },
+  "lenkung": {
+   "wendekreis": 12.0
+  },
+  "fahrwerk": {
+   "wank": 1.2,
+   "hz": 2.3,
+   "tau": 0.07
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.95,
+   "max_winkel": 65
+  },
+  "ziel": {
+   "0_100": 2.9,
+   "0_200": 7.8,
+   "vmax": 341,
+   "brems_100": 30,
+   "quer_g": 1.25
+  }
+ },
+ {
+  "id": "hypercar",
+  "name": "Mühlendamm Sechzehn",
+  "klasse": "hypercar",
+  "vorbild": "Bugatti Chiron",
+  "masse": 2070,
+  "lbh": [
+   4.54,
+   2.04,
+   1.21
+  ],
+  "radstand": 2.71,
+  "spur": 1.73,
+  "cg_h": 0.45,
+  "vorn": 0.44,
+  "antrieb": "AWD",
+  "awd_vorn": 0.35,
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 1103,
+   "nm": 1600,
+   "n_max": 6800,
+   "lag": 0.25
+  },
+  "getriebe": {
+   "typ": "dsg",
+   "gaenge": 7,
+   "schalt": 0.1
+  },
+  "reifen": {
+   "typ": "hypercar",
+   "breite_mm": 355,
+   "kpa": 280
+  },
+  "aero": {
+   "cwA": 0.75,
+   "clA": 0.5,
+   "aktiv": true
+  },
+  "bremse": {
+   "typ": "keramik",
+   "abs": true,
+   "vorn": 0.62,
+   "airbrake": true
+  },
+  "lenkung": {
+   "wendekreis": 12.8
+  },
+  "fahrwerk": {
+   "wank": 1.4,
+   "hz": 2.2,
+   "tau": 0.09
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "vectoring",
+  "launch": true,
+  "limiter": 420,
+  "drift": {
+   "faehigkeit": 0.6,
+   "max_winkel": 50
+  },
+  "ziel": {
+   "0_100": 2.4,
+   "0_200": 6.1,
+   "vmax": 420,
+   "brems_100": 31,
+   "quer_g": 1.3
+  }
+ },
+ {
+  "id": "hypercar_elektro",
+  "name": "Voltwerk Blitzschlag",
+  "klasse": "hypercar",
+  "vorbild": "Rimac Nevera",
+  "masse": 2380,
+  "lbh": [
+   4.75,
+   1.99,
+   1.21
+  ],
+  "radstand": 2.75,
+  "spur": 1.7,
+  "cg_h": 0.43,
+  "vorn": 0.48,
+  "antrieb": "AWD",
+  "awd_vorn": 0.45,
+  "motor": {
+   "typ": "elektro",
+   "kw": 1408,
+   "nm": 2360
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "reifen": {
+   "typ": "hypercar",
+   "breite_mm": 315,
+   "kpa": 270
+  },
+  "aero": {
+   "cwA": 0.66,
+   "clA": 0.4,
+   "aktiv": true
+  },
+  "bremse": {
+   "typ": "keramik",
+   "abs": true,
+   "vorn": 0.62
+  },
+  "lenkung": {
+   "wendekreis": 12.0
+  },
+  "fahrwerk": {
+   "wank": 1.3,
+   "hz": 2.2,
+   "tau": 0.08
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "vectoring",
+  "launch": true,
+  "rekuperation_g": 0.2,
+  "drift": {
+   "faehigkeit": 0.65,
+   "max_winkel": 55
+  },
+  "ziel": {
+   "0_100": 2.0,
+   "vmax": 412,
+   "brems_100": 30,
+   "quer_g": 1.3
+  }
+ },
+ {
+  "id": "muscle_klassik",
+  "name": "Tempelhof Stier 69",
+  "klasse": "muscle",
+  "vorbild": "Dodge Charger R/T 440 (1969)",
+  "masse": 1750,
+  "lbh": [
+   5.28,
+   1.95,
+   1.35
+  ],
+  "radstand": 2.97,
+  "spur": 1.52,
+  "cg_h": 0.55,
+  "vorn": 0.56,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "v8_klassik",
+   "kw": 215,
+   "nm": 650,
+   "n_max": 5200
+  },
+  "getriebe": {
+   "typ": "wandler_alt",
+   "gaenge": 3,
+   "schalt": 0.45
+  },
+  "reifen": {
+   "typ": "diagonal_oldtimer",
+   "breite_mm": 215,
+   "kpa": 200
+  },
+  "aero": {
+   "cwA": 1.05
+  },
+  "bremse": {
+   "typ": "scheibe_trommel",
+   "abs": false,
+   "vorn": 0.62,
+   "fading": "hoch"
+  },
+  "lenkung": {
+   "wendekreis": 12.8,
+   "rate_faktor": 0.75
+  },
+  "fahrwerk": {
+   "wank": 7.0,
+   "hz": 1.0,
+   "tau": 0.3
+  },
+  "assist": {
+   "esp": "aus",
+   "tcs": false
+  },
+  "diff": "sperre",
+  "drift": {
+   "faehigkeit": 1.0,
+   "max_winkel": 65
+  },
+  "burnout": true,
+  "ziel": {
+   "0_100": 6.8,
+   "vmax": 220,
+   "brems_100": 50,
+   "quer_g": 0.75
+  }
+ },
+ {
+  "id": "muscle_modern",
+  "name": "Tempelhof Fohlen V8",
+  "klasse": "muscle",
+  "vorbild": "Ford Mustang GT 5.0 (S650)",
+  "masse": 1850,
+  "lbh": [
+   4.81,
+   1.92,
+   1.4
+  ],
+  "radstand": 2.72,
+  "spur": 1.63,
+  "cg_h": 0.52,
+  "vorn": 0.53,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 358,
+   "nm": 540,
+   "n_max": 7500
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 10,
+   "schalt": 0.15
+  },
+  "reifen": {
+   "typ": "sommer_uhp",
+   "breite_mm": 275,
+   "kpa": 250
+  },
+  "aero": {
+   "cwA": 0.78
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": true,
+   "vorn": 0.65
+  },
+  "lenkung": {
+   "wendekreis": 12.2
+  },
+  "fahrwerk": {
+   "wank": 2.8,
+   "hz": 1.6,
+   "tau": 0.12
+  },
+  "assist": {
+   "esp": "sport",
+   "tcs": true
+  },
+  "diff": "sperre",
+  "launch": true,
+  "drift": {
+   "faehigkeit": 0.95,
+   "max_winkel": 65
+  },
+  "burnout": true,
+  "ziel": {
+   "0_100": 4.6,
+   "vmax": 250,
+   "brems_100": 34,
+   "quer_g": 1.0
+  },
+  "limiter": 250
+ },
+ {
+  "id": "drift_coupe",
+  "name": "Lausitz Seiten 15",
+  "klasse": "sport",
+  "vorbild": "Nissan Silvia S15 Drift-Aufbau (fiktiver Build)",
+  "masse": 1250,
+  "lbh": [
+   4.45,
+   1.7,
+   1.29
+  ],
+  "radstand": 2.53,
+  "spur": 1.48,
+  "cg_h": 0.48,
+  "vorn": 0.53,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "turbo_benzin",
+   "kw": 260,
+   "nm": 450,
+   "n_max": 8000,
+   "lag": 0.3
+  },
+  "getriebe": {
+   "typ": "manuell_sequenziell",
+   "gaenge": 6,
+   "schalt": 0.12
+  },
+  "reifen": {
+   "typ": "drift_semi",
+   "breite_mm": 255,
+   "kpa": 260
+  },
+  "aero": {
+   "cwA": 0.64
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": false,
+   "vorn": 0.62,
+   "hydro_handbremse": true
+  },
+  "lenkung": {
+   "wendekreis": 9.5,
+   "lock_grad": 60
+  },
+  "fahrwerk": {
+   "wank": 1.6,
+   "hz": 2.3,
+   "tau": 0.08
+  },
+  "assist": {
+   "esp": "aus",
+   "tcs": false
+  },
+  "diff": "starr",
+  "drift": {
+   "faehigkeit": 1.0,
+   "max_winkel": 70,
+   "grip_hinten": 0.6
+  },
+  "ziel": {
+   "0_100": 4.6,
+   "vmax": 250,
+   "brems_100": 34,
+   "quer_g": 1.0
+  }
+ },
+ {
+  "id": "oldtimer_kaefer",
+  "name": "Adlershof Kugel",
+  "klasse": "oldtimer",
+  "vorbild": "VW Käfer 1200 (34 PS)",
+  "masse": 835,
+  "lbh": [
+   4.07,
+   1.54,
+   1.5
+  ],
+  "radstand": 2.4,
+  "spur": 1.31,
+  "cg_h": 0.55,
+  "vorn": 0.4,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "boxer_luft",
+   "kw": 25,
+   "nm": 82,
+   "n_max": 4600
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 4,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "diagonal_oldtimer",
+   "breite_mm": 155,
+   "kpa": 170
+  },
+  "aero": {
+   "cwA": 0.88
+  },
+  "bremse": {
+   "typ": "trommel",
+   "abs": false,
+   "vorn": 0.6,
+   "fading": "hoch"
+  },
+  "lenkung": {
+   "wendekreis": 11.0,
+   "rate_faktor": 0.7
+  },
+  "fahrwerk": {
+   "wank": 6.5,
+   "hz": 1.1,
+   "tau": 0.3
+  },
+  "assist": {
+   "esp": "aus",
+   "tcs": false
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.6,
+   "max_winkel": 50
+  },
+  "ziel": {
+   "0_100": 32,
+   "vmax": 115,
+   "brems_100": 58,
+   "quer_g": 0.7
+  }
+ },
+ {
+  "id": "trabant",
+  "name": "Lausitz Kolibri 601",
+  "klasse": "oldtimer",
+  "vorbild": "Trabant 601",
+  "masse": 690,
+  "lbh": [
+   3.56,
+   1.51,
+   1.44
+  ],
+  "radstand": 2.02,
+  "spur": 1.2,
+  "cg_h": 0.55,
+  "vorn": 0.58,
+  "antrieb": "FWD",
+  "motor": {
+   "typ": "zweitakt",
+   "kw": 19,
+   "nm": 54,
+   "n_max": 4500
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 4,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "diagonal_oldtimer",
+   "breite_mm": 145,
+   "kpa": 170
+  },
+  "aero": {
+   "cwA": 0.8
+  },
+  "bremse": {
+   "typ": "trommel",
+   "abs": false,
+   "vorn": 0.65,
+   "fading": "hoch"
+  },
+  "lenkung": {
+   "wendekreis": 10.0,
+   "rate_faktor": 0.7
+  },
+  "fahrwerk": {
+   "wank": 7.0,
+   "hz": 1.2,
+   "tau": 0.3
+  },
+  "assist": {
+   "esp": "aus",
+   "tcs": false
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.3,
+   "max_winkel": 40
+  },
+  "rauchfahne": true,
+  "ziel": {
+   "0_100": 21,
+   "vmax": 107,
+   "brems_100": 55,
+   "quer_g": 0.7
+  }
+ },
+ {
+  "id": "oldtimer_w123",
+  "name": "Teltower Diesel 240",
+  "klasse": "oldtimer",
+  "vorbild": "Mercedes 240 D (W123)",
+  "masse": 1450,
+  "lbh": [
+   4.73,
+   1.79,
+   1.44
+  ],
+  "radstand": 2.8,
+  "spur": 1.47,
+  "cg_h": 0.56,
+  "vorn": 0.53,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_sauger",
+   "kw": 53,
+   "nm": 137,
+   "n_max": 4400
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 4,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "diagonal_oldtimer",
+   "breite_mm": 175,
+   "kpa": 200
+  },
+  "aero": {
+   "cwA": 0.95
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": false,
+   "vorn": 0.65,
+   "fading": "mittel"
+  },
+  "lenkung": {
+   "wendekreis": 11.3,
+   "rate_faktor": 0.75
+  },
+  "fahrwerk": {
+   "wank": 5.5,
+   "hz": 1.1,
+   "tau": 0.28
+  },
+  "assist": {
+   "esp": "aus",
+   "tcs": false
+  },
+  "diff": "offen",
+  "drift": {
+   "faehigkeit": 0.55,
+   "max_winkel": 50
+  },
+  "ziel": {
+   "0_100": 20,
+   "vmax": 143,
+   "brems_100": 45,
+   "quer_g": 0.75
+  }
+ },
+ {
+  "id": "lkw_75t",
+  "name": "Oberlausitz L75 Verteiler",
+  "klasse": "lkw",
+  "vorbild": "MAN TGL 7,5 t Verteiler",
+  "masse": {
+   "leer": 4800,
+   "voll": 7490
+  },
+  "lbh": [
+   7.2,
+   2.4,
+   3.2
+  ],
+  "radstand": 3.6,
+  "spur": 1.95,
+  "cg_h": {
+   "leer": 0.95,
+   "voll": 1.25
+  },
+  "vorn": 0.45,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 160,
+   "nm": 850,
+   "n_max": 2600,
+   "lag": 0.5
+  },
+  "getriebe": {
+   "typ": "amt",
+   "gaenge": 12,
+   "schalt": 0.8
+  },
+  "reifen": {
+   "typ": "lkw",
+   "breite_mm": 245,
+   "kpa": 750
+  },
+  "aero": {
+   "cwA": 5.0
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.55,
+   "aufbau_s": 0.4,
+   "retarder": "motorbremse"
+  },
+  "lenkung": {
+   "wendekreis": 13.5
+  },
+  "fahrwerk": {
+   "wank": 6.0,
+   "hz": 1.6,
+   "tau": 0.3
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 89,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_80": 22,
+   "vmax": 89,
+   "brems_80": 48,
+   "quer_g": 0.55
+  }
+ },
+ {
+  "id": "sattelzug_40t",
+  "name": "Oberlausitz Fernlast 48",
+  "klasse": "lkw_sattel",
+  "vorbild": "Mercedes Actros 1848 mit Planenauflieger",
+  "masse": {
+   "leer": 15000,
+   "voll": 40000
+  },
+  "lbh": [
+   16.5,
+   2.55,
+   4.0
+  ],
+  "radstand": 3.7,
+  "spur": 2.05,
+  "cg_h": {
+   "leer": 1.2,
+   "voll": 2.0
+  },
+  "vorn": 0.3,
+  "gelenk": {
+   "typ": "sattel",
+   "zugmaschine_l": 6.0,
+   "auflieger_l": 13.6,
+   "zapfen_bis_achse": 7.7
+  },
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 350,
+   "nm": 2500,
+   "n_max": 1900,
+   "lag": 0.6
+  },
+  "getriebe": {
+   "typ": "amt",
+   "gaenge": 12,
+   "schalt": 1.0
+  },
+  "reifen": {
+   "typ": "lkw",
+   "breite_mm": 315,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 6.0
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.35,
+   "aufbau_s": 0.45,
+   "retarder": "hydraulisch"
+  },
+  "lenkung": {
+   "wendekreis": 15.5
+  },
+  "fahrwerk": {
+   "wank": 7.0,
+   "hz": 1.5,
+   "tau": 0.35
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 89,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_80": 40,
+   "vmax": 89,
+   "brems_80": 56,
+   "quer_g": 0.35
+  }
+ },
+ {
+  "id": "muellwagen",
+  "name": "Kiezwerk Presse 26",
+  "klasse": "lkw",
+  "vorbild": "3-Achs-Müllwagen 26 t (Stadtreinigung)",
+  "masse": {
+   "leer": 17000,
+   "voll": 26000
+  },
+  "lbh": [
+   9.5,
+   2.55,
+   3.6
+  ],
+  "radstand": 4.5,
+  "spur": 2.05,
+  "cg_h": {
+   "leer": 1.3,
+   "voll": 1.6
+  },
+  "vorn": 0.3,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 240,
+   "nm": 1600,
+   "n_max": 2300,
+   "lag": 0.5
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 6,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "lkw",
+   "breite_mm": 315,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 6.5
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.4,
+   "aufbau_s": 0.45,
+   "retarder": "hydraulisch"
+  },
+  "lenkung": {
+   "wendekreis": 17.0
+  },
+  "fahrwerk": {
+   "wank": 6.5,
+   "hz": 1.5,
+   "tau": 0.35
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 85,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_50": 20,
+   "vmax": 85,
+   "brems_50": 24,
+   "quer_g": 0.4
+  }
+ },
+ {
+  "id": "stadtbus",
+  "name": "Kiezwerk Stadtbus 12",
+  "klasse": "bus",
+  "vorbild": "Mercedes Citaro 12 m (Linienbus)",
+  "masse": {
+   "leer": 11500,
+   "voll": 18000
+  },
+  "lbh": [
+   12.1,
+   2.55,
+   3.1
+  ],
+  "radstand": 5.85,
+  "spur": 2.1,
+  "cg_h": {
+   "leer": 1.1,
+   "voll": 1.25
+  },
+  "vorn": 0.33,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 220,
+   "nm": 1200,
+   "n_max": 2200,
+   "lag": 0.4
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 6,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "bus",
+   "breite_mm": 275,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 5.5
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.45,
+   "aufbau_s": 0.4,
+   "retarder": "hydraulisch"
+  },
+  "lenkung": {
+   "wendekreis": 21.5
+  },
+  "fahrwerk": {
+   "wank": 5.0,
+   "hz": 0.9,
+   "tau": 0.35,
+   "luft": true,
+   "kneeling": true
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 80,
+  "fahrgaeste": true,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_50": 15,
+   "vmax": 80,
+   "brems_50": 27,
+   "quer_g": 0.45
+  }
+ },
+ {
+  "id": "doppeldecker",
+  "name": "Kiezwerk Doppelstock",
+  "klasse": "bus",
+  "vorbild": "Berliner Doppeldecker 13,7 m (3 Achsen)",
+  "masse": {
+   "leer": 17500,
+   "voll": 26000
+  },
+  "lbh": [
+   13.7,
+   2.55,
+   4.1
+  ],
+  "radstand": 6.1,
+  "spur": 2.1,
+  "cg_h": {
+   "leer": 1.45,
+   "voll": 1.7
+  },
+  "vorn": 0.3,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 260,
+   "nm": 1700,
+   "n_max": 2200,
+   "lag": 0.45
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 6,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "bus",
+   "breite_mm": 275,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 7.0
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.4,
+   "aufbau_s": 0.45,
+   "retarder": "hydraulisch"
+  },
+  "lenkung": {
+   "wendekreis": 21.0
+  },
+  "fahrwerk": {
+   "wank": 6.0,
+   "hz": 0.9,
+   "tau": 0.4,
+   "luft": true
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 80,
+  "fahrgaeste": true,
+  "hoehe_kritisch": true,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_50": 18,
+   "vmax": 80,
+   "brems_50": 28,
+   "quer_g": 0.4
+  }
+ },
+ {
+  "id": "gelenkbus",
+  "name": "Kiezwerk Gelenk 18",
+  "klasse": "bus_gelenk",
+  "vorbild": "Mercedes Citaro G 18 m",
+  "masse": {
+   "leer": 16500,
+   "voll": 28000
+  },
+  "lbh": [
+   18.1,
+   2.55,
+   3.1
+  ],
+  "radstand": 5.9,
+  "spur": 2.1,
+  "cg_h": {
+   "leer": 1.1,
+   "voll": 1.25
+  },
+  "vorn": 0.3,
+  "gelenk": {
+   "typ": "drehgelenk",
+   "vorderwagen_l": 10.9,
+   "nachlaeufer_l": 7.2,
+   "knick_max_grad": 50,
+   "schubgelenk": true
+  },
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "diesel_lkw",
+   "kw": 260,
+   "nm": 1500,
+   "n_max": 2200,
+   "lag": 0.45
+  },
+  "getriebe": {
+   "typ": "wandler",
+   "gaenge": 6,
+   "schalt": 0.5
+  },
+  "reifen": {
+   "typ": "bus",
+   "breite_mm": 275,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 5.8
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.35,
+   "aufbau_s": 0.45,
+   "retarder": "hydraulisch"
+  },
+  "lenkung": {
+   "wendekreis": 23.0
+  },
+  "fahrwerk": {
+   "wank": 5.0,
+   "hz": 0.9,
+   "tau": 0.4,
+   "luft": true
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 80,
+  "fahrgaeste": true,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_50": 17,
+   "vmax": 80,
+   "brems_50": 28,
+   "quer_g": 0.45
+  }
+ },
+ {
+  "id": "e_bus",
+  "name": "Kiezwerk E-Stadtbus 12",
+  "klasse": "bus",
+  "vorbild": "Mercedes eCitaro 12 m",
+  "masse": {
+   "leer": 13500,
+   "voll": 19500
+  },
+  "lbh": [
+   12.1,
+   2.55,
+   3.4
+  ],
+  "radstand": 5.85,
+  "spur": 2.1,
+  "cg_h": {
+   "leer": 1.25,
+   "voll": 1.35
+  },
+  "vorn": 0.33,
+  "antrieb": "RWD",
+  "motor": {
+   "typ": "elektro",
+   "kw": 250,
+   "nm": 2200
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "reifen": {
+   "typ": "bus",
+   "breite_mm": 275,
+   "kpa": 850
+  },
+  "aero": {
+   "cwA": 5.5
+  },
+  "bremse": {
+   "typ": "druckluft",
+   "abs": true,
+   "vorn": 0.45,
+   "aufbau_s": 0.4
+  },
+  "lenkung": {
+   "wendekreis": 21.5
+  },
+  "fahrwerk": {
+   "wank": 5.0,
+   "hz": 0.9,
+   "tau": 0.35,
+   "luft": true
+  },
+  "assist": {
+   "esp": "voll",
+   "tcs": true
+  },
+  "diff": "offen",
+  "limiter": 80,
+  "rekuperation_g": 0.1,
+  "fahrgaeste": true,
+  "drift": {
+   "faehigkeit": 0
+  },
+  "ziel": {
+   "0_50": 12,
+   "vmax": 80,
+   "brems_50": 26,
+   "quer_g": 0.45
+  }
+ },
+ {
+  "id": "zweitakter",
+  "name": "Lausitz Kolibri",
+  "klasse": "oldtimer",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 650.0,
+  "vorn": 0.6,
+  "cg_h": 0.56,
+  "radstand": 2.02,
+  "spur": 1.2,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 19.0
+  },
+  "ziel": {
+   "vmax": 107.0
+  },
+  "limiter": 107.0
+ },
+ {
+  "id": "kleinwagen",
+  "name": "Havel Piccolo",
+  "klasse": "pkw_klein",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1100.0,
+  "vorn": 0.63,
+  "cg_h": 0.54,
+  "radstand": 2.47,
+  "spur": 1.45,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 60.0
+  },
+  "ziel": {
+   "vmax": 170.0
+  },
+  "limiter": 170.0
+ },
+ {
+  "id": "kompakt",
+  "name": "Spree Ronda",
+  "klasse": "pkw_kompakt",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1350.0,
+  "vorn": 0.61,
+  "cg_h": 0.55,
+  "radstand": 2.63,
+  "spur": 1.55,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 110.0
+  },
+  "ziel": {
+   "vmax": 210.0
+  },
+  "limiter": 210.0
+ },
+ {
+  "id": "limousine",
+  "name": "Teltower T6",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1600.0,
+  "vorn": 0.52,
+  "cg_h": 0.53,
+  "radstand": 2.85,
+  "spur": 1.58,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 180.0
+  },
+  "ziel": {
+   "vmax": 240.0
+  },
+  "limiter": 240.0
+ },
+ {
+  "id": "taxi",
+  "name": "Teltower T6 Droschke",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1750.0,
+  "vorn": 0.53,
+  "cg_h": 0.56,
+  "radstand": 2.94,
+  "spur": 1.58,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 120.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 210.0
+  },
+  "limiter": 210.0
+ },
+ {
+  "id": "kombi",
+  "name": "Märker Allwetter",
+  "klasse": "pkw_mittel",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1750.0,
+  "vorn": 0.58,
+  "cg_h": 0.57,
+  "radstand": 2.82,
+  "spur": 1.58,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "kw": 170.0
+  },
+  "ziel": {
+   "vmax": 230.0
+  },
+  "limiter": 230.0
+ },
+ {
+  "id": "transporter",
+  "name": "Spree Kasten",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2100.0,
+  "vorn": 0.6,
+  "cg_h": 0.85,
+  "radstand": 3.0,
+  "spur": 1.7,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 100.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 160.0
+  },
+  "limiter": 160.0
+ },
+ {
+  "id": "elektro",
+  "name": "Voltwerk E-Terra",
+  "klasse": "elektro",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2250.0,
+  "vorn": 0.49,
+  "cg_h": 0.55,
+  "radstand": 2.9,
+  "spur": 1.65,
+  "antrieb": "AWD",
+  "awd_vorn": 0.45,
+  "motor": {
+   "kw": 300.0,
+   "typ": "elektro"
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "ziel": {
+   "vmax": 220.0
+  },
+  "limiter": 220.0
+ },
+ {
+  "id": "gelaende",
+  "name": "Grunewald Keiler",
+  "klasse": "offroad",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2300.0,
+  "vorn": 0.52,
+  "cg_h": 0.85,
+  "radstand": 2.85,
+  "spur": 1.65,
+  "antrieb": "AWD",
+  "awd_vorn": 0.5,
+  "motor": {
+   "kw": 190.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 190.0
+  },
+  "limiter": 190.0
+ },
+ {
+  "id": "sportwagen",
+  "name": "Oberbaum Furia",
+  "klasse": "supercar",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1400.0,
+  "vorn": 0.42,
+  "cg_h": 0.45,
+  "radstand": 2.6,
+  "spur": 1.6,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 320.0
+  },
+  "ziel": {
+   "vmax": 300.0
+  },
+  "limiter": 300.0
+ },
+ {
+  "id": "heckcoupe",
+  "name": "Wannsee Boxer 6",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1450.0,
+  "vorn": 0.38,
+  "cg_h": 0.48,
+  "radstand": 2.45,
+  "spur": 1.55,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 290.0
+  },
+  "ziel": {
+   "vmax": 290.0
+  },
+  "limiter": 290.0
+ },
+ {
+  "id": "hothatch",
+  "name": "Spree Ronda Sport",
+  "klasse": "pkw_kompakt",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1380.0,
+  "vorn": 0.62,
+  "cg_h": 0.5,
+  "radstand": 2.62,
+  "spur": 1.56,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 221.0
+  },
+  "ziel": {
+   "vmax": 250.0
+  },
+  "limiter": 250.0
+ },
+ {
+  "id": "roadster",
+  "name": "Köpenick Spyder",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1050.0,
+  "vorn": 0.5,
+  "cg_h": 0.45,
+  "radstand": 2.31,
+  "spur": 1.5,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 97.0
+  },
+  "ziel": {
+   "vmax": 205.0
+  },
+  "limiter": 205.0
+ },
+ {
+  "id": "musclecar",
+  "name": "Tempelhof Stier V8",
+  "klasse": "muscle",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1650.0,
+  "vorn": 0.56,
+  "cg_h": 0.52,
+  "radstand": 2.74,
+  "spur": 1.52,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 330.0
+  },
+  "ziel": {
+   "vmax": 250.0
+  },
+  "limiter": 250.0
+ },
+ {
+  "id": "oldtimer",
+  "name": "Adlershof Kanzler",
+  "klasse": "oldtimer",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1300.0,
+  "vorn": 0.53,
+  "cg_h": 0.58,
+  "radstand": 2.75,
+  "spur": 1.45,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 60.0
+  },
+  "ziel": {
+   "vmax": 150.0
+  },
+  "limiter": 150.0
+ },
+ {
+  "id": "pickup",
+  "name": "Grunewald Kipper",
+  "klasse": "offroad",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2150.0,
+  "vorn": 0.6,
+  "cg_h": 0.8,
+  "radstand": 3.1,
+  "spur": 1.65,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 150.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 180.0
+  },
+  "limiter": 180.0
+ },
+ {
+  "id": "kleinbus",
+  "name": "Havel Kiezbus",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1500.0,
+  "vorn": 0.44,
+  "cg_h": 0.9,
+  "radstand": 2.4,
+  "spur": 1.4,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 55.0
+  },
+  "ziel": {
+   "vmax": 115.0
+  },
+  "limiter": 115.0
+ },
+ {
+  "id": "rallye",
+  "name": "Märker Schotter",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1280.0,
+  "vorn": 0.58,
+  "cg_h": 0.5,
+  "radstand": 2.52,
+  "spur": 1.55,
+  "antrieb": "AWD",
+  "awd_vorn": 0.35,
+  "motor": {
+   "kw": 190.0
+  },
+  "ziel": {
+   "vmax": 230.0
+  },
+  "limiter": 230.0
+ },
+ {
+  "id": "supersport",
+  "name": "Oberbaum Tempesta",
+  "klasse": "supercar",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1422.0,
+  "vorn": 0.43,
+  "cg_h": 0.44,
+  "radstand": 2.62,
+  "spur": 1.67,
+  "antrieb": "AWD",
+  "awd_vorn": 0.3,
+  "motor": {
+   "kw": 470.0
+  },
+  "ziel": {
+   "vmax": 325.0
+  },
+  "limiter": 325.0
+ },
+ {
+  "id": "gtcoupe",
+  "name": "Tempelhof GT 40",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1615.0,
+  "vorn": 0.47,
+  "cg_h": 0.46,
+  "radstand": 2.63,
+  "spur": 1.63,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 390.0
+  },
+  "ziel": {
+   "vmax": 318.0
+  },
+  "limiter": 318.0
+ },
+ {
+  "id": "leichtbau",
+  "name": "Adlershof Flèche",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1100.0,
+  "vorn": 0.44,
+  "cg_h": 0.44,
+  "radstand": 2.42,
+  "spur": 1.55,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 185.0
+  },
+  "ziel": {
+   "vmax": 250.0
+  },
+  "limiter": 250.0
+ },
+ {
+  "id": "elektrosport",
+  "name": "Voltwerk Blitz GT",
+  "klasse": "elektro",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2300.0,
+  "vorn": 0.48,
+  "cg_h": 0.45,
+  "radstand": 2.9,
+  "spur": 1.66,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "kw": 560.0,
+   "typ": "elektro"
+  },
+  "getriebe": {
+   "typ": "einstufig"
+  },
+  "ziel": {
+   "vmax": 260.0
+  },
+  "limiter": 260.0
+ },
+ {
+  "id": "sprinter",
+  "name": "Spree Großraum 316",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2700.0,
+  "vorn": 0.52,
+  "cg_h": 1.05,
+  "radstand": 3.66,
+  "spur": 1.72,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 120.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 160.0
+  },
+  "limiter": 160.0
+ },
+ {
+  "id": "hochdach",
+  "name": "Havel Kasten Hoch",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1650.0,
+  "vorn": 0.6,
+  "cg_h": 0.75,
+  "radstand": 2.75,
+  "spur": 1.56,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 90.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 180.0
+  },
+  "limiter": 180.0
+ },
+ {
+  "id": "powerkombi",
+  "name": "Märker RS Avant",
+  "klasse": "pkw_mittel",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2075.0,
+  "vorn": 0.57,
+  "cg_h": 0.52,
+  "radstand": 2.93,
+  "spur": 1.67,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "kw": 441.0
+  },
+  "ziel": {
+   "vmax": 280.0
+  },
+  "limiter": 280.0
+ },
+ {
+  "id": "familienkombi",
+  "name": "Teltower T4 Tourer",
+  "klasse": "pkw_mittel",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1650.0,
+  "vorn": 0.6,
+  "cg_h": 0.55,
+  "radstand": 2.79,
+  "spur": 1.58,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 147.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 225.0
+  },
+  "limiter": 225.0
+ },
+ {
+  "id": "business",
+  "name": "Teltower T5",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1800.0,
+  "vorn": 0.51,
+  "cg_h": 0.52,
+  "radstand": 2.98,
+  "spur": 1.6,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 250.0
+  },
+  "ziel": {
+   "vmax": 250.0
+  },
+  "limiter": 250.0
+ },
+ {
+  "id": "sportlimo",
+  "name": "Teltower T3 RS",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1730.0,
+  "vorn": 0.52,
+  "cg_h": 0.5,
+  "radstand": 2.86,
+  "spur": 1.62,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 375.0
+  },
+  "ziel": {
+   "vmax": 290.0
+  },
+  "limiter": 290.0
+ },
+ {
+  "id": "luxus",
+  "name": "Grunewald Senator",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2100.0,
+  "vorn": 0.52,
+  "cg_h": 0.54,
+  "radstand": 3.1,
+  "spur": 1.65,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 320.0
+  },
+  "ziel": {
+   "vmax": 250.0
+  },
+  "limiter": 250.0
+ },
+ {
+  "id": "coupe",
+  "name": "Wannsee Coupé 240",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1700.0,
+  "vorn": 0.53,
+  "cg_h": 0.48,
+  "radstand": 2.75,
+  "spur": 1.6,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 338.0
+  },
+  "ziel": {
+   "vmax": 285.0
+  },
+  "limiter": 285.0
+ },
+ {
+  "id": "leichtcoupe",
+  "name": "Lausitz Hachi",
+  "klasse": "sport",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1275.0,
+  "vorn": 0.53,
+  "cg_h": 0.46,
+  "radstand": 2.575,
+  "spur": 1.54,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 172.0
+  },
+  "ziel": {
+   "vmax": 226.0
+  },
+  "limiter": 226.0
+ },
+ {
+  "id": "gklasse",
+  "name": "Grunewald Kommandant",
+  "klasse": "offroad",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2560.0,
+  "vorn": 0.5,
+  "cg_h": 0.95,
+  "radstand": 2.89,
+  "spur": 1.64,
+  "antrieb": "AWD",
+  "awd_vorn": 0.5,
+  "motor": {
+   "kw": 310.0
+  },
+  "ziel": {
+   "vmax": 210.0
+  },
+  "limiter": 210.0
+ },
+ {
+  "id": "defender",
+  "name": "Grunewald Förster 110",
+  "klasse": "offroad",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2350.0,
+  "vorn": 0.5,
+  "cg_h": 0.88,
+  "radstand": 3.02,
+  "spur": 1.7,
+  "antrieb": "AWD",
+  "awd_vorn": 0.5,
+  "motor": {
+   "kw": 221.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 191.0
+  },
+  "limiter": 191.0
+ },
+ {
+  "id": "niva",
+  "name": "Lausitz Taiga",
+  "klasse": "offroad",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1285.0,
+  "vorn": 0.55,
+  "cg_h": 0.75,
+  "radstand": 2.2,
+  "spur": 1.43,
+  "antrieb": "AWD",
+  "awd_vorn": 0.5,
+  "motor": {
+   "kw": 61.0
+  },
+  "ziel": {
+   "vmax": 142.0
+  },
+  "limiter": 142.0
+ },
+ {
+  "id": "kompaktsuv",
+  "name": "Spree Tiga",
+  "klasse": "suv",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1600.0,
+  "vorn": 0.6,
+  "cg_h": 0.66,
+  "radstand": 2.68,
+  "spur": 1.58,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 110.0
+  },
+  "ziel": {
+   "vmax": 200.0
+  },
+  "limiter": 200.0
+ },
+ {
+  "id": "sportsuv",
+  "name": "Oberbaum Cayo",
+  "klasse": "suv",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2050.0,
+  "vorn": 0.53,
+  "cg_h": 0.66,
+  "radstand": 2.9,
+  "spur": 1.66,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "kw": 250.0
+  },
+  "ziel": {
+   "vmax": 245.0
+  },
+  "limiter": 245.0
+ },
+ {
+  "id": "grosssuv",
+  "name": "Teltower TX7",
+  "klasse": "suv",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2200.0,
+  "vorn": 0.52,
+  "cg_h": 0.7,
+  "radstand": 2.98,
+  "spur": 1.68,
+  "antrieb": "AWD",
+  "awd_vorn": 0.4,
+  "motor": {
+   "kw": 250.0
+  },
+  "ziel": {
+   "vmax": 243.0
+  },
+  "limiter": 243.0
+ },
+ {
+  "id": "motorcycle",
+  "name": "Tegel Blitz 1000",
+  "klasse": "zweirad_motor",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 280.0,
+  "vorn": 0.5,
+  "cg_h": 0.66,
+  "radstand": 1.45,
+  "motor": {
+   "kw": 110.0
+  },
+  "ziel": {
+   "vmax": 240.0
+  },
+  "limiter": 240.0
+ },
+ {
+  "id": "scooter",
+  "name": "Kiezflitzer 125",
+  "klasse": "zweirad_motor",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 215.0,
+  "vorn": 0.42,
+  "cg_h": 0.6,
+  "radstand": 1.35,
+  "motor": {
+   "kw": 11.0
+  },
+  "ziel": {
+   "vmax": 95.0
+  },
+  "limiter": 95.0
+ },
+ {
+  "id": "police",
+  "name": "Teltower T6 Streife",
+  "klasse": "pkw_oberklasse",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 1750.0,
+  "vorn": 0.53,
+  "cg_h": 0.56,
+  "radstand": 2.94,
+  "spur": 1.58,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 190.0
+  },
+  "ziel": {
+   "vmax": 240.0
+  },
+  "limiter": 240.0
+ },
+ {
+  "id": "ambulance",
+  "name": "Spree Kasten RTW",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 4200.0,
+  "vorn": 0.45,
+  "cg_h": 1.15,
+  "radstand": 3.66,
+  "spur": 1.75,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 140.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 140.0
+  },
+  "limiter": 140.0
+ },
+ {
+  "id": "delivery",
+  "name": "Spree Kasten Paket",
+  "klasse": "van",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 2900.0,
+  "vorn": 0.55,
+  "cg_h": 1.0,
+  "radstand": 3.3,
+  "spur": 1.7,
+  "antrieb": "FWD",
+  "motor": {
+   "kw": 105.0,
+   "typ": "diesel"
+  },
+  "ziel": {
+   "vmax": 145.0
+  },
+  "limiter": 145.0
+ },
+ {
+  "id": "truck",
+  "name": "Oberlausitz L75",
+  "klasse": "lkw",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 7500.0,
+  "vorn": 0.45,
+  "cg_h": 1.4,
+  "radstand": 4.2,
+  "spur": 1.95,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 150.0,
+   "typ": "diesel_lkw"
+  },
+  "ziel": {
+   "vmax": 100.0
+  },
+  "limiter": 100.0
+ },
+ {
+  "id": "garbage",
+  "name": "Kiezwerk Presse 26",
+  "klasse": "lkw",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 18000.0,
+  "vorn": 0.38,
+  "cg_h": 1.6,
+  "radstand": 4.6,
+  "spur": 2.05,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 240.0,
+   "typ": "diesel_lkw"
+  },
+  "ziel": {
+   "vmax": 85.0
+  },
+  "limiter": 85.0
+ },
+ {
+  "id": "bus",
+  "name": "Kiezwerk Stadtbus 12",
+  "klasse": "bus",
+  "quelle": "carmodels.rs (Spielmodell, Schlüssel bleibt für Spielstände stabil)",
+  "masse": 12500.0,
+  "vorn": 0.35,
+  "cg_h": 1.25,
+  "radstand": 6.0,
+  "spur": 2.1,
+  "antrieb": "RWD",
+  "motor": {
+   "kw": 220.0,
+   "typ": "diesel_lkw"
+  },
+  "ziel": {
+   "vmax": 90.0
+  },
+  "limiter": 90.0
+ }
+]

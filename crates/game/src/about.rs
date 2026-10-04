@@ -603,6 +603,7 @@ mod tests {
             "gta-berlin",
             "berlin-map-loader",
             "berlin-sim",
+            "physics-calibrate",
         ];
         let mut locked: Vec<(String, String)> = Vec::new();
         let mut name = None;

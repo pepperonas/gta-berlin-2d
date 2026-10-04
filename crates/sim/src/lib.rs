@@ -5,6 +5,7 @@
 pub mod ambience;
 pub mod animals;
 pub mod bikes;
+pub mod calibrate;
 pub mod car;
 pub mod carmodels;
 pub mod city;
@@ -40,5 +41,7 @@ pub mod traffic;
 pub mod transit;
 pub mod transitlive;
 pub mod tunnel;
+pub mod vehdata;
+pub mod vphys;
 pub mod weather;
 pub mod world;

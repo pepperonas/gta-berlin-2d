@@ -1,0 +1,1134 @@
+{
+ "_hinweis": "Vorgaben je Klasse für alles, was ein Fahrzeug nicht selbst angibt (cg_h, vorn, Fahrwerk, Lenkung v_s, ESP, Drift, Reifen aus der Prompt-Tabelle; Abmessungen, Motor, Getriebe, Aero, Bremse als typische Klassenwerte). rad_m = dynamischer Radhalbmesser.",
+ "klassen": {
+  "pkw_klein": {
+   "cg_h": 0.55,
+   "vorn": 0.62,
+   "lbh": [
+    3.7,
+    1.65,
+    1.5
+   ],
+   "radstand": 2.45,
+   "spur": 1.43,
+   "antrieb": "FWD",
+   "motor": {
+    "typ": "sauger_benzin",
+    "n_max": 6300,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "manuell",
+    "gaenge": 5,
+    "schalt": 0.35
+   },
+   "reifen": {
+    "typ": "eco",
+    "breite_mm": 175,
+    "kpa": 230
+   },
+   "rad_m": 0.29,
+   "aero": {
+    "cwA": 0.66,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.72,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 10.0,
+    "v_s": 20
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.25,
+    "max_winkel": 35
+   },
+   "fahrwerk": {
+    "wank": 4.0,
+    "nick": 1.4,
+    "hz": 1.4,
+    "tau": 0.15
+   }
+  },
+  "pkw_kompakt": {
+   "cg_h": 0.55,
+   "vorn": 0.61,
+   "lbh": [
+    4.28,
+    1.79,
+    1.46
+   ],
+   "radstand": 2.62,
+   "spur": 1.55,
+   "antrieb": "FWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 6500,
+    "lag": 0.25
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 7,
+    "schalt": 0.12
+   },
+   "reifen": {
+    "typ": "sommer_std",
+    "breite_mm": 225,
+    "kpa": 240
+   },
+   "rad_m": 0.31,
+   "aero": {
+    "cwA": 0.62,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.7,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 10.9,
+    "v_s": 22
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.3,
+    "max_winkel": 40
+   },
+   "fahrwerk": {
+    "wank": 3.5,
+    "nick": 1.22,
+    "hz": 1.4,
+    "tau": 0.15
+   }
+  },
+  "pkw_mittel": {
+   "cg_h": 0.56,
+   "vorn": 0.57,
+   "lbh": [
+    4.8,
+    1.84,
+    1.48
+   ],
+   "radstand": 2.8,
+   "spur": 1.58,
+   "antrieb": "FWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 6500,
+    "lag": 0.25
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 7,
+    "schalt": 0.12
+   },
+   "reifen": {
+    "typ": "sommer_std",
+    "breite_mm": 225,
+    "kpa": 240
+   },
+   "rad_m": 0.31,
+   "aero": {
+    "cwA": 0.66,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.7,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 11.5,
+    "v_s": 22
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.35,
+    "max_winkel": 40
+   },
+   "fahrwerk": {
+    "wank": 3.8,
+    "nick": 1.33,
+    "hz": 1.3,
+    "tau": 0.17
+   }
+  },
+  "pkw_oberklasse": {
+   "cg_h": 0.54,
+   "vorn": 0.52,
+   "lbh": [
+    4.95,
+    1.88,
+    1.47
+   ],
+   "radstand": 2.95,
+   "spur": 1.6,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 6500,
+    "lag": 0.2
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 8,
+    "schalt": 0.15
+   },
+   "reifen": {
+    "typ": "sommer_std",
+    "breite_mm": 245,
+    "kpa": 250
+   },
+   "rad_m": 0.31,
+   "aero": {
+    "cwA": 0.57,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.66,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 11.8,
+    "v_s": 23
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.5,
+    "max_winkel": 50
+   },
+   "fahrwerk": {
+    "wank": 3.3,
+    "nick": 1.15,
+    "hz": 1.3,
+    "tau": 0.16
+   }
+  },
+  "suv": {
+   "cg_h": 0.68,
+   "vorn": 0.55,
+   "lbh": [
+    4.6,
+    1.9,
+    1.68
+   ],
+   "radstand": 2.8,
+   "spur": 1.62,
+   "antrieb": "AWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 6300,
+    "lag": 0.25
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 8,
+    "schalt": 0.15
+   },
+   "reifen": {
+    "typ": "sommer_std",
+    "breite_mm": 255,
+    "kpa": 250
+   },
+   "rad_m": 0.31,
+   "aero": {
+    "cwA": 0.85,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.68,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 12.0,
+    "v_s": 20
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.25,
+    "max_winkel": 35
+   },
+   "fahrwerk": {
+    "wank": 4.7,
+    "nick": 1.65,
+    "hz": 1.3,
+    "tau": 0.2
+   }
+  },
+  "offroad": {
+   "cg_h": 0.85,
+   "vorn": 0.53,
+   "lbh": [
+    4.8,
+    1.93,
+    1.95
+   ],
+   "radstand": 2.89,
+   "spur": 1.64,
+   "antrieb": "AWD",
+   "motor": {
+    "typ": "diesel",
+    "n_max": 4600,
+    "lag": 0.3
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 8,
+    "schalt": 0.2
+   },
+   "reifen": {
+    "typ": "at_offroad",
+    "breite_mm": 265,
+    "kpa": 260
+   },
+   "rad_m": 0.37,
+   "aero": {
+    "cwA": 1.2,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.65,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 13.0,
+    "v_s": 18
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.35,
+    "max_winkel": 45
+   },
+   "fahrwerk": {
+    "wank": 6.0,
+    "nick": 2.1,
+    "hz": 1.2,
+    "tau": 0.25
+   }
+  },
+  "van": {
+   "cg_h": 0.9,
+   "vorn": 0.52,
+   "lbh": [
+    5.2,
+    1.95,
+    2.1
+   ],
+   "radstand": 3.2,
+   "spur": 1.66,
+   "antrieb": "FWD",
+   "motor": {
+    "typ": "diesel",
+    "n_max": 4500,
+    "lag": 0.35
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 7,
+    "schalt": 0.15
+   },
+   "reifen": {
+    "typ": "transporter",
+    "breite_mm": 215,
+    "kpa": 380
+   },
+   "rad_m": 0.33,
+   "aero": {
+    "cwA": 1.4,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.68,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 12.5,
+    "v_s": 16
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.15,
+    "max_winkel": 30
+   },
+   "fahrwerk": {
+    "wank": 5.8,
+    "nick": 2.03,
+    "hz": 1.4,
+    "tau": 0.24
+   }
+  },
+  "elektro": {
+   "cg_h": 0.5,
+   "vorn": 0.46,
+   "lbh": [
+    4.3,
+    1.83,
+    1.56
+   ],
+   "radstand": 2.77,
+   "spur": 1.56,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "elektro",
+    "n_max": 0,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "einstufig",
+    "gaenge": 1,
+    "schalt": 0.0
+   },
+   "reifen": {
+    "typ": "eco",
+    "breite_mm": 215,
+    "kpa": 270
+   },
+   "rad_m": 0.33,
+   "aero": {
+    "cwA": 0.62,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.7,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 10.5,
+    "v_s": 22
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.4,
+    "max_winkel": 40
+   },
+   "fahrwerk": {
+    "wank": 3.0,
+    "nick": 1.05,
+    "hz": 1.4,
+    "tau": 0.15
+   }
+  },
+  "sport": {
+   "cg_h": 0.45,
+   "vorn": 0.45,
+   "lbh": [
+    4.5,
+    1.85,
+    1.3
+   ],
+   "radstand": 2.5,
+   "spur": 1.58,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 7500,
+    "lag": 0.15
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 8,
+    "schalt": 0.08
+   },
+   "reifen": {
+    "typ": "sommer_uhp",
+    "breite_mm": 295,
+    "kpa": 250
+   },
+   "rad_m": 0.33,
+   "aero": {
+    "cwA": 0.62,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.62,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 11.2,
+    "v_s": 26
+   },
+   "assist": {
+    "esp": "sport",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.85,
+    "max_winkel": 60
+   },
+   "fahrwerk": {
+    "wank": 1.8,
+    "nick": 0.63,
+    "hz": 2.0,
+    "tau": 0.09
+   }
+  },
+  "supercar": {
+   "cg_h": 0.42,
+   "vorn": 0.42,
+   "lbh": [
+    4.53,
+    1.93,
+    1.18
+   ],
+   "radstand": 2.64,
+   "spur": 1.66,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 8500,
+    "lag": 0.15
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 7,
+    "schalt": 0.08
+   },
+   "reifen": {
+    "typ": "sommer_uhp",
+    "breite_mm": 305,
+    "kpa": 250
+   },
+   "rad_m": 0.34,
+   "aero": {
+    "cwA": 0.66,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.62,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 11.8,
+    "v_s": 27
+   },
+   "assist": {
+    "esp": "sport",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.8,
+    "max_winkel": 55
+   },
+   "fahrwerk": {
+    "wank": 1.3,
+    "nick": 0.45,
+    "hz": 2.2,
+    "tau": 0.08
+   }
+  },
+  "hypercar": {
+   "cg_h": 0.44,
+   "vorn": 0.45,
+   "lbh": [
+    4.6,
+    2.0,
+    1.21
+   ],
+   "radstand": 2.73,
+   "spur": 1.72,
+   "antrieb": "AWD",
+   "motor": {
+    "typ": "turbo_benzin",
+    "n_max": 6800,
+    "lag": 0.2
+   },
+   "getriebe": {
+    "typ": "dsg",
+    "gaenge": 7,
+    "schalt": 0.1
+   },
+   "reifen": {
+    "typ": "hypercar",
+    "breite_mm": 335,
+    "kpa": 280
+   },
+   "rad_m": 0.35,
+   "aero": {
+    "cwA": 0.72,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.62,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 12.5,
+    "v_s": 28
+   },
+   "assist": {
+    "esp": "sport",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.6,
+    "max_winkel": 50
+   },
+   "fahrwerk": {
+    "wank": 1.4,
+    "nick": 0.49,
+    "hz": 2.2,
+    "tau": 0.09
+   }
+  },
+  "muscle": {
+   "cg_h": 0.54,
+   "vorn": 0.55,
+   "lbh": [
+    4.9,
+    1.93,
+    1.38
+   ],
+   "radstand": 2.8,
+   "spur": 1.6,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "sauger_benzin",
+    "n_max": 7000,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 8,
+    "schalt": 0.15
+   },
+   "reifen": {
+    "typ": "sommer_uhp",
+    "breite_mm": 275,
+    "kpa": 250
+   },
+   "rad_m": 0.34,
+   "aero": {
+    "cwA": 0.8,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.65,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 12.4,
+    "v_s": 22
+   },
+   "assist": {
+    "esp": "sport",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.95,
+    "max_winkel": 65
+   },
+   "fahrwerk": {
+    "wank": 4.5,
+    "nick": 1.57,
+    "hz": 1.3,
+    "tau": 0.2
+   }
+  },
+  "oldtimer": {
+   "cg_h": 0.56,
+   "vorn": 0.52,
+   "lbh": [
+    4.4,
+    1.7,
+    1.45
+   ],
+   "radstand": 2.6,
+   "spur": 1.4,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "sauger_benzin",
+    "n_max": 4800,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "manuell",
+    "gaenge": 4,
+    "schalt": 0.5
+   },
+   "reifen": {
+    "typ": "diagonal_oldtimer",
+    "breite_mm": 165,
+    "kpa": 190
+   },
+   "rad_m": 0.3,
+   "aero": {
+    "cwA": 0.9,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "trommel",
+    "abs": false,
+    "vorn": 0.62,
+    "aufbau_s": 0.15
+   },
+   "lenkung": {
+    "wendekreis": 11.2,
+    "v_s": 18
+   },
+   "assist": {
+    "esp": "aus",
+    "tcs": false
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.5,
+    "max_winkel": 50
+   },
+   "fahrwerk": {
+    "wank": 6.5,
+    "nick": 2.27,
+    "hz": 1.1,
+    "tau": 0.3
+   }
+  },
+  "lkw": {
+   "cg_h": 1.3,
+   "vorn": 0.4,
+   "lbh": [
+    8.0,
+    2.5,
+    3.4
+   ],
+   "radstand": 4.2,
+   "spur": 2.0,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "diesel_lkw",
+    "n_max": 2400,
+    "lag": 0.5
+   },
+   "getriebe": {
+    "typ": "amt",
+    "gaenge": 12,
+    "schalt": 0.8
+   },
+   "reifen": {
+    "typ": "lkw",
+    "breite_mm": 315,
+    "kpa": 850
+   },
+   "rad_m": 0.5,
+   "aero": {
+    "cwA": 5.5,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "druckluft",
+    "abs": true,
+    "vorn": 0.45,
+    "aufbau_s": 0.4
+   },
+   "lenkung": {
+    "wendekreis": 16.0,
+    "v_s": 12
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "fahrwerk": {
+    "wank": 6.5,
+    "nick": 2.27,
+    "hz": 1.5,
+    "tau": 0.32
+   }
+  },
+  "lkw_sattel": {
+   "cg_h": 1.8,
+   "vorn": 0.3,
+   "lbh": [
+    16.5,
+    2.55,
+    4.0
+   ],
+   "radstand": 3.7,
+   "spur": 2.05,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "diesel_lkw",
+    "n_max": 1900,
+    "lag": 0.6
+   },
+   "getriebe": {
+    "typ": "amt",
+    "gaenge": 12,
+    "schalt": 1.0
+   },
+   "reifen": {
+    "typ": "lkw",
+    "breite_mm": 315,
+    "kpa": 850
+   },
+   "rad_m": 0.52,
+   "aero": {
+    "cwA": 6.0,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "druckluft",
+    "abs": true,
+    "vorn": 0.35,
+    "aufbau_s": 0.45
+   },
+   "lenkung": {
+    "wendekreis": 15.5,
+    "v_s": 11
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "fahrwerk": {
+    "wank": 7.0,
+    "nick": 2.45,
+    "hz": 1.5,
+    "tau": 0.35
+   }
+  },
+  "bus": {
+   "cg_h": 1.3,
+   "vorn": 0.32,
+   "lbh": [
+    12.1,
+    2.55,
+    3.1
+   ],
+   "radstand": 5.85,
+   "spur": 2.1,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "diesel_lkw",
+    "n_max": 2200,
+    "lag": 0.4
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 6,
+    "schalt": 0.5
+   },
+   "reifen": {
+    "typ": "bus",
+    "breite_mm": 275,
+    "kpa": 850
+   },
+   "rad_m": 0.5,
+   "aero": {
+    "cwA": 5.5,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "druckluft",
+    "abs": true,
+    "vorn": 0.45,
+    "aufbau_s": 0.4,
+    "verzoegerung_g": 0.45,
+    "_hinweis": "Betriebsbremse eines Linienbusses: gedrosselt wegen stehender Fahrgäste"
+   },
+   "lenkung": {
+    "wendekreis": 21.5,
+    "v_s": 12
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "fahrwerk": {
+    "wank": 5.5,
+    "nick": 1.92,
+    "hz": 0.9,
+    "tau": 0.38
+   }
+  },
+  "bus_gelenk": {
+   "cg_h": 1.2,
+   "vorn": 0.3,
+   "lbh": [
+    18.1,
+    2.55,
+    3.1
+   ],
+   "radstand": 5.9,
+   "spur": 2.1,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "diesel_lkw",
+    "n_max": 2200,
+    "lag": 0.45
+   },
+   "getriebe": {
+    "typ": "wandler",
+    "gaenge": 6,
+    "schalt": 0.5
+   },
+   "reifen": {
+    "typ": "bus",
+    "breite_mm": 275,
+    "kpa": 850
+   },
+   "rad_m": 0.5,
+   "aero": {
+    "cwA": 5.8,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "druckluft",
+    "abs": true,
+    "vorn": 0.35,
+    "aufbau_s": 0.45,
+    "verzoegerung_g": 0.45,
+    "_hinweis": "Betriebsbremse eines Linienbusses: gedrosselt wegen stehender Fahrgäste"
+   },
+   "lenkung": {
+    "wendekreis": 23.0,
+    "v_s": 11
+   },
+   "assist": {
+    "esp": "voll",
+    "tcs": true
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "fahrwerk": {
+    "wank": 5.0,
+    "nick": 1.75,
+    "hz": 0.9,
+    "tau": 0.4
+   }
+  },
+  "zweirad_muskel": {
+   "cg_h": 1.0,
+   "vorn": 0.44,
+   "lbh": [
+    1.8,
+    0.6,
+    1.1
+   ],
+   "radstand": 1.1,
+   "spur": 0.0,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "muskel",
+    "n_max": 0,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "einstufig",
+    "gaenge": 1,
+    "schalt": 0.0
+   },
+   "reifen": {
+    "typ": "fahrrad",
+    "breite_mm": 40,
+    "kpa": 400
+   },
+   "rad_m": 0.35,
+   "aero": {
+    "cwA": 0.6,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": false,
+    "vorn": 0.65,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 4.0,
+    "v_s": 0
+   },
+   "assist": {
+    "esp": "aus",
+    "tcs": false
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "zweirad": true
+  },
+  "zweirad_elektro": {
+   "cg_h": 1.0,
+   "vorn": 0.45,
+   "lbh": [
+    1.2,
+    0.5,
+    1.2
+   ],
+   "radstand": 0.95,
+   "spur": 0.0,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "elektro",
+    "n_max": 0,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "einstufig",
+    "gaenge": 1,
+    "schalt": 0.0
+   },
+   "reifen": {
+    "typ": "scooter_klein",
+    "breite_mm": 60,
+    "kpa": 300
+   },
+   "rad_m": 0.13,
+   "aero": {
+    "cwA": 0.55,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": false,
+    "vorn": 0.6,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 3.5,
+    "v_s": 0
+   },
+   "assist": {
+    "esp": "aus",
+    "tcs": false
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "zweirad": true
+  },
+  "zweirad_motor": {
+   "cg_h": 0.72,
+   "vorn": 0.48,
+   "lbh": [
+    2.1,
+    0.8,
+    1.1
+   ],
+   "radstand": 1.42,
+   "spur": 0.0,
+   "antrieb": "RWD",
+   "motor": {
+    "typ": "sauger_benzin",
+    "n_max": 9000,
+    "lag": 0.0
+   },
+   "getriebe": {
+    "typ": "manuell",
+    "gaenge": 6,
+    "schalt": 0.15
+   },
+   "reifen": {
+    "typ": "motorrad_touring",
+    "breite_mm": 160,
+    "kpa": 250
+   },
+   "rad_m": 0.31,
+   "aero": {
+    "cwA": 0.45,
+    "clA": 0.0
+   },
+   "bremse": {
+    "typ": "scheibe",
+    "abs": true,
+    "vorn": 0.75,
+    "aufbau_s": 0.1
+   },
+   "lenkung": {
+    "wendekreis": 6.0,
+    "v_s": 0
+   },
+   "assist": {
+    "esp": "aus",
+    "tcs": false
+   },
+   "diff": "offen",
+   "drift": {
+    "faehigkeit": 0.0,
+    "max_winkel": 0
+   },
+   "zweirad": true
+  }
+ }
+}

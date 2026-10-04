@@ -1,0 +1,14 @@
+{
+ "realismus": 0.7,
+ "grip_global": 1.05,
+ "bremse_global": 1.0,
+ "lenk_assist": 0.5,
+ "drift_assist_stufe": 2,
+ "esp_spieler_default": "sport",
+ "aquaplaning_staerke": 0.8,
+ "eis_grip_minimum": 0.06,
+ "gewichtsverlagerung_skala": 1.0,
+ "kamera_zoom_nach_tempo": true,
+ "lkw_begrenzer_tunebar": true,
+ "wandkontakt_gleiten": true
+}

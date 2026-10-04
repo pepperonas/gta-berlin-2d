@@ -1537,3 +1537,49 @@ Tests: Raffung (18 Abfahrten je echte Viertelstunde, Fahrzeit 80 statt 240 s, Zu
 schichten, Schienenstöße je Achse, Quietschen, Bahnsteigmischung, Druckluft/Warnton, Hall (erste Reflexion,
 −60 dB nach 1,5 s), Ebenentabelle; Integration auf echten Daten: Hermannplatz, Alexanderplatz (alle vier
 Bahnsteige verbunden, Treppen auf dem Bahnsteig), Kottbusser Tor (hinauf, umsteigen zum Tunnel, zurück).
+
+## Fahrphysik Phase 1–2: Daten, Physikkern, Kalibrierung (04.10.2026)
+
+Das Spiel benutzt die neue Physik noch nicht, der Umstieg folgt in Phase 3. Bis dahin fährt `dynamics.rs`.
+
+- **Daten** (`data/vehicles/`, Leitfaden in dessen `README.md`): Fahrzeuge erben tief zusammengeführt von ihrer
+  Klasse und optional per `basis` von einem anderen Fahrzeug. Fehlende Größen werden abgeleitet:
+  - Drehmoment aus Leistung und Kurve. Kann die Kurve die Leistung nicht tragen, gilt ab dem ersten Vollmoment
+    `min(nm, P/ω)` (`band_from`).
+  - Übersetzungen: Der letzte Gang erreicht die Vmax bei der Spitzenleistungsdrehzahl, der erste liegt an der
+    Traktionsgrenze, die Spreizung ist begrenzt.
+  - Lenkeinschlag aus dem Wendekreis, Gierträgheit `m·a·b·1,05`.
+
+  `vehdata.rs` lehnt unbekannte Felder, Reifen, Kurven und Klassen mit Meldung ab. Ein Test hält
+  `vehicle.schema.json` und den Lader deckungsgleich.
+- **Physikkern** `vphys.rs` (rein, deterministisch): festes 1/120 s, über 60 m/s 1/240 s. Ein Einspurmodell
+  mit Achslasten aus Lastverlagerung (gedämpft über Fahrwerks-τ).
+  - Reifen: Magic Formula (B, C aus Schräglauf- und Gleitverhältnis), Reibungsellipse.
+  - Bremsen und Antrieb: ABS hält 0,99 und gibt bei Lenkeinschlag Längskraft ab. Blockierte Räder gleiten im
+    Reifensystem und lenken nicht. TCS hält 0,98, Allrad verschiebt Moment zur haftenden Achse.
+  - Motoren: Turbo-Ladedruck mit Verzögerung, Elektro mit konstanter Kraft bis 35 % der Vmax und danach
+    konstanter Leistung, Muskel mit Leistung und Kraftgrenze.
+  - Zweiräder: Wheelie- und Stoppie-Grenze.
+  - ⚠️ **Die Drehträgheit (`mass_factor`, 1,04 + 0,0018·i²) zehrt am Motormoment, nicht an der Haftgrenze.** Die
+    erste Fassung teilte die gesamte Längskraft durch den Faktor. Ein Allradler kam so beim Anfahren auf 0,73 g
+    statt etwa 1 g, und jedes starke Auto war 10–25 % zu langsam.
+  - Während des Schaltens bleibt Zugkraft je Getriebeart (`shift_torque`): Doppelkupplung 90 %, Wandler 60 %,
+    sequenziell 50 %, Handschalter 0.
+- **Kalibrierung** `calibrate.rs` + `tools/physics-calibrate`:
+  - Messfahrten: Beschleunigung mit gespanntem Lader wie bei Zeitschriftenmessungen, Vmax bis zur Beharrung,
+    Bremsweg ab Pedal, 40-m-Kreis (gezählt wird nur stabile Fahrt mit |β| < 6°).
+  - Stellschrauben in fester Reihenfolge: cwA ±15 %, μ ±10 %, Bremskraft 0,5–1,6, Übersetzung, Schaltzeit,
+    Wirkungsgrad ±3 %.
+  - Bei Abweichung prüft das Werkzeug gegen eine **Ideal-Untergrenze** (konstante Spitzenleistung, keine
+    Schaltpausen, beste Schrauben). Liegt schon die über dem Ziel, heißt es „physikalisch nicht erreichbar“.
+  - Ausgabe: `vehicles.calibrated.json`, `docs/kalibrierung/bericht.md`, CSV-Spuren je Fahrzeug.
+    `--pruefen` dient als CI-Wächter.
+- **Gemeldete Konflikte mit dem Master-Prompt** (die Codebasis gewinnt):
+  - Akzeptanztest 3 nennt für den Kleinwagen ~25 km/h nach 3 s. Ein 65-PS-Auto, das seine 0–100-Zeit trifft, steht
+    dort bei ~36 km/h (Turbo S 111 km/h). Der Test prüft deshalb den Abstand ≥ 2,5×.
+  - Fahrrad-Zielwerte widersprechen den Leistungsdaten (Sprint-Antritt gegen Alltagsziel).
+  - Trabant (0–100 in 21 s braucht mehr als 19 kW), Plaid und Elektro-Hypercar (Werksangaben mit
+    Drag-Strip-Rollout) und die Vmax-Angaben einiger Supersportler passen nicht zu Leistung und Luftwiderstand.
+  - Linienbusse bremsen im Betrieb gedrosselt (stehende Fahrgäste), Klassenwert `verzoegerung_g` 0,45.
+  - Querbeschleunigung von Lkw/Bus begrenzt real die Kippgrenze (Phase 6).
+

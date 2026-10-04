@@ -1,0 +1,379 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "vehicle.schema.json",
+ "title": "vehicles.json",
+ "type": "array",
+ "items": {
+  "$ref": "#/$defs/fahrzeug"
+ },
+ "$defs": {
+  "fahrzeug": {
+   "title": "Fahrzeug (GTA Berlin 2D, Fahrphysik)",
+   "description": "Ein Eintrag in vehicles.json. Fehlendes erbt das Fahrzeug von seiner Klasse (classes.json) bzw. von `basis`. Geprüft wird im Spiel von crates/sim/src/vehdata.rs; dieses Schema dient Editoren und der Dokumentation, ein Test hält beide deckungsgleich.",
+   "type": "object",
+   "required": [
+    "id",
+    "name",
+    "klasse",
+    "masse"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[a-z0-9_]+$",
+     "description": "Schlüssel (Spielstände, Kalibrierung)"
+    },
+    "name": {
+     "type": "string",
+     "description": "Anzeigename (Parodie, keine echten Marken)"
+    },
+    "klasse": {
+     "type": "string",
+     "description": "Klasse aus classes.json; liefert alle Vorgaben"
+    },
+    "basis": {
+     "type": "string",
+     "description": "id eines anderen Fahrzeugs, von dem geerbt wird"
+    },
+    "vorbild": {
+     "type": "string"
+    },
+    "quelle": {
+     "type": "string"
+    },
+    "masse": {
+     "oneOf": [
+      {
+       "type": "number",
+       "exclusiveMinimum": 0
+      },
+      {
+       "type": "object",
+       "properties": {
+        "leer": {
+         "type": "number"
+        },
+        "voll": {
+         "type": "number"
+        }
+       },
+       "required": [
+        "leer",
+        "voll"
+       ],
+       "additionalProperties": false
+      }
+     ],
+     "description": "kg, oder {leer, voll} bei Nutzfahrzeugen"
+    },
+    "kw": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "Kurzform für motor.kw"
+    },
+    "nm": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "Kurzform für motor.nm"
+    },
+    "n_max": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "description": "Kurzform für motor.n_max"
+    },
+    "lbh": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3,
+     "description": "Länge, Breite, Höhe in m"
+    },
+    "radstand": {
+     "type": "number"
+    },
+    "spur": {
+     "type": "number"
+    },
+    "cg_h": {
+     "oneOf": [
+      {
+       "type": "number",
+       "exclusiveMinimum": 0
+      },
+      {
+       "type": "object",
+       "properties": {
+        "leer": {
+         "type": "number"
+        },
+        "voll": {
+         "type": "number"
+        }
+       },
+       "required": [
+        "leer",
+        "voll"
+       ],
+       "additionalProperties": false
+      }
+     ],
+     "description": "Schwerpunkthöhe in m"
+    },
+    "vorn": {
+     "type": "number",
+     "minimum": 0.05,
+     "maximum": 0.95,
+     "description": "Gewichtsanteil Vorderachse"
+    },
+    "antrieb": {
+     "enum": [
+      "FWD",
+      "RWD",
+      "AWD"
+     ]
+    },
+    "awd_vorn": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "motor": {
+     "type": "object",
+     "properties": {
+      "typ": {
+       "type": "string",
+       "description": "Kurve aus engine-curves.json"
+      },
+      "kw": {
+       "type": "number"
+      },
+      "nm": {
+       "type": "number"
+      },
+      "n_max": {
+       "type": "number"
+      },
+      "lag": {
+       "type": "number"
+      },
+      "w_dauer": {
+       "type": "number"
+      },
+      "w_sprint": {
+       "type": "number"
+      }
+     }
+    },
+    "getriebe": {
+     "type": "object",
+     "properties": {
+      "typ": {
+       "type": "string"
+      },
+      "gaenge": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "schalt": {
+       "type": "number"
+      }
+     }
+    },
+    "reifen": {
+     "type": "object",
+     "properties": {
+      "typ": {
+       "type": "string",
+       "description": "Reifen aus tires.json"
+      },
+      "breite_mm": {
+       "type": "number"
+      },
+      "kpa": {
+       "type": "number"
+      },
+      "zoll": {
+       "type": "number"
+      }
+     },
+     "required": [
+      "typ"
+     ]
+    },
+    "rad_m": {
+     "type": "number"
+    },
+    "aero": {
+     "type": "object",
+     "properties": {
+      "cwA": {
+       "type": "number"
+      },
+      "clA": {
+       "type": "number"
+      }
+     }
+    },
+    "bremse": {
+     "type": "object",
+     "properties": {
+      "typ": {
+       "type": "string"
+      },
+      "abs": {
+       "type": "boolean"
+      },
+      "vorn": {
+       "type": "number"
+      },
+      "aufbau_s": {
+       "type": "number"
+      },
+      "verzoegerung_g": {
+       "type": "number"
+      },
+      "retarder": {
+       "type": "string"
+      },
+      "fading": {
+       "type": "string"
+      }
+     }
+    },
+    "lenkung": {
+     "type": "object",
+     "properties": {
+      "wendekreis": {
+       "type": "number"
+      },
+      "v_s": {
+       "type": "number"
+      },
+      "lock_grad": {
+       "type": "number"
+      },
+      "rate_faktor": {
+       "type": "number"
+      },
+      "hinterachse": {
+       "type": "boolean"
+      }
+     }
+    },
+    "fahrwerk": {
+     "type": "object",
+     "properties": {
+      "wank": {
+       "type": "number"
+      },
+      "nick": {
+       "type": "number"
+      },
+      "hz": {
+       "type": "number"
+      },
+      "tau": {
+       "type": "number"
+      }
+     }
+    },
+    "assist": {
+     "type": "object",
+     "properties": {
+      "esp": {
+       "enum": [
+        "aus",
+        "sport",
+        "voll"
+       ]
+      },
+      "tcs": {
+       "type": "boolean"
+      }
+     }
+    },
+    "diff": {
+     "enum": [
+      "offen",
+      "sperre",
+      "starr",
+      "vectoring"
+     ]
+    },
+    "launch": {
+     "type": "boolean"
+    },
+    "limiter": {
+     "type": "number",
+     "description": "Höchsttempo-Begrenzer in km/h"
+    },
+    "rekuperation_g": {
+     "type": "number"
+    },
+    "drift": {
+     "type": "object",
+     "properties": {
+      "faehigkeit": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "max_winkel": {
+       "type": "number"
+      }
+     }
+    },
+    "ziel": {
+     "type": "object",
+     "description": "Zielwerte für die Kalibrierung",
+     "patternProperties": {
+      "^(0_[0-9]+|vmax|brems_[0-9]+|quer_g)$": {
+       "type": "number"
+      }
+     },
+     "additionalProperties": false
+    },
+    "max_schraeglage": {
+     "type": "number"
+    },
+    "wheelie_control": {
+     "type": "boolean"
+    },
+    "zweirad": {
+     "type": "boolean"
+    },
+    "gelenk": {
+     "type": "boolean"
+    },
+    "sirene": {
+     "type": "boolean"
+    },
+    "fahrgaeste": {
+     "type": "integer"
+    },
+    "hoehe_kritisch": {
+     "type": "boolean"
+    },
+    "burnout": {
+     "type": "boolean"
+    },
+    "rauchfahne": {
+     "type": "boolean"
+    },
+    "kalibrier_zuladung": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "wirkungsgrad": {
+     "type": "number",
+     "minimum": 0.5,
+     "maximum": 1
+    }
+   },
+   "additionalProperties": false
+  }
+ }
+}

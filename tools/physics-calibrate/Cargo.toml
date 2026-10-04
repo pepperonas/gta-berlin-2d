@@ -1,0 +1,11 @@
+[package]
+name = "physics-calibrate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Kalibriert die Fahrphysik headless gegen die Zielwerte der Fahrzeugdaten"
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+berlin-sim = { path = "../../crates/sim" }

@@ -1,0 +1,299 @@
+{
+ "_hinweis": "mu_trocken = Haftbeiwert quer auf trockenem Asphalt; laengs gilt mu_trocken * mu_laengs (Reifen haften längs etwas besser als quer; 1,2 nach Reifenmessdaten, wo Bremsen 1,1–1,2 g und Kurven 0,9–1,0 g erreichen). Peak-Schräglauf in Grad; bei Zweirädern ohne Schräglaufmodell null. faktor je Untergrundkategorie.",
+ "reifen": {
+  "eco": {
+   "mu_trocken": 0.92,
+   "peak_schraeglauf_grad": 7,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.95,
+    "schnee": 0.55,
+    "eis": 0.7,
+    "lose": 1.0
+   }
+  },
+  "sommer_std": {
+   "mu_trocken": 1.0,
+   "peak_schraeglauf_grad": 6.5,
+   "gleit_zu_peak": 0.82,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.0,
+    "schnee": 0.55,
+    "eis": 0.7,
+    "lose": 1.0
+   }
+  },
+  "sommer_uhp": {
+   "mu_trocken": 1.1,
+   "peak_schraeglauf_grad": 5.5,
+   "gleit_zu_peak": 0.85,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.95,
+    "schnee": 0.45,
+    "eis": 0.6,
+    "lose": 0.95
+   }
+  },
+  "semi_slick": {
+   "mu_trocken": 1.2,
+   "peak_schraeglauf_grad": 5,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.7,
+    "schnee": 0.3,
+    "eis": 0.5,
+    "lose": 0.85
+   }
+  },
+  "hypercar": {
+   "mu_trocken": 1.2,
+   "peak_schraeglauf_grad": 5,
+   "gleit_zu_peak": 0.85,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.85,
+    "schnee": 0.35,
+    "eis": 0.55,
+    "lose": 0.9
+   }
+  },
+  "drift_semi": {
+   "mu_trocken": 1.05,
+   "peak_schraeglauf_grad": 6,
+   "gleit_zu_peak": 0.88,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.8,
+    "schnee": 0.4,
+    "eis": 0.6,
+    "lose": 0.95
+   }
+  },
+  "ganzjahr": {
+   "mu_trocken": 0.95,
+   "peak_schraeglauf_grad": 7,
+   "gleit_zu_peak": 0.82,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.0,
+    "schnee": 0.85,
+    "eis": 0.85,
+    "lose": 1.0
+   }
+  },
+  "winter": {
+   "mu_trocken": 0.9,
+   "peak_schraeglauf_grad": 8,
+   "gleit_zu_peak": 0.85,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.02,
+    "schnee": 1.0,
+    "eis": 1.0,
+    "lose": 1.0
+   }
+  },
+  "at_offroad": {
+   "mu_trocken": 0.85,
+   "peak_schraeglauf_grad": 9,
+   "gleit_zu_peak": 0.85,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.95,
+    "schnee": 0.85,
+    "eis": 0.8,
+    "lose": 1.15
+   }
+  },
+  "diagonal_oldtimer": {
+   "mu_trocken": 0.78,
+   "peak_schraeglauf_grad": 11,
+   "gleit_zu_peak": 0.88,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.85,
+    "schnee": 0.6,
+    "eis": 0.7,
+    "lose": 1.05
+   }
+  },
+  "transporter": {
+   "mu_trocken": 0.85,
+   "peak_schraeglauf_grad": 8,
+   "gleit_zu_peak": 0.82,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.0,
+    "schnee": 0.8,
+    "eis": 0.8,
+    "lose": 1.0
+   }
+  },
+  "lkw": {
+   "mu_trocken": 0.72,
+   "peak_schraeglauf_grad": 10,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.0,
+    "schnee": 0.85,
+    "eis": 0.85,
+    "lose": 1.0
+   }
+  },
+  "bus": {
+   "mu_trocken": 0.72,
+   "peak_schraeglauf_grad": 10,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 1.0,
+    "schnee": 0.85,
+    "eis": 0.85,
+    "lose": 1.0
+   }
+  },
+  "fahrrad": {
+   "mu_trocken": 0.85,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.9,
+    "schnee": 0.6,
+    "eis": 0.5,
+    "lose": 0.95
+   }
+  },
+  "rennrad": {
+   "mu_trocken": 0.95,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.85,
+    "schnee": 0.4,
+    "eis": 0.4,
+    "lose": 0.7
+   }
+  },
+  "scooter_klein": {
+   "mu_trocken": 0.7,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.75,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.75,
+    "schnee": 0.4,
+    "eis": 0.35,
+    "lose": 0.8
+   }
+  },
+  "scooter_offroad": {
+   "mu_trocken": 0.85,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.9,
+    "schnee": 0.6,
+    "eis": 0.5,
+    "lose": 1.05
+   }
+  },
+  "roller": {
+   "mu_trocken": 0.85,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.85,
+    "schnee": 0.5,
+    "eis": 0.45,
+    "lose": 0.9
+   }
+  },
+  "motorrad_sport": {
+   "mu_trocken": 1.2,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.8,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.85,
+    "schnee": 0.3,
+    "eis": 0.3,
+    "lose": 0.7
+   }
+  },
+  "motorrad_touring": {
+   "mu_trocken": 1.05,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.82,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.95,
+    "schnee": 0.4,
+    "eis": 0.4,
+    "lose": 0.85
+   }
+  },
+  "cruiser": {
+   "mu_trocken": 0.95,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.82,
+   "mu_laengs": 1.2,
+   "peak_schlupf": 0.11,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.9,
+    "schnee": 0.4,
+    "eis": 0.4,
+    "lose": 0.85
+   }
+  }
+ }
+}

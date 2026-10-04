@@ -8,6 +8,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 1 und 2 (noch nicht im Spiel aktiv): Fahrzeugdaten liegen als JSON in
+  `data/vehicles/` (87 Fahrzeuge in 20 Klassen, 21 Reifen, 20 Untergründe, Motorkurven, Schema). Fünf Felder
+  genügen für ein neues Fahrzeug, der Rest wird aus der Klasse abgeleitet. Neuer Physikkern `berlin_sim::vphys`
+  mit Einspurmodell bei 120 Hz: Magic-Formula-Reifen, Reibungsellipse, Lastverlagerung, ABS/Traktionskontrolle,
+  Turbolader, Drehträgheit des Antriebsstrangs und Lastschaltung je Getriebeart. Dazu das Kalibrierwerkzeug
+  `physics-calibrate`: Es fährt jedes Fahrzeug durch Beschleunigung, Vmax, Bremsweg und Kreisfahrt und dreht nur
+  die erlaubten Stellschrauben. Masse, Leistung und Drehmoment bleiben unangetastet. Stand: 179 von 205
+  Zielwerten in der Toleranz, alle übrigen mit Grund im Bericht `docs/kalibrierung/bericht.md`.
 - Native Rust-Portierung: Bahnhöfe auf ihren echten Ebenen. Jeder S-/U-Bahn-Halt hat einen begehbaren Bahnsteig,
   Hochbahnsteige liegen über der sichtbaren Stadt. Bahnsteige gleichen Namens bilden einen Bahnhof mit
   Umsteigetreppen („▼ U7 · Ebene −2“); die anderen Ebenen scheinen durch. Ebenen für 54 große Umsteigebahnhöfe
