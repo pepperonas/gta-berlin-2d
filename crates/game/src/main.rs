@@ -11,6 +11,7 @@ mod play;
 mod raster;
 mod snowtracks;
 mod sound;
+mod streetfurn;
 mod underground;
 mod weatherfx;
 mod wheel;

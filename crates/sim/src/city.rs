@@ -309,6 +309,7 @@ enum Owned {
     Crossing(i64),
     Poi(u32, Vec<(i32, i32)>),
     Addr(u32, Vec<(i32, i32)>),
+    Sign(u32, Vec<(i32, i32)>),
     Furn(u32, Vec<(i32, i32)>),
     Rail(u32, Vec<(i32, i32)>),
     Dens(String),
@@ -322,6 +323,50 @@ pub struct Poi {
     pub cat: &'static str,
     pub name: String,
     pub kind: String,
+}
+/// Wegweiser an einer Kreuzungszufahrt (`signs.js decodeSign`): Lage, Fahrtrichtung, Kreuzungsname, Zeilen.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sign {
+    pub x: f64,
+    pub y: f64,
+    pub angle: f64,
+    pub name: String,
+    pub vis: bool,
+    pub rows: Vec<SignRow>,
+}
+/// Zeile: Pfeilrichtung, Abbiegewinkel, Ziele, Bundesstraßennummer
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignRow {
+    pub dir: f64,
+    pub turn: f64,
+    pub dests: Vec<String>,
+    pub refn: String,
+}
+impl SignRow {
+    /// Ziel ist ein Straßenname (weißes Schild für den Nahbereich) statt eines Orts?
+    pub fn street(&self) -> bool {
+        const ENDS: [&str; 14] = [
+            "straße",
+            "str.",
+            "damm",
+            "allee",
+            "ufer",
+            "weg",
+            "platz",
+            "chaussee",
+            "brücke",
+            "gasse",
+            "ring",
+            "steig",
+            "promenade",
+            "zeile",
+        ];
+        !self.dests.is_empty()
+            && self.dests.iter().all(|d| {
+                let l = d.to_lowercase();
+                ENDS.iter().any(|e| l.ends_with(e))
+            })
+    }
 }
 /// Hausnummer an einer Straße.
 #[derive(Debug, Clone, PartialEq)]
@@ -409,6 +454,7 @@ pub struct TileData {
     signals: Vec<i64>,
     bans: Vec<(i64, i64, i64)>,
     pois: Vec<Poi>,
+    signs: Vec<Sign>,
     addrs: Vec<Address>,
     furn: Vec<Furn>,
     rails: Vec<(i64, bool, bool, Vec<Pt>, i8)>,
@@ -685,6 +731,40 @@ impl TileData {
                 .unwrap_or_default()
         };
         let names: Vec<String> = names;
+        let mut signs = Vec::new();
+        for r in list("signs")? {
+            let r = row(r, 6)?;
+            let rows = arr(&r[5])?
+                .iter()
+                .filter_map(|q| {
+                    let q = q.as_array()?;
+                    let dests = name_of(q.get(2)?, &names);
+                    let refi = q.get(3)?.as_i64().unwrap_or(-1);
+                    Some(SignRow {
+                        dir: q.first()?.as_f64()? / 1000.,
+                        turn: q.get(1)?.as_f64()? / 1000.,
+                        dests: dests
+                            .split(';')
+                            .filter(|d| !d.is_empty())
+                            .map(str::to_owned)
+                            .collect(),
+                        refn: if refi >= 0 {
+                            name_of(&Value::from(refi), &names)
+                        } else {
+                            String::new()
+                        },
+                    })
+                })
+                .collect();
+            signs.push(Sign {
+                x: num(&r[0])?,
+                y: num(&r[1])?,
+                angle: num(&r[2])? / 1000.,
+                name: name_of(&r[3], &names),
+                vis: r[4].as_i64().unwrap_or(0) != 0,
+                rows,
+            });
+        }
         let mut pois = Vec::new();
         for r in list("pois")? {
             let r = row(r, 3)?;
@@ -754,6 +834,7 @@ impl TileData {
         });
         Ok(Self {
             pois,
+            signs,
             addrs,
             furn,
             rails,
@@ -890,6 +971,8 @@ pub struct City {
     pub portals: Layer<Portal>,
     pub paths: Layer<LevelPath>,
     pub pois: Layer<Poi>,
+    /// Wegweiser (Darstellung)
+    pub signs: Layer<Sign>,
     pub addresses: Layer<Address>,
     pub furn: Layer<Furn>,
     /// Gleismittellinien (oberirdisch; für Tunnel/Zugsichtbarkeit)
@@ -1008,6 +1091,7 @@ impl City {
             portals: Layer::new(256.),
             paths: Layer::new(320.),
             pois: Layer::new(400.),
+            signs: Layer::new(400.),
             addresses: Layer::new(400.),
             furn: Layer::new(256.),
             rails: Layer::new(256.),
@@ -1267,6 +1351,7 @@ impl City {
                 Owned::Portal(h, k) => self.portals.drop_item(h, &k),
                 Owned::Path(h, k) => self.paths.drop_item(h, &k),
                 Owned::Poi(h, k) => self.pois.drop_item(h, &k),
+                Owned::Sign(h, k) => self.signs.drop_item(h, &k),
                 Owned::Addr(h, k) => self.addresses.drop_item(h, &k),
                 Owned::Furn(h, k) => self.furn.drop_item(h, &k),
                 Owned::Rail(h, k) => self.rails.drop_item(h, &k),
@@ -1668,6 +1753,13 @@ impl City {
                 owned: vec![Owned::Poi(h, k)],
             });
         }
+        for g in d.signs {
+            let (h, k) = self.signs.add(g.clone(), &Rect::new(g.x, g.y, 0., 0.));
+            t.local.push(Entry {
+                refs: 1,
+                owned: vec![Owned::Sign(h, k)],
+            });
+        }
         for a in d.addrs {
             let (h, k) = self.addresses.add(a.clone(), &Rect::new(a.x, a.y, 0., 0.));
             t.local.push(Entry {
@@ -1938,6 +2030,15 @@ impl City {
             }
         }
         best.map(|(_, a)| a)
+    }
+    /// Wegweiser im Umkreis (Kopien).
+    pub fn signs_near(&mut self, x: f64, y: f64, radius: f64) -> Vec<Sign> {
+        self.signs
+            .query(&Rect::around(x, y, radius))
+            .into_iter()
+            .map(|h| self.signs.get(h).clone())
+            .filter(|g| (g.x - x).abs() <= radius && (g.y - y).abs() <= radius)
+            .collect()
     }
     /// POIs im Umkreis (Kopien).
     pub fn pois_near(&mut self, x: f64, y: f64, radius: f64) -> Vec<Poi> {

@@ -1234,3 +1234,19 @@ Port von `worldfx.js` und den Bremsspuren aus `render.js`, in `game/effects.rs` 
 - **Bremsspuren** an den Hinterrädern beim Rutschen, Vollbremsen ab 150 px/s oder mit Handbremse (nicht im Schnee,
   dort gibt es die Reifenspuren der Schneedecke), dunkle Striche, die nach 8 s verblassen; höchstens 600.
 Rein darstellend: Streuung aus Hashes, nie aus dem Welt-Zufall.
+
+## Wegweiser und Laternen (04.10.2026)
+
+`game/streetfurn.rs` portiert `render.js drawSign`/`signBoard` und `drawLamp`.
+- **Wegweiser:** Die Rust-Stadt liest jetzt das Kachelfeld `signs` (`City::signs`, `signs_near`; `Sign`, `SignRow`
+  wie `signs.js decodeSign`, 1 682 Schilder in Berlin). Jedes Schild steht auf einem Pfosten an der Zufahrt; die
+  Tafel zeigt je Ausfahrt einen Pfeil in Kartenrichtung, bis zu zwei Ziele (gelb für Orte, weiß für Straßen) und
+  die Bundesstraßennummer als gelbes Kästchen; sie reicht vom Pfosten weg von der Fahrbahn.
+  **Abweichung:** Die Tafel wird im HUD gezeichnet, weil die Bitmapschrift nur in ganzzahligen Pixelstufen
+  skaliert und sich ihre Breite in Weltkoordinaten nicht vorab bemessen lässt; sie liegt dadurch auch über Dächern.
+  Pfosten und Bodenschatten liegen in der Szene. [Bild](images/native/wegweiser.png).
+- **Laternen:** Mast, Ausleger und Kopf (Berliner Gaslaternen mit dunklem Dach), bisher gab es in Rust nur ihr
+  Licht. Nachts leuchtet der Kopf selbst (eine kleine helle Lichtquelle, wie `lightOccluders` sie in die Lichtkarte
+  malt). [Bild](images/native/laternen.png).
+
+Ein Integrationstest liest Wegweiser aus den echten Kacheln; Unit-Tests für Tafellage und Laternenkopf.

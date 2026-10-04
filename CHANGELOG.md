@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Wegweiser an Kreuzungen (Pfeile, Ziele, Bundesstraßen) und Laternen mit Mast und
+  leuchtendem Kopf.
 - Native Rust-Portierung: Reifenqualm, Staub, Gischt und Schneestaub, Rauch aus beschädigten Autos und Bremsspuren.
 - Native Rust-Portierung: Gebrauchsspuren – Ölband je Fahrstreifen, Kontaktschatten am Hausfuß, Schmutz am Boden,
   Moos und Ruß auf Dächern, funkelnde Reflexe auf dem Wasser.

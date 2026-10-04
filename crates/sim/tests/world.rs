@@ -1866,3 +1866,22 @@ fn churches_are_known_for_the_bells() {
     assert!(w.city.church_near(x, y, 50.));
     assert!(!w.city.church_near(x + 1e6, y, 50.));
 }
+
+#[test]
+fn direction_signs_come_from_the_tiles() {
+    let mut w = world(95);
+    run(&mut w, 5, idle());
+    let (x, y) = (w.player.x, w.player.y);
+    let signs = w.city.signs_near(x, y, 6000.);
+    assert!(!signs.is_empty(), "Wegweiser in Kreuzberg");
+    let s = &signs[0];
+    assert!(
+        !s.rows.is_empty() && s.rows.iter().all(|r| !r.dests.is_empty()),
+        "{s:?}"
+    );
+    assert!(
+        s.rows
+            .iter()
+            .all(|r| r.dir.is_finite() && r.dir.abs() <= 7.)
+    );
+}

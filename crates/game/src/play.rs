@@ -55,6 +55,10 @@ pub struct Play {
     /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
     pub demo_station: Option<bool>,
     pub people_show: bool,
+    /// Laternen und Wegweiser im Bild (in `lights` gesammelt, dort ist die Stadt veränderlich)
+    street_lamps: Vec<berlin_sim::lamps::Lamp>,
+    street_signs: Vec<berlin_sim::city::Sign>,
+    lamps_lit: bool,
     /// Fahrzeug-Atlas schon an die Engine gegeben
     vehicle_atlas_sent: bool,
     /// Schaufensterlicht und Leuchtreklame (nachts)
@@ -273,6 +277,9 @@ impl Play {
             demo_drive: false,
             demo_station: None,
             people_show: false,
+            street_lamps: Vec::new(),
+            street_signs: Vec::new(),
+            lamps_lit: false,
             vehicle_atlas_sent: false,
             neon: Default::default(),
             demo_covered: false,
@@ -2381,6 +2388,8 @@ impl Game for Play {
             };
             crate::figure::person_bodies(&who, &crate::figure::player_look(), depth, w.time, out);
         }
+        crate::streetfurn::lamp_bodies(&self.street_lamps, self.lamps_lit, out);
+        crate::streetfurn::sign_bodies(&self.street_signs, out);
         self.fx.bodies(out);
         crate::weatherfx::ground_bodies(w, &self.trails, out);
         crate::weatherfx::bodies(w, out);
@@ -2560,6 +2569,7 @@ impl Game for Play {
             crate::weatherfx::overlay(&self.world, out);
             crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
             crate::underground::entrance_letters(&self.world, camera, viewport, out);
+            crate::streetfurn::sign_texts(&self.street_signs, camera, viewport, out);
             crate::neon::draw(&self.neon, camera, viewport, out);
         }
         self.hud_width = out.width;
@@ -2650,6 +2660,19 @@ impl Game for Play {
     }
     fn lights(&mut self, out: &mut Vec<LightSource>) {
         let l = world_light(&self.world);
+        {
+            // Laternen und Wegweiser im Bild für bodies()/hud() vormerken
+            let w = &mut self.world;
+            let (cx, cy) = (w.camera.x, w.camera.y);
+            let view = 1500. / w.camera.zoom.max(0.5);
+            self.street_lamps = if w.player.inside.is_some() {
+                Vec::new()
+            } else {
+                self.lamps.near(&mut w.city, cx, cy, view)
+            };
+            self.street_signs = w.city.signs_near(cx, cy, view);
+            self.lamps_lit = l.lamps_on;
+        }
         let k = l.dark as f32;
         if k <= 0. {
             return;
@@ -2675,6 +2698,11 @@ impl Game for Play {
         );
         let view = 2200. / zoom.max(0.5);
         if l.lamps_on {
+            // Laternenköpfe selbst leuchten (render.js lightOccluders malt sie in die Lichtkarte)
+            for lp in &self.street_lamps {
+                let (hx, hy) = crate::streetfurn::lamp_head(lp);
+                push(out, hx as f64, hy as f64, 9., rgb(lp.rgb), 1.);
+            }
             for lp in self.lamps.near(&mut self.world.city, cx, cy, view + 250.) {
                 push(
                     out,
