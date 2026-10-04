@@ -60,6 +60,9 @@ pub enum Sfx {
     Splash(f32),
     /// Straßenbahnklingel (zweimal)
     TramBell(f32),
+    /// Türgong: öffnen (aufsteigend), schließen (absteigend)
+    GongOpen,
+    GongClose,
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -955,6 +958,14 @@ impl Synth {
                 self.tone(90., 0.12, Triangle, 0.2 * k, 0., 0., 0., M);
             }
             Sfx::Impact(k) => self.burst(0.05, 3500., 0.12 * k, Highpass, 0.7, 0., 0., M),
+            Sfx::GongOpen => {
+                self.tone(659., 0.35, Sine, 0.1, 0., 0., 0., M);
+                self.tone(880., 0.45, Sine, 0.1, 0.28, 0., 0., M);
+            }
+            Sfx::GongClose => {
+                self.tone(880., 0.3, Sine, 0.1, 0., 0., 0., M);
+                self.tone(659., 0.4, Sine, 0.1, 0.24, 0., 0., M);
+            }
             Sfx::TramBell(k) => {
                 for at in [0., 0.22] {
                     self.tone(1568., 0.5, Sine, 0.08 * k, at, 0., 0., M);

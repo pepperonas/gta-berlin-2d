@@ -77,6 +77,8 @@ pub struct Input {
     pub click_held: bool,
     pub click_force: bool,
     pub click_double: bool,
+    /// Mitfahren: einsteigen bzw. aussteigen (Flanke, G / Steuerkreuz unten)
+    pub ride: bool,
 }
 
 /// Laufender Klickauftrag der Spielfigur (world.js `p.click`).
@@ -126,6 +128,8 @@ pub struct Player {
     pub combat: crate::combat::Combat,
     pub click: Option<Click>,
     pub click_t: f64,
+    /// fährt mit bzw. führt eine Bahn (ride.rs)
+    pub ride: Option<crate::ride::Ride>,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -215,6 +219,9 @@ pub struct World {
     pub transit_state: crate::transit::State,
     pub transit_populated: bool,
     pub ug: crate::tunnel::Cache,
+    /// vom Spieler übernommener Zug; Tunnelansicht 0 (oben) … 1 (unter Tage)
+    pub player_train: Option<crate::ride::PlayerTrain>,
+    pub underground: f64,
     /// Straßenbahnwagen nahe der Kamera als Hindernisse (transitlive.rs)
     pub rail_obs: Vec<crate::traffic::RailObs>,
     /// Pfützen je Kante (Aquaplaning und Darstellung), mit den Rollern um die Kamera abgebaut
@@ -297,6 +304,7 @@ impl World {
                 combat: Default::default(),
                 click: None,
                 click_t: 0.,
+                ride: None,
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -333,6 +341,8 @@ impl World {
             transit_state: Default::default(),
             transit_populated: false,
             ug: Default::default(),
+            player_train: None,
+            underground: 0.,
             scoot_t: -99.,
             rhythm_t: -99.,
             life_t: -99.,
@@ -601,6 +611,15 @@ impl World {
                 self.scooters.insert(id, v);
             }
         }
+    }
+
+    /// Platz frei für einen Kreis (feste Hindernisse dieser Ebene, Autos)?
+    pub fn spot_free_here(&mut self, x: f64, y: f64, r: f64, lvl: i8) -> bool {
+        spot_free_static(&mut self.city, &self.knocked, x, y, r, lvl)
+            && self
+                .cars
+                .iter()
+                .all(|c| circle_vs_obb(x, y, r, &c.obb()).is_none())
     }
 
     /// Nachtleben an (x, y): Lokale vor ihrem Gehweg, mit Feed; Regen und Schnee nach drinnen.
@@ -942,6 +961,7 @@ impl World {
         };
         self.transit_populated = false;
         self.rail_obs.clear();
+        self.player_train = None;
         self.hangers.clear();
         self.populated = false;
     }
@@ -2348,13 +2368,47 @@ impl World {
             self.update_mission(input, dt);
             return;
         }
-        if input.enter_exit {
-            if self.player.in_car.is_some() {
-                self.try_exit();
+        let driver = self
+            .player
+            .ride
+            .as_ref()
+            .is_some_and(|r| r.kind == crate::ride::RideKind::Driver);
+        let dead = self.player.combat.dead;
+        if input.ride && !dead && self.player.in_car.is_none() && !driver {
+            if self.player.ride.is_some() {
+                self.alight_transit();
             } else {
-                self.try_enter();
+                self.board_transit();
+            }
+        } else if input.enter_exit && !dead {
+            if driver {
+                self.leave_train();
+            } else if self.player.ride.is_none() {
+                if self.player.in_car.is_some() {
+                    self.try_exit();
+                } else {
+                    // am Führerstand einer Bahn: übernehmen, sonst wie immer ein Auto
+                    let (x, y) = (self.player.x, self.player.y);
+                    let cab = self
+                        .transit_near(x, y, crate::ride::CAB + 10.)
+                        .into_iter()
+                        .find(|h| {
+                            h.car == 0
+                                && h.front <= crate::ride::CAB
+                                && h.mode != crate::transit::Mode::Bus
+                        });
+                    if !cab.is_some_and(|c| self.take_train(&c)) {
+                        self.try_enter();
+                    }
+                }
             }
         }
+        // Wenden verbraucht den Tastendruck (sonst öffnete er gleich die Türen am neuen ersten Halt)
+        let turned = input.action && driver && self.at_terminus() && self.turn_around();
+        let train_input = Input {
+            action: input.action && !turned,
+            ..*input
+        };
         let pc = self.player.in_car.and_then(|id| self.car_index(id));
         if let Some(i) = pc {
             if input.esp_toggle && !self.cars[i].wrecked {
@@ -2393,7 +2447,7 @@ impl World {
                 });
             }
             c.horn_was = c.horn;
-        } else if !self.player.combat.dead {
+        } else if !self.player.combat.dead && self.player.ride.is_none() {
             let input = &self.click_control(input, dt);
             self.update_player_on_foot(input, dt);
             crate::combat::update_player_combat(self, &input.combat, dt);
@@ -2499,6 +2553,20 @@ impl World {
             (self.player.x, self.player.y, self.player.angle) = (c.x, c.y, c.angle);
         }
         self.update_transit(dt);
+        self.update_player_train(&train_input, dt);
+        if self.player.ride.is_some() {
+            self.update_ride();
+        }
+        // Tunnelansicht weich ein- und ausblenden
+        let ug = if self.player.ride.as_ref().is_some_and(|r| r.underground) {
+            1.
+        } else {
+            0.
+        };
+        self.underground += (ug - self.underground) * (dt / 0.6).min(1.);
+        if (self.underground - ug).abs() < 0.01 {
+            self.underground = ug;
+        }
         self.update_levels();
 
         // Beschossene Autos: KI-Fahrer steigt aus und rennt weg. Wracks: ebenso, Wrack verschwindet später außer Sicht
@@ -2542,7 +2610,7 @@ impl World {
         });
 
         // Spieler zu Fuß gegen Autos
-        if self.player.in_car.is_none() {
+        if self.player.in_car.is_none() && self.player.ride.is_none() {
             for i in 0..self.cars.len() {
                 let o = self.cars[i].obb();
                 let p = &self.player;
@@ -2834,7 +2902,16 @@ impl World {
 
     pub fn update_camera(&mut self, dt: f64) {
         let (mut tx, mut ty, mut zoom) = (self.player.x, self.player.y, FOOT_ZOOM);
-        if let Some(c) = self.player_car() {
+        if let Some(r) = &self.player.ride {
+            let ahead = if r.kind == crate::ride::RideKind::Driver {
+                r.speed * 0.6
+            } else {
+                0.
+            };
+            tx = self.player.x + self.player.angle.cos() * ahead;
+            ty = self.player.y + self.player.angle.sin() * ahead;
+            zoom = 1. - (r.speed / 330.).clamp(0., 1.) * 0.28;
+        } else if let Some(c) = self.player_car() {
             tx = c.x + c.vx * 0.45;
             ty = c.y + c.vy * 0.45;
             let k = c.kind_info();
@@ -2858,10 +2935,14 @@ impl World {
             .player_car_id
             .and_then(|id| self.car(id))
             .filter(|c| !c.wrecked);
-        let pos = self
-            .player_car()
-            .map(|c| (c.x, c.y))
-            .unwrap_or((self.player.x, self.player.y));
+        let pos = match &self.player.ride {
+            // im Wagen: an der letzten Haltestelle (world.js rideExit; bei S-/U-Bahn deren Straßenpunkt)
+            Some(r) => (r.last_stop.x, r.last_stop.y),
+            None => self
+                .player_car()
+                .map(|c| (c.x, c.y))
+                .unwrap_or((self.player.x, self.player.y)),
+        };
         let r2 = |v: f64| (v * 100.).round() / 100.;
         SaveData {
             version: crate::save::SAVE_VERSION,

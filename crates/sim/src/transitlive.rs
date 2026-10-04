@@ -67,7 +67,7 @@ impl World {
     pub fn rail_obstacle_at(&self, x: f64, y: f64, head_on: Option<f64>) -> bool {
         let hit = |ox: f64, oy: f64, r: f64| (ox - x).hypot(oy - y) < r;
         let p = &self.player;
-        if p.in_car.is_none() && !p.combat.dead && hit(p.x, p.y, 22.) {
+        if p.in_car.is_none() && p.ride.is_none() && !p.combat.dead && hit(p.x, p.y, 22.) {
             return true;
         }
         for c in &self.cars {
@@ -182,7 +182,17 @@ impl World {
             let this = &*self;
             let t: &Transit = &tr;
             // Straßenbahnen halten vor Hindernissen (Wartezeit zählt mit)
+            // Fahrplan-Züge desselben Musters hinter dem Spielerzug warten vor seinem Heck
+            let pt = this.player_train.as_ref().map(|t| (t.pid, t.s));
             let mut blocked = |p: &Pattern, v: &mut Veh, dt: f64| {
+                if let Some((pid, ps)) = pt
+                    && pid == p.id
+                {
+                    let vs = position_at(p, v.tau).s;
+                    if vs < ps && ps - p.mode.train_len() - vs < 600. {
+                        return true;
+                    }
+                }
                 if p.mode == Mode::Tram && this.tram_blocked(t, p, v, false) {
                     v.blocked_t += dt;
                     true
@@ -306,6 +316,24 @@ impl World {
                 }
             }
         }
+        // Spielerzug: Straßenbahn immer, S-/U-Bahn nur oberirdisch als festes, fahrendes Hindernis
+        if let Some((pid, ps, pv)) = self.player_train.as_ref().map(|t| (t.pid, t.s, t.v)) {
+            let p = &tr.patterns[pid];
+            let sh = tr.shape_of(p);
+            if p.mode == Mode::Tram || !self.ug.underground_at_s(&mut self.city, p, sh, ps) {
+                for c in train_cars(sh, p.mode, ps) {
+                    self.rail_obs.push(RailObs {
+                        x: c.x,
+                        y: c.y,
+                        angle: c.angle,
+                        hw: c.l / 2.,
+                        hh: c.w / 2.,
+                        vx: c.angle.cos() * pv,
+                        vy: c.angle.sin() * pv,
+                    });
+                }
+            }
+        }
         self.transit_state = st;
         self.transit = Some(tr);
         self.collide_rail();
@@ -424,6 +452,7 @@ impl World {
             }
             let pl = &mut self.player;
             if pl.in_car.is_none()
+                && pl.ride.is_none()
                 && let Some(m) = circle_vs_obb(pl.x, pl.y, 7., &ob)
             {
                 pl.x += m.nx * m.depth;
@@ -480,6 +509,33 @@ impl World {
                         lit: !pos.dwelling,
                     });
                 }
+            }
+        }
+        // vom Spieler geführter Zug: Straßenbahn immer, S-/U-Bahn wo das Gleis oben liegt
+        if let Some((pid, ps, pv)) = self.player_train.as_ref().map(|t| (t.pid, t.s, t.v)) {
+            let p = &tr.patterns[pid];
+            let mut cars = Vec::new();
+            let mut lvl = Vec::new();
+            for c in train_cars(tr.shape_of(p), p.mode, ps) {
+                if p.mode == Mode::Tram {
+                    cars.push(c);
+                    lvl.push(0);
+                } else if let Some(l) =
+                    crate::tunnel::rail_level_at(&mut self.city, c.x, c.y, crate::tunnel::PROBE)
+                {
+                    cars.push(c);
+                    lvl.push(l);
+                }
+            }
+            if !cars.is_empty() {
+                out.push(Visible {
+                    line: p.name.clone(),
+                    mode: p.mode,
+                    color: p.color.clone(),
+                    cars,
+                    lvl,
+                    lit: pv > 0.,
+                });
             }
         }
         self.transit = Some(tr);

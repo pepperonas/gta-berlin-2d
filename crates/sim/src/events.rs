@@ -27,6 +27,41 @@ pub enum Event {
         x: f64,
         y: f64,
     },
+    /// Mitfahren: eingestiegen (aufgesprungen), ausgestiegen (abgesprungen), Fahrt ohne Fahrzeug beendet
+    Board {
+        line: String,
+        hop: bool,
+        x: f64,
+        y: f64,
+    },
+    Alight {
+        hop: bool,
+        x: f64,
+        y: f64,
+    },
+    RideEnd {
+        x: f64,
+        y: f64,
+    },
+    /// Zug führen: übernommen, Zug voraus, Türen, Trinkgeld, gewendet
+    TrainTake {
+        line: String,
+        x: f64,
+        y: f64,
+    },
+    TrainBlocked,
+    DoorsOpen {
+        out: u32,
+        inn: u32,
+        first: bool,
+    },
+    DoorsClose,
+    Tip {
+        amount: f64,
+    },
+    TurnAround {
+        line: String,
+    },
     /// Straßenbahn klingelt vor einem Hindernis
     TramBell {
         x: f64,

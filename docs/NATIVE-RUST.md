@@ -953,3 +953,35 @@ Lebensplatz, Mix mit Feed-Anteil, Regen macht leiser. Ein Spieltest liest den ec
 **Validierung:** Unit-Tests für Takt, Lage zur Fahrzeit, Wagenfolge, Musterindex, Tramgleis-Nähe, Abfahrten und
 Anhalten. Ein Integrationstest prüft in Kreuzberg mit dem echten Fahrplan: Busse und U-Bahn werden verfolgt, Busse
 fahren als KI auf ihrer Linie voran, S- und U-Bahn sind am oberirdischen Gleis sichtbar. 137 Rust-Tests.
+
+## Nahverkehr B: Mitfahren und Bahn führen (04.10.2026)
+
+`sim/ride.rs` portiert `ride.js`, `playertrain.js`, `trainphysics.js` und den Mitfahr-Teil von `world.js`.
+- **Referenzen statt Kopien:** Fahrzeuge werden referenziert, nie kopiert: `Ref::Veh` (Fahrplan-Fahrzeug),
+  `Ref::Car` (Bus als KI-Auto) oder `Ref::PlayerTrain`. `vehicle_state` löst eine Referenz auf; ist das Fahrzeug
+  weg, endet die Fahrt an der letzten Haltestelle, bei S-/U-Bahn an deren Straßenausgang (Bahnhofs-POI mit passendem
+  Namen, sonst der nächste Gehweg).
+- **Mitfahren (G, Controller: Steuerkreuz unten):** Einsteigen in 2,5 m Reichweite eines Wagens, auch in Fahrt
+  (Aufspringen ab 25 km/h); auf die Hochbahn von der Straße nur, solange sie hält. Aussteigen neben dem Wagen,
+  schnell = Abspringen mit Sturz, ab 40 km/h mit Verletzung. Unter Tage und auf der Hochbahn nur am Bahnhof.
+  Die Figur sitzt im Wagen (Ebene des Gleises bzw. unter Tage −2), die Kamera folgt, Kampf und Laufen ruhen.
+- **Bahn führen (F am Führerstand):** Das Fahrplan-Fahrzeug verlässt den Fahrplan; ein stehengelassener Zug kehrt
+  später an seiner Stelle zurück (Fahrzeit per Bisektion). Fahrphysik je Art (Straßenbahn 60, U-Bahn 70,
+  S-Bahn 100 km/h; Anfahren mit abnehmender Zugkraft, Bremse, Notbremse, Ausrollen; Schienenhaftung nach Wetter,
+  im Tunnel trocken). Zwangsbremsung vor dem Endhalt, dem Heck des Zugs voraus auf derselben Strecke und, bei der
+  Straßenbahn, vor Hindernissen (nach 20 s zählt Gegenverkehr nicht mehr). Fahrplan-Züge desselben Musters warten
+  hinter dem eigenen.
+- **Türen und Trinkgeld:** Türen (E) nur im Stand an einer Haltestelle; Fahrgäste steigen aus und ein. Das
+  Trinkgeld (bis 10 €) gibt es für einen genauen Halt (±3 m) und sanftes Bremsen. Am bedienten Endhalt wendet E in
+  die Gegenrichtung derselben Linie.
+- **Darstellung:** Der eigene Zug wird mitgezeichnet (S-/U-Bahn nur oberirdisch) und ist für den Verkehr ein festes
+  Hindernis. Die Fahrgast-/Fahrerleiste oben zeigt Linie (in Linienfarbe), Ziel, nächsten Halt, am Führerstand
+  Tempo, Fahrgäste und was E gerade tut; sie weicht dem Auftragsfeld aus. Klänge für Türgong, Klingel, Trinkgeld.
+  `--bildschirm zugfahrt` übernimmt die nächste Straßenbahn und gibt Gas ([Bild](images/native/zugfahrt.png),
+  M6 am Alexanderplatz, daneben die S-Bahn auf dem Viadukt). Ein Spielstand während der Fahrt landet an der
+  letzten Haltestelle.
+
+**Validierung:** Unit-Tests für die Fahrphysik (Anfahren, Höchsttempo, Zwangsbremsung vor einem Hindernis, Türen,
+Nässe) und das Trinkgeld. Ein Integrationstest am Alexanderplatz steigt in eine fahrende Straßenbahn, fährt mit,
+steigt aus, übernimmt eine Bahn am Führerstand, fährt an, bremst mit der Notbremse und verlässt den Führerstand.
+140 Rust-Tests.

@@ -120,8 +120,9 @@ pub fn draw(
         minimap(w, target, mx, 720. - my - MINI - 10., MINI, h);
         health(h, &w.player.combat, mx, 720. - my - 6., MINI, w.time);
     }
-    // unten rechts zu Fuß: Waffe und Munition
-    if w.player.in_car.is_none() && !w.player.combat.dead {
+    ride_bar(w, h);
+    // unten rechts zu Fuß: Waffe und Munition (im Zug keine Waffe)
+    if w.player.in_car.is_none() && w.player.ride.is_none() && !w.player.combat.dead {
         weapon_panel(h, &w.player.combat, h.width - mx, 720. - my);
     }
     // oben rechts: Auftrag und Zeit
@@ -588,6 +589,184 @@ pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f3
 }
 
 /// Waffe und Magazin unten rechts (hud.js drawWeaponPanel); `r`/`b` = rechte bzw. untere Kante.
+/// Hex-Farbe einer Linie („#c00“, „cc0000“) → Farbe, sonst `None`.
+fn line_color(s: &str) -> Option<[f32; 4]> {
+    let h = s.trim_start_matches('#');
+    let v = u32::from_str_radix(h, 16).ok()?;
+    match h.len() {
+        6 => Some([
+            ((v >> 16) & 255) as f32 / 255.,
+            ((v >> 8) & 255) as f32 / 255.,
+            (v & 255) as f32 / 255.,
+            1.,
+        ]),
+        3 => Some([
+            ((v >> 8) & 15) as f32 / 15.,
+            ((v >> 4) & 15) as f32 / 15.,
+            (v & 15) as f32 / 15.,
+            1.,
+        ]),
+        _ => None,
+    }
+}
+
+/// Fahrgast-/Fahrerleiste oben mittig (hud.js drawRideBar): Linie, Ziel, nächster Halt; am Führerstand Tempo und
+/// was die Aktionstaste gerade tut.
+fn ride_bar(w: &World, h: &mut Hud) {
+    use berlin_sim::ride::{Doors, Ref, RideKind};
+    let Some(r) = &w.player.ride else { return };
+    let Some(tr) = w.transit.as_ref() else { return };
+    let (pid, stop, dwelling) = match &r.r {
+        Ref::PlayerTrain => match &w.player_train {
+            Some(t) => (t.pid, t.next_stop, t.v < 3.),
+            None => return,
+        },
+        Ref::Car(id) => match w.car(*id).and_then(|c| c.bus.as_ref()) {
+            Some(b) => (b.pid, b.stop, b.boarding),
+            None => return,
+        },
+        Ref::Veh { pid, key } => {
+            let Some(v) = w
+                .transit_state
+                .tracked
+                .get(pid)
+                .and_then(|t| t.veh.iter().find(|v| v.key == *key))
+            else {
+                return;
+            };
+            let pos = berlin_sim::transit::position_at(&tr.patterns[*pid], v.tau);
+            (*pid, pos.stop, pos.dwelling)
+        }
+    };
+    let p = &tr.patterns[pid];
+    let driver = r.kind == RideKind::Driver;
+    let (bw, bh) = (500., if driver { 112. } else { 64. });
+    // mittig; steht oben rechts der Auftrag, weicht die Leiste nach links aus
+    let pv = PlayerView {
+        x: w.player.x,
+        y: w.player.y,
+        in_car: w.player.in_car,
+    };
+    let (objective, _) = w.mission.objective(&w.city.places, pv, &w.cars);
+    let right = if objective.is_empty() {
+        h.width - MARGIN.0
+    } else {
+        h.width - MARGIN.0 - h.text_width(objective, 18.) - 24.
+    };
+    let x = (h.width / 2. - bw / 2.).min(right - bw).max(MARGIN.0);
+    let y = MARGIN.1 + 40.;
+    let fit = |h: &Hud, t: &str, size: f32, max: f32| -> String {
+        if h.text_width(t, size) <= max {
+            return t.to_string();
+        }
+        let mut c: Vec<char> = t.chars().collect();
+        while !c.is_empty()
+            && h.text_width(&format!("{}…", c.iter().collect::<String>()), size) > max
+        {
+            c.pop();
+        }
+        format!("{}…", c.iter().collect::<String>())
+    };
+    let short = |n: &str| {
+        n.trim_start_matches("S+U ")
+            .trim_start_matches("S ")
+            .trim_start_matches("U ")
+            .split(" (")
+            .next()
+            .unwrap_or("")
+            .to_string()
+    };
+    panel(h, x, y, bw, bh, 0.82);
+    let col = line_color(&p.color).unwrap_or(YELLOW);
+    h.rect(x + 14., y + 12., 58., 26., col, 6.);
+    let dark = col[0] * 0.3 + col[1] * 0.59 + col[2] * 0.11 > 0.6;
+    h.text(
+        &r.line,
+        x + 43.,
+        y + 31.,
+        16.,
+        if dark { [0.07, 0.07, 0.07, 1.] } else { WHITE },
+        Align::Center,
+        false,
+    );
+    let dest = fit(h, &format!("→ {}", short(&r.dest)), 16., bw - 100.);
+    h.text(&dest, x + 84., y + 31., 16., WHITE, Align::Left, true);
+    let next = p
+        .stop_names
+        .get(stop.min(p.stop_names.len().saturating_sub(1)))
+        .map(|n| short(n))
+        .unwrap_or_default();
+    let line2 = if dwelling {
+        format!("Hält: {next}")
+    } else {
+        format!("Nächster Halt: {next}")
+    };
+    let line2 = fit(h, &line2, 15., if driver { bw - 28. } else { bw - 210. });
+    h.text(
+        &line2,
+        x + 14.,
+        y + 56.,
+        15.,
+        [0.87, 0.87, 0.87, 1.],
+        Align::Left,
+        true,
+    );
+    if !driver {
+        let tip = if r.underground && !dwelling {
+            "Aussteigen nur am Bahnsteig"
+        } else {
+            "G: aussteigen"
+        };
+        h.text(tip, x + bw - 14., y + 56., 13., GREY, Align::Right, true);
+    } else if let Some(t) = &w.player_train {
+        let kmh = (t.v * 0.36).round();
+        h.text(
+            &format!("{kmh} km/h"),
+            x + 14.,
+            y + 82.,
+            18.,
+            if t.blocked { [1., 0.5, 0.5, 1.] } else { WHITE },
+            Align::Left,
+            true,
+        );
+        let terminus = w.at_terminus();
+        let doors = if t.drive.doors == Doors::Open {
+            "Türen offen – E schließen"
+        } else if terminus {
+            "E: wenden"
+        } else if t.at_stop.is_some() {
+            "E: Türen öffnen"
+        } else if t.blocked {
+            "Zug voraus"
+        } else {
+            "W Gas · S Bremse · Leertaste Not · F aussteigen"
+        };
+        let doors = fit(h, doors, 13., bw - 28.);
+        h.text(
+            &doors,
+            x + 14.,
+            y + 102.,
+            13.,
+            if t.at_stop.is_some() || terminus {
+                YELLOW
+            } else {
+                GREY
+            },
+            Align::Left,
+            true,
+        );
+        h.text(
+            &format!("{} Fahrgäste", t.passengers),
+            x + bw - 14.,
+            y + 82.,
+            13.,
+            GREY,
+            Align::Right,
+            true,
+        );
+    }
+}
+
 pub fn weapon_panel(h: &mut Hud, c: &berlin_sim::combat::Combat, r: f32, b: f32) {
     use berlin_sim::combat::WEAPONS;
     let wp = c.weapon();

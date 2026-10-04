@@ -90,6 +90,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   `--bars`, Befehl `bars`), Raucher und Schlangen vor vollen Bars, Stimmengewirr, Lachen, Gläser und Club-Bass im Klang.
 - Native Rust-Fassung: Nahverkehr nach VBB-Fahrplan – Busse als KI auf ihrer Linie mit Halten, Straßenbahnen mit
   Gleisen, Klingel und Vorrang, S- und U-Bahn auf oberirdischen Gleisen; `--befehl` für Aufnahmen.
+- Native Rust-Fassung: Mitfahren (G) in Bus und Bahn mit Auf- und Abspringen, Bahn am Führerstand übernehmen (F) und
+  selbst fahren – Zwangsbremsung, Türen, Trinkgeld für sanftes, genaues Halten, Wenden am Linienende; Fahrgast- und
+  Fahrerleiste im HUD.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

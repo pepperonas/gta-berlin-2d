@@ -1468,3 +1468,180 @@ fn timetable_buses_and_trains_run_in_kreuzberg() {
         "Hochbahn sichtbar"
     );
 }
+
+#[test]
+fn ride_and_drive_a_tram_at_alexanderplatz() {
+    use berlin_sim::ride::{Ref, RideKind};
+    use berlin_sim::transit::{Mode, Transit, point_on_shape, position_at};
+    use berlin_sim::world::TeleportSpot;
+    let mut w = world(121);
+    w.set_transit(Transit::read(&root()).expect("transit.json"));
+    // Alexanderplatz (Straßenbahnen M4/M5/M6)
+    let ov = berlin_map_loader::overview::Overview::read(&root()).unwrap();
+    let st = ov
+        .stations
+        .iter()
+        .find(|s| s.name.contains("Alexanderplatz"))
+        .expect("Bahnhof Alexanderplatz");
+    let Some(TeleportSpot::Spot { x, y, angle, .. }) =
+        w.find_teleport_spot(st.at.x as f64, st.at.y as f64)
+    else {
+        panic!("Teleport")
+    };
+    w.teleport_to(x, y, angle);
+    run(&mut w, 60, idle());
+    w.peds.retain(|p| p.state != PedState::Hang); // freie Bahnsteige (Rhythmus bleibt an: sonst steht der Fahrplan)
+    // eine fahrende Straßenbahn in der Nähe suchen und die Figur neben ihren zweiten Wagen stellen
+    let mut found = None;
+    for _ in 0..60 * 120 {
+        run(&mut w, 1, idle());
+        let tr = w.transit.as_ref().unwrap();
+        for (&pid, s) in &w.transit_state.tracked {
+            let p = &tr.patterns[pid];
+            if p.mode != Mode::Tram {
+                continue;
+            }
+            for v in &s.veh {
+                let pos = position_at(p, v.tau);
+                let (hx, hy, _) = point_on_shape(tr.shape_of(p), pos.s);
+                if !pos.dwelling && (hx - w.camera.x).hypot(hy - w.camera.y) < 1500. {
+                    found = Some(Ref::Veh {
+                        pid,
+                        key: v.key.clone(),
+                    });
+                }
+            }
+        }
+        if found.is_some() {
+            break;
+        }
+    }
+    let r = found.expect("Straßenbahn am Alexanderplatz");
+    let st = w.vehicle_state(&r).expect("Lage");
+    let c = st.cars[1];
+    (w.player.x, w.player.y) = (
+        c.x - c.angle.sin() * (c.w / 2. + 6.),
+        c.y + c.angle.cos() * (c.w / 2. + 6.),
+    );
+    run(
+        &mut w,
+        1,
+        Input {
+            ride: true,
+            ..idle()
+        },
+    );
+    let ride = w.player.ride.clone().expect("eingestiegen (aufgesprungen)");
+    assert_eq!(ride.kind, RideKind::Passenger);
+    assert_eq!(ride.mode, Mode::Tram);
+    let p0 = (w.player.x, w.player.y);
+    run(&mut w, 120, idle());
+    assert!(
+        (w.player.x - p0.0).hypot(w.player.y - p0.1) > 20.
+            || w.vehicle_state(&ride.r).is_some_and(|s| s.dwelling),
+        "fährt mit"
+    );
+    // aussteigen
+    let mut out = false;
+    for _ in 0..600 {
+        run(
+            &mut w,
+            1,
+            Input {
+                ride: true,
+                ..idle()
+            },
+        );
+        if w.player.ride.is_none() {
+            out = true;
+            break;
+        }
+        run(&mut w, 5, idle());
+    }
+    assert!(out, "ausgestiegen");
+    // Führerstand: Figur an die Spitze einer Bahn, E übernimmt
+    let mut taken = false;
+    for _ in 0..60 * 120 {
+        run(&mut w, 1, idle());
+        let near: Vec<Ref> = {
+            let tr = w.transit.as_ref().unwrap();
+            let mut v = Vec::new();
+            for (&pid, s) in &w.transit_state.tracked {
+                if tr.patterns[pid].mode == Mode::Tram {
+                    v.extend(s.veh.iter().map(|x| Ref::Veh {
+                        pid,
+                        key: x.key.clone(),
+                    }));
+                }
+            }
+            v
+        };
+        for r in near {
+            let Some(st) = w.vehicle_state(&r) else {
+                continue;
+            };
+            let f = st.cars[0];
+            if (f.x - w.camera.x).hypot(f.y - w.camera.y) > 1500. || !st.dwelling {
+                continue;
+            }
+            (w.player.x, w.player.y) = (
+                f.x + f.angle.cos() * (f.l / 2. - 4.) - f.angle.sin() * (f.w / 2. + 4.),
+                f.y + f.angle.sin() * (f.l / 2. - 4.) + f.angle.cos() * (f.w / 2. + 4.),
+            );
+            run(
+                &mut w,
+                1,
+                Input {
+                    enter_exit: true,
+                    ..idle()
+                },
+            );
+            if w.player_train.is_some() {
+                taken = true;
+                break;
+            }
+        }
+        if taken {
+            break;
+        }
+    }
+    assert!(taken, "Straßenbahn übernommen");
+    assert_eq!(
+        w.player.ride.as_ref().map(|r| r.kind),
+        Some(RideKind::Driver)
+    );
+    let s0 = w.player_train.as_ref().unwrap().s;
+    run(
+        &mut w,
+        60 * 6,
+        Input {
+            throttle: 1.,
+            ..idle()
+        },
+    );
+    let t = w.player_train.as_ref().unwrap();
+    assert!(
+        t.s > s0 + 20. || t.blocked || t.wait_t > 0.,
+        "fährt an (oder wartet vor einem Hindernis)"
+    );
+    // Notbremse, dann verlassen
+    run(
+        &mut w,
+        60 * 8,
+        Input {
+            handbrake: true,
+            ..idle()
+        },
+    );
+    assert_eq!(w.player_train.as_ref().unwrap().v, 0.);
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert!(w.player.ride.is_none(), "Führerstand verlassen");
+    assert!(w.player_train.is_some(), "Zug bleibt stehen");
+}

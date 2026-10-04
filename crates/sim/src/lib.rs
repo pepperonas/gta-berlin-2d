@@ -24,6 +24,7 @@ pub mod mission;
 pub mod nightlife;
 pub mod pedestrians;
 pub mod rhythm;
+pub mod ride;
 pub mod roadgraph;
 pub mod save;
 pub mod services;

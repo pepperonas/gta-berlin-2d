@@ -48,6 +48,8 @@ pub struct Play {
     pub demo_combat: bool,
     /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
     pub vehicle_show: bool,
+    /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
+    pub demo_drive: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -248,6 +250,7 @@ impl Play {
             trigger_was: false,
             demo_combat: false,
             vehicle_show: false,
+            demo_drive: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -839,6 +842,7 @@ pub fn input_from(keys: &Keys, driving: bool) -> Input {
         action_held: keys.held.contains(&KeyCode::KeyE) || p.a,
         esp_toggle: pressed(KeyCode::KeyX),
         abs_toggle: pressed(KeyCode::KeyY) || pressed(KeyCode::KeyZ),
+        ride: pressed(KeyCode::KeyG) || pe.down,
         combat: combat_input(keys, driving),
         ..Default::default()
     }
@@ -906,6 +910,51 @@ fn demo_combat_input(w: &World, input: &mut Input) {
 
 /// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
 /// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+/// Aufnahmen: Figur an den Führerstand der nächsten Straßenbahn stellen und übernehmen.
+fn demo_take_tram(w: &mut World) {
+    use berlin_sim::ride::{Near, Ref};
+    use berlin_sim::transit::Mode;
+    let refs: Vec<Ref> = match w.transit.as_ref() {
+        Some(tr) => w
+            .transit_state
+            .tracked
+            .iter()
+            .filter(|(pid, _)| tr.patterns[**pid].mode == Mode::Tram)
+            .flat_map(|(&pid, s)| {
+                s.veh.iter().map(move |v| Ref::Veh {
+                    pid,
+                    key: v.key.clone(),
+                })
+            })
+            .collect(),
+        None => return,
+    };
+    for r in refs {
+        let Some(st) = w.vehicle_state(&r) else {
+            continue;
+        };
+        let f = st.cars[0];
+        if (f.x - w.camera.x).hypot(f.y - w.camera.y) > 900. {
+            continue;
+        }
+        let (fx, fy) = (
+            f.x + f.angle.cos() * (f.l / 2. - 4.),
+            f.y + f.angle.sin() * (f.l / 2. - 4.),
+        );
+        (w.player.x, w.player.y) = (fx, fy);
+        let near = Near {
+            r,
+            mode: Mode::Tram,
+            dist: 0.,
+            car: 0,
+            front: 4.,
+        };
+        if w.take_train(&near) {
+            return;
+        }
+    }
+}
+
 /// Bahnen (railart.js drawTrainCar): Wagenkasten, Dach mit Geräten, Zierlinie, Führerstand mit Scheinwerfern,
 /// Schlusslichter, Stromabnehmer der Straßenbahn; dazu die Straßenbahngleise in der Fahrbahn.
 fn rail_bodies(
@@ -1512,11 +1561,24 @@ impl Game for Play {
         let mut input = if self.bigmap.open {
             Input::default()
         } else {
-            input_from(keys, w2.player.in_car.is_some())
+            // im Auto oder am Führerstand einer Bahn: Gas/Bremse statt Laufen
+            let drives_train = w2
+                .player
+                .ride
+                .as_ref()
+                .is_some_and(|r| r.kind == berlin_sim::ride::RideKind::Driver);
+            input_from(keys, w2.player.in_car.is_some() || drives_train)
         };
         if self.vehicle_show && !w2.loading {
             self.vehicle_show = false;
             w2.vehicle_show();
+        }
+        if self.demo_drive && !w2.loading {
+            if w2.player_train.is_none() {
+                demo_take_tram(w2);
+            } else {
+                input.throttle = 1.;
+            }
         }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
@@ -2032,7 +2094,7 @@ impl Game for Play {
                 depth: 0.6168,
                 color: rgba(0xe0ac69, 1.),
             });
-        } else if w.player.in_car.is_none() {
+        } else if w.player.in_car.is_none() && w.player.ride.is_none() {
             let (x, y, a) = (w.player.x as f32, w.player.y as f32, w.player.angle as f32);
             let depth0 = if w.player.level.lvl >= 1 {
                 0.548
