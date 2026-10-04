@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Dachaufbauten (Schornsteine, Schächte, Oberlichter, Klimageräte, Solar, Terrassen),
+  Gauben, Hauseingänge und die Spätifront.
 - Native Rust-Portierung: Wegweiser an Kreuzungen (Pfeile, Ziele, Bundesstraßen) und Laternen mit Mast und
   leuchtendem Kopf.
 - Native Rust-Portierung: Reifenqualm, Staub, Gischt und Schneestaub, Rauch aus beschädigten Autos und Bremsspuren.

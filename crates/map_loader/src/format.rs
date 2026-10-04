@@ -134,6 +134,8 @@ pub struct Building {
     pub wall_rgb: Option<u32>,
     pub center: Vec2,
     pub seed: u32,
+    /// Hauseingänge: Ring, Kante, Lage entlang der Kante (0…1)
+    pub doors: Vec<(usize, usize, f32)>,
 }
 #[derive(Debug, Clone)]
 pub struct Road {
@@ -381,6 +383,22 @@ impl Tile {
             };
             let seed = (crate::citycodes::hash01((id as u32).wrapping_mul(7).wrapping_add(3)) * 1e9)
                 .floor() as u32;
+            let doors = r
+                .get(5)
+                .and_then(|v| v.as_array())
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|d| {
+                            let d = d.as_array()?;
+                            Some((
+                                d.first()?.as_u64()? as usize,
+                                d.get(1)?.as_u64()? as usize,
+                                d.get(2)?.as_f64()? as f32 / 1000.,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             items.push(Item {
                 id: gid(&r[0])?,
                 feature: Feature::Building(Building {
@@ -395,6 +413,7 @@ impl Tile {
                     wall_rgb: optional(r, 8).checked_sub(1),
                     center,
                     seed,
+                    doors,
                 }),
             });
         }

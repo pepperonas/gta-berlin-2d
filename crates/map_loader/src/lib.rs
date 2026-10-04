@@ -5,6 +5,7 @@ pub mod geom;
 pub mod mesh;
 pub mod overview;
 pub mod projection;
+pub mod roofdecor;
 pub mod roofs;
 pub mod stream;
 use std::path::PathBuf;

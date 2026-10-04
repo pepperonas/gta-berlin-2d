@@ -15,10 +15,13 @@ struct Out {
     @location(4) @interpolate(flat) center: vec2<f32>,
 };
 fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
-    let delta = point.xy - camera.position;
     var h = 0.0;
     // Minikarte (params.y = 1) zeigt alles flach von oben
     if point.z > 0.0 && camera.params.y < 0.5 { h = max(18.0, point.z * 0.5); }
+    return project_h(point, center, depth, h);
+}
+fn project_h(point: vec3<f32>, center: vec2<f32>, depth: f32, h: f32) -> vec4<f32> {
+    let delta = point.xy - camera.position;
     let relative_center = center - camera.position;
     let offset = vec2(relative_center.x * h * 0.0005, -h * 0.5 + relative_center.y * h * 0.00025);
     let screen = (delta + offset) * camera.scale;
@@ -31,6 +34,12 @@ fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
 ) -> Out {
     var out: Out;
     out.position = project(point, center, depth);
+    // Fassadendetails (Tür, Ladenfront): z ist der Anteil der projizierten Wandhöhe, uv.y die Gebäudehöhe
+    if material == 13.0 {
+        var h = 0.0;
+        if camera.params.y < 0.5 { h = max(18.0, uv.y * 0.5) * point.z; }
+        out.position = project_h(point, center, depth, h);
+    }
     out.color = color; out.normal = normal; out.uv = uv; out.material = material; out.center = center;
     // Minikarte: Häuser als dunkle Grundrisse (hud.js MINI: #2b2d33), Boden in seinen Farben
     if camera.params.y > 0.5 && point.z > 0.0 { out.color = vec3(0.169, 0.176, 0.2) / 0.78; }

@@ -384,6 +384,112 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
             mesh.polygon(tri, base, b.height, b.center, |p| axis.local(p));
         }
     }
+    // Fassadendetails (Material 13: z = Anteil der projizierten Wandhöhe, uv.y = Gebäudehöhe; die Schrägansicht
+    // hebt jeden Punkt über dem Boden um mindestens 18 px, so liegen Tür und Ladenfront dennoch am Fuß der Wand)
+    let full_h = (b.height * 0.5).max(18.);
+    let frac = |px: f32| (px / full_h).clamp(0., 1.);
+    let wall_quad = |mesh: &mut Mesh,
+                     a: Vec2,
+                     c: Vec2,
+                     u0: f32,
+                     u1: f32,
+                     z0: f32,
+                     z1: f32,
+                     color: u32,
+                     d: f32| {
+        let dir = c - a;
+        let base = mesh.vertices.len() as u32;
+        for (u, z) in [(u0, z0), (u1, z0), (u1, z1), (u0, z1)] {
+            let p = a + dir * u;
+            mesh.vertices.push(Vertex {
+                point: [p.x, p.y, z],
+                normal: [0., 0., 1.],
+                color: rgb(color),
+                uv: [0., b.height],
+                center: b.center.to_array(),
+                material: 13.,
+                depth: d,
+            });
+        }
+        mesh.indices
+            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    };
+    let door_depth = depth + 0.00004 - 0.00001;
+    for &(ri, ei, t) in &b.doors {
+        let Some(ring) = b.polygon.rings.get(ri) else {
+            continue;
+        };
+        if ring.len() < 2 {
+            continue;
+        }
+        let (a, c) = (ring[ei % ring.len()], ring[(ei + 1) % ring.len()]);
+        let len = (c - a).length();
+        if len < 14. {
+            continue;
+        }
+        let half = 6. / len;
+        let top = frac((22f32).min(full_h * 0.4));
+        wall_quad(
+            mesh,
+            a,
+            c,
+            (t - half).max(0.),
+            (t + half).min(1.),
+            0.,
+            top,
+            0x3b2a1e,
+            door_depth,
+        );
+    }
+    if b.kind == crate::citycodes::building_kind::SPAETI {
+        // Ladenfront an der Wand, die am stärksten zur Kamera (Süden) zeigt: Schaufenster und rotes Band
+        let mut front: Option<(Vec2, Vec2, f32)> = None;
+        for ring in &b.polygon.rings {
+            for (a, c) in edges(ring) {
+                let d = c - a;
+                let len = d.length();
+                if len < 20. {
+                    continue;
+                }
+                let mut n = Vec2::new(d.y, -d.x) / len;
+                if roofdecor_point_inside((a + c) * 0.5 + n * 2., &b.polygon.rings) {
+                    n = -n;
+                }
+                let score = n.y * len;
+                if front.is_none_or(|f| score > f.2) {
+                    front = Some((a, c, score));
+                }
+            }
+        }
+        if let Some((a, c, _)) = front {
+            let len = (c - a).length();
+            let w = len.min(120.);
+            let u0 = (len - w) / 2.;
+            let (ua, ub) = (u0 / len, (u0 + w) / len);
+            wall_quad(
+                mesh,
+                a,
+                c,
+                (u0 + 6.) / len,
+                (u0 + w - 24.) / len,
+                frac(2.),
+                frac(15.),
+                0x9fd3ff,
+                door_depth,
+            );
+            wall_quad(
+                mesh,
+                a,
+                c,
+                ua,
+                ub,
+                frac(15.),
+                frac(27.),
+                0xe03b3b,
+                door_depth,
+            );
+        }
+    }
     for facet in roofs::roof_facets(b, style, scale) {
         if signed_area(&facet.points).abs() < 0.01 {
             continue;
@@ -403,7 +509,110 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
             }
         }
     }
+    // Dachaufbauten und Gauben (roofs.js roofDecor)
+    for d in crate::roofdecor::roof_decor(b, style, scale) {
+        use crate::roofdecor::Kind;
+        let (ax, ay) = (d.angle.cos(), d.angle.sin());
+        let (u, v) = (Vec2::new(ax, ay), Vec2::new(-ay, ax));
+        let rect = |hx: f32, hy: f32, off: Vec2| {
+            let c = d.center + off;
+            vec![
+                c - u * hx - v * hy,
+                c + u * hx - v * hy,
+                c + u * hx + v * hy,
+                c - u * hx + v * hy,
+            ]
+        };
+        let flat = |mesh: &mut Mesh, pts: &[Vec2], color: u32, dd: f32, normal: Vec3| {
+            mesh.polygon(
+                pts,
+                Surface {
+                    color,
+                    material: 0.,
+                    depth: depth - dd,
+                    normal,
+                },
+                b.height,
+                b.center,
+                |p| p,
+            );
+        };
+        if d.kind == Kind::Dormer {
+            // zwei Dachhälften zur Seite geneigt, Stirnseite in Fassadenfarbe mit Fenster zur Traufe
+            let (hx, hy) = (d.half.x, d.half.y);
+            let tilt = |s: f32| Vec3::new(u.x * s * 0.6, u.y * s * 0.6, 1.).normalize();
+            flat(
+                mesh,
+                &rect(hx / 2., hy, -u * hx / 2.),
+                skin,
+                0.00004,
+                tilt(-1.),
+            );
+            flat(
+                mesh,
+                &rect(hx / 2., hy, u * hx / 2.),
+                skin,
+                0.00004,
+                tilt(1.),
+            );
+            let s = if d.out.dot(v) >= 0. { 1. } else { -1. };
+            flat(
+                mesh,
+                &rect(hx, 1.2, v * s * (hy - 1.2)),
+                wall,
+                0.00005,
+                Vec3::Z,
+            );
+            flat(
+                mesh,
+                &rect(hx * 0.5, 0.8, v * s * (hy - 1.)),
+                0x39414d,
+                0.00006,
+                Vec3::Z,
+            );
+            continue;
+        }
+        let (outer, inner) = d.kind.colors();
+        let k = match d.kind {
+            Kind::Chimney => 0.55,
+            Kind::Solar | Kind::Terrace => 0.86,
+            _ => 0.7,
+        };
+        // Schatten zur Seite, Rand, Innenfläche
+        flat(
+            mesh,
+            &rect(d.half.x, d.half.y, Vec2::new(1.2, 1.2)),
+            0x2a2a2a,
+            0.00003,
+            Vec3::Z,
+        );
+        flat(
+            mesh,
+            &rect(d.half.x, d.half.y, Vec2::ZERO),
+            outer,
+            0.00004,
+            Vec3::Z,
+        );
+        flat(
+            mesh,
+            &rect(d.half.x * k, d.half.y * k, Vec2::ZERO),
+            inner,
+            0.00005,
+            Vec3::Z,
+        );
+    }
     Ok(())
+}
+fn roofdecor_point_inside(p: Vec2, rings: &[Vec<Vec2>]) -> bool {
+    let mut inside = false;
+    for r in rings {
+        for (a, b) in edges(r) {
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                inside = !inside;
+            }
+        }
+    }
+    inside
 }
 fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
     if r.passage {

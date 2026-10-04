@@ -1250,3 +1250,21 @@ Rein darstellend: Streuung aus Hashes, nie aus dem Welt-Zufall.
   malt). [Bild](images/native/laternen.png).
 
 Ein Integrationstest liest Wegweiser aus den echten Kacheln; Unit-Tests für Tafellage und Laternenkopf.
+
+## Dachaufbauten, Gauben, Hauseingänge und Spätifront (04.10.2026)
+
+- **`map_loader/roofdecor.rs`** portiert `roofs.js roofDecor` und den Gaubenteil von `roofGeometry`: auf
+  Flachdächern Schornsteine, Lüftungsschächte, Oberlichter, Klimageräte (Hallen), Solarflächen und Dachterrassen –
+  jedes Teil ganz im Grundriss (exakter Rechtecktest nach Liang–Barsky, auch gegen Einbuchtungen und kleine Höfe),
+  beim Berliner Dach nur auf der flachen Mitte; auf Wohnhäusern mit geneigtem Dach Schornsteine auf dem First und
+  Gauben auf den Traufseiten (zwei geneigte Dachhälften, Stirnseite in Fassadenfarbe mit Fenster). Gezeichnet mit
+  Rand, Innenfläche und Schlagschatten in den Farben von `render.js DECOR_COLOR`. Deterministisch aus dem Seed
+  (mulberry32). [Bild](images/native/dachaufbauten.png).
+- **Hauseingänge** (Feld 5 der Gebäudezeile, jetzt dekodiert) als dunkle Tür am Fuß der Wand, die **Spätifront**
+  (Schaufenster und rotes Band an der Wand, die am stärksten zur Kamera zeigt) – über ein neues Material 13: die
+  Schrägansicht hebt jeden Punkt über dem Boden um mindestens 18 px, darum trägt z dort den Anteil der projizierten
+  Wandhöhe und `uv.y` die Gebäudehöhe, und der Vertex-Shader rechnet den Punkt genau wie die Wand.
+  **Abweichung:** ohne den Schriftzug „SPÄTI 24/7“.
+
+Unit-Tests: Aufbauten liegen ganz im Grundriss, Wohnhäuser bekommen Schornsteine und Gauben, Kleinbauten nichts,
+der Rechtecktest erkennt eine überstehende Ecke.
