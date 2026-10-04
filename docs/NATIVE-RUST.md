@@ -1430,3 +1430,21 @@ Abbiegeverbote gelten im Auto und nicht zu Fuß, Abbiegekosten (rechts < links, 
 Einrasten und Route auf derselben Kante; Navigation: Ankunft, Neuberechnung beim Abkommen, „keine Route“ einmal
 gemeldet, Fortschritt nur vorwärts; Integration: Routen zwischen den drei Missionsorten im Auto und zu Fuß ohne
 Lücken. Befehlszeile: `ziel`, Alias, `aus`.
+
+## Über das Spiel (04.10.2026)
+
+**Neu gegenüber der JS-Fassung.** Titel- und Pausenmenü haben den Eintrag „Über das Spiel“ (`game/about.rs`) mit
+drei Reitern: **Spiel** (Version, Entwicklung, Hinweise – inoffizielles Fanprojekt ohne Verbindung zu Rockstar
+Games/Take-Two –, Technik), **Lizenzen** (Datenquellen: OpenStreetMap ODbL, Geoportal Berlin dl-de/zero-2.0, VBB
+CC BY 3.0, gostumblr; Schrift font8x8; alle Rust-Pakete mit Lizenz, vorneweg nach Lizenz gezählt) und **Changelog**
+(`CHANGELOG.md`, Markdown zu Klartext). Bedienung: Links/Rechts, A/D, LB/RB oder Klick wechseln den Reiter;
+Hoch/Runter, Stick, Mausrad, Bild↑/↓, Pos1/Ende rollen; Esc/B/Rechtsklick zurück.
+
+Nichts davon ist abgetippt: die Version kommt aus `package.json` (die Crate-Version 0.1.0 ist intern – der
+Titelbildschirm zeigte sie bisher fälschlich als Spielversion), der Changelog per `include_str!`, die Paketliste aus
+`crates/game/src/thirdparty.tsv`, erzeugt von `node tools/thirdparty.mjs` aus `cargo metadata` (der Commit-Hook
+erneuert sie, wenn `Cargo.lock` sich ändert; ein Test vergleicht sie mit `Cargo.lock`). Die Schrift kennt kein „•“
+und keine Hoch/Runter-Pfeile – Aufzählungspunkte werden als kleine Quadrate gezeichnet. Das Titelmenü setzt ab
+sieben Einträgen enger (`Menu::spacing`), damit es über der Fußzeile endet.
+[Reiter Spiel](images/native/ueber-das-spiel.png), [Lizenzen](images/native/ueber-lizenzen.png).
+`--bildschirm ueber|lizenzen|changelog` öffnet die Seite für Aufnahmen.

@@ -54,6 +54,7 @@ pub struct Play {
     /// frei belegbare Steuerung (settings.json `bindings`) und ihre Tafel
     pub bindings: crate::bindings::Bindings,
     bindmenu: crate::bindmenu::BindMenu,
+    pub about: crate::about::About,
     /// Kamerazoom über die Belegung (Kamera näher/weiter), Faktor auf den Spielzoom
     zoom_user: f32,
     /// Controller-Vibration: Regeln und die nächste abzuholende
@@ -147,6 +148,8 @@ pub enum Screen {
     Stats(bool),
     /// Belegungstafel (aus der Steuerungstafel); merkt sich die Herkunft wie `Controls`
     Bindings(bool),
+    /// „Über das Spiel“; merkt sich die Herkunft wie `Controls`
+    About(bool),
 }
 
 /// Wie das Programm startet.
@@ -253,6 +256,10 @@ impl Play {
             }
             Screen::Stats(from_title) => {
                 crate::menu::draw_stats(out, &self.stats, &self.stats_total, !from_title);
+                return;
+            }
+            Screen::About(from_title) => {
+                self.about.draw(out, !from_title);
                 return;
             }
             _ => {}
@@ -409,6 +416,7 @@ impl Play {
             nav: crate::nav::Nav::start(root.to_path_buf()),
             bindings,
             bindmenu: Default::default(),
+            about: Default::default(),
             zoom_user: 1.,
             rumbler: Default::default(),
             rumble_out: None,
@@ -808,6 +816,23 @@ impl Play {
             a.play(berlin_audio::synth::Sfx::Ui);
         }
     }
+    /// Von einer Tafel (Steuerung, Statistik, Über das Spiel) zurück zum Titel bzw. in die Pause.
+    fn back_from_page(&mut self, from_title: bool) {
+        if from_title {
+            self.screen = Screen::Title;
+            return;
+        }
+        // zurück in die Pause: deren Menü (die Tafel ist auch vom Titel aus erreichbar)
+        let keep = self
+            .menu
+            .items
+            .iter()
+            .any(|i| i.action == crate::menu::Action::Resume);
+        self.screen = Screen::Paused;
+        if !keep {
+            self.menu = crate::menu::pause_menu();
+        }
+    }
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
     fn step_screens(&mut self, keys: &Keys, dt: f64) -> bool {
         use crate::menu::{Action, Pick};
@@ -823,6 +848,7 @@ impl Play {
                     | Screen::Controls(false)
                     | Screen::Stats(false)
                     | Screen::Bindings(false)
+                    | Screen::About(false)
             ) || (self.screen == Screen::Playing
                 && (self.teleport.is_some() || self.console.open)))
         {
@@ -937,7 +963,11 @@ impl Play {
             }
             Screen::Title => {
                 if !self.world.loading {
-                    let mp = self.menu.mouse(self.hud_width / 2., 350., &keys.mouse);
+                    let mp = self.menu.mouse(
+                        self.hud_width / 2.,
+                        crate::menu::TITLE_MENU_Y,
+                        &keys.mouse,
+                    );
                     match mp.or(self.menu.input(mk)) {
                         Some(Pick::Choose(Action::Continue)) => {
                             self.ui_sound();
@@ -951,6 +981,11 @@ impl Play {
                             self.screen = Screen::Controls(true)
                         }
                         Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(true),
+                        Some(Pick::Choose(Action::About)) => {
+                            self.ui_sound();
+                            self.about = Default::default();
+                            self.screen = Screen::About(true)
+                        }
                         Some(Pick::Choose(Action::Quit)) => {
                             self.write_stats();
                             self.quit = true
@@ -998,6 +1033,10 @@ impl Play {
                     }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
                     Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(false),
+                    Some(Pick::Choose(Action::About)) => {
+                        self.about = Default::default();
+                        self.screen = Screen::About(false)
+                    }
                     Some(Pick::Choose(Action::Title)) => {
                         self.write_stats();
                         self.screen = Screen::Title;
@@ -1056,24 +1095,27 @@ impl Play {
                 }
                 true
             }
+            Screen::About(from_title) => {
+                let w = self.hud_width;
+                let k = crate::about::AboutKeys::from(keys, |p| crate::about::tab_at(w, p));
+                match self.about.step(k, dt as f32) {
+                    crate::about::Out::Back => {
+                        self.ui_sound();
+                        self.back_from_page(from_title);
+                    }
+                    crate::about::Out::Switched => self.ui_sound(),
+                    crate::about::Out::Stay => {}
+                }
+                if from_title {
+                    self.world.update(&Input::default(), dt);
+                }
+                true
+            }
             Screen::Controls(from_title) | Screen::Stats(from_title) => {
                 let click = keys.mouse.left_pressed || keys.mouse.right_pressed;
                 if mk.back || mk.confirm || click {
                     self.ui_sound();
-                    if from_title {
-                        self.screen = Screen::Title;
-                    } else {
-                        // zurück in die Pause: deren Menü (die Tafel ist auch vom Titel aus erreichbar)
-                        let keep = self
-                            .menu
-                            .items
-                            .iter()
-                            .any(|i| i.action == crate::menu::Action::Resume);
-                        self.screen = Screen::Paused;
-                        if !keep {
-                            self.menu = crate::menu::pause_menu();
-                        }
-                    }
+                    self.back_from_page(from_title);
                 }
                 if from_title {
                     self.world.update(&Input::default(), dt);
@@ -2356,7 +2398,11 @@ impl Game for Play {
         let c = self.world.camera;
         if matches!(
             self.screen,
-            Screen::Title | Screen::Controls(true) | Screen::Stats(true) | Screen::Bindings(true)
+            Screen::Title
+                | Screen::Controls(true)
+                | Screen::Stats(true)
+                | Screen::Bindings(true)
+                | Screen::About(true)
         ) {
             // langsame Kreisfahrt über dem Kiez (main.js demo-Kamera, kleiner Radius: geladene Kacheln)
             let t = self.world.time;
@@ -3471,9 +3517,17 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
+        // „Über das Spiel“ aus der Pause und zurück in die Pause
         for _ in 0..5 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::About(false));
+        press(&mut p, Some(KeyCode::ArrowRight));
+        assert_eq!(p.about.tab, crate::about::Tab::Licenses);
+        press(&mut p, Some(KeyCode::Escape));
+        assert_eq!(p.screen, Screen::Paused);
+        press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::Enter));
         assert_eq!(p.screen, Screen::Title);
         assert!(p.menu.items[0].enabled && p.menu.index == 0);
@@ -3491,6 +3545,12 @@ mod tests {
         assert!(p.stats.get("timePlayed") > 0. && p.stats_total.get("timePlayed") > 0.);
         let file = std::fs::read_to_string(dir.join("stats.json")).expect("stats.json");
         assert!(file.contains("timePlayed"));
+        press(&mut p, Some(KeyCode::Escape));
+        assert_eq!(p.screen, Screen::Title);
+        // Über das Spiel vom Titel aus, zurück zum Titel
+        press(&mut p, Some(KeyCode::ArrowDown));
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.screen, Screen::About(true));
         press(&mut p, Some(KeyCode::Escape));
         assert_eq!(p.screen, Screen::Title);
         // Beenden

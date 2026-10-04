@@ -1,6 +1,10 @@
 #!/bin/sh
-# Hält die README-Badges (docs/badges/) bei jedem Commit aktuell: Codezeilen, Tests, Versionen.
-# Einrichten (einmal je Klon): git config core.hooksPath tools/githooks
-# Gezählt wird der Arbeitsbaum, nicht der Index — für einen Teil-Commit ist der Wert darum der Stand der Platte.
+# Hält generierte Dateien bei jedem Commit aktuell. Einrichten (einmal je Klon): git config core.hooksPath tools/githooks
+# - README-Badges (docs/badges/): Codezeilen, Tests, Versionen. Gezählt wird der Arbeitsbaum, nicht der Index.
+# - Lizenzliste der Rust-Pakete (crates/game/src/thirdparty.tsv), wenn Cargo.lock im Commit steckt.
 node tools/badges.mjs || exit 1
 git add docs/badges
+if git diff --cached --name-only | grep -qx Cargo.lock; then
+  node tools/thirdparty.mjs || exit 1
+  git add crates/game/src/thirdparty.tsv
+fi

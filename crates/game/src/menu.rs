@@ -5,6 +5,8 @@ use berlin_engine::hud::{Align, Hud};
 use berlin_engine::{KeyCode, Keys};
 
 pub const YELLOW: [f32; 4] = [1., 0.827, 0.239, 1.];
+/// Mitte des ersten Eintrags im Titelmenü.
+pub const TITLE_MENU_Y: f32 = 316.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -17,6 +19,8 @@ pub enum Action {
     Restart,
     Title,
     Stats,
+    /// Seite „Über das Spiel“
+    About,
     /// Ergebnis: weiter (Auftrag zurücksetzen, Spieler bleibt), erneut versuchen, frei weiterspielen
     Next,
     Retry,
@@ -105,14 +109,24 @@ impl Menu {
         }
         k.back.then_some(Pick::Back)
     }
+    /// Zeilenabstand und Knopfhöhe: ab sieben Einträgen enger, damit das Menü über der Fußzeile endet.
+    pub fn spacing(&self) -> (f32, f32) {
+        if self.items.len() >= 7 {
+            (50., 42.)
+        } else {
+            (58., 48.)
+        }
+    }
     /// Eintrag unter dem Punkt (HUD-Einheiten), so wie `draw_menu` ihn zeichnet.
     pub fn at(&self, cx: f32, y: f32, p: glam::Vec2) -> Option<usize> {
         if (p.x - cx).abs() > 190. {
             return None;
         }
-        let rel = p.y - (y - 24.);
-        let i = (rel / 58.).floor();
-        (i >= 0. && rel - i * 58. <= 48. && (i as usize) < self.items.len()).then_some(i as usize)
+        let (step, height) = self.spacing();
+        let rel = p.y - (y - height / 2.);
+        let i = (rel / step).floor();
+        (i >= 0. && rel - i * step <= height && (i as usize) < self.items.len())
+            .then_some(i as usize)
     }
     /// Maus: Zeigen wählt aus, Klicken bestätigt (deaktivierte Einträge reagieren nicht).
     pub fn mouse(&mut self, cx: f32, y: f32, m: &berlin_engine::Mouse) -> Option<Pick> {
@@ -149,6 +163,7 @@ pub fn title_menu(has_save: bool) -> Menu {
         item(Action::New, "Neues Spiel"),
         item(Action::Controls, "Steuerung"),
         item(Action::Stats, "Statistik"),
+        item(Action::About, "Über das Spiel"),
         item(Action::Quit, "Beenden"),
     ]);
     m.index = if has_save { 0 } else { 1 };
@@ -162,6 +177,7 @@ pub fn pause_menu() -> Menu {
         item(Action::Restart, "Mission neu starten"),
         item(Action::Controls, "Steuerung"),
         item(Action::Stats, "Statistik"),
+        item(Action::About, "Über das Spiel"),
         item(Action::Title, "Zum Hauptmenü"),
     ])
 }
@@ -315,15 +331,16 @@ pub fn draw_stats(
 /// Menüeinträge untereinander, ab y (Mitte der ersten Zeile), zentriert bei cx.
 pub fn draw_menu(h: &mut Hud, m: &Menu, cx: f32, y: f32) {
     let width = 380.;
+    let (step, height) = m.spacing();
     for (i, it) in m.items.iter().enumerate() {
-        let yy = y + i as f32 * 58.;
+        let yy = y + i as f32 * step;
         let sel = i == m.index;
         let bg = if sel {
             YELLOW
         } else {
             [0.06, 0.067, 0.094, 0.7]
         };
-        h.rect(cx - width / 2., yy - 24., width, 48., bg, 10.);
+        h.rect(cx - width / 2., yy - height / 2., width, height, bg, 10.);
         let color = if sel {
             [0.067, 0.067, 0.067, 1.]
         } else if it.enabled {
@@ -400,12 +417,12 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool) {
             true,
         );
     } else {
-        draw_menu(h, m, vw / 2., 350.);
+        draw_menu(h, m, vw / 2., TITLE_MENU_Y);
         footer(h, "Enter / A: Auswählen");
     }
     let grey = [0.6, 0.6, 0.6, 1.];
     h.text(
-        &format!("v{} · native Fassung", env!("CARGO_PKG_VERSION")),
+        &format!("v{} · native Fassung", crate::about::game_version()),
         vw - 36.,
         720. - 16.,
         14.,
@@ -721,17 +738,29 @@ mod tests {
     fn mouse_points_and_clicks_entries() {
         use glam::Vec2;
         let mut m = pause_menu();
-        // Einträge bei y = 280 + i·58, je 48 hoch, 380 breit um cx
-        assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
-        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 58. * 2.)), Some(2));
+        // sieben Einträge: enger gesetzt (y = 280 + i·50, je 42 hoch), 380 breit um cx
+        assert_eq!(m.spacing(), (50., 42.));
         assert_eq!(
-            m.at(640., 280., Vec2::new(640., 280. + 30.)),
+            result_menu(false).spacing(),
+            (58., 48.),
+            "kurze Menüs behalten den weiten Abstand"
+        );
+        assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
+        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 50. * 2.)), Some(2));
+        assert_eq!(
+            m.at(640., 280., Vec2::new(640., 280. + 25.)),
             None,
             "Lücke zwischen zwei Einträgen"
         );
+        // das Titelmenü endet über der Fußzeile
+        let t = title_menu(true);
+        let (step, height) = t.spacing();
+        assert!(
+            TITLE_MENU_Y + (t.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10. - 16.
+        );
         assert_eq!(m.at(640., 280., Vec2::new(900., 280.)), None);
         let mut mouse = berlin_engine::Mouse {
-            hud: Some(Vec2::new(640., 280. + 58.)),
+            hud: Some(Vec2::new(640., 280. + 50.)),
             moved: true,
             ..Default::default()
         };

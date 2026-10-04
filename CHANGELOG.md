@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Menüeintrag „Über das Spiel“ (Titel- und Pausenmenü) mit drei Reitern: Spiel
+  (Version, Entwicklung, Hinweise, Technik), Lizenzen (Datenquellen und alle 326 Rust-Pakete mit Lizenz) und
+  Changelog. Alles aus Repo-Dateien gelesen; ein Test prüft die Paketliste gegen `Cargo.lock`. Der Titelbildschirm
+  zeigt jetzt die Spielversion statt der internen Crate-Version.
 - README-Badges (Version, Codezeilen je Sprache, Unit-Tests je Sprache, Rust/wgpu/winit/cpal, Karte, Kacheln,
   OSM-Stand u. a.), erzeugt von `tools/badges.mjs` und bei jedem Commit vom Hook `tools/githooks/pre-commit`
   aktualisiert (`git config core.hooksPath tools/githooks`).
