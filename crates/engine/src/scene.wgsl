@@ -12,6 +12,7 @@ struct Out {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec3<f32>, @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>, @location(3) @interpolate(flat) material: f32,
+    @location(4) @interpolate(flat) center: vec2<f32>,
 };
 fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
     let delta = point.xy - camera.position;
@@ -30,7 +31,7 @@ fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
 ) -> Out {
     var out: Out;
     out.position = project(point, center, depth);
-    out.color = color; out.normal = normal; out.uv = uv; out.material = material;
+    out.color = color; out.normal = normal; out.uv = uv; out.material = material; out.center = center;
     // Minikarte: Häuser als dunkle Grundrisse (hud.js MINI: #2b2d33), Boden in seinen Farben
     if camera.params.y > 0.5 && point.z > 0.0 { out.color = vec3(0.169, 0.176, 0.2) / 0.78; }
     return out;
@@ -74,6 +75,69 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     }
     let light = 0.60 + 0.40 * max(0.0, dot(normalize(in.normal), normalize(camera.sun.xyz)));
     return vec4(linear_color(clamp(color * light, vec3(0.0), vec3(1.0))), 1.0);
+}
+// Erleuchtete Fenster (windows.js): eigener Durchgang nach dem Licht, damit Glühlampenlicht nachts nicht mit der
+// Umgebung abgedunkelt wird. Gleiche Fassaden, Tiefe LessEqual ohne Schreiben; alles außer brennenden Scheiben wird
+// verworfen. Haus = Grundrissmitte, Fassade = Richtung der Wand, je Etage bilden 2–4 Fenster eine Wohnung.
+// camera.params.z = Anteil brennender Fenster (Tagesgang), camera.sun.w = Spieluhr in Minuten.
+fn mix32(x0: u32) -> u32 {
+    var x = x0;
+    x = (x ^ (x >> 16u)) * 0x7feb352du;
+    x = (x ^ (x >> 15u)) * 0x846ca68bu;
+    return x ^ (x >> 16u);
+}
+fn whash(a: u32, b: u32, c: u32, d: u32, e: u32) -> f32 {
+    var x = mix32(a ^ 0x9e3779b9u);
+    x = mix32(x ^ b);
+    x = mix32(x ^ c);
+    x = mix32(x ^ d);
+    x = mix32(x ^ e);
+    return f32(x >> 8u) / 16777216.0;
+}
+@fragment fn window_fs(in: Out) -> @location(0) vec4<f32> {
+    let frac = camera.params.z;
+    let minutes = camera.sun.w;
+    let m = minutes - floor(minutes / 1440.0) * 1440.0;
+    let late = m < 330.0 || m > 1380.0;
+    if in.material != 11.0 || camera.params.y > 0.5 || (frac <= 0.001 && !late) { discard; }
+    let p = in.uv / camera.params.x;
+    let cell_size = vec2(2.5, 3.0);
+    let cell = floor(p / cell_size);
+    let st = fract(p / cell_size);
+    let glass = st.x > 0.35 && st.x < 0.72 && st.y > 0.28 && st.y < 0.80;
+    if !glass { discard; }
+    let seed = bitcast<u32>(i32(floor(in.center.x))) * 73856093u ^ bitcast<u32>(i32(floor(in.center.y))) * 19349663u;
+    let n = normalize(in.normal.xy + vec2(1e-6, 0.0));
+    let face = u32(i32(round(atan2(n.y, n.x) / 6.2831853 * 16.0)) + 16) % 16u;
+    let col = u32(max(cell.x, 0.0));
+    let row = u32(max(cell.y, 0.0));
+    let flat_w = 2.0 + floor(whash(seed, face, row, 1u, 0u) * 3.0);
+    let flat_i = u32(floor((f32(col) + floor(whash(seed, face, row, 2u, 0u) * flat_w)) / flat_w));
+    let home = whash(seed, face, row, flat_i, 3u);
+    let room = whash(seed, face, row, col, 4u);
+    var on = 0.78 * home + 0.22 * room < frac;
+    // nachts kurz Licht in einem einzelnen Raum (Bad, Küche), je 9 Minuten neu ausgewürfelt
+    if !on && late { on = whash(seed, face, row, col ^ (u32(floor(minutes / 9.0)) * 2654435761u), 5u) < 0.012; }
+    if !on { discard; }
+    let k = whash(seed, face, row, flat_i, 6u);
+    let evening = m > 1080.0 || m < 120.0;
+    // warm, neutral, kaltweiß, Fernseher (flackert bläulich), gedimmt hinter dem Vorhang
+    var c = vec3(1.0, 0.812, 0.471);
+    var glow = 1.0;
+    if k >= 0.58 && k < 0.78 { c = vec3(1.0, 0.925, 0.753); }
+    else if k >= 0.78 && k < 0.87 { c = vec3(0.894, 0.925, 1.0); }
+    else if k >= 0.87 && k < 0.95 && evening {
+        c = vec3(0.616, 0.737, 1.0);
+        let fx = f32(col) * 0.7 + in.center.x * 0.001;
+        let fy = f32(row) * 1.3 + in.center.y * 0.001;
+        glow = 0.55 + 0.45 * abs(sin(minutes * 3.1 + fx) * sin(minutes * 7.3 + fy));
+    }
+    else if k >= 0.95 { c = vec3(0.878, 0.592, 0.353); }
+    // Vorhang: nur der untere Teil der Scheibe leuchtet
+    let curtain = whash(seed, face, row, col, 7u) < 0.22;
+    let gy = (st.y - 0.28) / 0.52;
+    if curtain && gy > 0.55 { discard; }
+    return vec4(linear_color(c * glow), 1.0);
 }
 struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32>, @location(1) uv: vec2<f32> };
 @vertex fn sprite_vs(

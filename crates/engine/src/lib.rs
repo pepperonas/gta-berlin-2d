@@ -48,6 +48,9 @@ pub struct Lighting {
     pub shadow_strength: f32,
     pub ambient: [f32; 3],
     pub dark: f32,
+    /// Anteil brennender Fenster (Tagesgang, `daylight.js windowsLit`) und Spieluhr in Minuten
+    pub windows: f32,
+    pub minutes: f32,
 }
 impl Default for Lighting {
     /// 13 Uhr: Sonne im Süden, kurze Schatten nach Norden, volles Tageslicht.
@@ -60,6 +63,8 @@ impl Default for Lighting {
             shadow_strength: 1.,
             ambient: [1.; 3],
             dark: 0.,
+            windows: 0.,
+            minutes: 780.,
         }
     }
 }

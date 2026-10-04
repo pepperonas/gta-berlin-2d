@@ -175,6 +175,8 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
         shadow_strength: l.sun.strength as f32,
         ambient: l.ambient.map(|c| c as f32),
         dark: l.dark as f32,
+        windows: l.windows_lit as f32,
+        minutes: l.minutes as f32,
     }
 }
 

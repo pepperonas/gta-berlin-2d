@@ -1057,3 +1057,23 @@ gewürfelt wird. 147 Rust-Tests.
 **Validierung:** Unit-Tests für Adressen, Wochenschnitt-Erkennung und das Zusammenführen; ein Netz-Test
 (`cargo test -p gta-berlin -- --ignored live_feed`) holt gostumblr mit sieben Wochentagen. Live geprüft: 121 Bars.
 149 Rust-Tests (dazu einer, der Netz braucht).
+
+## Erleuchtete Fenster (04.10.2026)
+
+Port von `windows.js`: Abends, nachts und bei trübem Wetter brennt Licht in einzelnen Wohnungen. Entschieden wird je
+Fenster im Fragment-Shader (`scene.wgsl window_fs`), deterministisch aus einem Hash von Haus (Grundrissmitte),
+Fassade (Wandrichtung in 16 Stufen), Etage und Wohnung: je Etage bilden zwei bis vier Fenster eine Wohnung, die
+Räume einer Wohnung gehen kurz nacheinander an. Wie viele brennen, gibt der Tagesgang vor
+(`daylight windows_lit`, mit Wetter); nachts geht hier und da kurz Licht in einem einzelnen Raum an (je 9 Minuten
+neu). Lichtfarben warm, neutral, kaltweiß, gedimmt und abends bläulich flackernde Fernseher; ein Teil der Fenster hat
+den Vorhang halb zu.
+- **Eigener Durchgang nach dem Licht:** Die Lichtkarte multipliziert die Szene mit dem Umgebungslicht; ein Fenster in
+  der Fassade wäre nachts mit abgedunkelt. Deshalb zeichnet eine zweite Pipeline dieselben Gebäude-Meshes nach den
+  Licht-Compositen, mit Tiefentest `LessEqual` ohne Tiefenschreiben, und verwirft alles außer brennenden Scheiben.
+  Am Tag (Anteil 0, außerhalb der Nachtstunden) entfällt der Durchgang ganz.
+- Uniform: `params.z` = Anteil brennender Fenster, `sun.w` = Spieluhr in Minuten (`Lighting::windows/minutes`).
+  [Bild](images/native/fenster.png), 22 Uhr.
+
+**Abweichungen:** Büros, Schulen und Hallen haben in JS einen eigenen Tagesgang; die Gebäudeart steht nicht im
+Mesh, hier folgen alle Häuser dem Wohnungs-Tagesgang. Das Fensterlicht strahlt nicht in die Lichtkarte ab und wird
+im Nebel nicht gedämpft. Geprüft per Aufnahme (Nacht: Fenster, Tag: kein einziges warmes Fensterpixel).

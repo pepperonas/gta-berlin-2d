@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: erleuchtete Fenster am Abend, in der Nacht und bei trübem Wetter (Wohnungen, Lichtfarben,
+  Fernsehflackern, Vorhänge), im eigenen Durchgang nach dem Licht.
 - Native Rust-Portierung: U-/S-Bahnhöfe und Bahnhofseingänge auf der Minikarte; Bar-Auslastung live aus dem Netz
   (`--bars live|URL`, Befehl `bars live`, alle zwei Minuten neu).
 - Native Rust-Portierung: zwölf Menschen-Typen nach Bezirk, Uhrzeit und Wochentag (Tempo und Aussehen), Jogger

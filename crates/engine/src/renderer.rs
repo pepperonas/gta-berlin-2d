@@ -33,6 +33,7 @@ pub(crate) struct Renderer {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
+    window_pipeline: wgpu::RenderPipeline,
     sprite_pipeline: wgpu::RenderPipeline,
     body_pipeline: wgpu::RenderPipeline,
     bodies: Option<wgpu::Buffer>,
@@ -164,38 +165,47 @@ impl Renderer {
             stencil: Default::default(),
             bias: Default::default(),
         };
-        let make_pipeline =
-            |label, vs, fs, stride, step_mode, attributes: &[wgpu::VertexAttribute], blend| {
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some(label),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: Some(vs),
-                        compilation_options: Default::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: stride,
-                            step_mode,
-                            attributes,
-                        }],
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: Some(fs),
-                        compilation_options: Default::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: config.format,
-                            blend,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    primitive: Default::default(),
-                    depth_stencil: Some(depth_state.clone()),
-                    multisample: Default::default(),
-                    multiview_mask: None,
-                    cache: None,
-                })
-            };
+        let make_pipeline = |label,
+                             vs,
+                             fs,
+                             stride,
+                             step_mode,
+                             attributes: &[wgpu::VertexAttribute],
+                             blend,
+                             write: bool| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some(vs),
+                    compilation_options: Default::default(),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: stride,
+                        step_mode,
+                        attributes,
+                    }],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(fs),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: Default::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    depth_write_enabled: Some(write),
+                    ..depth_state.clone()
+                }),
+                multisample: Default::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
         let pipeline = make_pipeline(
             "Berlin indexed meshes",
             "vs",
@@ -204,6 +214,18 @@ impl Renderer {
             wgpu::VertexStepMode::Vertex,
             &attrs,
             None,
+            true,
+        );
+        // erleuchtete Fenster: dieselben Fassaden nach dem Licht, ohne Tiefe zu schreiben
+        let window_pipeline = make_pipeline(
+            "Berlin lit windows",
+            "vs",
+            "window_fs",
+            size_of::<Vertex>() as u64,
+            wgpu::VertexStepMode::Vertex,
+            &attrs,
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
         );
         let sprite_pipeline = make_pipeline(
             "Berlin instanced atlas",
@@ -213,6 +235,7 @@ impl Renderer {
             wgpu::VertexStepMode::Instance,
             &sprite_attrs,
             Some(wgpu::BlendState::ALPHA_BLENDING),
+            true,
         );
         let body_pipeline = make_pipeline(
             "Berlin instanced bodies",
@@ -222,6 +245,7 @@ impl Renderer {
             wgpu::VertexStepMode::Instance,
             &body_attrs,
             Some(wgpu::BlendState::ALPHA_BLENDING),
+            true,
         );
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera / sun"),
@@ -447,6 +471,7 @@ impl Renderer {
             queue,
             config,
             pipeline,
+            window_pipeline,
             sprite_pipeline,
             body_pipeline,
             bodies: None,
@@ -789,6 +814,18 @@ impl Renderer {
             pass.set_pipeline(&self.light.ambient_composite);
             pass.draw(0..3, 0..1);
         }
+        let m = self.lighting.minutes.rem_euclid(1440.);
+        if self.lighting.windows > 0.001 || !(330. ..=1380.).contains(&m) {
+            pass.set_pipeline(&self.window_pipeline);
+            pass.set_bind_group(1, &self.atlas_bind, &[]);
+            for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+                if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
+                    pass.set_vertex_buffer(0, vertices.slice(..));
+                    pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+                }
+            }
+        }
         drop(pass);
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -979,8 +1016,8 @@ impl Renderer {
         };
         let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
-        uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), 0.]);
-        uniform.extend([self.scale, 0., 0., 0.]);
+        uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
+        uniform.extend([self.scale, 0., l.windows, 0.]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
         uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
         self.queue
