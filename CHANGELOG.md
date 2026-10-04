@@ -50,6 +50,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Ergebnismenü nach Aufträgen (Weiter / Erneut versuchen / Frei weiterspielen, Welt steht)
   und Statistik (`sim/stats.rs` nach `stats.js`; dieses Spiel und insgesamt, `stats.json` neben dem Spielstand,
   aus Titel und Pause erreichbar).
+- Native Rust-Fassung: Kampf (`sim/combat.rs` nach `combat.js`): sechs Waffen und Tritt, Schüsse als Strahlen,
+  Nahkampfbogen, Zielhilfe am Stick, Kämpfer unter den Passanten, beschossene Fahrer fliehen, K. o. mit
+  Krankenhaus und Gebühr; Mündungsfeuer, Leuchtspuren, Blut, Lebensleiste, Waffenanzeige, Kampfklänge und
+  Kampfstatistik. `--kampf-demo` für Aufnahmen.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

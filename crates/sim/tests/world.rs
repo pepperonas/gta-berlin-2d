@@ -590,3 +590,202 @@ fn statistics_track_distance_time_and_entering() {
     assert!(game.get("timeCar") > 0.4);
     assert_eq!(game, total, "beide Stände bekommen dasselbe");
 }
+
+/// Passanten vor die Spielfigur stellen und ruhig halten (für Treffertests).
+fn ped_in_front(w: &mut World, dist: f64) -> usize {
+    let (x, y, lvl) = (w.player.x, w.player.y, w.player.level.lvl);
+    let i = w
+        .peds
+        .iter()
+        .position(|p| p.state != PedState::Dead && !berlin_sim::combat::is_fighter(p.id))
+        .expect("Passant");
+    let p = &mut w.peds[i];
+    (p.x, p.y) = (x + dist, y);
+    p.level.lvl = lvl;
+    p.state = PedState::Idle;
+    p.t = 99.;
+    i
+}
+
+#[test]
+fn shooting_and_melee_hurt_pedestrians() {
+    use berlin_sim::combat::{CombatInput, Target, cast_ray};
+    use berlin_sim::events::Event;
+    let mut w = world(21);
+    run(&mut w, 10, idle());
+    // eine freie Schusslinie nach Osten suchen (die Figur steht an einer Straße)
+    let lvl = w.player.level.lvl;
+    let (mut ang, mut found) = (0., false);
+    for k in 0..16 {
+        let a = k as f64 * std::f64::consts::TAU / 16.;
+        let (x, y) = (w.player.x, w.player.y);
+        if cast_ray(&mut w, x, y, a, 80., lvl).hit.is_none() {
+            ang = a;
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "keine freie Richtung");
+    let i = ped_in_front(&mut w, 0.);
+    let (x, y) = (w.player.x, w.player.y);
+    (w.peds[i].x, w.peds[i].y) = (x + ang.cos() * 50., y + ang.sin() * 50.);
+    let id = w.peds[i].id;
+    assert_eq!(
+        cast_ray(&mut w, x, y, ang, 200., lvl).hit,
+        Some(Target::Ped(i))
+    );
+    // Pistole wählen und zielen
+    let aim = CombatInput {
+        aim_x: ang.cos(),
+        aim_y: ang.sin(),
+        ..Default::default()
+    };
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: CombatInput {
+                weapon_slot: 4,
+                ..aim
+            },
+            ..idle()
+        },
+    );
+    assert_eq!(w.player.combat.weapon().id, "pistol");
+    run(&mut w, 15, idle());
+    let mut shots = 0;
+    for _ in 0..40 {
+        w.update(
+            &Input {
+                combat: CombatInput {
+                    fire: true,
+                    fire_pressed: true,
+                    ..aim
+                },
+                ..idle()
+            },
+            DT,
+        );
+        shots += w
+            .events
+            .iter()
+            .filter(|e| matches!(e, Event::Shot { .. }))
+            .count();
+        if w.events
+            .iter()
+            .any(|e| matches!(e, Event::Kill { player: true, .. }))
+        {
+            break;
+        }
+        w.update(
+            &Input {
+                combat: aim,
+                ..idle()
+            },
+            DT,
+        );
+    }
+    let p = w.peds.iter().find(|p| p.id == id).expect("Passant noch da");
+    assert_eq!(p.state, PedState::Dead, "drei Pistolentreffer à 34 töten");
+    assert!((3..=6).contains(&shots), "{shots} Schüsse");
+    assert_eq!(w.player.combat.mag[3], 12 - shots as u32);
+    // Nahkampf: ein Faustschlag aus nächster Nähe trifft und lässt bluten
+    let j = ped_in_front(&mut w, 0.);
+    let (x, y) = (w.player.x, w.player.y);
+    (w.peds[j].x, w.peds[j].y) = (x + ang.cos() * 14., y + ang.sin() * 14.);
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: CombatInput {
+                weapon_slot: 1,
+                ..aim
+            },
+            ..idle()
+        },
+    );
+    run(&mut w, 20, idle());
+    let hp = w.peds[j].hp;
+    w.update(
+        &Input {
+            combat: CombatInput { fire: true, ..aim },
+            ..idle()
+        },
+        DT,
+    );
+    assert!(w.events.iter().any(|e| matches!(
+        e,
+        Event::Swing {
+            hit: true,
+            npc: false,
+            ..
+        }
+    )));
+    assert!(w.events.iter().any(|e| matches!(e, Event::Blood { .. })));
+    assert!(w.peds[j].hp <= hp - 20. + 1e-9, "Faust: 20 Schaden");
+}
+
+#[test]
+fn knockout_brings_the_player_to_a_hospital() {
+    use berlin_sim::combat::{PLAYER_HP, RESPAWN_DELAY, hurt_player};
+    use berlin_sim::events::Event;
+    let mut w = world(22);
+    run(&mut w, 10, idle());
+    w.money = 1000.;
+    let (x0, y0) = (w.player.x, w.player.y);
+    hurt_player(&mut w, 60., (x0 + 10., y0));
+    assert_eq!(w.player.combat.hp, PLAYER_HP - 60.);
+    hurt_player(&mut w, 60., (x0 + 10., y0));
+    assert!(w.player.combat.dead);
+    assert!(w.events.iter().any(|e| matches!(e, Event::Wasted { .. })));
+    // liegt still, auch mit Eingaben
+    run(
+        &mut w,
+        (RESPAWN_DELAY / DT) as usize - 5,
+        Input {
+            move_x: 1.,
+            ..idle()
+        },
+    );
+    assert_eq!((w.player.x, w.player.y), (x0, y0));
+    let mut respawned = false;
+    for _ in 0..600 {
+        w.update(&idle(), DT);
+        if w.events
+            .iter()
+            .any(|e| matches!(e, Event::Respawn { fee, .. } if *fee == 100.))
+        {
+            respawned = true;
+            break;
+        }
+    }
+    assert!(respawned, "nach dem K. o. im Krankenhaus aufgewacht");
+    assert!(!w.player.combat.dead && w.player.combat.hp == PLAYER_HP);
+    assert_eq!(w.money, 900., "10 % Krankenhausgebühr");
+    let h = w.city.nearest_hospital(x0, y0).map(|h| (h.x, h.y)).unwrap();
+    assert!(
+        (w.player.x - h.0).hypot(w.player.y - h.1) < 1500.,
+        "auf dem Gehweg beim Krankenhaus (es liegt oft mitten im Gelände)"
+    );
+    assert!(w.city.in_building(w.player.x, w.player.y).is_none());
+}
+
+#[test]
+fn a_shot_at_car_makes_the_driver_flee() {
+    use berlin_sim::car::Driver;
+    let mut w = world(23);
+    run(&mut w, 30, idle());
+    let i = w
+        .cars
+        .iter()
+        .position(|c| c.driver == Some(Driver::Npc))
+        .expect("KI-Auto");
+    let peds = w.peds.len();
+    let (x, y) = (w.cars[i].x, w.cars[i].y);
+    berlin_sim::combat::hurt_car(&mut w, i, 20., (x + 100., y));
+    let id = w.cars[i].id;
+    run(&mut w, 1, idle());
+    let c = w.cars.iter().find(|c| c.id == id).unwrap();
+    assert!(c.driver.is_none() && !c.wrecked, "Fahrer ist ausgestiegen");
+    assert!(w.peds.len() > peds, "und rennt als Passant weg");
+}

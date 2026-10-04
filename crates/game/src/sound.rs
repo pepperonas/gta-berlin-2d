@@ -47,7 +47,33 @@ impl Listener {
                 Event::MissionStart => Some((Sfx::MissionStart, 1.)),
                 Event::MissionSuccess => Some((Sfx::MissionSuccess, 1.)),
                 Event::MissionFail => Some((Sfx::MissionFail, 1.)),
-                Event::Wreck { .. } | Event::Notice(_) => None,
+                Event::Shot { x, y, weapon, .. } => {
+                    let kind = match weapon {
+                        "pistol" => 0,
+                        "smg" => 1,
+                        _ => 2,
+                    };
+                    // Schüsse hört man weiter als einen Unfall
+                    let k = (1. - (x - cx).hypot(y - cy) / (EVENT_HEAR * 2.)).clamp(0., 1.) as f32;
+                    Some((Sfx::Gun(kind, 1.), k))
+                }
+                Event::Swing { x, y, hit, .. } => Some((
+                    if hit { Sfx::Punch(1.) } else { Sfx::Swing(1.) },
+                    near(x, y),
+                )),
+                Event::Thud { x, y } => Some((Sfx::Thud(1.), near(x, y))),
+                Event::Impact { x, y, .. } => Some((Sfx::Impact(1.), near(x, y))),
+                Event::PlayerHurt { .. } => Some((Sfx::Punch(1.), 1.)),
+                Event::Wasted { .. } => Some((Sfx::MissionFail, 1.)),
+                Event::Respawn { .. } => Some((Sfx::Pickup, 1.)),
+                Event::Reload { .. } => Some((Sfx::Reload, 1.)),
+                Event::Reloaded { .. } => Some((Sfx::Reloaded, 1.)),
+                Event::WeaponSwitch { .. } => Some((Sfx::WeaponSwitch, 1.)),
+                Event::Wreck { .. }
+                | Event::Notice(_)
+                | Event::Blood { .. }
+                | Event::Kill { .. }
+                | Event::WeaponHit { .. } => None,
             };
             if let Some((sfx, gain)) = s
                 && gain > 0.02
@@ -56,6 +82,11 @@ impl Listener {
                     Sfx::Crash(k) => Sfx::Crash(k * gain),
                     Sfx::Horn(k) => Sfx::Horn(k * gain),
                     Sfx::Knock(k) => Sfx::Knock(k * gain),
+                    Sfx::Gun(w, k) => Sfx::Gun(w, k * gain),
+                    Sfx::Swing(k) => Sfx::Swing(k * gain),
+                    Sfx::Punch(k) => Sfx::Punch(k * gain),
+                    Sfx::Thud(k) => Sfx::Thud(k * gain),
+                    Sfx::Impact(k) => Sfx::Impact(k * gain),
                     s => s,
                 });
             }

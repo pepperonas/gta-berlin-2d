@@ -27,6 +27,8 @@ pub enum PedState {
     Return,
     Down,
     Dead,
+    /// wehrt sich gegen die Spielfigur (combat.rs)
+    Fight,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CrossTarget {
@@ -66,6 +68,12 @@ pub struct Ped {
     pub hp: f64,
     pub level: LevelState,
     pub level_init: bool,
+    /// Sturzrichtung (tot)
+    pub fall: f64,
+    /// Kampf: Dauer, Abklingzeit des Schlags, Schlaganimation
+    pub fight_t: f64,
+    pub hit_cd: f64,
+    pub punch: f64,
 }
 
 pub fn walkable(e: &Edge) -> bool {
@@ -210,6 +218,10 @@ pub fn create_ped(id: u32, city: &mut City, sw: &mut Sidewalks, spot: Spot, rng:
         hp: 100.,
         level: LevelState::default(),
         level_init: false,
+        fall: 0.,
+        fight_t: 0.,
+        hit_cd: 0.,
+        punch: 0.,
     }
 }
 
@@ -313,6 +325,8 @@ pub struct PedCtx<'a> {
     pub cars: &'a [MovingCar],
     /// Spieler zu Fuß (x, y)
     pub player_on_foot: Option<Pt>,
+    /// Faustschläge auf die Spielfigur in diesem Schritt (von wo)
+    pub punches: &'a mut Vec<Pt>,
 }
 
 fn move_with_collision(p: &mut Ped, dx: f64, dy: f64, cx: &mut PedCtx) {
@@ -574,6 +588,40 @@ pub fn update_ped(p: &mut Ped, cx: &mut PedCtx, dt: f64) {
         }
         PedState::Dead => {
             p.dead_t += dt;
+            return;
+        }
+        PedState::Fight => 'fight: {
+            // combat.js updateFight: zur Spielfigur laufen, zuschlagen, irgendwann aufgeben
+            p.fight_t += dt;
+            p.punch = (p.punch - dt).max(0.);
+            let Some((tx, ty)) = cx.player_on_foot else {
+                p.state = PedState::Idle;
+                p.t = 1.;
+                break 'fight;
+            };
+            let (dx, dy) = (tx - p.x, ty - p.y);
+            let d = dx.hypot(dy);
+            if d > crate::combat::FIGHT_FAR || p.fight_t > crate::combat::FIGHT_GIVE_UP {
+                p.state = PedState::Idle;
+                p.t = 1.;
+                break 'fight;
+            }
+            p.facing = dy.atan2(dx);
+            let reach = crate::combat::FIGHT_REACH;
+            if d > reach {
+                let v = (d - reach + 1.).min(RUN * 0.85 * dt);
+                move_with_collision(p, dx / d * v, dy / d * v, cx);
+            }
+            p.hit_cd -= dt;
+            if d <= reach + 2. && p.hit_cd <= 0. {
+                p.hit_cd = crate::combat::FIGHT_COOLDOWN;
+                p.punch = 0.22;
+                cx.punches.push((p.x, p.y));
+            }
+            let f = p.facing;
+            let (mx, my) = (p.x - px, p.y - py);
+            p.step += mx.hypot(my);
+            p.facing = f;
             return;
         }
         PedState::Down => {

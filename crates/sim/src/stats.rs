@@ -48,6 +48,19 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
         ],
     ),
     (
+        "Kampf",
+        &[
+            ("kills", "Menschen getötet", Fmt::N),
+            ("killsShot", "davon erschossen", Fmt::N),
+            ("killsMelee", "davon im Nahkampf", Fmt::N),
+            ("shots", "Schüsse", Fmt::N),
+            ("bullets", "Kugeln", Fmt::N),
+            ("hits", "Treffer", Fmt::N),
+            ("deaths", "selbst umgehauen", Fmt::N),
+            ("hospitalFees", "Krankenhauskosten", Fmt::Eur),
+        ],
+    ),
+    (
         "Aufträge",
         &[
             ("missions", "Aufträge erledigt", Fmt::N),
@@ -170,6 +183,28 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
             Event::Carjack { .. } => add("carjacks", 1.),
             Event::Wreck { car, .. } if Some(car) == w.player_car_id || Some(car) == p.in_car => {
                 add("ownWrecks", 1.)
+            }
+            Event::Kill {
+                player: true,
+                weapon,
+                ..
+            } => {
+                add("kills", 1.);
+                let melee = crate::combat::WEAPONS
+                    .iter()
+                    .chain([&crate::combat::KICK])
+                    .find(|w| w.id == weapon)
+                    .is_some_and(|w| w.melee);
+                add(if melee { "killsMelee" } else { "killsShot" }, 1.);
+            }
+            Event::Shot { ref traces, .. } => {
+                add("shots", 1.);
+                add("bullets", traces.len() as f64);
+            }
+            Event::WeaponHit { .. } => add("hits", 1.),
+            Event::Wasted { .. } => add("deaths", 1.),
+            Event::Respawn { fee, .. } => {
+                add("hospitalFees", fee);
             }
             Event::MissionSuccess => add("missions", 1.),
             Event::MissionFail => add("missionsFailed", 1.),

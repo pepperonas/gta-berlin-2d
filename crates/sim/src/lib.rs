@@ -7,6 +7,7 @@ pub mod car;
 pub mod carmodels;
 pub mod city;
 pub mod collision;
+pub mod combat;
 pub mod daylight;
 pub mod dynamics;
 pub mod enginevoice;

@@ -118,6 +118,11 @@ pub fn draw(
     // unten links: Minikarte (beim Briefing ausgeblendet)
     if ms != State::Briefing {
         minimap(w, target, mx, 720. - my - MINI - 10., MINI, h);
+        health(h, &w.player.combat, mx, 720. - my - 6., MINI, w.time);
+    }
+    // unten rechts zu Fuß: Waffe und Munition
+    if w.player.in_car.is_none() && !w.player.combat.dead {
+        weapon_panel(h, &w.player.combat, h.width - mx, 720. - my);
     }
     // oben rechts: Auftrag und Zeit
     if !objective.is_empty() {
@@ -152,6 +157,7 @@ pub fn draw(
             h.text(label, r - tw - 12., my + 66., 13., GREY, Align::Right, true);
         }
     }
+    hurt(h, &w.player.combat);
     // unten rechts: Tacho, darüber Fahrzeugname nach dem Einsteigen
     let car = w.player_car();
     if let Some(c) = car {
@@ -558,6 +564,147 @@ pub fn draw(
             }
         }
         _ => {}
+    }
+}
+
+/// Lebensleiste unter der Minikarte (hud.js drawHealth): grün → gelb → rot, unter 25 % blinkt sie.
+pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f32, t: f64) {
+    let hp = (c.hp / berlin_sim::combat::PLAYER_HP).clamp(0., 1.) as f32;
+    h.rect(x, y, w, 6., [0., 0., 0., 0.6], 0.);
+    h.rect(x + 1., y + 1., w - 2., 4., [0.27, 0.63, 0.31, 0.25], 0.);
+    let low = hp < 0.25 && (t * 3.).floor() as i64 % 2 == 0;
+    let col = if low {
+        [1., 0.42, 0.35, 1.]
+    } else if hp > 0.6 {
+        [0.37, 0.83, 0.37, 1.]
+    } else if hp > 0.3 {
+        [0.91, 0.77, 0.25, 1.]
+    } else {
+        [0.91, 0.28, 0.24, 1.]
+    };
+    if hp > 0. {
+        h.rect(x + 1., y + 1., (w - 2.) * hp, 4., col, 0.);
+    }
+}
+
+/// Waffe und Magazin unten rechts (hud.js drawWeaponPanel); `r`/`b` = rechte bzw. untere Kante.
+pub fn weapon_panel(h: &mut Hud, c: &berlin_sim::combat::Combat, r: f32, b: f32) {
+    use berlin_sim::combat::WEAPONS;
+    let wp = c.weapon();
+    let y = b - 70.;
+    h.text(
+        &wp.name.to_uppercase(),
+        r,
+        y + 16.,
+        13.,
+        YELLOW,
+        Align::Right,
+        true,
+    );
+    if wp.melee {
+        h.text(
+            "NAHKAMPF",
+            r,
+            y + 46.,
+            20.,
+            [0.91, 0.91, 0.91, 1.],
+            Align::Right,
+            true,
+        );
+    } else if c.reload_t > 0. {
+        let u = (1. - c.reload_t / wp.reload).clamp(0., 1.) as f32;
+        h.text(
+            "NACHLADEN",
+            r,
+            y + 40.,
+            14.,
+            [0.87, 0.87, 0.87, 1.],
+            Align::Right,
+            true,
+        );
+        h.rect(r - 111., y + 47., 112., 6., [0., 0., 0., 0.55], 0.);
+        h.rect(r - 110., y + 48., 110. * u, 4., YELLOW, 0.);
+    } else {
+        let mag = c.mag[c.weapon];
+        let rest = format!("/ {}", wp.mag);
+        let tw = h.text(
+            &rest,
+            r,
+            y + 48.,
+            15.,
+            [0.78, 0.78, 0.78, 1.],
+            Align::Right,
+            true,
+        );
+        let low = mag as f32 <= wp.mag as f32 * 0.25;
+        h.text(
+            &mag.to_string(),
+            r - tw - 6.,
+            y + 48.,
+            32.,
+            if low { [1., 0.48, 0.44, 1.] } else { WHITE },
+            Align::Right,
+            true,
+        );
+    }
+    // Waffenleiste: kleine Striche, der gewählte gelb
+    for i in 0..WEAPONS.len() {
+        let bx = r - (WEAPONS.len() - 1 - i) as f32 * 14. - 10.;
+        h.rect(bx - 1., y + 59., 12., 5., [0., 0., 0., 0.7], 0.);
+        let col = if i == c.weapon {
+            YELLOW
+        } else {
+            [1., 1., 1., 0.45]
+        };
+        h.rect(bx, y + 60., 10., 3., col, 0.);
+    }
+}
+
+/// Roter Rand bei Treffern, K. o.-Schriftzug (hud.js drawHurt). Der Verlauf ist aus Rahmen gestaffelt.
+pub fn hurt(h: &mut Hud, c: &berlin_sim::combat::Combat) {
+    let a = if c.dead {
+        (c.dead_t * 0.4).min(0.55)
+    } else {
+        c.hurt_flash * 0.45
+    } as f32;
+    if a > 0.01 {
+        let (vw, vh) = (h.width, 720.);
+        for k in 0..8 {
+            let inset = k as f32 * 18.;
+            let al = a * (1. - k as f32 / 8.) * 0.35;
+            let col = [0.59, 0., 0., al];
+            h.rect(inset, inset, vw - 2. * inset, 18., col, 0.);
+            h.rect(inset, vh - inset - 18., vw - 2. * inset, 18., col, 0.);
+            h.rect(inset, inset + 18., 18., vh - 2. * inset - 36., col, 0.);
+            h.rect(
+                vw - inset - 18.,
+                inset + 18.,
+                18.,
+                vh - 2. * inset - 36.,
+                col,
+                0.,
+            );
+        }
+    }
+    if c.dead {
+        h.text(
+            "K. O.",
+            h.width / 2.,
+            350.,
+            72.,
+            [1., 0.3, 0.3, 1.],
+            Align::Center,
+            true,
+        );
+        h.text(
+            "Du wachst gleich im nächsten Krankenhaus auf …",
+            h.width / 2.,
+            394.,
+            20.,
+            [0.93, 0.93, 0.93, 1.],
+            Align::Center,
+            true,
+        );
     }
 }
 

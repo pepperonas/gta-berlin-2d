@@ -1,4 +1,5 @@
 mod bigmap;
+mod effects;
 mod hud;
 mod menu;
 mod play;
@@ -27,6 +28,7 @@ fn main() -> Result<()> {
     let mut new_game = false;
     let mut resume = false;
     let mut screen: Option<String> = None;
+    let mut demo_combat = false;
     let mut seed = 1989u32;
     let mut check_sim: Option<f64> = None;
     let mut save_path = None;
@@ -132,6 +134,7 @@ fn main() -> Result<()> {
             "--free" => free = true,
             "--new" => new_game = true,
             "--fortsetzen" => resume = true,
+            "--kampf-demo" => demo_combat = true,
             "--bildschirm" => {
                 let v = args
                     .next()
@@ -161,8 +164,8 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik] [--audio-wav DATEI [--audio-seconds N]]\n\
-Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik] [--kampf-demo] [--audio-wav DATEI [--audio-seconds N]]\n\
+Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Strg: angreifen · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
                 return Ok(());
@@ -240,13 +243,14 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     // wie --im-auto und --stadtplan springen ebenfalls direkt ins Spiel)
     let start = if new_game {
         play::Start::New
-    } else if resume || in_car || stadtplan.is_some() || screen.is_some() {
+    } else if resume || in_car || stadtplan.is_some() || screen.is_some() || demo_combat {
         play::Start::Continue
     } else {
         play::Start::Title
     };
     let play = play::Play::new(&options.data_root, seed, Some(storage), sound, start)?;
     let mut play = play;
+    play.demo_combat = demo_combat;
     match screen.as_deref() {
         Some("pause") => play.pause(),
         Some("steuerung") => play.screen = play::Screen::Controls(false),

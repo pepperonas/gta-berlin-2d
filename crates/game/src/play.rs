@@ -38,6 +38,11 @@ pub struct Play {
     tracker: berlin_sim::stats::Tracker,
     stats_written: f64,
     result_menu: Option<crate::menu::Menu>,
+    trigger_was: bool,
+    /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
+    pub demo_combat: bool,
+    /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
+    pub fx: crate::effects::Effects,
 }
 
 /// Statistikdatei neben dem Spielstand: `{"total": …, "saved": …}`.
@@ -172,6 +177,9 @@ impl Play {
             tracker: Default::default(),
             stats_written: 0.,
             result_menu: None,
+            trigger_was: false,
+            demo_combat: false,
+            fx: Default::default(),
         })
     }
     fn save(&mut self) -> bool {
@@ -472,7 +480,134 @@ pub fn input_from(keys: &Keys, driving: bool) -> Input {
         action_held: keys.held.contains(&KeyCode::KeyE) || p.a,
         esp_toggle: pressed(KeyCode::KeyX),
         abs_toggle: pressed(KeyCode::KeyY) || pressed(KeyCode::KeyZ),
+        combat: combat_input(keys, driving),
     }
+}
+
+/// Kampf zu Fuß (input.js): Strg/RT feuert, V/B tritt, R/X lädt nach, Q/RB nächste, LB vorige Waffe, 1–6 direkt,
+/// rechter Stick zielt. Die Flanke des Triggers ergänzt `Play::step` (der Stand des letzten Schritts liegt dort).
+pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInput {
+    if driving {
+        return Default::default();
+    }
+    let pressed = |k: KeyCode| keys.pressed.contains(&k);
+    let (p, pe) = (&keys.pad, &keys.pad_pressed);
+    let ctrl =
+        keys.held.contains(&KeyCode::ControlLeft) || keys.held.contains(&KeyCode::ControlRight);
+    let (rx, ry) = radial_deadzone(p.rx, p.ry, 0.22);
+    let digits = [
+        KeyCode::Digit1,
+        KeyCode::Digit2,
+        KeyCode::Digit3,
+        KeyCode::Digit4,
+        KeyCode::Digit5,
+        KeyCode::Digit6,
+    ];
+    berlin_sim::combat::CombatInput {
+        fire: ctrl || p.rt > 0.5,
+        fire_pressed: pressed(KeyCode::ControlLeft) || pressed(KeyCode::ControlRight),
+        kick: pressed(KeyCode::KeyV) || pe.b,
+        reload: pressed(KeyCode::KeyR) || pe.x,
+        weapon_next: pressed(KeyCode::KeyQ) || pe.rb,
+        weapon_prev: pe.lb,
+        weapon_slot: digits
+            .iter()
+            .position(|&d| pressed(d))
+            .map_or(0, |i| i as u8 + 1),
+        aim_x: rx as f64,
+        aim_y: ry as f64,
+    }
+}
+
+/// `--kampf-demo`: Pistole ziehen, auf den nächsten lebenden Passanten zielen und jeden zweiten Schritt abdrücken.
+fn demo_combat_input(w: &World, input: &mut Input) {
+    let (x, y) = (w.player.x, w.player.y);
+    let target = w
+        .peds
+        .iter()
+        .filter(|p| p.state != PedState::Dead && p.level.lvl == w.player.level.lvl)
+        .min_by(|a, b| {
+            (a.x - x)
+                .hypot(a.y - y)
+                .total_cmp(&(b.x - x).hypot(b.y - y))
+        });
+    input.combat.weapon_slot = if w.player.combat.weapon == 3 { 0 } else { 4 };
+    if let Some(t) = target.filter(|t| (t.x - x).hypot(t.y - y) < 400.) {
+        let a = (t.y - y).atan2(t.x - x);
+        input.combat.aim_x = a.cos();
+        input.combat.aim_y = a.sin();
+        let fire = (w.time * 60.).round() as i64 % 12 == 0;
+        input.combat.fire = fire;
+        input.combat.fire_pressed = fire;
+    }
+}
+
+/// Waffe in der Hand der Spielfigur (vor dem Körper in Zielrichtung) und Schlagbewegung.
+fn weapon_bodies(
+    c: &berlin_sim::combat::Combat,
+    at: (f32, f32),
+    a: f32,
+    depth: f32,
+    out: &mut Vec<Body>,
+) {
+    use berlin_sim::combat::AttackKind;
+    let wp = c.weapon();
+    let (fx, fy) = (a.cos(), a.sin());
+    // Ausholen: beim Schlag schwingt die Waffe ein Stück herum, beim Tritt schiebt sich ein Fuß nach vorn
+    let swing = c
+        .attack
+        .filter(|t| t.kind == AttackKind::Swing)
+        .map_or(0., |t| (t.t / 0.22) as f32);
+    let kick = c
+        .attack
+        .filter(|t| t.kind == AttackKind::Kick)
+        .map_or(0., |t| (t.t / 0.28) as f32);
+    if kick > 0. {
+        out.push(Body {
+            center: [at.0 + fx * (6. + 6. * kick), at.1 + fy * (6. + 6. * kick)],
+            half: [3.5, 2.2],
+            angle: a,
+            shape: 0.,
+            depth: depth + 0.0001,
+            color: [0.12, 0.12, 0.14, 1.],
+        });
+    }
+    let (len, wid, col) = match wp.id {
+        "bat" => (11., 1.6, [0.55, 0.38, 0.2, 1.]),
+        "knife" => (5., 0.9, [0.8, 0.82, 0.85, 1.]),
+        "pistol" => (5., 1.4, [0.1, 0.1, 0.11, 1.]),
+        "smg" => (8., 1.8, [0.1, 0.1, 0.11, 1.]),
+        "shotgun" => (11., 1.6, [0.25, 0.18, 0.12, 1.]),
+        _ => (0., 0., [0.; 4]),
+    };
+    if len == 0. {
+        // Fäuste: beim Schlag schnellt eine Hand vor
+        if swing > 0. {
+            out.push(Body {
+                center: [at.0 + fx * (6. + 6. * swing), at.1 + fy * (6. + 6. * swing)],
+                half: [2.4, 2.4],
+                angle: 0.,
+                shape: 1.,
+                depth: depth - 0.0003,
+                color: rgba(0xe0ac69, 1.),
+            });
+        }
+        return;
+    }
+    let wa = a + swing * 1.2 - 0.6 * swing.signum();
+    let (wx, wy) = (wa.cos(), wa.sin());
+    let side = (-fy * 3.5, fx * 3.5);
+    out.push(Body {
+        center: [
+            at.0 + side.0 + wx * (5. + len / 2.),
+            at.1 + side.1 + wy * (5. + len / 2.),
+        ],
+        half: [len / 2., wid],
+        angle: wa,
+        shape: 0.,
+        depth: depth - 0.0003,
+        color: col,
+    });
 }
 
 fn rgba(rgb: u32, a: f32) -> [f32; 4] {
@@ -548,6 +683,13 @@ impl Game for Play {
         } else {
             input_from(keys, w2.player.in_car.is_some())
         };
+        if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
+            demo_combat_input(w2, &mut input);
+        }
+        // Trigger als Taste: Flanke gegenüber dem letzten Schritt
+        let trigger = keys.pad.rt > 0.5;
+        input.combat.fire_pressed |= trigger && !self.trigger_was && input.combat.fire;
+        self.trigger_was = trigger;
         if self.auto_enter && !w2.loading && w2.player.in_car.is_none() {
             self.auto_enter = false;
             if let Some((x, y)) = w2
@@ -560,6 +702,8 @@ impl Game for Play {
             }
         }
         w2.update(&input, dt);
+        self.fx.ingest(&self.world.events);
+        self.fx.step(dt as f32);
         berlin_sim::stats::track_step(
             &mut [&mut self.stats, &mut self.stats_total],
             &mut self.tracker,
@@ -700,13 +844,23 @@ impl Game for Play {
             let depth = if p.level.lvl >= 1 { 0.549 } else { 0.618 };
             let (x, y, a) = (p.x as f32, p.y as f32, p.facing as f32);
             if p.state == PedState::Dead {
+                // liegt in Sturzrichtung: Körper lang, Kopf voraus
+                let f = p.fall as f32;
                 out.push(Body {
                     center: [x, y],
-                    half: [9., 4.],
-                    angle: a,
+                    half: [8.5, 4.5],
+                    angle: f,
                     shape: 1.,
                     depth: depth + 0.001,
-                    color: [0.45, 0.05, 0.05, 0.9],
+                    color: shade(rgba(p.shirt, 1.), 0.8),
+                });
+                out.push(Body {
+                    center: [x + f.cos() * 9., y + f.sin() * 9.],
+                    half: [3., 3.],
+                    angle: 0.,
+                    shape: 1.,
+                    depth: depth + 0.0008,
+                    color: rgba(p.skin, 1.),
                 });
                 continue;
             }
@@ -734,9 +888,50 @@ impl Game for Play {
                 depth: depth - 0.0002,
                 color: rgba(p.skin, 1.),
             });
+            // Faustschlag eines Kämpfers
+            if p.punch > 0. {
+                let r = 6. + 5. * (p.punch / 0.22) as f32;
+                out.push(Body {
+                    center: [x + a.cos() * r, y + a.sin() * r],
+                    half: [2.2, 2.2],
+                    angle: 0.,
+                    shape: 1.,
+                    depth: depth - 0.0003,
+                    color: rgba(p.skin, 1.),
+                });
+            }
         }
-        if w.player.in_car.is_none() {
+        if w.player.in_car.is_none() && w.player.combat.dead {
+            // K. o.: liegt
+            let (x, y, f) = (
+                w.player.x as f32,
+                w.player.y as f32,
+                w.player.combat.fall as f32,
+            );
+            out.push(Body {
+                center: [x, y],
+                half: [9., 5.],
+                angle: f,
+                shape: 1.,
+                depth: 0.617,
+                color: rgba(0x2b2f3a, 1.),
+            });
+            out.push(Body {
+                center: [x + f.cos() * 10., y + f.sin() * 10.],
+                half: [3.2, 3.2],
+                angle: 0.,
+                shape: 1.,
+                depth: 0.6168,
+                color: rgba(0xe0ac69, 1.),
+            });
+        } else if w.player.in_car.is_none() {
             let (x, y, a) = (w.player.x as f32, w.player.y as f32, w.player.angle as f32);
+            let depth0 = if w.player.level.lvl >= 1 {
+                0.548
+            } else {
+                0.617
+            };
+            weapon_bodies(&w.player.combat, (x, y), a, depth0, out);
             let depth = if w.player.level.lvl >= 1 {
                 0.548
             } else {
@@ -767,6 +962,7 @@ impl Game for Play {
                 color: rgba(0xe0ac69, 1.),
             });
         }
+        self.fx.bodies(out);
         crate::weatherfx::bodies(w, out);
     }
     fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
@@ -886,6 +1082,7 @@ impl Game for Play {
         if k <= 0. {
             return;
         }
+        self.fx.lights(out, k);
         let rgb = |c: [u8; 3]| c.map(|v| v as f32 / 255.);
         let push =
             |out: &mut Vec<LightSource>, x: f64, y: f64, radius: f32, color: [f32; 3], a: f32| {

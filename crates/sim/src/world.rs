@@ -70,6 +70,8 @@ pub struct Input {
     pub action_held: bool,
     pub esp_toggle: bool,
     pub abs_toggle: bool,
+    /// Kampf (nur zu Fuß wirksam)
+    pub combat: crate::combat::CombatInput,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +89,7 @@ pub struct Player {
     pub move_speed: f64,
     pub level: crate::levels::LevelState,
     pub level_init: bool,
+    pub combat: crate::combat::Combat,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -210,6 +213,7 @@ impl World {
                 move_speed: 0.,
                 level: Default::default(),
                 level_init: false,
+                combat: Default::default(),
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -695,6 +699,74 @@ impl World {
         self.events.push(Event::Door { x, y });
         true
     }
+    /// K. o.: nach kurzer Pause ins nächste Krankenhaus (Gebühr), ein laufender Auftrag platzt (world.js updateKnockout).
+    fn update_knockout(&mut self, dt: f64) {
+        use crate::combat::{HOSPITAL_FEE, RESPAWN_DELAY};
+        let c = &mut self.player.combat;
+        c.dead_t += dt;
+        if c.dead_t < RESPAWN_DELAY {
+            return;
+        }
+        let (px, py) = (self.player.x, self.player.y);
+        let (hx, hy, name) = self
+            .city
+            .nearest_hospital(px, py)
+            .map(|h| (h.x, h.y, h.name.clone()))
+            .unwrap_or((
+                self.city.places.player_spawn.x,
+                self.city.places.player_spawn.y,
+                String::new(),
+            ));
+        if !self.player.combat.moved {
+            // erst hinbringen; die Kacheln dort lädt der nächste Schritt
+            self.player.combat.moved = true;
+            teleport_on_foot(self, hx, hy);
+            return;
+        }
+        // auf den nächsten Gehweg stellen, falls das Krankenhaus mitten im Haus liegt
+        if (self.city.in_building(px, py).is_some()
+            || self.city.surface_at(px, py, None) == Ground::Water)
+            && let Some(sp) =
+                pedestrians::nearest_spot(&mut self.city, &mut self.sidewalks, px, py, 800.)
+        {
+            let (x, y) = self.sidewalks.point(&mut self.city, sp.edge, sp.side, sp.s);
+            (self.player.x, self.player.y) = (x, y);
+            (self.camera.x, self.camera.y) = (x, y);
+        }
+        let fee = (self.money * HOSPITAL_FEE).floor();
+        self.money -= fee;
+        self.player.combat = crate::combat::Combat {
+            weapon: self.player.combat.weapon,
+            ..Default::default()
+        };
+        self.player.stun = 0.;
+        self.player.level_init = false;
+        let fee_txt = if fee > 0. {
+            format!(" (-{} €)", fee as i64)
+        } else {
+            String::new()
+        };
+        let place = if name.is_empty() {
+            String::new()
+        } else {
+            format!(": {name}")
+        };
+        self.notice = Some(Notice {
+            text: format!("Im Krankenhaus aufgewacht{place}{fee_txt}"),
+            t: 5.,
+        });
+        self.events.push(Event::Respawn {
+            x: self.player.x,
+            y: self.player.y,
+            fee,
+        });
+        if matches!(self.mission.state, State::ToPickup | State::ToDropoff) {
+            self.mission.fail(
+                "K. o. – im Krankenhaus aufgewacht, der Auftrag ist geplatzt.",
+                &mut self.events,
+            );
+        }
+    }
     fn fleeing_driver(&mut self, car_idx: usize, fx: f64, fy: f64, secs: f64) {
         let (x, y, a, hh, lvl) = {
             let c = &self.cars[car_idx];
@@ -1032,8 +1104,12 @@ impl World {
                 });
             }
             c.horn_was = c.horn;
-        } else {
+        } else if !self.player.combat.dead {
             self.update_player_on_foot(input, dt);
+        }
+        crate::combat::update_player_combat(self, &input.combat, dt);
+        if self.player.combat.dead {
+            self.update_knockout(dt);
         }
 
         // KI: Momentaufnahme + Nachbarschaftsraster (während der Schleife bewegt sich nichts)
@@ -1128,8 +1204,18 @@ impl World {
         }
         self.update_levels();
 
-        // Wracks: KI-Fahrer steigt aus und flieht, Wrack verschwindet später außer Sicht
+        // Beschossene Autos: KI-Fahrer steigt aus und rennt weg. Wracks: ebenso, Wrack verschwindet später außer Sicht
         for i in 0..self.cars.len() {
+            if let Some((fx, fy)) = self.cars[i].shot_at.take()
+                && self.cars[i].driver == Some(Driver::Npc)
+                && !self.cars[i].wrecked
+            {
+                self.cars[i].driver = None;
+                self.cars[i].ai = None;
+                let id = self.cars[i].id;
+                drop_claims(&mut self.res, id);
+                self.fleeing_driver(i, fx, fy, 5.);
+            }
             if !self.cars[i].wrecked {
                 continue;
             }
@@ -1199,6 +1285,7 @@ impl World {
             vy: f64,
             r: f64,
             always: bool,
+            melee: bool,
         }
         let mut threats = Vec::new();
         if let Some(c) = self.player_car()
@@ -1212,6 +1299,7 @@ impl World {
                 vy: c.vy,
                 r: 90.,
                 always: false,
+                melee: false,
             });
         }
         for e in &self.events {
@@ -1223,6 +1311,7 @@ impl World {
                     vy: 0.,
                     r: if npc { 80. } else { 170. },
                     always: true,
+                    melee: false,
                 }),
                 Event::Crash { x, y, strength, .. } if strength > 0.25 => threats.push(Threat {
                     x,
@@ -1231,6 +1320,37 @@ impl World {
                     vy: 0.,
                     r: 130.,
                     always: true,
+                    melee: false,
+                }),
+                // Schüsse hört man weit; Blut und Schläge des Spielers nur in der Nähe (Kämpfer mischen mit)
+                Event::Shot { x, y, .. } => threats.push(Threat {
+                    x,
+                    y,
+                    vx: 0.,
+                    vy: 0.,
+                    r: crate::combat::GUNSHOT_SCARE,
+                    always: true,
+                    melee: false,
+                }),
+                Event::Blood { x, y, .. } => threats.push(Threat {
+                    x,
+                    y,
+                    vx: 0.,
+                    vy: 0.,
+                    r: 220.,
+                    always: true,
+                    melee: false,
+                }),
+                Event::Swing {
+                    x, y, npc: false, ..
+                } => threats.push(Threat {
+                    x,
+                    y,
+                    vx: 0.,
+                    vy: 0.,
+                    r: 90.,
+                    always: true,
+                    melee: true,
                 }),
                 _ => {}
             }
@@ -1247,21 +1367,24 @@ impl World {
                 lvl: c.lvl(),
             })
             .collect();
-        let on_foot = self
-            .player
-            .in_car
-            .is_none()
+        let on_foot = (self.player.in_car.is_none() && !self.player.combat.dead)
             .then_some((self.player.x, self.player.y));
+        let alive = !self.player.combat.dead;
+        let mut punches = Vec::new();
         let player_car = self.player.in_car;
         let mut near = Vec::new();
         let mut hits: Vec<(f64, f64)> = Vec::new();
         for k in 0..self.peds.len() {
             let ped = &mut self.peds[k];
             if ped.state != PedState::Dead {
-                if !matches!(ped.state, PedState::Down | PedState::Flee) {
+                if !matches!(ped.state, PedState::Down | PedState::Flee | PedState::Fight) {
                     for t in &threats {
                         if (ped.x - t.x).hypot(ped.y - t.y) > t.r {
                             continue;
+                        }
+                        if t.melee && alive && crate::combat::is_fighter(ped.id) {
+                            crate::combat::start_fight(ped);
+                            break;
                         }
                         if t.always || (ped.x - t.x) * t.vx + (ped.y - t.y) * t.vy > 0. {
                             scare(ped, (t.x, t.y), 2.5);
@@ -1319,8 +1442,19 @@ impl World {
                 knocked: &self.knocked,
                 cars: &moving,
                 player_on_foot: on_foot,
+                punches: &mut punches,
             };
             pedestrians::update_ped(&mut self.peds[k], &mut cx, dt);
+        }
+        for (x, y) in punches {
+            self.events.push(Event::Swing {
+                x,
+                y,
+                weapon: "fists",
+                hit: true,
+                npc: true,
+            });
+            crate::combat::hurt_player(self, crate::combat::FIGHT_DMG, (x, y));
         }
         for (hx, hy) in hits {
             for o in &mut self.peds {

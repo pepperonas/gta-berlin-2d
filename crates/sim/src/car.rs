@@ -67,6 +67,8 @@ pub struct Car {
     pub cargo: bool,
     pub horn: bool,
     pub horn_was: bool,
+    /// beschossen (von wo): world.rs lässt den KI-Fahrer aussteigen und fliehen
+    pub shot_at: Option<(f64, f64)>,
     pub skid: f64,
     pub spin: f64,
     pub level: LevelState,
@@ -114,6 +116,7 @@ impl Car {
             cargo: false,
             horn: false,
             horn_was: false,
+            shot_at: None,
             skid: 0.,
             spin: 0.,
             level: LevelState::default(),

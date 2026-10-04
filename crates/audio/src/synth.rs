@@ -44,6 +44,18 @@ pub enum Sfx {
     Footstep(Footstep, f32),
     /// Donner: Lautstärke 0…1, nah (trockener Knall vor dem Grollen)
     Thunder(f32, bool),
+    /// Schuss: Waffe (0 Pistole, 1 MP, 2 Schrotflinte) und Lautstärke
+    Gun(u8, f32),
+    /// Schlag ins Leere bzw. Treffer (Faust/Schläger), Lautstärke
+    Swing(f32),
+    Punch(f32),
+    /// Schlag auf Blech
+    Thud(f32),
+    /// Kugeleinschlag
+    Impact(f32),
+    Reload,
+    Reloaded,
+    WeaponSwitch,
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -787,6 +799,37 @@ impl Synth {
                 self.tone(120., 0.08, Sine, 0.2, 0.05, 0., 0., M);
             }
             Sfx::Ui => self.tone(880., 0.09, Triangle, 0.12, 0., 0., 0., M),
+            // Waffen (audio.js): Knall aus gefiltertem Rauschen plus tiefer Schlag
+            Sfx::Gun(kind, k) => match kind {
+                0 => {
+                    self.burst(0.16, 2600., 0.45 * k, Lowpass, 0.7, 0., 0., M);
+                    self.tone(140., 0.12, Sine, 0.3 * k, 0., -90., 0., M);
+                }
+                1 => {
+                    self.burst(0.07, 3200., 0.32 * k, Lowpass, 0.7, 0., 0., M);
+                    self.tone(170., 0.06, Sine, 0.18 * k, 0., -80., 0., M);
+                }
+                _ => {
+                    self.burst(0.42, 1500., 0.6 * k, Lowpass, 0.7, 0., 0., M);
+                    self.tone(80., 0.3, Sine, 0.4 * k, 0., -40., 0., M);
+                }
+            },
+            Sfx::Swing(k) => self.burst(0.12, 900., 0.12 * k, Bandpass, 0.7, 0., 0., M),
+            Sfx::Punch(k) => {
+                self.burst(0.08, 500., 0.35 * k, Lowpass, 0.7, 0., 0., M);
+                self.tone(110., 0.1, Sine, 0.3 * k, 0., -50., 0., M);
+            }
+            Sfx::Thud(k) => {
+                self.burst(0.1, 1200., 0.25 * k, Bandpass, 0.7, 0., 0., M);
+                self.tone(90., 0.12, Triangle, 0.2 * k, 0., 0., 0., M);
+            }
+            Sfx::Impact(k) => self.burst(0.05, 3500., 0.12 * k, Highpass, 0.7, 0., 0., M),
+            Sfx::Reload => {
+                self.tone(1400., 0.04, Sine, 0.06, 0., 0., 0., M);
+                self.tone(900., 0.05, Sine, 0.06, 0.12, 0., 0., M);
+            }
+            Sfx::Reloaded => self.tone(1800., 0.04, Sine, 0.07, 0., 0., 0., M),
+            Sfx::WeaponSwitch => self.tone(1100., 0.04, Triangle, 0.07, 0., 0., 0., M),
             Sfx::Tick => self.tone(1200., 0.05, Square, 0.06, 0., 0., 0., M),
             Sfx::Pickup => {
                 for (i, f) in [523., 659., 784.].into_iter().enumerate() {

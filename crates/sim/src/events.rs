@@ -49,4 +49,68 @@ pub enum Event {
     Pickup,
     Tick,
     Notice(String),
+    // Kampf (combat.rs)
+    Shot {
+        x: f64,
+        y: f64,
+        a: f64,
+        weapon: &'static str,
+        /// Endpunkte der Kugeln (Leuchtspuren)
+        traces: Vec<(f64, f64)>,
+    },
+    Swing {
+        x: f64,
+        y: f64,
+        weapon: &'static str,
+        hit: bool,
+        npc: bool,
+    },
+    Impact {
+        x: f64,
+        y: f64,
+        metal: bool,
+    },
+    Blood {
+        x: f64,
+        y: f64,
+        a: f64,
+        n: u32,
+    },
+    Kill {
+        x: f64,
+        y: f64,
+        weapon: &'static str,
+        player: bool,
+    },
+    WeaponHit {
+        weapon: &'static str,
+        car: bool,
+    },
+    Thud {
+        x: f64,
+        y: f64,
+    },
+    PlayerHurt {
+        x: f64,
+        y: f64,
+        dmg: f64,
+    },
+    Wasted {
+        x: f64,
+        y: f64,
+    },
+    Respawn {
+        x: f64,
+        y: f64,
+        fee: f64,
+    },
+    Reload {
+        weapon: &'static str,
+    },
+    Reloaded {
+        weapon: &'static str,
+    },
+    WeaponSwitch {
+        weapon: &'static str,
+    },
 }

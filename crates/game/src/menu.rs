@@ -171,7 +171,7 @@ pub fn draw_stats(
         0.,
     );
     h.text("STATISTIK", vw / 2., 70., 36., YELLOW, Align::Center, true);
-    let cols: [&[usize]; 2] = [&[0], &[1, 2]];
+    let cols: [&[usize]; 2] = [&[0, 2], &[1, 3]];
     let (col_w, gap, voff, size) = (600., 24., 150., 15.);
     let x0 = vw / 2. - (2. * col_w + gap) / 2.;
     let grey = [0.6, 0.6, 0.6, 1.];
@@ -371,7 +371,10 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("ESP · ABS umschalten (im Auto)", "–", "X · Y/Z"),
     ("Einsteigen / Aussteigen", "Y", "F"),
     ("Aktion (Auftrag, Einladen)", "A", "E"),
-    ("Hupe", "X", "H"),
+    ("Hupe (im Auto) · Nachladen (zu Fuß)", "X", "H · R"),
+    ("Angreifen / Schießen · Treten", "RT · B", "Strg · V"),
+    ("Waffe wechseln", "RB / LB", "Q · 1–6"),
+    ("Zielen", "Rechter Stick", "Blickrichtung"),
     ("Stadtplan", "Ansicht-Taste", "Tab"),
     ("Uhr +1 Stunde · Wetter wechseln", "–", "T · N"),
     ("Ton umschalten · Speichern", "–", "M · F5"),
@@ -407,7 +410,7 @@ pub fn draw_controls(h: &mut Hud) {
         Align::Left,
         true,
     );
-    let row = 28.;
+    let row = 26.;
     for (i, (a, b, k)) in CONTROLS.iter().enumerate() {
         let y = 200. + i as f32 * row;
         if i % 2 == 0 {

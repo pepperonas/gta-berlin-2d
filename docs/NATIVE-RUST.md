@@ -532,3 +532,69 @@ Aufnahme: [Statistik](images/native/menu-statistik.png) (`--bildschirm statistik
   Spieler stehen; die Statistik zählt und `stats.json` wird geschrieben
 
 Die GPU-Aufnahme wurde visuell kontrolliert.
+
+## Kampf (04.10.2026)
+
+**Simulation** (`sim/combat.rs`, Port von `combat.js`):
+- **Waffen:** sechs Waffen wie im Browser (Fäuste, Baseballschläger, Messer, Pistole, Maschinenpistole,
+  Schrotflinte) und der Tritt. Munition ist unbegrenzt, Magazine werden nachgeladen.
+- **Schüsse** sind sofortige Strahlen. Hauswände, Stadtgrenze, Bäume, Kisten und stehende Poller halten sie auf,
+  Zäune, Gleise und Geländer nicht. Getroffen wird, was zuerst im Weg ist, Passant oder Auto, auf der eigenen
+  Ebene.
+- **Streuung** kommt aus dem Welt-Zufall und wächst mit dem Tempo der Figur. Die Schrotflinte fächert acht Kugeln.
+- **Nahkampf** trifft im Bogen vor der Figur.
+- **Zielhilfe:** am Stick ein Kegel mit freier Sichtlinie; ohne Stick zielt die Figur in Blickrichtung.
+- **Treffer auf Passanten:**
+  - Blut, ab 0 LP tot (Sturzrichtung).
+  - Zivilisten fliehen; die festen 15 % Kämpfer (aus der Personennummer) schlagen zurück, 9 LP je Schlag.
+  - Schüsse erschrecken alle im Umkreis von 42 m, Schläge des Spielers ziehen Kämpfer in der Nähe in die Schlägerei.
+- **Treffer auf Autos:** Schaden ×0,45 bis zum Wrack. Ein beschossener KI-Fahrer steigt aus und rennt weg.
+- **Spielfigur:**
+  - 100 LP, nach 8 s ohne Treffer 4 LP/s zurück.
+  - Bei 0 LP K. o., nach 3 s im nächsten Krankenhaus. Liegt es mitten im Gelände, steht die Figur auf dem
+    nächsten Gehweg.
+  - Das kostet 10 % des Geldes, und ein laufender Auftrag platzt.
+
+**Bedienung:**
+- **Angreifen/Schießen:** Strg bzw. RT. Pistole und Schrotflinte je Druck, MP und Nahkampf solange gehalten.
+- **Treten:** V bzw. B.
+- **Nachladen:** R bzw. X.
+- **Waffe wechseln:** Q oder RB vor, LB zurück, 1–6 direkt.
+- **Zielen:** rechter Stick. Eine Mauszielung gibt es noch nicht.
+
+**Darstellung** (`game/effects.rs` + Figuren in `play.rs`):
+- Mündungsfeuer (nachts auch als Lichtquelle), Leuchtspuren und Einschläge (Staub bzw. Funken auf Blech).
+- Blutstropfen in Schlagrichtung bleiben 90 s liegen und dunkeln nach.
+- Tote liegen in Sturzrichtung, Kämpfer zeigen ihren Schlag. Die Spielfigur trägt die gewählte Waffe; Schlag
+  und Tritt sind sichtbar.
+
+**HUD:**
+- Lebensleiste unter der Minikarte (wird rot, blinkt unter 25 %).
+- Waffenanzeige unten rechts mit Magazin, Nachladebalken und Waffenleiste.
+- Roter Rand bei Treffern, K. o.-Schriftzug.
+
+**Klang:** Pistole, MP und Schrotflinte (hörbar bis zur doppelten Ereignisweite), Schlag, Treffer, Blech,
+Einschlag, Nachladen und Waffenwechsel.
+
+**Statistik:** neuer Abschnitt Kampf mit Getöteten (erschossen bzw. im Nahkampf), Schüssen, Kugeln, Treffern,
+eigenen K. o. und Krankenhauskosten.
+
+Aufnahme: [Pistole, Waffenanzeige und Blut](images/native/kampf.png). `--kampf-demo` zieht für Aufnahmen die
+Pistole und schießt auf den nächsten Passanten.
+
+**Noch offen:**
+- Maus zum Zielen und Klicksteuerung (Diablo-Schema)
+- Waffenrad
+- Polizei und Rettungsdienst (`services.js`)
+- Waffen-Statistik je Waffe
+- Radfahrer als Ziele (keine Räder portiert)
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 104 Rust-Tests laufen erfolgreich. Neu getestet:
+- Strahl gegen Kreis, Strecke und gedrehtes Rechteck; Kämpferanteil ~15 %; Waffentabelle
+- Effekte erscheinen und vergehen
+- auf echten Kacheln: freie Schusslinie gesucht, drei bis sechs Pistolenschüsse töten, das Magazin zählt mit
+- Faustschlag trifft, blutet und macht 20 Schaden
+- K. o.: die Figur liegt still, wacht beim Krankenhaus auf einem Gehweg auf, 10 % Gebühr
+- ein beschossener KI-Fahrer steigt aus und flieht
+
+Die GPU-Aufnahme wurde visuell kontrolliert.
