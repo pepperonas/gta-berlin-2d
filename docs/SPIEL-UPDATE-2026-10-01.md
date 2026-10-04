@@ -211,6 +211,15 @@ Testlauf allein für diese Dokumentationsänderung:
   Die vollständige Suite ist nicht grün; betroffene Tests und Implementierungen
   müssen bei der nächsten gezielten Bereinigung einzeln abgeglichen werden.
 - Der anschließend ergänzte Wochentag-Befehl hat noch keinen eigenen Testlauf.
+- **Nachtrag 04.10.2026:** Die Fehlschläge sind aufgelöst, `npm test` meldet 471/471. 17 Tests wurden auf die
+  neuen Regeln dieses Updates umgestellt (siehe oben: Einsteigen und Bahnhöfe per F, keine NPC-Stürze, ESP für alle
+  Autos, Klangpegel, sichtbare Zaunkollision, Befehlszeile). Der Verkehrsfall war ein echter Fehler: Ein neues
+  KI-Auto unmittelbar an der Haltelinie vor einer Engstelle fuhr gegen den Gegenverkehr hinein; behoben über
+  `spawnAllowed`. Offen bleibt: Auf sehr engen zweispurigen Straßen streifen sich KI-Autos bei Glätte in Kurven
+  gelegentlich frontal oder verklemmen sich (nur in einzelnen Abläufen, nicht in der Suite).
+- Hinweis zum Code: In `world.js clickControl` ist der Zweig für `p.click.enter` (Einsteigen per Klick mit
+  Türhalt) seit diesem Update unerreichbar; der Mauszeiger zeigt über Fahrzeugen weiterhin das Einsteige-Symbol,
+  obwohl ein Klick nur hinführt.
 - Das Spiel wurde nach Serverneustart und Browser-Neuladen sichtbar gestartet.
   Ein manueller Vergleich der neuen Beschleunigung und ein abschließender Hörtest
   sind damit nicht nachgewiesen.

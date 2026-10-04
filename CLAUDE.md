@@ -340,6 +340,9 @@ change in `web/`.
   as their edges load (hooks `city.hooks.edgeAdd/edgeRemove`; `lane.next` recomputed per `city.gen`) (trimmed at junctions, Bezier connectors, no U-turns except dead ends); `traffic.js` follows the lane
   polyline with pure pursuit, slows for turns/obstacles, replans via the lane hash. **Population lives around the camera**
   (`TRAFFIC.spawnMin/spawnMax/despawn` in `config.js`, `managePopulation` in `world.js`).
+- **Spawn rule:** a new AI car born within `GATE_STOP` of its first line would pass it in the first step and be
+  claimed unchecked by `entryGate` (meant for platoons), even against oncoming traffic in a narrow. Every spawn
+  (traffic, services, buses) therefore calls `spawnAllowed` (Rust: `traffic::spawn_allowed`) after `placeOnLane`.
 - **Right of way = reservations, not StVO.** `ai.segs` (lane pieces with `k0`/`kEnd`) drive an entry gate before each lane
   end: `mayEnter` checks space behind the junction, `world.jres` (unsignalled junction: approach + per-car movement
   chord; non-conflicting movements may share) and `world.nres` (a narrow = all connected narrow edges of one street,
