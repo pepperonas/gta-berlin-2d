@@ -2,7 +2,7 @@
 //! einem deterministischen Simulationsschritt. Eingaben kommen als abstrakter Zustand ([`Input`]), Ausgaben als
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
 //!
-//! Noch nicht portiert: Linienverkehr und U-Bahnhöfe, Bar-Auslastung (Nachtleben-Feed), Jogger und Hundehalter.
+//! Noch nicht portiert: Linienverkehr und U-Bahnhöfe, Jogger und Hundehalter.
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
 use crate::city::{City, Ground, Solid, point_along};
@@ -589,6 +589,24 @@ impl World {
                 self.scooters.insert(id, v);
             }
         }
+    }
+
+    /// Nachtleben an (x, y): Lokale vor ihrem Gehweg, mit Feed; Regen und Schnee nach drinnen.
+    pub fn nightlife_at(&mut self, x: f64, y: f64) -> crate::nightlife::Heard {
+        let (clock, day, rain, snow) = (self.clock, self.day, self.sky.p.rain, self.sky.p.snow);
+        let cache = &mut self.life_cache;
+        let mut front = |c: &mut City, qx: f64, qy: f64| cache.front(c, qx, qy).map(|f| (f.x, f.y));
+        crate::nightlife::nightlife_at(
+            &mut self.city,
+            &mut front,
+            x,
+            y,
+            clock,
+            day,
+            None,
+            rain,
+            snow,
+        )
     }
 
     /// Pfützen einer Kante (gecacht, solange die Kachel um die Kamera vollständig ist).

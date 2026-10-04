@@ -287,10 +287,16 @@ fn on_off(v: Option<&str>, cur: bool) -> Option<bool> {
 /// Was ein Befehl außerhalb der Welt auslöst (das Spiel führt es aus).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    Teleport { x: f64, y: f64, name: String },
+    Teleport {
+        x: f64,
+        y: f64,
+        name: String,
+    },
     Stats,
     Cheat(&'static str),
     Money(f64),
+    /// Bar-Feed: Datei setzen, `neu` laden, `aus`
+    Bars(Option<String>),
 }
 
 /// Was ein Befehl braucht.
@@ -515,6 +521,17 @@ pub const COMMANDS: &[Command] = &[
         help: "eigenes Auto reparieren",
         cheat: true,
         args: &[],
+    },
+    Command {
+        name: "bars",
+        aliases: &["nachtleben"],
+        help: "Bar-Auslastung (Feed-Datei setzen, neu laden, aus)",
+        cheat: false,
+        args: &[arg(
+            "Datei|neu|aus",
+            true,
+            Values::Fixed(&[("neu", "Feed neu laden"), ("aus", "nur OSM-Lokale")]),
+        )],
     },
     Command {
         name: "stats",
@@ -1114,6 +1131,24 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 err("Kein Auto")
             }
         }
+        "bars" => match a0 {
+            None => match &w.city.bars {
+                Some(b) => ok(format!(
+                    "{} Bars im Feed, {} auf der Karte zugeordnet",
+                    b.list.len(),
+                    b.list.iter().filter(|b| b.osm).count()
+                )),
+                None => ok("Kein Bar-Feed – bars <Datei>"),
+            },
+            Some(v) => {
+                ctx.actions.push(Action::Bars(Some(v.to_string())));
+                ok(if v == "aus" {
+                    "Bar-Feed aus"
+                } else {
+                    "Lade Bar-Feed …"
+                })
+            }
+        },
         "stats" => {
             ctx.actions.push(Action::Stats);
             ok("Statistik")

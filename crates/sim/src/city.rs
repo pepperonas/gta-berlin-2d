@@ -839,6 +839,10 @@ pub const RETRY_S: [f64; 4] = [0.5, 1., 2., 3.];
 
 pub struct City {
     pub scale: f64,
+    /// Kopf aus index.json (Projektion für Geokoordinaten)
+    pub meta: Option<berlin_map_loader::format::Meta>,
+    /// Bar-Auslastungs-Feed (nightlife.rs)
+    pub bars: Option<crate::nightlife::Bars>,
     pub tile: f64,
     pub width: f64,
     pub height: f64,
@@ -950,6 +954,8 @@ impl City {
         };
         let border_bounds = bounds_of(&border);
         let mut city = Self {
+            meta: serde_json::from_value(m.clone()).ok(),
+            bars: None,
             scale: num(&m["scale"])?,
             tile: num(&m["tile"])?,
             width: num(&m["width"])?,

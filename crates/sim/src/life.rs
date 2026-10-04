@@ -128,6 +128,27 @@ pub fn activity_for(q: &Poi, minutes: f64, day: u32) -> Option<(Act, usize)> {
     }
 }
 
+/// Bar aus dem Auslastungs-Feed: je voller, desto mehr Leute rauchen davor, Clubs haben Schlange.
+pub fn feed_activity(
+    kind: &str,
+    bar: &crate::nightlife::Bar,
+    x: f64,
+    y: f64,
+    minutes: f64,
+    day: u32,
+) -> Option<(Act, usize)> {
+    let lvl = crate::nightlife::bar_level(kind, Some(bar), minutes, day, None);
+    let r = hl(&[x, y, (minutes / 60.).floor(), day as f64]);
+    if lvl < 0.08 {
+        return None;
+    }
+    Some(if kind == "nightclub" {
+        (Act::Queue, (3. + lvl * 12. + r * 3.).round() as usize)
+    } else {
+        (Act::Smoke, (1. + lvl * 5. + r).round() as usize)
+    })
+}
+
 /// Stelle vor dem Laden (zur nächsten Straße hin), ohne Cache.
 pub fn front_of(city: &mut City, x: f64, y: f64) -> Option<Front> {
     let s = city.scale;
@@ -292,7 +313,23 @@ pub fn life_spots(
         .map(|h| city.pois.get(h).clone())
         .collect();
     for q in &pois {
-        let Some((act, n)) = activity_for(q, minutes, day) else {
+        let feed = if q.cat == "drink" {
+            let bi = city
+                .bars
+                .as_mut()
+                .and_then(|b| crate::nightlife::feed_bar_for(b, q));
+            bi.and_then(|i| city.bars.as_ref().map(|b| b.list[i].clone()))
+        } else {
+            None
+        };
+        let a = match &feed {
+            Some(bar) => {
+                let kind = if q.kind.is_empty() { "bar" } else { &q.kind };
+                feed_activity(kind, bar, q.x, q.y, minutes, day)
+            }
+            None => activity_for(q, minutes, day),
+        };
+        let Some((act, n)) = a else {
             continue;
         };
         if n == 0 {
@@ -307,6 +344,37 @@ pub fn life_spots(
                 hl(&[q.x, q.y]),
                 &mut out,
                 &format!("p{},{}", q.x, q.y),
+            );
+        }
+    }
+    // Bars aus dem Feed, die OSM nicht kennt: Raucher direkt an ihrer Koordinate
+    let extra: Vec<crate::nightlife::Bar> = city
+        .bars
+        .as_ref()
+        .map(|b| {
+            b.list
+                .iter()
+                .filter(|b| !b.osm)
+                .filter(|b| {
+                    b.x.is_some_and(|x| (x - cx).abs() <= radius)
+                        && b.y.is_some_and(|y| (y - cy).abs() <= radius)
+                })
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    for b in &extra {
+        let (x, y) = (b.x.unwrap_or(0.), b.y.unwrap_or(0.));
+        if let Some((act, n)) = feed_activity("bar", b, x, y, minutes, day)
+            && let Some(f) = cache.front(city, x, y)
+        {
+            arrange(
+                f,
+                n.min(6),
+                act,
+                hl(&[x, y]),
+                &mut out,
+                &format!("f{x},{y}"),
             );
         }
     }

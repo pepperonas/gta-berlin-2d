@@ -1,6 +1,7 @@
 //! Umgebungsklang an der Kamera (Port der in der Simulation vorhandenen Teile von `ambience.js`): Stadtrauschen,
 //! Verkehr, Vögel in Grün und Bäumen bei Tag, Wasser am Ufer, Regen, Wind und Böen, Dämpfung im Auto und durch
-//! Schnee. Nachtleben, Hochbahn und Martinshörner folgen mit Nahverkehr und Einsatzfahrzeugen.
+//! Schnee, Martinshörner und Nachtleben (Stimmengewirr vor Bars und Leuten am Lebensplatz, gedämpfte Clubmusik).
+//! Die Hochbahn folgt mit dem Nahverkehr.
 use crate::city::{CircleKind, PolyKind, Solid, bounds_of};
 use crate::collision::Rect;
 use crate::world::World;
@@ -25,6 +26,11 @@ pub struct Mix {
     /// nächstes Martinshorn: Lautstärke 0…1 und ob gerade der hohe Ton
     pub siren: f64,
     pub siren_high: bool,
+    /// Stimmengewirr (Bars, Leute am Lebensplatz), gedämpfte Musik, Richtung der lautesten Quelle, Anteil Feed
+    pub bar: f64,
+    pub music: f64,
+    pub bar_pan: f64,
+    pub night_feed: f64,
 }
 
 /// so weit hört man ein Martinshorn (px)
@@ -126,7 +132,31 @@ pub fn ambience_at(w: &mut World) -> Mix {
             siren_high = crate::services::siren_high(w.time + c.id as f64 * 0.37);
         }
     }
+    // Leute am Lebensplatz (trinken, rauchen, anstehen, plaudern, sitzen) in der Nähe
+    let mut bar = 0.;
+    for p in &w.peds {
+        if p.state != crate::pedestrians::PedState::Hang {
+            continue;
+        }
+        use crate::life::Act;
+        if p.hang.as_ref().is_some_and(|h| {
+            matches!(
+                h.act,
+                Act::Drink | Act::Smoke | Act::Queue | Act::Chat | Act::Sit
+            )
+        }) {
+            let d = (p.x - cx).hypot(p.y - cy);
+            if d < 400. {
+                bar += 0.12 * (1. - d / 400.);
+            }
+        }
+    }
+    let nl = w.nightlife_at(cx, cy);
     Mix {
+        bar: bar.max(nl.crowd).clamp(0., 1.),
+        music: nl.music * hush,
+        bar_pan: nl.pan,
+        night_feed: nl.feed,
         hum: if night { 0.35 } else { 0.6 } * hush,
         traffic: (traffic / 2.).clamp(0., 1.) * hush,
         // bei Regen, Sturm und Schnee schweigen die Vögel

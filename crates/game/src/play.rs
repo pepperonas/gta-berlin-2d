@@ -30,6 +30,8 @@ pub struct Play {
     pub screen: Screen,
     menu: crate::menu::Menu,
     root: std::path::PathBuf,
+    /// Bar-Feed (Standard `web/data/bars.json` neben den Kacheln, `--bars DATEI`), `None` = aus
+    pub bars_file: Option<std::path::PathBuf>,
     seed: u32,
     /// Stick-Stellung des letzten Schritts (Menüauswahl per Stick als Flanke)
     stick_prev: f32,
@@ -127,6 +129,15 @@ fn fresh_world(root: &Path, seed: u32) -> Result<World> {
     ))
 }
 
+/// Bar-Auslastungs-Feed lesen und an die Stadt hängen (Datei wie `npm run bars:fetch` sie schreibt).
+pub fn load_bars(world: &mut World, path: &Path) -> Result<usize, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| format!("Bar-Feed: {e}"))?;
+    let (_, _, bars) = berlin_sim::nightlife::parse_bar_feed(&json)?;
+    Ok(berlin_sim::nightlife::attach_bars(&mut world.city, bars))
+}
+
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
 pub fn lighting_at(minutes: f64) -> Lighting {
     lighting_of(&light_at(minutes))
@@ -184,7 +195,7 @@ impl Play {
             }
         };
         let places = crate::console::place_index(&bigmap.labels);
-        Ok(Self {
+        let mut play = Self {
             console: Default::default(),
             places,
             teleport_auto: false,
@@ -213,6 +224,10 @@ impl Play {
             screen,
             menu: crate::menu::title_menu(has_save),
             root: root.to_path_buf(),
+            bars_file: root
+                .parent()
+                .map(|p| p.join("bars.json"))
+                .filter(|p| p.exists()),
             seed,
             stick_prev: 0.,
             quit: false,
@@ -238,7 +253,13 @@ impl Play {
             time_scale: 1.,
             fx: Default::default(),
             trails: Default::default(),
-        })
+        };
+        match play.reload_bars() {
+            Ok(m) if play.bars_file.is_some() => eprintln!("Nachtleben: {m}"),
+            Err(e) => eprintln!("Bar-Feed nicht ladbar: {e}"),
+            _ => {}
+        }
+        Ok(play)
     }
     fn save(&mut self) -> bool {
         let Some(st) = self.storage.as_mut() else {
@@ -302,6 +323,9 @@ impl Play {
                 }
                 w.force_weather = self.world.force_weather;
                 self.world = w;
+                if let Err(e) = self.reload_bars() {
+                    eprintln!("Bar-Feed nicht ladbar: {e}");
+                }
                 self.stats = if resume {
                     self.stats_saved.clone()
                 } else {
@@ -398,6 +422,15 @@ impl Play {
             }
         }
     }
+    /// Bar-Feed (neu) an die Stadt hängen; Meldung für Befehlszeile und Konsole.
+    pub fn reload_bars(&mut self) -> Result<String, String> {
+        let Some(p) = self.bars_file.clone() else {
+            self.world.city.bars = None;
+            return Ok("Kein Bar-Feed – bars <Datei>".into());
+        };
+        let n = load_bars(&mut self.world, &p)?;
+        Ok(format!("{n} Bars aus {}", p.display()))
+    }
     /// Befehlszeile bedienen (Welt steht): Tasten und getippter Text, danach die Folgen der Befehle.
     fn step_console(&mut self, keys: &Keys) {
         use crate::console::{Action, Ctx, Key};
@@ -455,6 +488,19 @@ impl Play {
                         self.stats_total.bump("cheats");
                     }
                     Action::Money(m) => self.tracker.set_money(m),
+                    Action::Bars(arg) => {
+                        match arg.as_deref() {
+                            Some("aus") => self.bars_file = None,
+                            Some("neu") | None => {}
+                            Some(p) => self.bars_file = Some(p.into()),
+                        }
+                        let r = self.reload_bars();
+                        let (msg, ok) = match r {
+                            Ok(m) => (m, true),
+                            Err(e) => (e, false),
+                        };
+                        self.console.log.push((msg, ok, now));
+                    }
                 }
             }
             if !self.console.open {
@@ -2303,5 +2349,32 @@ mod tests {
         press(&mut p, Some(KeyCode::Enter));
         assert!(p.quit());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn real_bar_feed_lands_in_berlin() {
+        use berlin_sim::city::{City, DiskSource};
+        let root = berlin_map_loader::default_data_root();
+        let Some(path) = root
+            .parent()
+            .map(|p| p.join("bars.json"))
+            .filter(|p| p.exists())
+        else {
+            return; // Feed fehlt (gitignored, npm run bars:fetch)
+        };
+        let city = City::open(&root, Box::new(DiskSource::new(root.clone()))).unwrap();
+        let mut w = World::new(city, 3, 4, 4);
+        let n = load_bars(&mut w, &path).unwrap();
+        assert!(n > 0);
+        let b = w.city.bars.as_ref().unwrap();
+        let inside = b
+            .list
+            .iter()
+            .filter(|b| matches!((b.x, b.y), (Some(x), Some(y)) if w.city.inside_border(x, y)))
+            .count();
+        assert!(inside * 10 >= n * 9, "{inside} von {n} Bars in Berlin");
+        assert!(
+            b.list.iter().filter(|b| b.week.is_some()).count() * 2 >= n,
+            "Wochenprofile"
+        );
     }
 }

@@ -1355,3 +1355,56 @@ fn puddles_make_fast_cars_aquaplane() {
     );
     assert!(w.car(id).unwrap().aqua > 0.);
 }
+
+#[test]
+fn nightlife_feed_fills_bars_and_sound() {
+    use berlin_sim::nightlife::{Bar, attach_bars};
+    let mut w = world(101);
+    run(&mut w, 5, idle());
+    let g = w.city.places.giver;
+    (w.clock, w.day) = (23. * 60., 4);
+    let (lx, ly) = (g.x - 300., g.y);
+    let quiet = w.nightlife_at(lx, ly);
+    // eine volle Feed-Bar ohne OSM-Gegenstück am Späti, gehört aus 30 m
+    let bar = Bar {
+        name: "Testbar".into(),
+        key: "testbar".into(),
+        lat: None,
+        lon: None,
+        current: None,
+        usual: None,
+        at: None,
+        trend: Vec::new(),
+        week: Some([Some([Some(0.3); 24]); 7]),
+        x: Some(g.x),
+        y: Some(g.y),
+        osm: false,
+    };
+    assert_eq!(attach_bars(&mut w.city, vec![bar]), 1);
+    let loud = w.nightlife_at(lx, ly);
+    assert!(loud.crowd > quiet.crowd, "{} > {}", loud.crowd, quiet.crowd);
+    assert!(loud.feed > 0. && loud.sources.iter().any(|s| s.name == "Testbar"));
+    assert!(
+        loud.sources.iter().any(|s| s.name == "Testbar" && s.x > lx),
+        "Quelle liegt rechts"
+    );
+    // Raucher vor der Feed-Bar
+    let before = w.hangers.len();
+    w.manage_life(true);
+    let matched = w.city.bars.as_ref().unwrap().list[0].osm;
+    assert!(w.hangers.len() >= before.min(1));
+    assert!(
+        matched || w.hangers.keys().any(|k| k.starts_with('f')),
+        "Raucher vor der Testbar (oder dem OSM-Lokal, dem sie zugeordnet ist)"
+    );
+    (w.camera.x, w.camera.y) = (lx, ly);
+    let mix = berlin_sim::ambience::ambience_at(&mut w);
+    assert!(mix.bar > 0.05 && mix.night_feed > 0., "{mix:?}");
+    // Regen treibt die Leute rein: draußen leiser
+    (w.clock, w.day) = (19. * 60., 1); // ruhiger Montagabend: nicht gesättigt
+    w.sky.p.rain = 0.;
+    let dry = w.nightlife_at(lx, ly).crowd;
+    w.sky.p.rain = 1.;
+    let wet = w.nightlife_at(lx, ly).crowd;
+    assert!(dry < 1. && wet < dry, "{wet} < {dry}");
+}

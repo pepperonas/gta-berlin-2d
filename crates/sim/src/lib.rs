@@ -21,6 +21,7 @@ pub mod levels;
 pub mod life;
 pub mod math;
 pub mod mission;
+pub mod nightlife;
 pub mod pedestrians;
 pub mod rhythm;
 pub mod roadgraph;

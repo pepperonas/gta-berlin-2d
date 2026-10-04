@@ -86,6 +86,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Befehlszeile (Enter) wie im Browser – Uhrzeit, Wochentag, Wetter samt Wettertafel, Dichte,
   Teleport zu Straßen/Bahnhöfen/Ortsteilen/Kiezen/Bezirken, Geld, Gesundheit, Munition, Gottmodus, Fahrzeuge;
   Vorschläge mit Tippfehler-Toleranz, Verlauf, Statistikzeile für Konsolenbefehle.
+- Native Rust-Fassung: Nachtleben. Typische Auslastung je Lokalart, Bar-Feed (gostumblr-Format, `web/data/bars.json`,
+  `--bars`, Befehl `bars`), Raucher und Schlangen vor vollen Bars, Stimmengewirr, Lachen, Gläser und Club-Bass im Klang.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

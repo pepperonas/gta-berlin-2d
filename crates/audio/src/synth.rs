@@ -198,6 +198,14 @@ struct Ambience {
     next_chirp: f64,
     drops: f64,
     last: f64,
+    /// Nachtleben: Stimmengewirr in drei Formantbändern, Richtung, Silbentakt, Lachen, Gläser, Club-Takt
+    babble: [NoiseLayer; 3],
+    bar_pan: Smooth,
+    next_syllable: f64,
+    next_laugh: f64,
+    next_clink: f64,
+    next_beat: f64,
+    beat: u32,
 }
 
 pub struct Synth {
@@ -307,6 +315,17 @@ impl Synth {
             next_chirp: 0.,
             drops: 0.,
             last: 0.,
+            babble: [
+                l(Bandpass, 480., 3.),
+                l(Bandpass, 1150., 4.),
+                l(Bandpass, 2500., 5.),
+            ],
+            bar_pan: Smooth::new(0.),
+            next_syllable: 0.,
+            next_laugh: 0.,
+            next_clink: 0.,
+            next_beat: 0.,
+            beat: 0,
         };
         Self {
             sr,
@@ -675,6 +694,7 @@ impl Synth {
         }
         self.muffle_f
             .set(18000. * 0.04f32.powf(m.muffle as f32), 0.3, sr);
+        self.set_bar(m);
         // Vogelstimmen: kurze Tonfolgen, je mehr Grün, desto öfter
         if m.birds > 0.02 && self.t > self.amb.next_chirp {
             let base = 2400. + self.rng.unit() * 2600.;
@@ -694,6 +714,102 @@ impl Synth {
                 );
             }
             self.amb.next_chirp = self.t + 0.4 + self.rng.unit() as f64 * 2.2 / m.birds;
+        }
+    }
+
+    /// Nachtleben (audio.js setBar): Stimmengewirr mit Silbenrhythmus, Lachen, Gläserklirren und gedämpfter
+    /// Club-Bass (124 BPM, Kick und Bass auf der Offbeat), alles in Richtung der lautesten Quelle.
+    fn set_bar(&mut self, m: &Mix) {
+        let sr = self.sr;
+        let crowd = m.bar as f32;
+        let music = m.music as f32;
+        let pan = (m.bar_pan * 0.7) as f32;
+        self.amb.bar_pan.set(pan, 0.3, sr);
+        if self.t >= self.amb.next_syllable {
+            for (i, b) in self.amb.babble.iter_mut().enumerate() {
+                let base = [0.07, 0.045, 0.02][i] * crowd;
+                let g = base * (0.45 + self.rng.unit() * 0.9);
+                let f = [480., 1150., 2500.][i] * (0.8 + self.rng.unit() * 0.45);
+                b.gain.set(g, 0.03, sr);
+                b.freq.set(f, 0.04, sr);
+            }
+            self.amb.next_syllable = self.t + 0.06 + self.rng.unit() as f64 * 0.05;
+        }
+        let n0 = self.shots.len();
+        if crowd > 0.15 && self.t > self.amb.next_laugh {
+            // Lachen: 3–6 „ha“ (Formant auf Rauschen), fallend
+            let n = 3 + (self.rng.unit() * 4.) as usize;
+            let f0 = 800. + self.rng.unit() * 600.;
+            let mut at = 0.;
+            for i in 0..n {
+                let k = i as f32;
+                self.burst(
+                    0.09,
+                    f0 * (1. - k * 0.05),
+                    0.03 * crowd * (1. - k * 0.1),
+                    FilterType::Bandpass,
+                    7.,
+                    at,
+                    0.015,
+                    Dest::Outside,
+                );
+                at += 0.12 + self.rng.unit() * 0.03;
+            }
+            self.amb.next_laugh = self.t + 1.2 + self.rng.unit() as f64 * 5. / crowd as f64;
+        }
+        if crowd > 0.1 && self.t > self.amb.next_clink {
+            let f = 2800. + self.rng.unit() * 1600.;
+            let g = 0.02 * crowd;
+            self.tone(f, 0.25, Wave::Sine, g, 0., 0., 0., Dest::Outside);
+            self.tone(
+                f * 2.76,
+                0.15,
+                Wave::Sine,
+                g * 0.5,
+                0.,
+                0.,
+                0.,
+                Dest::Outside,
+            );
+            self.amb.next_clink = self.t + 0.8 + self.rng.unit() as f64 * 4. / crowd as f64;
+        }
+        if music > 0.03 {
+            let spb = 60. / 124.;
+            if self.amb.next_beat < self.t {
+                self.amb.next_beat = self.t + 0.05;
+            }
+            while self.amb.next_beat < self.t + 0.6 {
+                let at = (self.amb.next_beat - self.t) as f32;
+                // Kick: Sinus 130 → 44 Hz
+                self.tone(
+                    130.,
+                    0.3,
+                    Wave::Sine,
+                    0.22 * music,
+                    at,
+                    -86.,
+                    0.,
+                    Dest::Outside,
+                );
+                if self.amb.beat.is_multiple_of(2) {
+                    let f = [55., 55., 65.4, 49.][((self.amb.beat >> 3) % 4) as usize];
+                    self.tone(
+                        f,
+                        spb as f32 * 0.45,
+                        Wave::Saw,
+                        0.05 * music,
+                        at + spb as f32 / 2.,
+                        0.,
+                        170.,
+                        Dest::Outside,
+                    );
+                }
+                self.amb.next_beat += spb;
+                self.amb.beat += 1;
+            }
+        }
+        for s in &mut self.shots[n0..] {
+            s.pan = pan;
         }
     }
 
@@ -1005,6 +1121,10 @@ impl Synth {
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
             or += amb * c;
+            let bab: f32 = a.babble.iter_mut().map(|b| b.next(sr, block)).sum();
+            let (bl, br) = pan(a.bar_pan.tick());
+            ol += bab * bl;
+            or += bab * br;
             // --- Einzelklänge
             let (mut ml, mut mr) = (eng, eng);
             let t = self.t;

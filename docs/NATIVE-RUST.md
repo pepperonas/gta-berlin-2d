@@ -891,3 +891,35 @@ Die Engine liefert dafür getippten Text (`Keys::typed`, aus `KeyEvent::text`, b
 Rangfolge und Vorschläge; ein Test gegen die echte Welt prüft Uhrzeit, Wetter, Wochentag, Geld (als Cheat gezählt),
 `tp` mit Ortsliste aus `overview.json`, Fahrzeug abstellen, Tippfehler-Hinweis, Grenzen und den Ablauf
 Enter-übernimmt/Enter-führt-aus; 129 Rust-Tests.
+
+## Nachtleben (04.10.2026)
+
+`sim/nightlife.rs` ist ein Port von `nightlife.js`:
+- **Verlauf je Lokal:** typischer Verlauf je OSM-Lokalart (Bar, Kneipe ab Feierabend, Biergarten abends, Club ab
+  23 Uhr und vor allem Freitag-/Samstagnacht).
+- **Feed lesen:** `parse_bar_feed` liest das gostumblr-Format (`bars` mit Koordinaten, `occupancy_percent`,
+  `usual_percent`, `last_scraped`, `trend` und `weekly` als Wochenschnitt) und allgemein Listen, `{ bars | venues | … }`
+  oder GeoJSON. Wochenprofile kommen als Google-„Stoßzeiten“, Tagesobjekte, 7×24 oder 24.
+- **Ortszeit:** Zeitstempel (Unix-Sekunden, Millisekunden, ISO 8601) werden in Berliner Ortszeit umgerechnet, mit
+  MEZ/MESZ nach EU-Regel, ohne Zeitzonen-Bibliothek.
+- **Zuordnung:** `attach_bars` projiziert die Bars mit `projection::geo_to_px` (die Stadt behält dafür `meta` aus
+  `index.json`). `feed_bar_for` ordnet Feed-Bars OSM-Lokalen zu: gleicher Name in 150 m, sonst eine Bar in 30 m.
+- **Hören:** `nightlife_at` liefert Stimmengewirr, Musik, Richtung und Feed-Anteil. Regen und Schnee treiben die
+  Leute nach drinnen.
+
+**Folgen:**
+- **Stadtleben:** Vor vollen Feed-Bars rauchen mehr Leute, Clubs haben eine Schlange. Feed-Bars, die OSM nicht kennt,
+  bekommen Raucher an ihrer Koordinate.
+- **Klangmix:** `Mix` hat `bar`, `music`, `bar_pan` und `night_feed`; Leute am Lebensplatz zählen mit.
+- **Klang** (`synth.rs set_bar`): Stimmengewirr in drei Formantbändern mit Silbentakt, Lachen, Gläserklirren und
+  gedämpfter Club-Bass (124 BPM, Kick und Bass auf der Offbeat), alles in Richtung der lautesten Quelle.
+
+**Feed im nativen Spiel:** Standard ist `web/data/bars.json` neben den Kacheln, so wie `npm run bars:fetch` sie
+schreibt (gitignored). Alternativ `--bars DATEI` (oder `--bars aus`) und in der Befehlszeile `bars` (Stand zeigen),
+`bars neu`, `bars aus` oder `bars <Datei>`. Eine Live-Abfrage per HTTP gibt es nativ bewusst nicht (keine
+Netzwerk-Abhängigkeit); live gilt jede Auslastung als frisch.
+
+**Validierung:** Unit-Tests für Lokalverläufe, Ortszeit samt Sommerzeit und ISO-Zeitstempel sowie das tolerante
+Feed-Lesen. Ein Integrationstest prüft am echten Kiez: Feed-Bar lauter, Quelle in der richtigen Richtung, Raucher am
+Lebensplatz, Mix mit Feed-Anteil, Regen macht leiser. Ein Spieltest liest den echten Feed, wenn er vorhanden ist:
+121 Bars, mindestens 90 % in Berlin, Wochenprofile. 134 Rust-Tests.
