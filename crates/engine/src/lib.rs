@@ -53,6 +53,8 @@ pub struct Lighting {
     pub minutes: f32,
     /// Wärme der Farbabstimmung (`visualstyle.js filmMood`)
     pub warmth: f32,
+    /// Nebel 0…1,7 (`weather.fog`): dämpft das Fensterlicht (render.js `fogK`)
+    pub fog: f32,
 }
 impl Default for Lighting {
     /// 13 Uhr: Sonne im Süden, kurze Schatten nach Norden, volles Tageslicht.
@@ -68,6 +70,7 @@ impl Default for Lighting {
             windows: 0.,
             minutes: 780.,
             warmth: 0.018,
+            fog: 0.,
         }
     }
 }

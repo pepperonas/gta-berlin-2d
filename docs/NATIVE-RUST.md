@@ -1076,8 +1076,9 @@ den Vorhang halb zu.
 
 **Arbeitsstätten** (öffentliche Gebäude, Industrie, Lager) tragen an der Fassade Material 12 statt 11 und folgen
 dem Bürotagesgang aus `windows.js` (abends noch Licht, nachts fast dunkel, tagsüber gedämpft).
-**Abweichungen:** Das Fensterlicht strahlt nicht in die Lichtkarte ab und wird
-im Nebel nicht gedämpft. Geprüft per Aufnahme (Nacht: Fenster, Tag: kein einziges warmes Fensterpixel).
+Nebel dämpft das Fensterlicht wie `render.js fogK` (bis −65 % bei Nebel 1,4): der Wert steht im bisher freien
+Uniform-Platz hinter `scale` (`camera.fog`, `Lighting::fog`). [Bild](images/native/nebel-fenster.png), 21:30 bei
+dichtem Nebel. **Abweichung:** Das Fensterlicht strahlt nicht in die Lichtkarte ab. Geprüft per Aufnahme (Nacht: Fenster, Tag: kein einziges warmes Fensterpixel).
 
 ## Farbabstimmung und Vignette (04.10.2026)
 
@@ -1100,8 +1101,8 @@ Silhouette liegt minimal vor den eigenen Teilen, damit sie über der frei sichtb
 `--bildschirm verdeckt` stellt die Figur nördlich eines Hauses ab ([Bild](images/native/silhouette.png),
 vergrößert). Gegenprobe ohne Verdeckung: kein Umriss.
 
-Andere Autos und Passanten erscheinen unter Verdeckendem als blasse Umrisse. **Abweichung:** Räder und
-Straßenbahnwagen bekommen keine Silhouette.
+Andere Autos, Passanten, Radfahrer/E-Roller und Bahnwagen erscheinen unter Verdeckendem als blasse Umrisse; die
+Umriss-Tiefe liegt jeweils knapp vor dem vordersten eigenen Teil, damit das Fahrzeug sich nicht selbst verdeckt.
 
 ## Kirchenglocken (04.10.2026)
 

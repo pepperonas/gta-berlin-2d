@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Nebel dämpft das Fensterlicht (`fogK`); Radfahrer, E-Roller und Bahnwagen bekommen unter
+  Dächern und Baumkronen eine Silhouette.
 - Native Rust-Portierung: Missions-Autopilot als Integrationstest (A* über den echten Straßengraphen, Pure Pursuit,
   vorausschauendes Bremsen) – spielt die ganze Mission über Spieler-Eingaben.
 - Native Rust-Portierung: Straßennamen entlang der Straße auf dem Stadtplan (gedrehte Bitmapschrift).

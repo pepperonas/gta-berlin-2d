@@ -188,6 +188,7 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
         windows: l.windows_lit as f32,
         minutes: l.minutes as f32,
         warmth: berlin_sim::daylight::film_mood(l).0 as f32,
+        fog: 0.,
     }
 }
 
@@ -2426,6 +2427,37 @@ impl Game for Play {
                 color: pale,
             });
         }
+        // Radfahrer und Bahnwagen (render.js sammelt auch sie in `_covered`)
+        for b in w.bikes.iter().filter(|b| near(b.x, b.y)) {
+            let half = if b.kind == berlin_sim::bikes::Kind::Scooter {
+                6.
+            } else {
+                8.
+            };
+            out.push(Body {
+                center: [b.x as f32, b.y as f32],
+                half: [half, 3.5],
+                angle: b.angle as f32,
+                shape: 0.,
+                depth: if b.level.lvl >= 1 { 0.5506 } else { 0.6186 },
+                color: pale,
+            });
+        }
+        for t in &self.trains {
+            for (c, &lvl) in t.cars.iter().zip(&t.lvl) {
+                if !near(c.x, c.y) {
+                    continue;
+                }
+                out.push(Body {
+                    center: [c.x as f32, c.y as f32],
+                    half: [c.l as f32 / 2., c.w as f32 / 2.],
+                    angle: c.angle as f32,
+                    shape: 0.,
+                    depth: if lvl >= 1 { 0.545 } else { 0.62 },
+                    color: pale,
+                });
+            }
+        }
         for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
             if matches!(
                 p.state,
@@ -2646,6 +2678,7 @@ impl Game for Play {
     }
     fn lighting(&self) -> Option<Lighting> {
         let mut l = lighting_of(&world_light(&self.world));
+        l.fog = self.world.sky.p.fog as f32;
         // Blitze hellen alles kurz auf
         let flash = berlin_sim::weather::flash_total(
             self.world.seed,

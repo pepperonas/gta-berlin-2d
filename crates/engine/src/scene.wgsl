@@ -1,5 +1,5 @@
 struct Camera {
-    position: vec2<f32>, scale: f32, padding: f32,
+    position: vec2<f32>, scale: f32, fog: f32,
     viewport: vec2<f32>, padding2: vec2<f32>,
     sun: vec4<f32>, params: vec4<f32>,
     // shadow: Richtung (x, y), Länge je Höhe, Stärke · ambient: Umgebungslicht (sRGB) und Dunkelheit
@@ -205,7 +205,9 @@ fn office_light(m: f32) -> f32 {
     let curtain = whash(seed, face, row, col, 7u) < 0.22;
     let gy = (st.y - 0.28) / 0.52;
     if curtain && gy > 0.55 { discard; }
-    return vec4(linear_color(c * glow), 1.0);
+    // Nebel schluckt das Fensterlicht (render.js fogK)
+    let fog_k = 1.0 - 0.65 * min(1.0, camera.fog / 1.4);
+    return vec4(linear_color(c * glow) * fog_k, 1.0);
 }
 struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32>, @location(1) uv: vec2<f32> };
 @vertex fn sprite_vs(

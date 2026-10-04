@@ -1097,6 +1097,8 @@ impl Renderer {
         };
         let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
+        // freier Platz hinter `scale`: Nebel für das Fensterlicht
+        uniform[3] = l.fog;
         uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
         uniform.extend([self.scale, 0., l.windows, l.warmth]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
