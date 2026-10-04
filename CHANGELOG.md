@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Missions-Autopilot als Integrationstest (A* über den echten Straßengraphen, Pure Pursuit,
+  vorausschauendes Bremsen) – spielt die ganze Mission über Spieler-Eingaben.
 - Native Rust-Portierung: Straßennamen entlang der Straße auf dem Stadtplan (gedrehte Bitmapschrift).
 - Native Rust-Portierung: Dachaufbauten (Schornsteine, Schächte, Oberlichter, Klimageräte, Solar, Terrassen),
   Gauben, Hauseingänge und die Spätifront.

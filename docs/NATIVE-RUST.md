@@ -219,7 +219,7 @@ Bremslichter und Kisten; Passanten Körper und Kopf; das Missionsziel einen puls
 noch nicht fortgeschrieben), Pfützen/Aquaplaning-Auslösung und Sturmböen, Waffen und Nahkampf, Räder, Tiere,
 Nahverkehr und U-Bahnhöfe, Aufenthaltsorte, Einsatzfahrzeuge, Tagesrhythmus der Bevölkerung, Klick-Steuerung,
 Gamepad, HUD-Texte (Hinweise stehen im Fenstertitel), Audio und Licht. Der JS-Bot, der die Mission über
-A*-Routen selbst fährt, ist noch nicht portiert; der Missionstest versetzt das Auto.
+A*-Routen selbst fährt, ist seit dem 04.10.2026 portiert (`crates/sim/tests/autopilot.rs`).
 
 ### Validierung Phase 3 am 04.10.2026
 
@@ -1279,3 +1279,18 @@ Dafür liefert `overview.rs` die benannten Straßenzüge (`StreetLine`, wie `pre
 Bitmapschrift drehen (`Hud::text_rotated`, Glyph für Glyph entlang der Grundlinie).
 [Bild](images/native/stadtplan-strassen.png). Unit-Test: der Name liegt mittig auf einer schrägen Straße im
 richtigen Winkel und verschwindet weit herausgezoomt.
+
+## Missions-Autopilot (04.10.2026)
+
+`crates/sim/tests/autopilot.rs` portiert `tests/helpers/bot.js` und spielt die ganze Mission über dieselben
+abstrakten Eingaben wie ein Mensch: zu Fuß zum Auftraggeber, annehmen, zum eigenen Auto, einsteigen, mit A* über
+den echten Straßengraphen (Straßen bis „service“, ohne gesperrte Kanten und Durchfahrten) auf der rechten Fahrspur
+zur Lagerhalle, einladen, zum Abgabeort, abliefern. Gefahren wird mit Pure Pursuit (Krümmung 2·sin(Winkel)/Abstand,
+Lenkwinkel über den Radstand des Modells), vor Kurven wird vorausschauend gebremst (`cornerCap`), Schleifen und
+Haarnadeln im Weg werden übersprungen, festgefahren oder kreisend setzt er zurück. Das Missionsgebiet wird vorher
+geladen und gehalten (`City::load_area`).
+
+**Abweichung:** Der Bot hält 5 px Abstand von der Spurmitte zur Fahrbahnmitte hin – halb auf dem Gehweg geparkte
+Autos ragen in die rechte Spur, und mit genau mittiger Linie streifte er sie bei Tempo 200 so oft, dass die Ware
+zu Schrott ging. Mit `BOT_DBG=1` protokolliert der Test jeden Zusammenstoß (Gegner, Rolle, Abstand zur
+Straßenmitte). Ergebnis: Mission in 665 s von 930 s, Belohnung 520 €.
