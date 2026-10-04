@@ -66,6 +66,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Fahrzeugarten im Verkehr (`sim/fleet.rs` nach `fleet.js`): Lkw, Paketwagen, Müllauto,
   Motorrad und Roller nach Uhrzeit, Wochentag und Straße; Arbeitshalte mit Warnblinker bzw. Müllwerkern;
   Kastenwagen- und Zweirad-Darstellung; `--fahrzeugschau` für Aufnahmen.
+- Native Rust-Fassung: Wackelnde Streaming-Tests behoben (etwa jeder fünfte Lauf schlug fehl). Parallele Tests
+  bekamen unter macOS denselben Testordner, weil die Uhr nur mikrosekundengenau ist; jetzt mit Zähler im Namen.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

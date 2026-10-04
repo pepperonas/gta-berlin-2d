@@ -15,9 +15,13 @@ use std::{
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
+        // eigener Ordner je Test: die Uhr ist unter macOS nur mikrosekundengenau, parallel laufende Tests bekamen
+        // sonst denselben Ordner (und lasen die kaputte Kachel des anderen bzw. verloren ihn beim Aufräumen)
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let path = std::env::temp_dir().join(format!(
-            "berlin-stream-test-{}-{}",
+            "berlin-stream-test-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
