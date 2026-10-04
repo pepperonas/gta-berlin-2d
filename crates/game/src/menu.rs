@@ -387,6 +387,69 @@ pub fn draw_pause(h: &mut Hud, m: &Menu, completed: u32, best: Option<f64>) {
     footer(h, "Enter / A: Auswählen  ·  Esc / B: Weiter");
 }
 
+/// Knopfflächen der Teleport-Rückfrage (x, y, Breite, Höhe): Ja, Nein.
+pub fn teleport_buttons(vw: f32) -> ([f32; 4], [f32; 4]) {
+    let (h, bw, bh) = (190., 200., 46.);
+    let y = 360. - h / 2.;
+    let by = y + h - bh - 22.;
+    (
+        [vw / 2. - bw - 12., by, bw, bh],
+        [vw / 2. + 12., by, bw, bh],
+    )
+}
+
+/// Teleport-Rückfrage (hud.js drawTeleportDialog); `name` = Zielort, `None` solange der Stadtteil lädt.
+pub fn draw_teleport(h: &mut Hud, name: Option<&str>) {
+    let vw = h.width;
+    let (w, ht) = (560., 190.);
+    let (x, y) = (vw / 2. - w / 2., 360. - ht / 2.);
+    h.rect(0., 0., vw, 720., [0., 0., 0., 0.45], 0.);
+    h.rect(x, y, w, ht, [0.06, 0.07, 0.09, 0.92], 12.);
+    h.text(
+        "HIERHIN TELEPORTIEREN?",
+        vw / 2.,
+        y + 44.,
+        22.,
+        YELLOW,
+        Align::Center,
+        true,
+    );
+    h.text(
+        name.unwrap_or("Lade den Stadtteil …"),
+        vw / 2.,
+        y + 84.,
+        18.,
+        if name.is_some() {
+            [1.; 4]
+        } else {
+            [0.73, 0.73, 0.73, 1.]
+        },
+        Align::Center,
+        true,
+    );
+    let (yes, no) = teleport_buttons(vw);
+    h.rect(yes[0], yes[1], yes[2], yes[3], YELLOW, 10.);
+    h.text(
+        "Ja (Enter/A)",
+        yes[0] + yes[2] / 2.,
+        yes[1] + 30.,
+        18.,
+        [0.07, 0.07, 0.07, 1.],
+        Align::Center,
+        false,
+    );
+    h.rect(no[0], no[1], no[2], no[3], [1., 1., 1., 0.12], 10.);
+    h.text(
+        "Nein (Esc/B)",
+        no[0] + no[2] / 2.,
+        no[1] + 30.,
+        18.,
+        [0.93, 0.93, 0.93, 1.],
+        Align::Center,
+        true,
+    );
+}
+
 /// Belegung der nativen Fassung: Aufgabe, Controller, Tastatur.
 pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("Laufen / Lenken", "Linker Stick", "WASD / Pfeile"),

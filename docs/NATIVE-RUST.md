@@ -780,3 +780,25 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
 
 **Validierung:** neue Tests für Feldzuordnung (oben = 0, im Uhrzeigersinn, Totzone), Tippen gegen Halten, Wahl
 per Zeiger, Stick und Ziffer, Schließen beim Einsteigen und Zeitlupe; 117 Rust-Tests.
+
+## Teleport per Stadtplan (04.10.2026)
+
+Ein Linksklick ohne Ziehen auf den Stadtplan (`bigmap.rs control`, Weg ≤ 6 Pixel) wählt ein Ziel; Ziehen
+verschiebt die Karte weiterhin.
+- **Ziel suchen:** `World::find_teleport_spot` lädt die Kacheln um das Ziel (`city.focus("teleport")`).
+  Solange sie fehlen, ist das Ergebnis `Pending`; außerhalb Berlins `None`. Zu Fuß landet man auf dem
+  nächsten freien Gehwegpunkt, im Auto auf der nächsten Fahrspur in Fahrtrichtung. Der Ortsname kommt aus
+  `City::location_name` (Straße und Hausnummer, sonst Ortsteil/Kiez).
+- **Rückfrage:** Ein Dialog („Hierhin teleportieren?“ mit Ortsname, Ja per Enter/A oder Klick, Nein per
+  Esc/B) liegt über dem Plan. Die Welt steht still, und fehlende Kacheln werden weitergeladen.
+- **Sprung:** `teleport_to` versetzt Figur bzw. Auto, setzt die Bevölkerung neu und gibt den Zielfokus frei.
+  Die Statistik zählt Teleports.
+- **Während eines Auftrags:** Unterwegs zu Abholung oder Ablieferung lehnt der Plan mit einem Hinweis ab.
+
+Dafür liest `city.rs` jetzt POIs, Hausnummern, Stadtmöbel und Einwohnerdichte aus den Kacheln (`pois_near`,
+`nearest_address`, `density_at`) sowie Bezirke und Ortsteile aus `index.json` (`district_at`).
+`--bildschirm teleport` zeigt die Rückfrage für einen Punkt 2 km nördlich ([Bild](images/native/teleport.png)).
+Behoben: Der Dialog wurde über dem offenen Plan nie gezeichnet, weil `hud()` dort früh zurückkehrte.
+
+**Validierung:** Integrationstests für Teleport zu Fuß und im Auto (frei von Gebäuden, Bevölkerung am neuen Ort,
+außerhalb = nichts) und für Ortsnamen, Ortsteil, POIs und Dichte; 119 Rust-Tests.

@@ -12,6 +12,9 @@ use berlin_sim::world::{DT, Input, World};
 use glam::Vec2;
 use std::path::Path;
 
+/// Teleport-Rückfrage: Klickpunkt und (sobald geladen) Ziel x, y, Winkel, Ortsname.
+pub type Teleport = ((f64, f64), Option<(f64, f64, f64, String)>);
+
 pub struct Play {
     pub world: World,
     storage: Option<FileStorage>,
@@ -51,6 +54,9 @@ pub struct Play {
     /// letzter Linksklick (Spielzeit, HUD-Punkt) für den Doppelklick
     last_click: Option<(f64, Vec2)>,
     ctrl_held: bool,
+    /// Teleport-Rückfrage: Ziel (Kartenpunkt) und, sobald geladen, die Landestelle mit Namen
+    pub teleport: Option<Teleport>,
+
     /// Waffenrad (Maus rechts, Controller LB), Echtzeit für das Halten, Zeitlupe
     wheel_m: crate::wheel::WheelButton,
     wheel_p: crate::wheel::WheelButton,
@@ -213,6 +219,8 @@ impl Play {
             diablo,
             last_click: None,
             ctrl_held: false,
+            teleport: None,
+
             wheel_m: Default::default(),
             wheel_p: Default::default(),
             real_t: 0.,
@@ -317,6 +325,66 @@ impl Play {
         // offen halten, ohne dass ein Loslassen der (nicht gedrückten) Taste es schließt
         self.wheel_m.down = false;
     }
+    /// Teleport per Klick auf den Stadtplan vormerken (game.js requestTeleport).
+    /// Für Aufnahmen: Stadtplan offen, Rückfrage für einen Punkt 2 km nördlich.
+    pub fn demo_teleport(&mut self) {
+        let (x, y) = (self.world.player.x, self.world.player.y - 20000.);
+        self.bigmap.open = true;
+        self.screen = Screen::Playing;
+        self.request_teleport(x, y);
+    }
+    pub fn request_teleport(&mut self, x: f64, y: f64) {
+        use berlin_sim::world::TeleportSpot;
+        let notice = |w: &mut World, t: &str| {
+            w.notice = Some(berlin_sim::world::Notice {
+                text: t.into(),
+                t: 2.,
+            })
+        };
+        if matches!(
+            self.world.mission.state,
+            State::ToPickup | State::ToDropoff | State::Briefing
+        ) {
+            notice(&mut self.world, "Während eines Auftrags nicht möglich");
+            return;
+        }
+        match self.world.find_teleport_spot(x, y) {
+            None => notice(
+                &mut self.world,
+                "Dort kann man nicht hin (außerhalb von Berlin)",
+            ),
+            Some(TeleportSpot::Pending) => self.teleport = Some(((x, y), None)),
+            Some(TeleportSpot::Spot {
+                x: sx,
+                y: sy,
+                angle,
+                name,
+            }) => self.teleport = Some(((x, y), Some((sx, sy, angle, name)))),
+        }
+    }
+    /// Rückfrage beantworten.
+    fn confirm_teleport(&mut self, yes: bool) {
+        let Some((_, spot)) = self.teleport.take() else {
+            return;
+        };
+        match spot {
+            Some((x, y, a, name)) if yes => {
+                self.world.teleport_to(x, y, a);
+                self.bigmap.open = false;
+                self.world.notice = Some(berlin_sim::world::Notice {
+                    text: format!("Teleportiert: {name}"),
+                    t: 2.5,
+                });
+                self.stats.bump("teleports");
+                self.stats_total.bump("teleports");
+            }
+            Some(_) if !yes => self.world.city.release("teleport"),
+            None if !yes => self.world.city.release("teleport"),
+            _ => {
+                // Ziel lädt noch: weiter fragen
+            }
+        }
+    }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
         self.menu = crate::menu::pause_menu();
@@ -333,14 +401,50 @@ impl Play {
         self.stick_prev = keys.pad.ly;
         // solange Kacheln fehlen, steht die Welt ohnehin still; weiterladen auch in den Menüs
         if self.world.loading
-            && matches!(
+            && (matches!(
                 self.screen,
                 Screen::Paused | Screen::Controls(false) | Screen::Stats(false)
-            )
+            ) || (self.screen == Screen::Playing && self.teleport.is_some()))
         {
             self.world.update(&Input::default(), dt);
         }
         match self.screen {
+            Screen::Playing if self.teleport.is_some() => {
+                // Teleport-Rückfrage: Welt steht; Ziel nachladen, bis es da ist
+                if let Some(((x, y), None)) = self.teleport.clone() {
+                    match self.world.find_teleport_spot(x, y) {
+                        Some(berlin_sim::world::TeleportSpot::Spot {
+                            x: sx,
+                            y: sy,
+                            angle,
+                            name,
+                        }) => self.teleport = Some(((x, y), Some((sx, sy, angle, name)))),
+                        Some(berlin_sim::world::TeleportSpot::Pending) => {
+                            self.world.city.pump();
+                        }
+                        None => {
+                            self.teleport = None;
+                            self.world.city.release("teleport");
+                        }
+                    }
+                }
+                let (yes, no) = crate::menu::teleport_buttons(self.hud_width);
+                let m = keys.mouse;
+                let hit = |r: [f32; 4]| {
+                    m.left_pressed
+                        && m.hud.is_some_and(|p| {
+                            p.x >= r[0] && p.x <= r[0] + r[2] && p.y >= r[1] && p.y <= r[1] + r[3]
+                        })
+                };
+                if mk.confirm || hit(yes) {
+                    self.ui_sound();
+                    self.confirm_teleport(true);
+                } else if mk.back || hit(no) {
+                    self.ui_sound();
+                    self.confirm_teleport(false);
+                }
+                true
+            }
             Screen::Playing => {
                 let pause = keys.pressed.contains(&KeyCode::Escape)
                     || keys.pressed.contains(&KeyCode::KeyP)
@@ -817,7 +921,11 @@ impl Game for Play {
         self.bigmap.toggle(keys);
         if self.bigmap.open {
             let v = self.bigmap.view(self.hud_width);
-            self.bigmap.control(keys, dt as f32, v);
+            if let Some(at) = self.bigmap.control(keys, dt as f32, v)
+                && self.teleport.is_none()
+            {
+                self.request_teleport(at.x as f64, at.y as f64);
+            }
         }
         if keys.pressed.contains(&KeyCode::KeyM)
             && let Some(a) = &self.audio
@@ -1480,6 +1588,9 @@ impl Game for Play {
         }
         if self.bigmap.open {
             self.bigmap.draw(&self.world, out);
+            if let Some((_, spot)) = &self.teleport {
+                crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+            }
             return;
         }
         let warn = self.world.road_warning();
@@ -1494,6 +1605,9 @@ impl Game for Play {
             && let Some(c) = self.cursor
         {
             crate::hud::crosshair(out, c, p.combat.weapon().melee);
+        }
+        if let Some((_, spot)) = &self.teleport {
+            crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
         }
         for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
             if wh.open && self.screen == Screen::Playing {

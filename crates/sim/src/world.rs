@@ -1426,6 +1426,158 @@ impl World {
         })
     }
 
+    /// Teleport-Ziel zu einem Kartenpunkt (world.js findTeleportSpot): abseits der Fahrbahn genau dorthin bzw. an die
+    /// nächste freie Stelle bis 30 m, sonst im Auto auf die nächste Fahrspur (in Fahrtrichtung), zu Fuß auf den
+    /// nächsten Gehweg. `None` außerhalb Berlins oder ohne passende Stelle.
+    pub fn find_teleport_spot(&mut self, x: f64, y: f64) -> Option<TeleportSpot> {
+        if !self.city.inside_border(x, y) {
+            return None;
+        }
+        if !self.city.focus("teleport", x, y) {
+            return Some(TeleportSpot::Pending);
+        }
+        self.lanes.sync(&mut self.city);
+        let car = self.player_car().map(|c| (c.id, c.hw, c.hh));
+        let ground = self.city.surface_at(x, y, None);
+        let mut spot = None;
+        if matches!(ground, Ground::Grass | Ground::Plaza | Ground::Sidewalk) {
+            spot = self.open_spot(x, y, car);
+        }
+        if spot.is_none() {
+            spot = if car.is_some() {
+                self.lanes
+                    .nearest_lane(x, y, None, 3000., false)
+                    .and_then(|h| {
+                        let p = &self.lanes.lane(h.lane)?.pts;
+                        let (a, b) = (p[h.i], p[(h.i + 1).min(p.len() - 1)]);
+                        Some((h.x, h.y, (b.1 - a.1).atan2(b.0 - a.0)))
+                    })
+            } else {
+                pedestrians::nearest_spot(&mut self.city, &mut self.sidewalks, x, y, 3000.).map(
+                    |sp| {
+                        let (px, py) = self.sidewalks.point(&mut self.city, sp.edge, sp.side, sp.s);
+                        (px, py, 0.)
+                    },
+                )
+            };
+        }
+        let (sx, sy, angle) = spot?;
+        if !self.city.inside_border(sx, sy) || self.city.in_building(sx, sy).is_some() {
+            return None;
+        }
+        let name = self.city.location_name(sx, sy);
+        Some(TeleportSpot::Spot {
+            x: sx,
+            y: sy,
+            angle,
+            name,
+        })
+    }
+    /// Freie Stelle auf offenem Grund um (x, y), zuerst der Punkt selbst (world.js openSpot).
+    fn open_spot(
+        &mut self,
+        x: f64,
+        y: f64,
+        car: Option<(u32, f64, f64)>,
+    ) -> Option<(f64, f64, f64)> {
+        let s = self.city.scale;
+        let angles: &[f64] = if car.is_some() {
+            &[
+                0.,
+                std::f64::consts::FRAC_PI_2,
+                std::f64::consts::FRAC_PI_4,
+                -std::f64::consts::FRAC_PI_4,
+            ]
+        } else {
+            &[0.]
+        };
+        let mut r = 0.;
+        while r <= 30. * s {
+            let n = if r == 0. {
+                1
+            } else {
+                ((std::f64::consts::TAU * r / (2. * s)).round() as usize).max(8)
+            };
+            for k in 0..n {
+                let a0 = k as f64 / n as f64 * std::f64::consts::TAU;
+                let (px, py) = (x + a0.cos() * r, y + a0.sin() * r);
+                for &a in angles {
+                    if self.spot_free(px, py, a, car) {
+                        return Some((px, py, a));
+                    }
+                }
+            }
+            r += 2. * s;
+        }
+        None
+    }
+    fn spot_free(&mut self, px: f64, py: f64, angle: f64, car: Option<(u32, f64, f64)>) -> bool {
+        if !self.city.inside_border(px, py) {
+            return false;
+        }
+        let t = self.city.surface_at(px, py, None);
+        if matches!(t, Ground::Building | Ground::Water) || self.city.in_building(px, py).is_some()
+        {
+            return false;
+        }
+        let Some((id, hw, hh)) = car else {
+            return crate::footpath::foot_free(self, px, py, 0);
+        };
+        let probe = Obb {
+            x: px,
+            y: py,
+            angle,
+            hw: hw + 4.,
+            hh: hh + 4.,
+        };
+        let (c, sn) = (angle.cos(), angle.sin());
+        for h in self.city.solids.query(&Rect::around(px, py, hw + hh + 8.)) {
+            let sol = *self.city.solids.get(h);
+            if !crate::car::blocks(&self.knocked, &sol, 0) {
+                continue;
+            }
+            let hit = match sol {
+                Solid::Wall { seg, .. } => crate::collision::obb_vs_segment(&probe, &seg).is_some(),
+                Solid::Circle { x, y, r, .. } => circle_vs_obb(x, y, r, &probe).is_some(),
+                Solid::Rect(rc) => crate::collision::obb_vs_rect(&probe, &rc).is_some(),
+            };
+            if hit {
+                return false;
+            }
+        }
+        // die ganze Karosserie auf festem Grund (nicht halb im Wasser)
+        for (u, v) in [(1., 1.), (-1., 1.), (1., -1.), (-1., -1.)] {
+            let (cx, cy) = (
+                px + c * u * probe.hw - sn * v * probe.hh,
+                py + sn * u * probe.hw + c * v * probe.hh,
+            );
+            if self.city.surface_at(cx, cy, None) == Ground::Water {
+                return false;
+            }
+        }
+        self.cars
+            .iter()
+            .all(|o| o.id == id || (o.x - px).hypot(o.y - py) > 40.)
+    }
+    /// Teleport ausführen: eigenes Auto bzw. Figur dorthin, Verkehr und Passanten am neuen Ort aufbauen.
+    pub fn teleport_to(&mut self, x: f64, y: f64, angle: f64) {
+        if let Some(i) = self.player.in_car.and_then(|id| self.car_index(id)) {
+            let c = &mut self.cars[i];
+            (c.x, c.y, c.angle, c.vx, c.vy, c.ang_vel) = (x, y, angle, 0., 0., 0.);
+            c.level_init = false;
+            c.dyn_state = None;
+        }
+        self.player.x = x;
+        self.player.y = y;
+        self.player.level_init = false;
+        self.player.click = None;
+        self.camera.x = x;
+        self.camera.y = y;
+        self.reset_population();
+        self.stream();
+        self.city.release("teleport");
+    }
+
     /// K. o.: nach kurzer Pause ins nächste Krankenhaus (Gebühr), ein laufender Auftrag platzt (world.js updateKnockout).
     fn update_knockout(&mut self, dt: f64) {
         use crate::combat::{HOSPITAL_FEE, RESPAWN_DELAY};
@@ -2464,6 +2616,19 @@ fn update_service(
     } else {
         c.work = true;
     }
+}
+
+/// Ziel eines Teleports (Stadtplan, Konsole).
+#[derive(Debug, Clone, PartialEq)]
+pub enum TeleportSpot {
+    /// Stadtteil dort lädt noch (später erneut fragen)
+    Pending,
+    Spot {
+        x: f64,
+        y: f64,
+        angle: f64,
+        name: String,
+    },
 }
 
 /// Kurzer Name für Logs.

@@ -160,8 +160,9 @@ pub struct BigMap {
     /// Zeichnung für die Engine, bis sie abgeholt ist
     pub mesh: Option<berlin_map_loader::overview::OverlayMesh>,
     cache: Option<(View, Vec<Placed>)>,
-    /// Ziehen mit der Maus: letzter Zeigerpunkt (HUD)
+    /// Ziehen mit der Maus: letzter Zeigerpunkt (HUD) und zurückgelegter Weg seit dem Drücken
     drag: Option<Vec2>,
+    moved: f32,
 }
 
 impl BigMap {
@@ -181,6 +182,7 @@ impl BigMap {
             mesh: Some(ov.mesh),
             cache: None,
             drag: None,
+            moved: 0.,
         }
     }
     pub fn toggle(&mut self, keys: &Keys) -> bool {
@@ -226,7 +228,8 @@ impl BigMap {
         }
     }
     /// Verschieben und Zoomen (je Simulationsschritt).
-    pub fn control(&mut self, keys: &Keys, dt: f32, v: View) {
+    /// Verschieben, Zoomen; liefert einen Klick (ohne Ziehen) als Kartenpunkt.
+    pub fn control(&mut self, keys: &Keys, dt: f32, v: View) -> Option<Vec2> {
         let f = v.f;
         // Maus: Rad zoomt um den Zeiger, Ziehen verschiebt (hud.js zoomBigMap/panBigMap)
         let m = keys.mouse;
@@ -240,11 +243,26 @@ impl BigMap {
             let f1 = f0 * self.z;
             self.center = world - (p - Vec2::new(v.x + v.w / 2., v.y + v.h / 2.)) / f1;
         }
+        if m.left_pressed {
+            self.moved = 0.;
+        }
         if m.left
             && !m.left_pressed
             && let (Some(p), Some(last)) = (m.hud, self.drag)
         {
             self.center -= (p - last) / f;
+            self.moved += p.distance(last);
+        }
+        let mut click = None;
+        if m.left_released
+            && self.moved <= 6.
+            && let Some(p) = m.hud
+            && p.x >= v.x
+            && p.x <= v.x + v.w
+            && p.y >= v.y
+            && p.y <= v.y + v.h
+        {
+            click = Some((p - Vec2::new(v.ox, v.oy)) / f);
         }
         self.drag = if m.left { m.hud } else { None };
         let held = |k: KeyCode| keys.held.contains(&k);
@@ -264,6 +282,7 @@ impl BigMap {
         let zout = held(KeyCode::Minus) || held(KeyCode::NumpadSubtract) || held(KeyCode::PageDown);
         let rate = (zin as i32 as f32 - zout as i32 as f32) + p.rt - p.lt;
         self.z = (self.z * (rate * 1.6 * dt).exp()).clamp(1., ZOOM_MAX);
+        click
     }
     pub fn draw(&mut self, w: &World, h: &mut Hud) {
         let v = self.view(h.width);
@@ -366,7 +385,7 @@ impl BigMap {
             6.,
         );
         h.text(
-            "WASD/Stick: verschieben · +/− RT/LT: zoomen · Tab/B: schließen",
+            "Ziehen/WASD: verschieben · Rad/+/−: zoomen · Klick: teleportieren",
             hint[0] + 12.,
             hint[1] + 20.,
             13.,

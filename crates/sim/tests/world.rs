@@ -1155,3 +1155,67 @@ fn cyclists_ride_and_can_be_taken_or_knocked_off() {
         );
     }
 }
+
+#[test]
+fn teleport_finds_a_spot_on_foot_and_by_car() {
+    use berlin_sim::world::TeleportSpot;
+    let mut w = world(71);
+    run(&mut w, 5, idle());
+    // außerhalb Berlins: nichts
+    assert_eq!(w.find_teleport_spot(-5000., -5000.), None);
+    // zu Fuß 2 km weiter: Gehweg oder freier Grund, mit Ortsnamen
+    let (x0, y0) = (w.player.x, w.player.y);
+    let target = (x0 + 20000., y0 - 5000.);
+    let spot = w.find_teleport_spot(target.0, target.1).expect("Ziel");
+    let TeleportSpot::Spot { x, y, angle, name } = spot else {
+        panic!("synchrone Quelle lädt sofort")
+    };
+    assert!(!name.is_empty(), "Ortsname");
+    assert!((x - target.0).hypot(y - target.1) < 3000.);
+    assert!(w.city.in_building(x, y).is_none());
+    w.teleport_to(x, y, angle);
+    run(&mut w, 30, idle());
+    assert!((w.player.x - x).hypot(w.player.y - y) < 60., "angekommen");
+    assert!(
+        w.cars.len() > 5 && w.peds.len() > 5,
+        "Bevölkerung am neuen Ort"
+    );
+    // im Auto: auf eine Fahrspur, Auto kommt mit
+    let pc = w.player_car_id.unwrap();
+    let (cx, cy) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    (w.player.x, w.player.y) = (cx + 15., cy);
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert_eq!(w.player.in_car, Some(pc));
+    let Some(TeleportSpot::Spot { x, y, angle, .. }) = w.find_teleport_spot(x0, y0) else {
+        panic!("Ziel im Auto")
+    };
+    w.teleport_to(x, y, angle);
+    run(&mut w, 10, idle());
+    let (cx, cy) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    assert!((cx - x).hypot(cy - y) < 40.);
+    assert!(w.city.in_building(cx, cy).is_none());
+    assert_eq!(w.player.in_car, Some(pc));
+}
+
+#[test]
+fn location_names_and_pois() {
+    let mut w = world(72);
+    run(&mut w, 5, idle());
+    let g = w.city.places.giver;
+    let name = w.city.location_name(g.x, g.y);
+    assert!(!name.is_empty() && name != "Berlin", "{name}");
+    assert!(w.city.district_at(g.x, g.y).is_some());
+    assert!(
+        !w.city.pois_near(g.x, g.y, 3000.).is_empty(),
+        "POIs in der Nähe"
+    );
+    assert!(w.city.density_at(g.x, g.y) >= 0.);
+    eprintln!("Späti: {name} ({:?})", w.city.district_at(g.x, g.y));
+}

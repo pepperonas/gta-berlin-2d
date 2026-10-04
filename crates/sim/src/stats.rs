@@ -34,6 +34,7 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
             ("timeCar", "Zeit im Auto", Fmt::Time),
             ("bridges", "Brücken befahren", Fmt::N),
             ("aquaplanes", "Aquaplaning", Fmt::N),
+            ("teleports", "Teleports", Fmt::N),
         ],
     ),
     (
@@ -81,6 +82,10 @@ pub struct Stats(pub BTreeMap<String, f64>);
 impl Stats {
     pub fn get(&self, k: &str) -> f64 {
         self.0.get(k).copied().unwrap_or(0.)
+    }
+    /// Zähler um eins erhöhen (Ereignisse außerhalb der Simulation: Teleport, Konsole).
+    pub fn bump(&mut self, k: &str) {
+        self.add(k, 1.);
     }
     fn add(&mut self, k: &str, n: f64) {
         let v = self.0.entry(k.to_owned()).or_insert(0.);
