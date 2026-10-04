@@ -596,6 +596,7 @@ pub fn hurt_car(w: &mut World, i: usize, dmg: f64, from: (f64, f64)) {
             x: c.x,
             y: c.y,
             car: c.id,
+            player: true,
         });
     }
 }

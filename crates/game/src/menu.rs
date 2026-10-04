@@ -195,41 +195,40 @@ pub fn draw_stats(
         [0.02, 0.024, 0.04, if in_game { 0.82 } else { 0.94 }],
         0.,
     );
-    h.text("STATISTIK", vw / 2., 70., 36., YELLOW, Align::Center, true);
-    let cols: [&[usize]; 2] = [&[0, 2], &[1, 3]];
-    let (col_w, gap, voff, size) = (600., 24., 150., 15.);
-    let x0 = vw / 2. - (2. * col_w + gap) / 2.;
+    h.text("STATISTIK", vw / 2., 58., 36., YELLOW, Align::Center, true);
+    // Spalten wie hud.js drawStats: Unterwegs+Verkehr | Kampf+Aufträge | Nahverkehr
+    let sec = |name: &str| SECTIONS.iter().position(|(n, _)| *n == name).unwrap_or(0);
+    let cols: [Vec<usize>; 3] = [
+        vec![sec("Unterwegs"), sec("Verkehr")],
+        vec![sec("Kampf"), sec("Aufträge")],
+        vec![sec("Nahverkehr")],
+    ];
+    let (col_w, gap, voff, size) = (410., 16., 118., 11.);
+    let x0 = vw / 2. - (3. * col_w + 2. * gap) / 2.;
     let grey = [0.6, 0.6, 0.6, 1.];
     let mut rows = 0;
+    let mut bottom = 0f32;
     for (ci, secs) in cols.iter().enumerate() {
         let x = x0 + ci as f32 * (col_w + gap);
-        let mut y = 120.;
-        h.text(
-            "dieses Spiel",
-            x + col_w - voff,
-            y,
-            13.,
-            grey,
-            Align::Right,
-            true,
-        );
-        h.text(
-            "insgesamt",
-            x + col_w - 8.,
-            y,
-            13.,
-            grey,
-            Align::Right,
-            true,
-        );
+        let mut y = 96.;
+        h.text("Spiel", x + col_w - voff, y, 11., grey, Align::Right, true);
+        h.text("gesamt", x + col_w - 8., y, 11., grey, Align::Right, true);
         for &si in secs.iter() {
             let (title, list) = SECTIONS[si];
-            y += 34.;
-            h.text(&title.to_uppercase(), x, y, size, YELLOW, Align::Left, true);
+            y += 26.;
+            h.text(
+                &title.to_uppercase(),
+                x,
+                y,
+                size + 1.,
+                YELLOW,
+                Align::Left,
+                true,
+            );
             for (k, label, f) in list.iter() {
-                y += 26.;
+                y += 20.;
                 if rows % 2 == 0 {
-                    h.rect(x - 6., y - 19., col_w + 12., 26., [1., 1., 1., 0.04], 0.);
+                    h.rect(x - 6., y - 14., col_w + 12., 20., [1., 1., 1., 0.04], 0.);
                 }
                 rows += 1;
                 h.text(label, x, y, size, [1.; 4], Align::Left, false);
@@ -252,6 +251,62 @@ pub fn draw_stats(
                     false,
                 );
             }
+        }
+        bottom = bottom.max(y);
+    }
+    // Waffen: direkt unter den Spalten
+    use berlin_sim::stats::{Fmt, accuracy, weapon_key};
+    let mut y = bottom + 34.;
+    let wx = x0;
+    h.text("WAFFEN", wx, y, size + 1., YELLOW, Align::Left, true);
+    let heads = ["Schüsse/Schläge", "Kugeln", "Treffer", "Quote", "Tote"];
+    for (i, t) in heads.iter().enumerate() {
+        h.text(
+            t,
+            wx + 420. + i as f32 * 190.,
+            y,
+            10.,
+            grey,
+            Align::Right,
+            true,
+        );
+    }
+    let note_y = y + 19. * (berlin_sim::combat::WEAPONS.len() as f32 + 1.);
+    h.text(
+        "je Zelle: dieses Spiel / insgesamt",
+        wx,
+        note_y,
+        10.,
+        [0.47, 0.47, 0.47, 1.],
+        Align::Left,
+        false,
+    );
+    for wp in berlin_sim::combat::WEAPONS.iter() {
+        y += 19.;
+        h.text(wp.name, wx, y, size, [1.; 4], Align::Left, false);
+        let n = |s: &berlin_sim::stats::Stats, f: &str| {
+            format_stat(s.get(&weapon_key(wp.id, f)), Fmt::N)
+        };
+        let cells = [
+            (n(game, "shots"), n(total, "shots")),
+            (n(game, "bullets"), n(total, "bullets")),
+            (n(game, "hits"), n(total, "hits")),
+            (
+                format!("{} %", accuracy(game, wp.id)),
+                format!("{} %", accuracy(total, wp.id)),
+            ),
+            (n(game, "kills"), n(total, "kills")),
+        ];
+        for (i, (a, b)) in cells.iter().enumerate() {
+            h.text(
+                &format!("{a} / {b}"),
+                wx + 420. + i as f32 * 190.,
+                y,
+                size,
+                [1.; 4],
+                Align::Right,
+                false,
+            );
         }
     }
     footer(h, "Esc / B: Zurück");

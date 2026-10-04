@@ -1523,19 +1523,33 @@ fn ride_and_drive_a_tram_at_alexanderplatz() {
         c.x - c.angle.sin() * (c.w / 2. + 6.),
         c.y + c.angle.cos() * (c.w / 2. + 6.),
     );
-    run(
-        &mut w,
-        1,
-        Input {
+    // Statistik mitlaufen lassen: Mitfahrt, Aufspringen, Strecke als Fahrgast
+    use berlin_sim::stats::{Stats, Tracker, track_step};
+    let (mut sg, mut stot, mut tr) = (Stats::default(), Stats::default(), Tracker::default());
+    track_step(&mut [&mut sg, &mut stot], &mut tr, &w, DT);
+    w.update(
+        &Input {
             ride: true,
             ..idle()
         },
+        DT,
     );
+    track_step(&mut [&mut sg, &mut stot], &mut tr, &w, DT);
     let ride = w.player.ride.clone().expect("eingestiegen (aufgesprungen)");
     assert_eq!(ride.kind, RideKind::Passenger);
     assert_eq!(ride.mode, Mode::Tram);
     let p0 = (w.player.x, w.player.y);
-    run(&mut w, 120, idle());
+    for _ in 0..120 {
+        w.update(&idle(), DT);
+        track_step(&mut [&mut sg, &mut stot], &mut tr, &w, DT);
+    }
+    assert_eq!(sg.get("rides"), 1.);
+    assert!(sg.get("hopsOn") <= sg.get("rides"));
+    assert_eq!(sg.get("kmFoot"), 0.);
+    assert!(
+        sg.get("kmTransit") > 0. || w.vehicle_state(&ride.r).is_some_and(|s| s.dwelling),
+        "Strecke als Fahrgast"
+    );
     assert!(
         (w.player.x - p0.0).hypot(w.player.y - p0.1) > 20.
             || w.vehicle_state(&ride.r).is_some_and(|s| s.dwelling),

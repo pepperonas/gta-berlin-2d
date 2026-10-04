@@ -521,7 +521,7 @@ Browser. Der Spielstand wird nach einem Erfolg weiterhin automatisch gespeichert
   zurückholt. Geschrieben wird beim Speichern, beim Verlassen ins Hauptmenü, beim Beenden und alle 60 Spielsekunden,
   jeweils atomar über eine temporäre Datei.
 - **Bildschirm:** Er ist aus Titel und Pause erreichbar und zeigt zwei Spalten mit beiden Ständen.
-- **Nicht angezeigt** werden Zähler für noch nicht portierte Teile (Kampf, Nahverkehr, Teleport, Konsole).
+- **Seit dem 04.10.2026 vollständig:** alle Abschnitte wie in `stats.js` (siehe „Statistik vollständig“ unten).
 
 Aufnahme: [Statistik](images/native/menu-statistik.png) (`--bildschirm statistik`).
 
@@ -1162,3 +1162,14 @@ nach dem Licht gezeichnet (`weatherfx::storm_overlay`), damit Blitze nicht mit d
 **Validierung:** Unit-Tests für den Blitzpfad (Ende am Einschlag, Äste) und die Trümmer (nur im Sturm, ziehen mit
 dem Wind). Der Strahl wurde per Aufnahme mit vorgerückter Blitzzeit angesehen; in einer normalen Aufnahme fällt
 ein naher Einschlag selten ins Bild.
+
+## Statistik vollständig (04.10.2026)
+
+Der Statistikbildschirm zeigt jetzt alles, was `stats.js` zählt, im Layout von `hud.js drawStats`: drei Spalten
+(Unterwegs + Verkehr | Kampf + Aufträge | Nahverkehr) und darunter die Waffentabelle (Schüsse bzw. Schläge, Kugeln,
+Treffer, Quote, Tote je Waffe, jeweils dieses Spiel / insgesamt). Neu gezählt werden: Mitfahrten, Strecke als
+Fahrgast und als Zugführer, geführte Bahnen, bediente Halte (erneutes Öffnen am selben Halt zählt nicht), Trinkgeld
+(zählt nicht noch einmal als verdientes Geld), Auf- und Abspringen, zerstörte Autos (`Event::Wreck` trägt dafür
+`player`) und die Zähler je Waffe (flach als `w:<id>:<feld>` in `stats.json`). Ein Sprung ans Fahrtende ist keine
+Strecke. Die Schrift ist mit 11 Einheiten kleiner als im Browser, weil die Bitmapschrift breiter läuft
+([Bild](images/native/menu-statistik.png)). Der Mitfahrtest am Alexanderplatz bucht dabei die Statistik mit.

@@ -12,6 +12,8 @@ pub enum Event {
         x: f64,
         y: f64,
         car: u32,
+        /// von der Spielfigur zerstört (Waffe)
+        player: bool,
     },
     Knock {
         x: f64,

@@ -1,7 +1,6 @@
 //! Statistik (Port von `stats.js`): Zähler je Spiel und über alle Spiele, gespeist aus den Ereignissen der Simulation
 //! und einer Messung je Schritt (Strecke, Zeit, Tempo). Rein rechnerisch; gespeichert wird im Spiel als JSON.
-//! Zähler, deren Quelle in der nativen Fassung noch fehlt (Kampf, Nahverkehr, Teleport, Konsole), bleiben 0 und
-//! werden nicht angezeigt.
+//! Dazu je Waffe Schüsse/Schläge, Kugeln, Treffer und Tote (flach als `w:<id>:<feld>` gespeichert).
 use crate::events::Event;
 use crate::world::World;
 use serde_json::{Map, Value};
@@ -50,6 +49,19 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
         ],
     ),
     (
+        "Nahverkehr",
+        &[
+            ("rides", "Mitfahrten", Fmt::N),
+            ("kmTransit", "Strecke als Fahrgast", Fmt::Km),
+            ("trainsTaken", "Bahnen geführt", Fmt::N),
+            ("kmTrainDriven", "Strecke als Zugführer", Fmt::Km),
+            ("stopsServed", "Halte bedient", Fmt::N),
+            ("tipsEarned", "Trinkgeld", Fmt::Eur),
+            ("hopsOn", "aufgesprungen", Fmt::N),
+            ("hopsOff", "abgesprungen", Fmt::N),
+        ],
+    ),
+    (
         "Kampf",
         &[
             ("kills", "Menschen getötet", Fmt::N),
@@ -58,11 +70,10 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
             ("shots", "Schüsse", Fmt::N),
             ("bullets", "Kugeln", Fmt::N),
             ("hits", "Treffer", Fmt::N),
+            ("carsDestroyed", "Autos zerstört", Fmt::N),
             ("cyclistsDown", "Radfahrer vom Rad geholt", Fmt::N),
             ("bikesJacked", "Räder gekapert", Fmt::N),
             ("deaths", "selbst umgehauen", Fmt::N),
-            ("hospitalFees", "Krankenhauskosten", Fmt::Eur),
-            ("cheats", "Konsolenbefehle (Cheats)", Fmt::N),
         ],
     ),
     (
@@ -71,9 +82,28 @@ pub const SECTIONS: &[(&str, &[Row])] = &[
             ("missions", "Aufträge erledigt", Fmt::N),
             ("missionsFailed", "Aufträge verpatzt", Fmt::N),
             ("moneyEarned", "Geld verdient", Fmt::Eur),
+            ("hospitalFees", "Krankenhauskosten", Fmt::Eur),
+            ("cheats", "Konsolenbefehle (Cheats)", Fmt::N),
         ],
     ),
 ];
+/// Zähler je Waffe (Schlüssel `w:<id>:<feld>`).
+pub const WEAPON_FIELDS: [&str; 4] = ["shots", "bullets", "hits", "kills"];
+pub fn weapon_key(id: &str, field: &str) -> String {
+    format!("w:{id}:{field}")
+}
+/// Trefferquote in Prozent (Kugeln → Treffer, Nahkampf: Schläge → Treffer).
+pub fn accuracy(s: &Stats, id: &str) -> f64 {
+    let n = match s.get(&weapon_key(id, "bullets")) {
+        b if b > 0. => b,
+        _ => s.get(&weapon_key(id, "shots")),
+    };
+    if n > 0. {
+        (s.get(&weapon_key(id, "hits")) / n * 100.).round()
+    } else {
+        0.
+    }
+}
 /// Rekorde: Höchstwert, nicht Summe.
 const MAX_KEYS: &[&str] = &["topKmh"];
 
@@ -158,15 +188,19 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
     if car.is_some() {
         add("timeCar", dt);
     }
-    // Strecke: Sprünge (Neustart, Laden) zählen nicht
+    // Strecke: Sprünge (Neustart, Laden, Sprung ans Fahrtende) zählen nicht
+    let ride_end = w.events.iter().any(|e| matches!(e, Event::RideEnd { .. }));
     if let Some((x, y)) = tr.last {
         let d = (p.x - x).hypot(p.y - y);
-        if d < 600. {
+        if d < 600. && !ride_end {
             add("kmTotal", d / PX_PER_KM);
-            add(
-                if car.is_some() { "kmCar" } else { "kmFoot" },
-                d / PX_PER_KM,
-            );
+            let key = match (&car, &p.ride) {
+                (Some(_), _) => "kmCar",
+                (None, Some(r)) if r.kind == crate::ride::RideKind::Driver => "kmTrainDriven",
+                (None, Some(_)) => "kmTransit",
+                (None, None) => "kmFoot",
+            };
+            add(key, d / PX_PER_KM);
         }
     }
     if let Some(c) = car {
@@ -183,10 +217,22 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
     if aqua && !tr.aqua {
         add("aquaplanes", 1.);
     }
+    // Geld: jedes Plus aus Aufträgen; Trinkgeld als Zugführer zählt eigens (tipsEarned)
+    let tips: f64 = w
+        .events
+        .iter()
+        .map(|e| {
+            if let Event::Tip { amount } = e {
+                *amount
+            } else {
+                0.
+            }
+        })
+        .sum();
     if let Some(m) = tr.money
-        && w.money > m
+        && w.money - tips > m
     {
-        add("moneyEarned", w.money - m);
+        add("moneyEarned", w.money - tips - m);
     }
     for e in &w.events {
         match *e {
@@ -200,15 +246,30 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
             }
             Event::Knock { car, .. } if Some(car) == p.in_car => add("bollards", 1.),
             Event::Carjack { bike: false, .. } => add("carjacks", 1.),
+            Event::Wreck { player: true, .. } => add("carsDestroyed", 1.),
             Event::Wreck { car, .. } if Some(car) == w.player_car_id || Some(car) == p.in_car => {
                 add("ownWrecks", 1.)
             }
+            Event::Board { hop, .. } => {
+                add("rides", 1.);
+                if hop {
+                    add("hopsOn", 1.);
+                }
+            }
+            Event::Alight { hop: true, .. } => add("hopsOff", 1.),
+            Event::TrainTake { .. } => add("trainsTaken", 1.),
+            Event::DoorsOpen { first: true, .. } => add("stopsServed", 1.),
+            Event::Tip { amount } => add("tipsEarned", amount),
+            Event::Swing {
+                weapon, npc: false, ..
+            } => add(&weapon_key(weapon, "shots"), 1.),
             Event::Kill {
                 player: true,
                 weapon,
                 ..
             } => {
                 add("kills", 1.);
+                add(&weapon_key(weapon, "kills"), 1.);
                 let melee = crate::combat::WEAPONS
                     .iter()
                     .chain([&crate::combat::KICK])
@@ -216,11 +277,19 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
                     .is_some_and(|w| w.melee);
                 add(if melee { "killsMelee" } else { "killsShot" }, 1.);
             }
-            Event::Shot { ref traces, .. } => {
+            Event::Shot {
+                ref traces, weapon, ..
+            } => {
+                let n = traces.len().max(1) as f64;
                 add("shots", 1.);
-                add("bullets", traces.len() as f64);
+                add("bullets", n);
+                add(&weapon_key(weapon, "shots"), 1.);
+                add(&weapon_key(weapon, "bullets"), n);
             }
-            Event::WeaponHit { .. } => add("hits", 1.),
+            Event::WeaponHit { weapon, .. } => {
+                add("hits", 1.);
+                add(&weapon_key(weapon, "hits"), 1.);
+            }
             Event::Wasted { .. } => add("deaths", 1.),
             Event::Respawn { fee, .. } => {
                 add("hospitalFees", fee);

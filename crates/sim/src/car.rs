@@ -337,6 +337,7 @@ pub fn damage(car: &mut Car, impact: f64, events: &mut Vec<Event>) {
                 x: car.x,
                 y: car.y,
                 car: car.id,
+                player: false,
             });
         }
     }
