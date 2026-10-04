@@ -658,6 +658,88 @@ mod tests {
         );
     }
     #[test]
+    fn left_click_sets_a_waypoint_right_click_teleports_dragging_does_neither() {
+        use berlin_engine::Mouse;
+        use std::collections::HashSet;
+        let mut m = BigMap {
+            labels: labels(),
+            z: 1.,
+            ..Default::default()
+        };
+        let v = m.view(1280.);
+        let empty = HashSet::new();
+        let mut step = |m: &mut BigMap, mouse: Mouse| {
+            let keys = Keys {
+                held: &empty,
+                pressed: &empty,
+                pad: Default::default(),
+                pad_pressed: Default::default(),
+                mouse,
+                typed: "",
+            };
+            m.control(&keys, 1. / 60., v)
+        };
+        let p = Vec2::new(v.x + v.w / 2., v.y + v.h / 2.);
+        let at = (p - Vec2::new(v.ox, v.oy)) / v.f;
+        let press = Mouse {
+            hud: Some(p),
+            left: true,
+            left_pressed: true,
+            ..Default::default()
+        };
+        let release = Mouse {
+            hud: Some(p),
+            left_released: true,
+            ..Default::default()
+        };
+        // links: Drücken allein tut nichts, Loslassen ohne Ziehen setzt den Wegpunkt
+        assert_eq!(step(&mut m, press), None);
+        assert_eq!(step(&mut m, release), Some(MapClick::Waypoint(at)));
+        // rechts: teleportiert sofort an die Stelle unter dem Zeiger
+        let right = Mouse {
+            hud: Some(p),
+            right: true,
+            right_pressed: true,
+            ..Default::default()
+        };
+        assert_eq!(step(&mut m, right), Some(MapClick::Teleport(at)));
+        // gezogen (Karte verschoben): kein Wegpunkt beim Loslassen
+        step(&mut m, press);
+        let q = p + Vec2::new(40., 0.);
+        step(
+            &mut m,
+            Mouse {
+                hud: Some(q),
+                left: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            step(
+                &mut m,
+                Mouse {
+                    hud: Some(q),
+                    left_released: true,
+                    ..Default::default()
+                }
+            ),
+            None
+        );
+        // außerhalb der Karte: nichts
+        let out = Vec2::new(2., 2.);
+        assert_eq!(
+            step(
+                &mut m,
+                Mouse {
+                    hud: Some(out),
+                    right_pressed: true,
+                    ..Default::default()
+                }
+            ),
+            None
+        );
+    }
+    #[test]
     fn view_clamps_to_berlin_and_zoom_bounds() {
         let mut m = BigMap {
             labels: labels(),
