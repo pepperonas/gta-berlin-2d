@@ -27,6 +27,13 @@ pub enum Event {
         x: f64,
         y: f64,
     },
+    /// Auto schwimmt in einer Pfütze auf (`player` = das eigene)
+    Aquaplane {
+        x: f64,
+        y: f64,
+        car: u32,
+        player: bool,
+    },
     Carjack {
         x: f64,
         y: f64,

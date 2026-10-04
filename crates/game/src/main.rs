@@ -3,6 +3,7 @@ mod effects;
 mod hud;
 mod menu;
 mod play;
+mod snowtracks;
 mod sound;
 mod weatherfx;
 mod wheel;
@@ -272,6 +273,15 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     }
     play.auto_enter = in_car;
     play.world.force_weather = force_weather;
+    // Aufnahmen: der Boden ist schon so nass bzw. verschneit, wie das erzwungene Wetter es nach einer Weile wäre
+    if let Some(k) = force_weather {
+        let g = &mut play.world.weather;
+        match k {
+            "rain" | "heavyrain" | "storm" | "thunder" => g.wet = 1.,
+            "snow" | "heavysnow" => g.snow = 0.8,
+            _ => {}
+        }
+    }
     if let Some(z) = stadtplan {
         // Karte offen, bei Zoom > 1 um den Spieler
         play.bigmap.open = true;

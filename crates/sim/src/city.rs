@@ -1796,6 +1796,14 @@ impl City {
             && point_in_ring(x, y, &self.border)
     }
 
+    /// Alle geladenen Kreuzungsscheiben (Darstellung).
+    pub fn junction_discs(&self) -> impl Iterator<Item = &Junction> {
+        self.edge_segs
+            .slab
+            .iter()
+            .filter_map(|s| s.junction.as_ref())
+    }
+
     /// Nächste Kante (ohne Kreuzungsscheiben) im Umkreis, die `filter` erfüllt.
     pub fn nearest_edge(
         &mut self,

@@ -1,7 +1,7 @@
 //! Wetter auf der Straße (Port des Kerns von `traction.js`): aus Nässe, Schneedecke und Glätte am Ort folgen
 //! Faktoren für Bremsen, Anfahren, Seitenhalt und Lenkung. Überdachte Stellen (Durchfahrt, Boden unter einer
-//! Brücke) sind trocken, Brücken frieren zuerst. Pfützen/Aquaplaning-Erkennung und Sturmböen folgen mit dem
-//! Wettersystem (Phase 4); die Aquaplaning-Wirkung selbst ist in `car.rs`/`dynamics.rs` bereits enthalten.
+//! Brücke) sind trocken, Brücken frieren zuerst. Pfützen am Fahrbahnrand (`edge_puddles`, aus der Kanten-ID) lösen
+//! über `puddle_at` Aquaplaning aus; die Wirkung selbst steht in `car.rs`/`dynamics.rs`.
 use crate::city::{City, seg_dist2};
 use crate::collision::Rect;
 use std::collections::HashSet;
@@ -155,6 +155,97 @@ pub fn traction_of(c: &Condition) -> Traction {
 }
 pub fn adhesion_of(c: &Condition) -> f64 {
     RAIL_ICE.max(mix(c.wet, RAIL_WET) * mix(c.ice, RAIL_ICE))
+}
+
+/// Ab dieser Nässe stehen Pfützen.
+pub const PUDDLE_WET: f64 = 0.3;
+
+/// Pfütze am Fahrbahnrand: Mitte, Halbachsen (px), Ausrichtung.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Puddle {
+    pub x: f64,
+    pub y: f64,
+    pub rx: f64,
+    pub ry: f64,
+    pub a: f64,
+}
+
+/// `h` aus wetfx.js (Startwert 5).
+fn hw(n: &[f64]) -> f64 {
+    crate::math::hash01(n.iter().fold(5., |a, &b| a * 31. + (b + 0.5).floor()))
+}
+
+/// Pfützen einer Kante (wetfx.js edgePuddles): an der Rinne, wo das Wasser steht; nicht auf Brücken, in
+/// Durchfahrten oder kurzen Stücken, nie in einem Haus.
+pub fn edge_puddles(city: &mut City, eid: i64) -> Vec<Puddle> {
+    let mut out = Vec::new();
+    let Some(e) = city.edges.get(&eid) else {
+        return out;
+    };
+    if !(e.cls <= 8 && !e.bridge && !e.passage && e.len > 60.) {
+        return out;
+    }
+    let s = city.scale;
+    let (id, len, w, pts) = (e.id as f64, e.len, e.w, e.pts.clone());
+    let n = (len / (18. * s) + hw(&[id, 7.])).floor() as usize;
+    for k in 0..n {
+        let kf = k as f64;
+        if hw(&[id, kf, 9.]) > 0.6 {
+            continue;
+        }
+        let st = (0.1 + 0.8 * hw(&[id, kf, 1.])) * len;
+        let side = if hw(&[kf, id]) < 0.5 { -1. } else { 1. };
+        let p = crate::city::point_along(&pts, st);
+        let off = side * (w / 2. - (0.6 + hw(&[id, kf, 2.]) * 1.2) * s);
+        let (px, py) = (p.x - p.uy * off, p.y + p.ux * off);
+        if city.in_building(px, py).is_some() {
+            continue;
+        }
+        out.push(Puddle {
+            x: px,
+            y: py,
+            rx: (0.8 + hw(&[id, kf, 3.]) * 1.6) * s,
+            ry: (0.5 + hw(&[id, kf, 4.]) * 0.7) * s,
+            a: p.uy.atan2(p.ux),
+        });
+    }
+    out
+}
+
+/// Liegt (x, y) in der Pfütze?
+pub fn in_puddle(p: &Puddle, x: f64, y: f64) -> bool {
+    let (dx, dy) = (x - p.x, y - p.y);
+    let (c, s) = (p.a.cos(), p.a.sin());
+    let (lx, ly) = ((dx * c + dy * s) / p.rx, (-dx * s + dy * c) / p.ry);
+    lx * lx + ly * ly <= 1.
+}
+
+/// Fahrbahnen derselben Ebene unter (x, y), nächste zuerst (für die Pfützensuche; an Fahrbahnrändern liegen
+/// Nachbarstücke übereinander).
+pub fn roads_under(city: &mut City, x: f64, y: f64, lvl: i8) -> Vec<i64> {
+    let mut found: Vec<(i64, f64)> = Vec::new();
+    for h in city.edge_segs.query(&Rect::around(x, y, 40.)) {
+        let s = *city.edge_segs.get(h);
+        let Some(e) = s.edge.and_then(|id| city.edges.get(&id)) else {
+            continue;
+        };
+        let d2 = seg_dist2(x, y, s.ax, s.ay, s.bx, s.by);
+        let half = e.w / 2.;
+        if e.lvl == lvl && d2 <= half * half {
+            match found.iter_mut().find(|f| f.0 == e.id) {
+                Some(f) => f.1 = f.1.min(d2),
+                None => found.push((e.id, d2)),
+            }
+        }
+    }
+    found.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+    found.into_iter().map(|f| f.0).collect()
+}
+
+/// Gierimpuls beim Aufschwimmen: Richtung und Stärke aus dem Pfützen-Hash (±`Aqua::YAW` rad/s).
+pub fn aqua_yaw(p: &Puddle) -> f64 {
+    let n = p.x.round() * 73856. + p.y.round() * 19349.;
+    (crate::math::hash01(n) * 2. - 1.) * Aqua::YAW
 }
 
 #[cfg(test)]

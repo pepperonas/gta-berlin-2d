@@ -80,6 +80,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Verkehrszählung, Einwohnerdichte und Lokalen. Lebensorte (`life.rs`): Wartende, Raucher, Clubschlange,
   Späti-Runde, Cafégäste, Schaufenstergucker, Straßenmusik, Bänke und Decken im Park (neuer Passantenzustand
   `Hang`). Tauben und Enten (`animals.rs`), die auffliegen bzw. wegschwimmen, und abgestellte E-Roller.
+- Native Rust-Fassung: Wetter am Boden. Pfützen lösen Aquaplaning aus (mit Spritzwasser-Klang); nasser Asphalt,
+  Pfützen mit Regenringen, Aufschlagringe, Schneedecke, Schnee und Matschspuren auf den Straßen, Reifenspuren im
+  Schnee, Bodennebel und Wolkenschatten.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

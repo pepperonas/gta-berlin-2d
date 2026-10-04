@@ -230,6 +230,17 @@ impl Hud {
             extra: [0.; 4],
         });
     }
+    /// Weicher Fleck in Bildschirmpixeln (Wolkenschatten, Nebel): Deckkraft fällt zum Rand auf 0.
+    pub fn blob_px(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, angle: f32, color: [f32; 4]) {
+        self.items.push(HudItem {
+            center: [cx, cy],
+            half: [rx, ry],
+            angle,
+            shape: 5.,
+            color,
+            extra: [0.; 4],
+        });
+    }
     /// Kreisbogen von a0 bis a1 (rad, im Uhrzeigersinn ab +x), Radius r, Dicke.
     #[allow(clippy::too_many_arguments)]
     pub fn arc(

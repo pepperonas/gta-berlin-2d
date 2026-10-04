@@ -22,7 +22,7 @@ use crate::traffic::{
     Agent, Ctx, Reservations, Walker, claim_narrow, drive_ai, drop_claims, narrow_free,
     place_on_lane,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const DT: f64 = 1. / 60.;
 pub const PLAYER_RADIUS: f64 = 7.;
@@ -204,6 +204,8 @@ pub struct World {
     life_cache: crate::life::LifeCache,
     /// abgestellte E-Roller je Kante um die Kamera (nur Darstellung)
     pub scooters: std::collections::BTreeMap<i64, Vec<crate::bikes::ParkedScooter>>,
+    /// Pfützen je Kante (Aquaplaning und Darstellung), mit den Rollern um die Kamera abgebaut
+    pub puddles: HashMap<i64, Vec<crate::traction::Puddle>>,
     scoot_t: f64,
     rhythm_t: f64,
     life_t: f64,
@@ -309,6 +311,7 @@ impl World {
             hangers: Default::default(),
             life_cache: Default::default(),
             scooters: Default::default(),
+            puddles: HashMap::new(),
             scoot_t: -99.,
             rhythm_t: -99.,
             life_t: -99.,
@@ -564,12 +567,47 @@ impl World {
             .filter(|id| self.city.edges.get(id).is_some_and(|e| e.lvl < 1))
             .collect();
         self.scooters.retain(|id, _| near.contains(id));
+        if self.puddles.len() > 4000 {
+            self.puddles.retain(|id, _| near.contains(id));
+        }
+        let wet = self.weather.wet > crate::traction::PUDDLE_WET * 0.5;
         for id in near {
+            if wet {
+                self.puddles_of(id);
+            }
             if !self.scooters.contains_key(&id) {
                 let v = crate::bikes::parked_scooters(&mut self.city, &mut self.sidewalks, id);
                 self.scooters.insert(id, v);
             }
         }
+    }
+
+    /// Pfützen einer Kante (gecacht, solange die Kachel um die Kamera vollständig ist).
+    pub fn puddles_of(&mut self, eid: i64) -> &[crate::traction::Puddle] {
+        if !self.puddles.contains_key(&eid) {
+            let v = crate::traction::edge_puddles(&mut self.city, eid);
+            self.puddles.insert(eid, v);
+        }
+        &self.puddles[&eid]
+    }
+    /// Pfütze unter (x, y) auf Ebene `lvl` (nur bei genug Nässe, nicht überdacht).
+    pub fn puddle_at(&mut self, x: f64, y: f64, lvl: i8) -> Option<crate::traction::Puddle> {
+        if self.weather.wet <= crate::traction::PUDDLE_WET
+            || crate::traction::covered(&mut self.city, x, y, lvl)
+        {
+            return None;
+        }
+        for e in crate::traction::roads_under(&mut self.city, x, y, lvl) {
+            let hit = self
+                .puddles_of(e)
+                .iter()
+                .find(|p| crate::traction::in_puddle(p, x, y))
+                .copied();
+            if hit.is_some() {
+                return hit;
+            }
+        }
+        None
     }
 
     fn update_animals(&mut self, dt: f64) {
@@ -858,6 +896,7 @@ impl World {
         self.animals.clear();
         self.flocks.clear();
         self.scooters.clear();
+        self.puddles.clear();
         self.hangers.clear();
         self.populated = false;
     }
@@ -2091,6 +2130,39 @@ impl World {
         }
         let cond = road_condition(&mut self.city, &w, c.x, c.y, c.lvl());
         self.cars[i].traction = traction_of(&cond);
+        // Aufschwimmen in einer Pfütze: Mitte, dann beide Vorderräder; nicht erneut, solange es noch schwimmt
+        let c = &self.cars[i];
+        let (ca, sa) = (c.angle.cos(), c.angle.sin());
+        let vf = c.vx * ca + c.vy * sa;
+        if !cond.covered
+            && w.wet > crate::traction::PUDDLE_WET
+            && vf > crate::traction::Aqua::SPEED
+            && c.aqua <= 0.
+        {
+            let (fx, fy, lvl) = (c.hw * 0.7, c.hh * 0.8, c.lvl());
+            let probes = [
+                (c.x, c.y),
+                (c.x + ca * fx + sa * fy, c.y + sa * fx - ca * fy),
+                (c.x + ca * fx - sa * fy, c.y + sa * fx + ca * fy),
+            ];
+            let hit = probes
+                .into_iter()
+                .find_map(|(x, y)| self.puddle_at(x, y, lvl));
+            if let Some(p) = hit {
+                let id = self.cars[i].id;
+                let player = self.player.in_car == Some(id);
+                let c = &mut self.cars[i];
+                c.aqua = crate::traction::Aqua::TIME;
+                c.aqua_yaw = crate::traction::aqua_yaw(&p);
+                let (x, y) = (c.x, c.y);
+                self.events.push(Event::Aquaplane {
+                    x,
+                    y,
+                    car: id,
+                    player,
+                });
+            }
+        }
         // Sturmböe schiebt fahrende Autos quer (traction.js gustPush)
         let (ax, ay) = self.gust_accel(&self.cars[i]);
         let c = &mut self.cars[i];

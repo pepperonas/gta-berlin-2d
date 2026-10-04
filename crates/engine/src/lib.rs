@@ -26,7 +26,7 @@ use winit::{
 };
 
 /// Bewegtes Objekt für die Instanz-Pipeline: Mittelpunkt und halbe Ausdehnung in Kartenpixeln, Drehung (rad),
-/// Form (0 = abgerundetes Rechteck, 1 = Ellipse, 2 = Ring), Tiefe (kleiner = weiter vorn), Farbe sRGB + Deckkraft.
+/// Form (0 = abgerundetes Rechteck, 1 = Ellipse, 2 = Ring, 3 = weicher Fleck, 4/5 = Rechteck/Ellipse mit harter Kante), Tiefe (kleiner = weiter vorn), Farbe sRGB + Deckkraft.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Body {

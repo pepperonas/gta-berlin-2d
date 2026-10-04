@@ -56,6 +56,8 @@ pub enum Sfx {
     Reload,
     Reloaded,
     WeaponSwitch,
+    /// Spritzwasser beim Aufschwimmen (Aquaplaning)
+    Splash(f32),
 }
 
 /// Alles, was ein Bild an den Klang meldet.
@@ -835,6 +837,10 @@ impl Synth {
                 self.tone(90., 0.12, Triangle, 0.2 * k, 0., 0., 0., M);
             }
             Sfx::Impact(k) => self.burst(0.05, 3500., 0.12 * k, Highpass, 0.7, 0., 0., M),
+            Sfx::Splash(k) => {
+                self.burst(0.35, 700., 0.3 * k, Lowpass, 0.7, 0., 0., M);
+                self.burst(0.18, 2200., 0.12 * k, Bandpass, 0.7, 0., 0., M);
+            }
             Sfx::Reload => {
                 self.tone(1400., 0.04, Sine, 0.06, 0., 0., 0., M);
                 self.tone(900., 0.05, Sine, 0.06, 0.12, 0., 0., M);

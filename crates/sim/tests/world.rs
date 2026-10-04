@@ -1300,3 +1300,58 @@ fn city_life_animals_and_day_rhythm() {
     w.manage_life(true);
     assert!(!w.hangers.values().any(|&h| h == id), "Platz freigegeben");
 }
+
+#[test]
+fn puddles_make_fast_cars_aquaplane() {
+    use berlin_sim::events::Event;
+    use berlin_sim::traction::{edge_puddles, in_puddle};
+    let mut w = world(91);
+    run(&mut w, 5, idle());
+    // Pfützen sind deterministisch (Kanten-ID) und liegen an der Rinne
+    let (cx, cy) = (w.camera.x, w.camera.y);
+    let mut ids: Vec<i64> = w
+        .city
+        .edges
+        .values()
+        .filter(|e| e.pts.iter().any(|&(x, y)| (x - cx).hypot(y - cy) < 900.))
+        .map(|e| e.id)
+        .collect();
+    ids.sort();
+    let (eid, p) = ids
+        .iter()
+        .find_map(|&id| {
+            let v = edge_puddles(&mut w.city, id);
+            v.first().copied().map(|p| (id, p))
+        })
+        .expect("eine Pfütze");
+    assert_eq!(
+        edge_puddles(&mut w.city, eid)[0],
+        p,
+        "gleiche Kante = gleiche Pfützen"
+    );
+    assert!(in_puddle(&p, p.x, p.y) && !in_puddle(&p, p.x + p.rx * 2., p.y));
+    // trocken: keine Pfütze, nass: da
+    assert!(w.puddle_at(p.x, p.y, 0).is_none());
+    w.weather.wet = 1.;
+    let found = w.puddle_at(p.x, p.y, 0);
+    assert!(found.is_some(), "nass: Pfütze unter dem Punkt");
+    // ein schnelles KI-Auto mitten hinein: schwimmt auf
+    let i = w
+        .cars
+        .iter()
+        .position(|c| c.driver == Some(berlin_sim::car::Driver::Npc))
+        .expect("KI-Auto");
+    let c = &mut w.cars[i];
+    (c.x, c.y, c.angle) = (p.x, p.y, p.a);
+    let v = berlin_sim::traction::Aqua::SPEED + 40.;
+    (c.vx, c.vy) = (p.a.cos() * v, p.a.sin() * v);
+    let id = c.id;
+    w.update(&idle(), DT);
+    assert!(
+        w.events
+            .iter()
+            .any(|e| matches!(e, Event::Aquaplane { car, .. } if *car == id)),
+        "Aquaplaning-Ereignis"
+    );
+    assert!(w.car(id).unwrap().aqua > 0.);
+}

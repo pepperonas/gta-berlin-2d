@@ -98,7 +98,8 @@ struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: v
     return vec4(linear_color(texel.rgb * in.color), texel.a);
 }
 // Bewegte Objekte (Autos, Personen, Marker): instanzierte Rechtecke/Kreise mit weicher Kante (SDF).
-// shape 0 = abgerundetes Rechteck, 1 = Ellipse, 2 = Ring.
+// shape 0 = abgerundetes Rechteck, 1 = Ellipse, 2 = Ring, 3 = weicher Fleck (Deckkraft fällt zum Rand auf 0),
+// 4/5 = Rechteck/Ellipse mit harter Kante (Bodenschichten: kein halbdeckender Rand, der schon Tiefe schreibt).
 struct BodyOut {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>, @location(1) local: vec2<f32>,
@@ -122,6 +123,20 @@ struct BodyOut {
 }
 @fragment fn body_fs(in: BodyOut) -> @location(0) vec4<f32> {
     var d: f32;
+    if in.shape == 3.0 {
+        let q = length(in.local / in.extent);
+        let k = clamp(1.0 - q * q, 0.0, 1.0);
+        let alpha = k * k * in.color.a;
+        if alpha < 0.004 { discard; }
+        return vec4(linear_color(in.color.rgb), alpha);
+    }
+    if in.shape >= 4.0 {
+        let q = in.local / in.extent;
+        var inside: bool;
+        if in.shape == 5.0 { inside = dot(q, q) <= 1.0; } else { inside = max(abs(q.x), abs(q.y)) <= 1.0; }
+        if !inside || in.color.a < 0.004 { discard; }
+        return vec4(linear_color(in.color.rgb), in.color.a);
+    }
     if in.shape == 1.0 {
         let q = in.local / in.extent;
         d = (length(q) - 1.0) * min(in.extent.x, in.extent.y);

@@ -64,6 +64,8 @@ pub struct Play {
     time_scale: f64,
     /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
     pub fx: crate::effects::Effects,
+    /// Reifenspuren im Schnee (nur Darstellung)
+    pub trails: crate::snowtracks::Trails,
 }
 
 /// Einstellungen neben dem Spielstand (`settings.json`): Steuerschema.
@@ -226,6 +228,7 @@ impl Play {
             real_t: 0.,
             time_scale: 1.,
             fx: Default::default(),
+            trails: Default::default(),
         })
     }
     fn save(&mut self) -> bool {
@@ -364,6 +367,7 @@ impl Play {
     }
     /// Rückfrage beantworten.
     fn confirm_teleport(&mut self, yes: bool) {
+        self.trails.clear();
         let Some((_, spot)) = self.teleport.take() else {
             return;
         };
@@ -1345,6 +1349,8 @@ impl Game for Play {
         }
         self.fx.ingest(&self.world.events);
         self.fx.step(dt as f32);
+        self.trails
+            .record(&self.world.cars, self.world.time, self.world.weather.snow);
         berlin_sim::stats::track_step(
             &mut [&mut self.stats, &mut self.stats_total],
             &mut self.tracker,
@@ -1744,6 +1750,7 @@ impl Game for Play {
             });
         }
         self.fx.bodies(out);
+        crate::weatherfx::ground_bodies(w, &self.trails, out);
         crate::weatherfx::bodies(w, out);
     }
     fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
@@ -1803,6 +1810,7 @@ impl Game for Play {
         out: &mut berlin_engine::hud::Hud,
     ) {
         let engine = self.world.player_car().map(|_| self.listener.engine());
+        crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
         crate::weatherfx::overlay(&self.world, out);
         self.hud_width = out.width;
         match self.screen {

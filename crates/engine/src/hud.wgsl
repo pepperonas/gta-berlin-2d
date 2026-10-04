@@ -43,6 +43,11 @@ fn coverage(d: f32) -> f32 {
         ang = a0 + ((ang - a0) % tau + tau) % tau;
         if ang > a1 { discard; }
         a = coverage(abs(r - in.extra.z - in.extra.w * 0.5) - in.extra.w * 0.5);
+    } else if in.shape == 5.0 {
+        // weicher Fleck: Deckkraft fällt zum Rand auf 0
+        let q = length(in.local / in.extent);
+        let k = clamp(1.0 - q * q, 0.0, 1.0);
+        a = k * k;
     } else if in.shape == 4.0 {
         // Dreieck: Spitze bei (+ext.x, 0), Basis bei x = −ext.x
         let u = (in.local.x + in.extent.x) / (2.0 * in.extent.x);

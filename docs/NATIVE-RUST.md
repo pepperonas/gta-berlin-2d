@@ -834,3 +834,32 @@ noch keine Personentypen).
 **Validierung:** Unit-Tests für Kurven, Nachtleben, Tätigkeiten je Uhrzeit, Gruppenanordnung und Parkbelegung;
 Integrationstest auf echten Kacheln (Nacht < Nachmittag, Späti-Runde am Freitagabend, Plätze bleiben stehen,
 Tauben fliegen bei Annäherung auf, aufgescheuchte Gäste geben den Platz frei); 124 Rust-Tests.
+
+## Wetter am Boden und Aquaplaning (04.10.2026)
+
+**Simulation (`traction.rs`, nach `wetfx.js edgePuddles` und `traction.js`):** Pfützen je Kante, deterministisch aus
+der Kanten-ID, an der Rinne (nicht auf Brücken, in Durchfahrten oder kurzen Stücken, nie im Haus). Ab Nässe 0,3 lösen
+sie Aquaplaning aus: `apply_weather` prüft bei Tempo über `Aqua::SPEED` Mitte und beide Vorderräder
+(`World::puddle_at`), setzt `car.aqua`/`aqua_yaw` (Gieren aus dem Pfützen-Hash) und meldet `Event::Aquaplane`
+(Klang: Spritzwasser). Die Wirkung selbst stand schon in `car.rs`/`dynamics.rs`. Geprüft werden alle Fahrbahnen
+derselben Ebene unter dem Punkt, nicht nur die nächste: an Fahrbahnrändern überlappen Nachbarstücke. Die Pfützen
+der Kanten um die Kamera liegen in `World::puddles` (Cache, auch für die Darstellung).
+
+**Darstellung (`weatherfx.rs ground_bodies`, `snowtracks.rs`):**
+- Nasser Asphalt (dunkler, bläulich, tags matter Himmelsglanz), nasser Boden daneben, Pfützen mit dunklem Rand und
+  gespiegeltem Himmel, bei Regen Ringe darin und Aufschlagringe überall ([Bild](images/native/boden-heavyrain.png)).
+- Schneedecke auf Gehwegen, Höfen und Grün; auf den Straßen Schnee je Straßenklasse (viel Verkehr = freier) und
+  festgefahrene Matschspuren je Fahrstreifen; Reifenspuren aller Autos am Boden in einem Ringpuffer (12 000 Stücke,
+  verblassen in 240 s, bei Schneefall schneller) ([Bild](images/native/boden-heavysnow.png)).
+- Bodennebel als Dunst plus ziehende Schwaden; Häuser ragen heraus. Wolkenschatten (je Wolke vier weiche Klumpen
+  wie das Sprite in `wetfx.js`) und grauer Himmel bei Bedeckung legt das HUD im Bildraum über Dächer und Straßen.
+
+Technik: Die Bodenschichten liegen zwischen Straßen (Tiefe 0,85) und Autos (0,62). Innerhalb einer Schicht steigt die
+Tiefe je Körper um 1,5·10⁻⁷; mit dem Tiefentest `LessEqual` deckt so jede Stelle nur einmal, Gelenke und Kreuzungen
+dunkeln nicht doppelt nach. Dafür kennt der Body-Shader harte Rechtecke/Ellipsen (Form 4/5): ein weichgezeichneter
+Rand schriebe schon Tiefe und ließe halbdeckende Nähte stehen. Dazu kommt ein weicher Fleck (Form 3, im HUD 5) für
+Nebel und Wolken. Wolkenschatten gehen bewusst nicht als Welt-Körper über die Dächer: Körper vor Tiefe 0,5 würden den
+Lichtpass ausstanzen. `--wetter ART` setzt für Aufnahmen auch den Boden (Regen: nass, Schnee: Decke 0,8).
+
+**Validierung:** Integrationstest (Pfützen deterministisch, trocken keine, nass da, schnelles KI-Auto schwimmt auf und
+meldet das Ereignis) und Unit-Test der Reifenspuren (Schritt, Sprung, vier bzw. zwei Räder, Verblassen); 126 Tests.
