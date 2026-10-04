@@ -56,6 +56,7 @@ pub struct CrossSection {
     pub maxspeed: f64,
     pub surface: u8,
     pub lit: bool,
+    pub gaslight: bool,
     pub bus_contra: bool,
 }
 #[derive(Debug, Clone)]
@@ -1181,6 +1182,7 @@ impl City {
                     maxspeed: g(10),
                     surface: g(11) as u8,
                     lit: g(12) as u32 & 1 != 0,
+                    gaslight: g(12) as u32 & 2 != 0,
                     bus_contra: g(12) as u32 & 4 != 0,
                 };
                 let edge = Edge {
@@ -1434,7 +1436,8 @@ impl City {
         }
         false
     }
-    fn tree_on_road(&mut self, x: f64, y: f64, r: f64) -> bool {
+    /// Steht ein Kreis (Stamm, Mast) ganz oder teilweise auf einer Fahrbahn bis Klasse 9?
+    pub fn tree_on_road(&mut self, x: f64, y: f64, r: f64) -> bool {
         for h in self.edge_segs.query(&Rect::around(x, y, r)) {
             let s = *self.edge_segs.get(h);
             let half = match (s.edge.and_then(|id| self.edges.get(&id)), s.junction) {

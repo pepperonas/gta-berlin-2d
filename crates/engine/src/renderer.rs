@@ -1,9 +1,9 @@
-use crate::{Body, atlas, camera::Camera};
+use crate::{Body, LightSource, Lighting, atlas, camera::Camera, lightpass};
 use anyhow::{Context, Result};
 use berlin_map_loader::{
     format::TileKey,
     geom::Bounds,
-    mesh::{Mesh, Sprite, Vertex},
+    mesh::{Mesh, ShadowVertex, Sprite, Vertex},
     stream::Snapshot,
 };
 use glam::Vec2;
@@ -16,6 +16,8 @@ struct GpuTile {
     vertices: Option<wgpu::Buffer>,
     indices: Option<wgpu::Buffer>,
     sprites: Option<wgpu::Buffer>,
+    shadows: Option<wgpu::Buffer>,
+    shadow_indices: Option<wgpu::Buffer>,
 }
 pub(crate) struct Renderer {
     pub window: Arc<Window>,
@@ -37,10 +39,14 @@ pub(crate) struct Renderer {
     tiles: BTreeMap<TileKey, GpuTile>,
     size: PhysicalSize<u32>,
     scale: f32,
-    sun_hour: f32,
+    lighting: Lighting,
+    light: lightpass::LightPass,
+    layout: wgpu::PipelineLayout,
+    atlas_layout: wgpu::BindGroupLayout,
+    shader: wgpu::ShaderModule,
 }
 impl Renderer {
-    pub async fn new(window: Arc<Window>, scale: f32, sun_hour: f32) -> Result<Self> {
+    pub async fn new(window: Arc<Window>, scale: f32, lighting: Lighting) -> Result<Self> {
         let backends = if cfg!(target_os = "macos") {
             wgpu::Backends::METAL
         } else if cfg!(target_os = "windows") {
@@ -83,7 +89,9 @@ impl Renderer {
         surface.configure(&device, &config);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Berlin mesh / atlas shaders"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("scene.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("scene.wgsl"), include_str!("lighting.wgsl")).into(),
+            ),
         });
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Camera layout"),
@@ -93,7 +101,7 @@ impl Renderer {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(64),
+                    min_binding_size: wgpu::BufferSize::new(UNIFORM_BYTES),
                 },
                 count: None,
             }],
@@ -195,7 +203,7 @@ impl Renderer {
         );
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera / sun"),
-            size: 64,
+            size: UNIFORM_BYTES,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -258,6 +266,22 @@ impl Renderer {
             ],
         });
         let depth = depth_view(&device, &config);
+        let light = lightpass::LightPass::new(
+            &lightpass::Ctx {
+                device: &device,
+                layout: &layout,
+                atlas_layout: &atlas_layout,
+                shader: &shader,
+                surface: config.format,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: size_of::<Sprite>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &sprite_attrs,
+            },
+            config.width,
+            config.height,
+        );
         Ok(Self {
             window,
             instance,
@@ -278,7 +302,11 @@ impl Renderer {
             tiles: BTreeMap::new(),
             size,
             scale,
-            sun_hour,
+            lighting,
+            light,
+            layout,
+            atlas_layout,
+            shader,
         })
     }
     pub fn viewport(&self) -> Vec2 {
@@ -335,6 +363,16 @@ impl Renderer {
                         bytemuck::cast_slice(&mesh.sprites),
                         wgpu::BufferUsages::VERTEX,
                     ),
+                    shadows: upload(
+                        "Tile shadow walls",
+                        bytemuck::cast_slice::<ShadowVertex, u8>(&mesh.shadows),
+                        wgpu::BufferUsages::VERTEX,
+                    ),
+                    shadow_indices: upload(
+                        "Tile shadow indices",
+                        bytemuck::cast_slice(&mesh.shadow_indices),
+                        wgpu::BufferUsages::INDEX,
+                    ),
                 },
             );
         }
@@ -359,6 +397,12 @@ impl Renderer {
                 .write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
         }
     }
+    pub fn set_lighting(&mut self, lighting: Lighting) {
+        self.lighting = lighting;
+    }
+    pub fn set_lights(&mut self, lights: &[LightSource]) {
+        self.light.set_lights(&self.device, &self.queue, lights);
+    }
     pub fn drawable(&self) -> bool {
         self.size.width > 0 && self.size.height > 0
     }
@@ -369,6 +413,14 @@ impl Renderer {
             self.config.height = size.height;
             self.surface.configure(&self.device, &self.config);
             self.depth = depth_view(&self.device, &self.config);
+            let cx = lightpass::Ctx {
+                device: &self.device,
+                layout: &self.layout,
+                atlas_layout: &self.atlas_layout,
+                shader: &self.shader,
+                surface: self.config.format,
+            };
+            self.light.resize(&cx, size.width, size.height);
         }
     }
     fn draw_scene(
@@ -378,55 +430,138 @@ impl Renderer {
         camera: &Camera,
     ) {
         let visible = self.view_bounds(camera).expand(512.);
-        {
+        let l = self.lighting;
+        let shadows = l.shadow_strength > 0.02;
+        let night = l.dark > 0.;
+        // 1) Schattenmaske: auch Häuser außerhalb des Bildes können hineinwerfen (bis 900 px)
+        if shadows {
+            let casters = visible.expand(900.);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Berlin frame"),
+                label: Some("Schattenmaske"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: &self.light.mask.view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.14,
-                            g: 0.20,
-                            b: 0.12,
-                            a: 1.,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
                 ..Default::default()
             });
             pass.set_bind_group(0, &self.bind, &[]);
             pass.set_bind_group(1, &self.atlas_bind, &[]);
-            pass.set_pipeline(&self.pipeline);
-            for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
-                if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
-                    pass.set_vertex_buffer(0, vertices.slice(..));
-                    pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+            pass.set_pipeline(&self.light.shadow);
+            for tile in self.tiles.values().filter(|t| t.bounds.intersects(casters)) {
+                if let (Some(v), Some(i)) = (&tile.shadows, &tile.shadow_indices) {
+                    pass.set_vertex_buffer(0, v.slice(..));
+                    pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..tile.source.shadow_indices.len() as u32, 0, 0..1);
                 }
             }
-            pass.set_pipeline(&self.sprite_pipeline);
+            pass.set_pipeline(&self.light.tree_shadow);
             for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
                 if let Some(sprites) = &tile.sprites {
                     pass.set_vertex_buffer(0, sprites.slice(..));
                     pass.draw(0..6, 0..tile.source.sprites.len() as u32);
                 }
             }
-            if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
-                pass.set_pipeline(&self.body_pipeline);
-                pass.set_vertex_buffer(0, bodies.slice(..));
-                pass.draw(0..6, 0..self.body_count);
+        }
+        // 2) Lichtkarte: Umgebungslicht plus Lichtquellen
+        if night {
+            let lin = |c: f32| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) } as f64;
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Lichtkarte"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.light.lightmap.view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: lin(l.ambient[0]),
+                            g: lin(l.ambient[1]),
+                            b: lin(l.ambient[2]),
+                            a: 1.,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            if let Some(lights) = self
+                .light
+                .lights
+                .as_ref()
+                .filter(|_| self.light.light_count > 0)
+            {
+                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_bind_group(1, &self.atlas_bind, &[]);
+                pass.set_pipeline(&self.light.light);
+                pass.set_vertex_buffer(0, lights.slice(..));
+                pass.draw(0..6, 0..self.light.light_count);
             }
+        }
+        // 3) Bild: Karte, Schatten auf den Boden, Bäume/Decals, bewegte Objekte, dann das Licht
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Berlin frame"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.14,
+                        g: 0.20,
+                        b: 0.12,
+                        a: 1.,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        pass.set_bind_group(0, &self.bind, &[]);
+        pass.set_bind_group(1, &self.atlas_bind, &[]);
+        pass.set_pipeline(&self.pipeline);
+        for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+            if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
+                pass.set_vertex_buffer(0, vertices.slice(..));
+                pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+            }
+        }
+        if shadows {
+            pass.set_pipeline(&self.light.shadow_composite);
+            pass.set_bind_group(1, &self.light.mask.bind, &[]);
+            pass.draw(0..3, 0..1);
+            pass.set_bind_group(1, &self.atlas_bind, &[]);
+        }
+        pass.set_pipeline(&self.sprite_pipeline);
+        for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+            if let Some(sprites) = &tile.sprites {
+                pass.set_vertex_buffer(0, sprites.slice(..));
+                pass.draw(0..6, 0..tile.source.sprites.len() as u32);
+            }
+        }
+        if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
+            pass.set_pipeline(&self.body_pipeline);
+            pass.set_vertex_buffer(0, bodies.slice(..));
+            pass.draw(0..6, 0..self.body_count);
+        }
+        if night {
+            pass.set_pipeline(&self.light.light_composite);
+            pass.set_bind_group(1, &self.light.lightmap.bind, &[]);
+            pass.draw(0..3, 0..1);
+            pass.set_pipeline(&self.light.ambient_composite);
+            pass.draw(0..3, 0..1);
         }
     }
     /// Read back our own render target for repeatable visual QA, independent of desktop capture.
@@ -538,18 +673,12 @@ impl Renderer {
             }
             wgpu::CurrentSurfaceTexture::Validation => anyhow::bail!("Surface-Validierungsfehler"),
         };
+        let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
-        let d = ((self.sun_hour * 60. - 330.) / 900.).clamp(0., 1.);
-        let elevation = (std::f32::consts::PI * d).sin() * 58_f32.to_radians();
-        let az = (50. + 260. * d).to_radians();
-        let sun = [
-            az.sin() * elevation.cos(),
-            -az.cos() * elevation.cos(),
-            elevation.sin().max(0.05),
-            0.,
-        ];
-        uniform.extend(sun);
+        uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), 0.]);
         uniform.extend([self.scale, 0., 0., 0.]);
+        uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
+        uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
         self.queue
             .write_buffer(&self.uniform, 0, bytemuck::cast_slice(&uniform));
         let view = frame.texture.create_view(&Default::default());
@@ -564,6 +693,8 @@ impl Renderer {
         Ok(true)
     }
 }
+/// Kamera (32 B) + Sonne + Parameter + Schatten + Umgebungslicht (je 16 B).
+const UNIFORM_BYTES: u64 = 96;
 fn depth_view(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> wgpu::TextureView {
     device
         .create_texture(&wgpu::TextureDescriptor {

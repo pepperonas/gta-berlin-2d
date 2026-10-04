@@ -22,6 +22,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   „Kisten für den Kiez“ und Spielständen als JSON-Datei (Format der Browserfassung). `cargo run` ist damit
   spielbar; Autos, Passanten und Missionsziel werden instanziert gezeichnet. `--check-sim SEKUNDEN` prüft die
   Simulation ohne Fenster. 58 Rust-Tests, davon 10 Integrationstests auf den echten Kacheln.
+- Native Rust-Portierung, Phase 4: Tag-/Nachtlauf aus der Spieluhr (`daylight.rs`), Laternenstandorte wie
+  `lamps.js`, Hausschatten per Wand-Extrusion im Vertex-Shader und Baumkronenschatten in einer Schattenmaske,
+  Lichtkarte mit Laternen, Scheinwerferkegeln, Rück-/Bremslichtern und Ampeln; Dächer bekommen nur das
+  Umgebungslicht. `--uhr HH:MM` und Taste T (+1 Stunde).
 
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.

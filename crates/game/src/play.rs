@@ -1,9 +1,12 @@
 //! Spielbare Welt: verbindet die Simulation (`berlin-sim`) mit Fenster, Tasten und Zeichnen der Engine.
 use anyhow::Result;
-use berlin_engine::{Body, Game, KeyCode, Keys};
+use berlin_engine::{Body, Game, KeyCode, Keys, LightSource, Lighting};
 use berlin_sim::city::{City, ThreadedSource};
+use berlin_sim::daylight::{format_clock, light_at};
+use berlin_sim::lamps::LampCache;
 use berlin_sim::mission::{Outcome, State};
 use berlin_sim::pedestrians::PedState;
+use berlin_sim::roadgraph::{Light, signal_state};
 use berlin_sim::save::{FileStorage, Storage, read_save, write_save};
 use berlin_sim::world::{DT, Input, World};
 use glam::Vec2;
@@ -13,6 +16,21 @@ pub struct Play {
     pub world: World,
     storage: Option<FileStorage>,
     saved_for: u32,
+    lamps: LampCache,
+}
+
+/// Licht der Engine aus dem Tageslicht der Spieluhr.
+pub fn lighting_at(minutes: f64) -> Lighting {
+    let l = light_at(minutes);
+    let (az, el) = (l.azimuth as f32, l.elevation as f32);
+    Lighting {
+        sun: [az.sin() * el.cos(), -az.cos() * el.cos(), el.sin()],
+        shadow: [l.sun.dx as f32, l.sun.dy as f32],
+        shadow_len: l.sun.len as f32,
+        shadow_strength: l.sun.strength as f32,
+        ambient: l.ambient.map(|c| c as f32),
+        dark: l.dark as f32,
+    }
 }
 
 impl Play {
@@ -34,6 +52,7 @@ impl Play {
             world,
             storage: save,
             saved_for: 0,
+            lamps: LampCache::default(),
         })
     }
     pub fn set_storage(&mut self, st: FileStorage) {
@@ -112,6 +131,13 @@ impl Game for Play {
             self.save();
         }
         let w2 = &mut self.world;
+        if keys.pressed.contains(&KeyCode::KeyT) {
+            w2.clock = (w2.clock + 60.) % 1440.;
+            w2.notice = Some(berlin_sim::world::Notice {
+                text: format!("Uhr {}", format_clock(w2.clock)),
+                t: 1.5,
+            });
+        }
         // Ergebnis bestätigen: neuer Auftrag
         if matches!(w2.mission.state, State::Success | State::Failed)
             && keys.pressed.contains(&KeyCode::KeyE)
@@ -350,7 +376,149 @@ impl Game for Play {
         }
         parts.join(" · ")
     }
+    fn lighting(&self) -> Option<Lighting> {
+        Some(lighting_at(self.world.clock))
+    }
+    fn lights(&mut self, out: &mut Vec<LightSource>) {
+        let l = light_at(self.world.clock);
+        let k = l.dark as f32;
+        if k <= 0. {
+            return;
+        }
+        let rgb = |c: [u8; 3]| c.map(|v| v as f32 / 255.);
+        let push =
+            |out: &mut Vec<LightSource>, x: f64, y: f64, radius: f32, color: [f32; 3], a: f32| {
+                out.push(LightSource {
+                    center: [x as f32, y as f32],
+                    radius,
+                    angle: 0.,
+                    color,
+                    intensity: a.min(1.),
+                    cone: 0.,
+                    pad: 0.,
+                });
+            };
+        let (cx, cy, zoom) = (
+            self.world.camera.x,
+            self.world.camera.y,
+            self.world.camera.zoom,
+        );
+        let view = 2200. / zoom.max(0.5);
+        if l.lamps_on {
+            for lp in self.lamps.near(&mut self.world.city, cx, cy, view + 250.) {
+                push(
+                    out,
+                    lp.x + lp.nx * 18.,
+                    lp.y + lp.ny * 18.,
+                    if lp.main { 150. } else { 125. },
+                    rgb(lp.rgb),
+                    if lp.gas { 0.55 } else { 0.7 } * k,
+                );
+            }
+        }
+        let w = &self.world;
+        let (cx, cy) = (w.camera.x, w.camera.y);
+        let view = 2200. / w.camera.zoom.max(0.5);
+        let near =
+            |x: f64, y: f64| (x - cx).abs() < view + 250. && (y - cy).abs() < view * 0.7 + 250.;
+        // Ampeln: farbiger Schein an der Haltelinie jeder Zufahrt
+        for &v in &w.city.signals {
+            let Some(nd) = w.city.nodes.get(&v) else {
+                continue;
+            };
+            if !near(nd.x, nd.y) {
+                continue;
+            }
+            for e in nd
+                .edges
+                .iter()
+                .filter_map(|id| w.city.edges.get(id))
+                .filter(|e| e.cls <= 8)
+            {
+                let p = &e.pts;
+                let (a, b) = if e.a == v {
+                    (p[1], p[0])
+                } else {
+                    (p[p.len() - 2], p[p.len() - 1])
+                };
+                let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                let len = dx.hypot(dy).max(1e-6);
+                let (ux, uy) = (dx / len, dy / len);
+                let heading = uy.atan2(ux);
+                let (x, y) = (
+                    nd.x - ux * nd.trim.max(e.w / 2.) - uy * e.w / 2.,
+                    nd.y - uy * nd.trim.max(e.w / 2.) + ux * e.w / 2.,
+                );
+                let color = match signal_state(&w.city, v, heading, w.time) {
+                    Light::Red => [1., 0.24, 0.18],
+                    Light::Yellow => [1., 0.75, 0.2],
+                    Light::Green => [0.3, 1., 0.5],
+                };
+                push(out, x, y, 34., color, 0.8 * k);
+            }
+        }
+        // Fahrzeuge mit Fahrer: Scheinwerferkegel, Standlicht, Rück- und Bremslicht
+        for c in w
+            .cars
+            .iter()
+            .filter(|c| !c.wrecked && c.driver.is_some() && near(c.x, c.y))
+        {
+            let (sa, ca) = c.angle.sin_cos();
+            let (fx, fy, bx, by) = (
+                c.x + ca * c.hw,
+                c.y + sa * c.hw,
+                c.x - ca * c.hw,
+                c.y - sa * c.hw,
+            );
+            out.push(LightSource {
+                center: [(fx - ca * 4.) as f32, (fy - sa * 4.) as f32],
+                radius: 230.,
+                angle: c.angle as f32,
+                color: [1., 0.925, 0.77],
+                intensity: 0.85 * k,
+                cone: 1.,
+                pad: 0.,
+            });
+            push(out, fx, fy, 34., [1., 0.94, 0.82], 0.6 * k);
+            let braking = c.controls.brake > 0.1;
+            push(
+                out,
+                bx,
+                by,
+                if braking { 46. } else { 26. },
+                [1., 0.2, 0.14],
+                if braking { 0.9 } else { 0.45 } * k,
+            );
+        }
+        if w.player.in_car.is_none() {
+            push(out, w.player.x, w.player.y, 70., [1., 0.82, 0.67], 0.35 * k);
+        }
+        let pv = berlin_sim::mission::PlayerView {
+            x: w.player.x,
+            y: w.player.y,
+            in_car: w.player.in_car,
+        };
+        if let (_, Some((tx, ty))) = w.mission.objective(&w.city.places, pv, &w.cars) {
+            push(out, tx, ty, 90., [1., 0.8, 0.25], 0.7 * k);
+        }
+    }
     fn ready(&self) -> bool {
         !self.world.loading
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn lighting_follows_the_clock() {
+        let noon = lighting_at(13. * 60.);
+        // Schatten zeigt von der Sonne weg: Sonnenvektor (x, y) und Schattenrichtung sind entgegengesetzt
+        let dot = noon.sun[0] * noon.shadow[0] + noon.sun[1] * noon.shadow[1];
+        assert!(dot < 0. && noon.sun[2] > 0.8 && noon.dark == 0. && noon.shadow_strength == 1.);
+        let night = lighting_at(23. * 60.);
+        assert!(night.dark > 0.9 && night.shadow_strength == 0. && night.ambient[0] < 0.5);
+        let eve = lighting_at(19. * 60.);
+        assert!(eve.shadow[0] > 0.5 && eve.shadow_len > noon.shadow_len);
     }
 }

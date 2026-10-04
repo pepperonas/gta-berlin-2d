@@ -1,12 +1,13 @@
 # GTA Berlin
 
-## Native Rust-Portierung – Phase 3
+## Native Rust-Portierung – Phase 4
 
 Die native Fassung läuft mit `cargo run` (macOS: Metal, Windows: DX12) und ist
 seit Phase 3 spielbar: Kollision (SAT), Fahrphysik mit Einspurmodell/ESP/ABS,
 KI-Verkehr mit Ampeln und Vorfahrt, Passanten, die Mission „Kisten für den Kiez“
-und Spielstände als JSON-Datei. Beleuchtung, Audio, HUD-Texte, Waffen und
-Nahverkehr folgen; das Browser-Spiel bleibt die vollständige Referenz.
+und Spielstände als JSON-Datei; seit Phase 4 Tag und Nacht mit Schatten,
+Laternen und Scheinwerfern (`--uhr 22:30`, Taste T: +1 Stunde). Audio,
+HUD-Texte, Waffen und Nahverkehr folgen; das Browser-Spiel bleibt die vollständige Referenz.
 
 ```bash
 cargo run --release

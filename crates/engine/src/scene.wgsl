@@ -2,6 +2,8 @@ struct Camera {
     position: vec2<f32>, scale: f32, padding: f32,
     viewport: vec2<f32>, padding2: vec2<f32>,
     sun: vec4<f32>, params: vec4<f32>,
+    // shadow: Richtung (x, y), Länge je Höhe, Stärke · ambient: Umgebungslicht (sRGB) und Dunkelheit
+    shadow: vec4<f32>, ambient: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var atlas: texture_2d<f32>;

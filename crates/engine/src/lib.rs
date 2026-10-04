@@ -1,5 +1,6 @@
 mod atlas;
 pub mod camera;
+mod lightpass;
 mod renderer;
 use anyhow::Result;
 use berlin_map_loader::{
@@ -35,6 +36,46 @@ pub struct Body {
     pub color: [f32; 4],
 }
 
+/// Licht eines Bildes (aus dem Tageslicht der Spieluhr): Richtung zur Sonne für die Schattierung von Dächern
+/// und Fassaden, Schattenrichtung/-länge je Höhe/-stärke, Umgebungslicht (sRGB-Faktoren) und Dunkelheit 0…1.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Lighting {
+    pub sun: [f32; 3],
+    pub shadow: [f32; 2],
+    pub shadow_len: f32,
+    pub shadow_strength: f32,
+    pub ambient: [f32; 3],
+    pub dark: f32,
+}
+impl Default for Lighting {
+    /// 13 Uhr: Sonne im Süden, kurze Schatten nach Norden, volles Tageslicht.
+    fn default() -> Self {
+        let el = 58_f32.to_radians();
+        Self {
+            sun: [0., el.cos(), el.sin()],
+            shadow: [0., -1.],
+            shadow_len: 1. / el.tan(),
+            shadow_strength: 1.,
+            ambient: [1.; 3],
+            dark: 0.,
+        }
+    }
+}
+
+/// Lichtquelle für die Lichtkarte: Laterne, Scheinwerferkegel (`cone` = 1, zeigt in Richtung `angle`), Ampel,
+/// Blaulicht. Farbe sRGB 0…1, `intensity` wie die Deckkraft beim additiven Zeichnen der JS-Fassung.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightSource {
+    pub center: [f32; 2],
+    pub radius: f32,
+    pub angle: f32,
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub cone: f32,
+    pub pad: f32,
+}
+
 /// Gehaltene und in diesem Schritt neu gedrückte Tasten.
 pub struct Keys<'a> {
     pub held: &'a HashSet<KeyCode>,
@@ -53,6 +94,12 @@ pub trait Game {
     fn status(&self) -> String;
     /// Ist die Spielwelt geladen (für Smoke-Tests)?
     fn ready(&self) -> bool;
+    /// Licht des Bildes (Tageszeit); `None` = Licht aus den Optionen.
+    fn lighting(&self) -> Option<Lighting> {
+        None
+    }
+    /// Lichtquellen im Bild (nur nachts sichtbar).
+    fn lights(&mut self, _out: &mut Vec<LightSource>) {}
 }
 
 pub use winit::keyboard::KeyCode;
@@ -62,7 +109,7 @@ pub struct Options {
     pub smoke_frames: Option<u32>,
     pub data_root: PathBuf,
     pub position: Option<Vec2>,
-    pub sun_hour: f32,
+    pub lighting: Lighting,
     pub capture: Option<PathBuf>,
     pub zoom: f32,
 }
@@ -77,7 +124,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         smoke_frames,
         data_root,
         position,
-        sun_hour,
+        lighting,
         capture,
         zoom,
     } = options;
@@ -98,7 +145,8 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         index,
         streamer,
         status: Status::default(),
-        sun_hour,
+        lighting,
+        lights: Vec::new(),
         smoke_started: Instant::now(),
         keys: HashSet::new(),
         pressed: HashSet::new(),
@@ -140,7 +188,8 @@ struct App {
     index: Arc<Index>,
     streamer: Streamer,
     status: Status,
-    sun_hour: f32,
+    lighting: Lighting,
+    lights: Vec<LightSource>,
     smoke_started: Instant,
     capture: Option<PathBuf>,
 }
@@ -160,7 +209,7 @@ impl ApplicationHandler for App {
             pollster::block_on(renderer::Renderer::new(
                 window,
                 self.index.meta.scale,
-                self.sun_hour,
+                self.lighting,
             ))
         })();
         match result {
@@ -262,6 +311,10 @@ impl ApplicationHandler for App {
                     self.bodies.clear();
                     game.bodies(&mut self.bodies);
                     renderer.set_bodies(&self.bodies);
+                    renderer.set_lighting(game.lighting().unwrap_or(self.lighting));
+                    self.lights.clear();
+                    game.lights(&mut self.lights);
+                    renderer.set_lights(&self.lights);
                 } else if self.focused {
                     self.camera.position += movement.normalize_or_zero()
                         * (if self.keys.contains(&KeyCode::ShiftLeft) {

@@ -11,7 +11,7 @@ fn main() -> Result<()> {
         smoke_frames: None,
         data_root: berlin_map_loader::default_data_root(),
         position: None,
-        sun_hour: 13.,
+        lighting: Default::default(),
         capture: None,
         zoom: 2.,
     };
@@ -23,6 +23,7 @@ fn main() -> Result<()> {
     let mut seed = 1989u32;
     let mut check_sim: Option<f64> = None;
     let mut save_path = None;
+    let mut clock: Option<f64> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fps" => options.fps = args.next().context("Wert für --fps fehlt")?.parse()?,
@@ -53,10 +54,18 @@ fn main() -> Result<()> {
                 geo = Some((lat, lon));
             }
             "--sun-hour" => {
-                options.sun_hour = args.next().context("Stunde fehlt")?.parse()?;
+                let h: f64 = args.next().context("Stunde fehlt")?.parse()?;
                 ensure!(
-                    (5.5..=20.5).contains(&options.sun_hour),
-                    "Sonnenstunde muss zwischen 5.5 und 20.5 liegen"
+                    (0.0..24.0).contains(&h),
+                    "Stunde muss zwischen 0 und 24 liegen"
+                );
+                clock = Some(h * 60.);
+            }
+            "--uhr" | "--clock" => {
+                let text = args.next().context("Uhrzeit HH:MM fehlt")?;
+                clock = Some(
+                    berlin_sim::daylight::parse_clock(&text)
+                        .with_context(|| format!("Ungültige Uhrzeit: {text}"))?,
                 );
             }
             "--zoom" => {
@@ -91,8 +100,8 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--sun-hour 5.5..20.5] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN]\n\
-Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN]\n\
+Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
                 return Ok(());
@@ -150,6 +159,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
             "Startposition außerhalb der Karte"
         );
     }
+    options.lighting = play::lighting_at(clock.unwrap_or(13. * 60.));
     if free {
         return berlin_engine::run(options);
     }
@@ -170,6 +180,10 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     } else {
         play::Play::new(&options.data_root, seed, Some(storage))?
     };
+    let mut play = play;
+    if let Some(c) = clock {
+        play.world.clock = c;
+    }
     berlin_engine::run_with(options, Some(Box::new(play)))
 }
 

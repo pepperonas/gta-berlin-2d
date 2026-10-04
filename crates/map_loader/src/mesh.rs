@@ -29,11 +29,22 @@ pub struct Sprite {
     pub cell: f32,
     pub depth: f32,
 }
+/// Wand-Viereck für den Schattenwurf: Fußpunkt, Wandhöhe (bereits für die Schrägansicht gestaucht) und
+/// `extrude` 0 = am Fuß, 1 = um die Schattenlänge versetzt (rechnet der Vertex-Shader aus dem Sonnenstand).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ShadowVertex {
+    pub point: [f32; 2],
+    pub height: f32,
+    pub extrude: f32,
+}
 #[derive(Debug, Default, Clone)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub sprites: Vec<Sprite>,
+    pub shadows: Vec<ShadowVertex>,
+    pub shadow_indices: Vec<u32>,
 }
 impl Mesh {
     pub fn append(&mut self, other: &Self) {
@@ -41,11 +52,44 @@ impl Mesh {
         self.vertices.extend_from_slice(&other.vertices);
         self.indices.extend(other.indices.iter().map(|i| base + i));
         self.sprites.extend_from_slice(&other.sprites);
+        let base = self.shadows.len() as u32;
+        self.shadows.extend_from_slice(&other.shadows);
+        self.shadow_indices
+            .extend(other.shadow_indices.iter().map(|i| base + i));
     }
     pub fn bytes(&self) -> usize {
         self.vertices.len() * size_of::<Vertex>()
             + self.indices.len() * 4
             + self.sprites.len() * size_of::<Sprite>()
+            + self.shadows.len() * size_of::<ShadowVertex>()
+            + self.shadow_indices.len() * 4
+    }
+    /// Schatten eines Prismas: jede Wand überstreicht beim Versetzen ein Viereck; zusammen mit dem Grundriss
+    /// (den das Haus selbst bedeckt) ergibt die Vereinigung den ganzen Schatten (lighting.js addBuildingShadow).
+    pub fn building_shadow(&mut self, rings: &[Vec<Vec2>], height: f32) {
+        for ring in rings {
+            for (a, b) in edges(ring) {
+                if a == b {
+                    continue;
+                }
+                let base = self.shadows.len() as u32;
+                for (p, e) in [(a, 0.), (b, 0.), (b, 1.), (a, 1.)] {
+                    self.shadows.push(ShadowVertex {
+                        point: p.to_array(),
+                        height,
+                        extrude: e,
+                    });
+                }
+                self.shadow_indices.extend_from_slice(&[
+                    base,
+                    base + 1,
+                    base + 2,
+                    base,
+                    base + 2,
+                    base + 3,
+                ]);
+            }
+        }
     }
     fn polygon(
         &mut self,
@@ -235,6 +279,8 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
     let wall = wall_color(b, facade);
     let (skin, center_color) = roof_colors(b, style, wall);
     let depth = 0.45 - b.center.y / 500000. * 0.2;
+    // Schattenhöhe wie lighting.js buildingHeight: max(18, Höhe × heightScale 0,5)
+    mesh.building_shadow(&b.polygon.rings, (b.height * 0.5).max(18.));
     let axis = roofs::oriented_box(b);
     let wall_surface = Surface {
         color: wall,

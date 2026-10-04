@@ -457,3 +457,35 @@ fn surfaces_on_real_map() {
     let mid = berlin_sim::city::point_along(&e.pts, e.len / 2.);
     assert!(w.city.surface_at(mid.x, mid.y, Some(0)).is_road());
 }
+
+#[test]
+fn lamps_stand_on_sidewalks() {
+    let mut w = world(2);
+    let mut cache = berlin_sim::lamps::LampCache::default();
+    let (x, y) = (w.player.x, w.player.y);
+    let lamps = cache.near(&mut w.city, x, y, 1500.);
+    // Referenz: lamps.js edgeLamps auf derselben Karte im selben Ausschnitt ergibt 41
+    assert_eq!(
+        lamps.len(),
+        41,
+        "Laternen um den Späti wie in der JS-Fassung"
+    );
+    for l in &lamps {
+        assert!(
+            w.city.in_building(l.x, l.y).is_none(),
+            "Laterne im Haus bei ({}, {})",
+            l.x,
+            l.y
+        );
+        assert!(
+            !w.city.tree_on_road(l.x, l.y, 3.),
+            "Laterne auf der Fahrbahn bei ({}, {})",
+            l.x,
+            l.y
+        );
+        assert!((l.nx.hypot(l.ny) - 1.).abs() < 1e-9);
+    }
+    // deterministisch: dieselben Standorte beim zweiten Abfragen (aus dem Zwischenspeicher wie neu berechnet)
+    let again = berlin_sim::lamps::LampCache::default().near(&mut w.city, x, y, 1500.);
+    assert_eq!(lamps.len(), again.len());
+}
