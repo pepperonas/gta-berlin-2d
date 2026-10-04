@@ -1,6 +1,6 @@
 //! Waffenrad (Port von `weaponwheel.js`): eine Taste, die kurz getippt etwas anderes tut als gehalten.
-//!  – Maus rechts: tippen = treten, halten (zu Fuß) = Rad genau am Zeiger; gewählt ist das Feld in Richtung des Zeigers
-//!    ab der Radmitte. Loslassen oder Linksklick nimmt die Waffe.
+//!  – Maus: beide Tasten zusammen halten (zu Fuß) = Rad genau am Zeiger; gewählt ist das Feld in Richtung des Zeigers
+//!    ab der Radmitte. Beide Tasten loslassen nimmt die Waffe, kurzes Doppeltippen tut nichts.
 //!  – Controller LB: tippen = vorige Waffe, halten = Rad, der rechte Stick wählt.
 //! Solange das Rad offen ist, läuft das Spiel in Zeitlupe.
 use berlin_engine::hud::{Align, Hud};
@@ -281,7 +281,7 @@ pub fn draw(h: &mut Hud, w: &WheelButton, c: &Combat, age: f64, pad: bool) {
     let hint = if pad {
         "Stick wählt · LB loslassen nimmt"
     } else {
-        "Zeigen wählt · loslassen oder Linksklick nimmt"
+        "Zeigen wählt · beide Tasten loslassen nimmt"
     };
     h.text(
         hint,

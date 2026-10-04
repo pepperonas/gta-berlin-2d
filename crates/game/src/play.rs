@@ -2013,15 +2013,21 @@ impl Game for Play {
             keys.held.contains(&KeyCode::ControlLeft) || keys.held.contains(&KeyCode::ControlRight);
         let on_foot = !self.bigmap.open && w2.player.in_car.is_none();
         let world_pt = m.world.map(|p| (p.x as f64, p.y as f64));
-        if self.diablo && on_foot {
-            // Diablo: Klick läuft hin bzw. greift an oder steigt ein, Strg + Klick greift am Platz an,
-            // rechte Taste tritt
+        // Maus am PC: links läuft (nie schießen), rechts schießt bzw. schlägt immer zum Zeiger, beide Tasten
+        // zusammen öffnen das Waffenrad – solange das Rad gedrückt oder offen ist, weder laufen noch feuern
+        let combo = self.wheel_m.down || self.wheel_m.open || (m.left && m.right);
+        if on_foot && !combo && (m.right || m.right_pressed) {
+            input.combat.aim_world = world_pt;
+            input.combat.fire |= m.right;
+            input.combat.fire_pressed |= m.right_pressed;
+        }
+        if self.diablo && on_foot && !combo {
+            // Diablo: Klick läuft hin bzw. steigt ein (greift nie an, `click_attack` bleibt aus)
             let ctrl = keys.held.contains(&KeyCode::ControlLeft)
                 || keys.held.contains(&KeyCode::ControlRight);
             input.click_world = world_pt;
             input.click_held = m.left;
             input.click_pressed = m.left_pressed;
-            input.click_force = ctrl && m.left;
             if m.left_pressed {
                 let now = w2.time;
                 input.click_double = self.last_click.is_some_and(|(t, p)| {
@@ -2033,10 +2039,9 @@ impl Game for Play {
                 // Strg allein zielt mit der Maus (Fadenkreuz), feuern mit Klick oder Strg-Taste
                 input.combat.aim_world = world_pt;
             }
-        } else if self.mouse_aim && on_foot {
+        } else if self.mouse_aim && on_foot && !self.diablo {
+            // klassisch: die Maus zielt, gefeuert wird mit rechts (oben) oder Strg
             input.combat.aim_world = world_pt;
-            input.combat.fire |= m.left;
-            input.combat.fire_pressed |= m.left_pressed;
         }
         // Trigger als Taste: Flanke gegenüber dem letzten Schritt
         let trigger = keys.pad.rt > 0.5;
@@ -2059,7 +2064,13 @@ impl Game for Play {
         let (t, cur) = (self.real_t, w2.player.combat.weapon);
         let n = berlin_sim::combat::WEAPONS.len();
         let hud_center = Vec2::new(self.hud_width / 2., 360.);
-        if m.right_pressed && alive_foot {
+        // Waffenrad: beide Maustasten gemeinsam (die zweite Taste löst es aus)
+        if m.left
+            && m.right
+            && (m.left_pressed || m.right_pressed)
+            && !self.wheel_m.down
+            && alive_foot
+        {
             self.wheel_m.press(t, m.hud.unwrap_or(hud_center));
         }
         if let Some(p) = m.hud {
@@ -2075,11 +2086,9 @@ impl Game for Play {
             ));
         }
         let mut outcomes = Vec::new();
-        if self.wheel_m.down && !m.right {
+        // erst wenn beide Tasten los sind: Auswahl unter dem Zeiger (ein kurzes Doppeltippen tut nichts)
+        if self.wheel_m.down && !m.left && !m.right {
             let o = self.wheel_m.release(t);
-            if o.tap {
-                input.combat.kick = true;
-            }
             outcomes.push(o);
         }
         if self.wheel_m.open
@@ -3050,6 +3059,149 @@ mod tests {
             false,
         );
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
+    }
+    /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad.
+    #[test]
+    fn mouse_left_walks_right_shoots_both_open_the_wheel() {
+        use berlin_engine::Mouse;
+        use berlin_sim::events::Event;
+        let dir = std::env::temp_dir().join(format!("gta-berlin-mouse-{}", std::process::id()));
+        let root = berlin_map_loader::default_data_root();
+        let mut p = Play::new(
+            &root,
+            4,
+            Some(FileStorage::new(dir.join("s.json"))),
+            false,
+            Start::New,
+        )
+        .unwrap();
+        let none = HashSet::new();
+        let step = |p: &mut Play, mouse: Mouse| {
+            p.step(
+                &Keys {
+                    held: &none,
+                    pressed: &none,
+                    pad: Pad::default(),
+                    pad_pressed: Pad::default(),
+                    mouse,
+                    typed: "",
+                },
+                DT,
+            );
+            p.world
+                .events
+                .iter()
+                .filter(|e| matches!(e, Event::Shot { .. }))
+                .count()
+        };
+        let t0 = std::time::Instant::now();
+        while p.world.loading && t0.elapsed().as_secs() < 30 {
+            step(&mut p, Mouse::default());
+        }
+        assert_eq!(p.screen, Screen::Playing);
+        p.world.mission.state = berlin_sim::mission::State::Available;
+        // Pistole, volles Magazin, eine Person 60 px vor der Figur
+        let pistol = berlin_sim::combat::WEAPONS
+            .iter()
+            .position(|w| w.id == "pistol")
+            .unwrap();
+        p.world.player.combat.weapon = pistol;
+        p.world.player.combat.mag[pistol] = 12;
+        p.world.player.combat.cool = 0.;
+        let (x, y) = (p.world.player.x + 60., p.world.player.y);
+        if let Some(q) = p.world.peds.first_mut() {
+            (q.x, q.y) = (x, y);
+        }
+        let at = Some(glam::Vec2::new(x as f32, y as f32));
+        let hud = Some(glam::Vec2::new(640., 360.));
+        // links auf die Person: hinlaufen, kein Schuss
+        let shots = step(
+            &mut p,
+            Mouse {
+                world: at,
+                hud,
+                left: true,
+                left_pressed: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(shots, 0, "links schießt nie");
+        assert!(
+            matches!(
+                p.world.player.click,
+                Some(berlin_sim::world::Click::Walk { .. })
+            ),
+            "links läuft nur hin: {:?}",
+            p.world.player.click
+        );
+        step(
+            &mut p,
+            Mouse {
+                world: at,
+                hud,
+                ..Default::default()
+            },
+        );
+        p.world.player.click = None;
+        // rechts: Schuss zum Zeiger
+        let shots = step(
+            &mut p,
+            Mouse {
+                world: at,
+                hud,
+                right: true,
+                right_pressed: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(shots, 1, "rechts schießt");
+        for _ in 0..30 {
+            step(
+                &mut p,
+                Mouse {
+                    world: at,
+                    hud,
+                    ..Default::default()
+                },
+            );
+        }
+        // beide Tasten: Waffenrad, kein Schuss, nach der Haltezeit offen
+        let mut shots = step(
+            &mut p,
+            Mouse {
+                world: at,
+                hud,
+                right: true,
+                right_pressed: true,
+                left: true,
+                left_pressed: true,
+                ..Default::default()
+            },
+        );
+        for _ in 0..30 {
+            shots += step(
+                &mut p,
+                Mouse {
+                    world: at,
+                    hud,
+                    right: true,
+                    left: true,
+                    ..Default::default()
+                },
+            );
+        }
+        assert_eq!(shots, 0, "beide Tasten schießen nicht");
+        assert!(p.wheel_m.open, "beide Tasten halten öffnet das Waffenrad");
+        step(
+            &mut p,
+            Mouse {
+                world: at,
+                hud,
+                ..Default::default()
+            },
+        );
+        assert!(!p.wheel_m.open && !p.wheel_m.down, "loslassen schließt");
+        let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
     fn lighting_follows_the_clock() {

@@ -626,6 +626,19 @@ Simulationsschritt.
 
 Mit echter Maus wurde nicht gespielt.
 
+## Mausbelegung (04.10.2026, Nutzerwunsch)
+
+In beiden Schemata (Diablo und klassisch) gilt am PC:
+- **Linke Maustaste schießt nie.** Diablo: laufen, Auto/Rad anlaufen bzw. einsteigen; ein Klick auf eine Person
+  oder einen fahrenden Radler läuft nur hin (`Input::click_attack` aus, auch Strg + Links greift nicht mehr an).
+  Klassisch: keine Funktion.
+- **Rechte Maustaste schießt bzw. schlägt immer**, zum Mauszeiger (gehalten: Dauerfeuer bzw. weiter zuschlagen).
+- **Beide Maustasten zusammen** öffnen das Waffenrad am Zeiger; gewählt wird, wohin der Zeiger zeigt, wenn beide
+  Tasten los sind. Solange das Rad gedrückt oder offen ist, wird weder gelaufen noch gefeuert; ein kurzes
+  Doppeltippen tut nichts. Treten bleibt auf V, Strg schießt weiter über die Tastatur.
+- Test `mouse_left_walks_right_shoots_both_open_the_wheel` im echten Spiel (Pistole, Person vor der Figur),
+  gegengeprüft mit zwei Mutationen (Linksklick darf angreifen; beide Tasten feuern) – beide machen ihn rot.
+
 ## Diablo-Schema (04.10.2026)
 
 Wie im Browser ist zu Fuß am PC jetzt das Diablo-Schema der Standard. Die Steuerungstafel schaltet mit ←/→ auf
@@ -640,11 +653,13 @@ das klassische Schema (WASD, die Maus zielt) um. Die Wahl liegt in `settings.jso
   - Der Weg wird über Sichtlinien geglättet.
 - **Klick** (`World::click_control`/`click_intent`, Port von `clickControl`/`clickIntent`):
   - Boden: hinlaufen. Gehalten läuft die Figur dem Zeiger nach, der Weg wird alle 0,15 s neu gesucht.
-  - Person: hinlaufen bis in Waffenreichweite und angreifen; gehalten weiter, bis sie liegt.
+  - Person: hinlaufen bis in Waffenreichweite und angreifen; gehalten weiter, bis sie liegt. **Seit der neuen
+    Mausbelegung (s. unten) nur noch mit `Input::click_attack` – am PC ist das aus, ein Linksklick läuft dann bloß
+    hin.**
   - Heiles Auto neben der Figur oder Doppelklick: hinlaufen, 0,35 s an der Tür, einsteigen. Ein Auto weiter weg
     wird nur angelaufen. Ein Wrack zählt als Boden.
-  - Strg + Klick: am Platz angreifen, wohin gezeigt wird, mit Fadenkreuz.
-  - Rechte Taste: treten. WASD bricht jeden Klickauftrag ab.
+  - ~~Strg + Klick: am Platz angreifen~~ und ~~rechte Taste: treten~~ – abgelöst, s. „Mausbelegung“. WASD bricht
+    jeden Klickauftrag ab.
   - Ein Ring am Boden zeigt das Laufziel.
 - **Engine:** Im Smoke-Test und bei Aufnahmen gibt die Engine keine Eingaben mehr an das Spiel. Eine Taste, die
   zufällig ins Aufnahmefenster ging, hatte die Steuerungstafel geschlossen.
@@ -748,8 +763,8 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
   er.
 - **Kampf:** Fahrende Radfahrer sind Ziele für Strahl, Nahkampf, Zeiger und Zielhilfe. Ein Treffer holt sie vom
   Rad, der Fahrer nimmt den Treffer als Person (`combat::hurt_bike`, Ereignis `BikeDown`).
-- **Klicken (Diablo):** Ein Klick auf einen Radfahrer greift an, bis er unten ist. Ein Doppelklick oder ein Klick
-  auf ein liegendes Rad läuft hin und nimmt es.
+- **Klicken (Diablo):** Ein Klick auf einen fahrenden Radfahrer läuft hin (angegriffen wird mit rechts). Ein
+  Doppelklick oder ein Klick auf ein liegendes Rad läuft hin und nimmt es.
 - **Darstellung:** zwei Räder, Rahmen bzw. Trittbrett, Lenker und der Fahrer im Trikot, beim Rad mit
   Tretbewegung. Liegende Räder sind gekippt und ohne Fahrer.
 - **Statistik:** Radfahrer umgefahren, vom Rad geholt, Räder gekapert.

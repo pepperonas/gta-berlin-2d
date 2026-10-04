@@ -516,9 +516,14 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("Mitfahren (Bus, Bahn)", "Steuerkreuz unten", "G"),
     ("Aktion (Auftrag, Einladen)", "A", "E"),
     ("Hupe (im Auto) · Nachladen (zu Fuß)", "X", "H · R"),
-    ("Angreifen / Schießen · Treten", "RT · B", "Strg · V"),
+    (
+        "Angreifen / Schießen · Treten",
+        "RT · B",
+        "Rechte Maus / Strg · V",
+    ),
     ("Waffe wechseln", "RB / LB", "Q · 1–6"),
-    ("Zielen", "Rechter Stick", "Maus (Diablo: Strg)"),
+    ("Waffenrad", "LB halten", "Beide Maustasten halten"),
+    ("Zielen", "Rechter Stick", "Maus"),
     ("Stadtplan", "Ansicht-Taste", "Tab"),
     ("Uhr +1 h · Wetter · Ton · Speichern", "–", "T · N · M · F5"),
     ("Zoom · Befehlszeile", "–", "Mausrad · Enter"),
@@ -547,20 +552,24 @@ pub fn draw_controls(h: &mut Hud, diablo: bool) {
     let mouse_rows: [(&str, &str, &str); 2] = if diablo {
         [
             (
-                "Maus links: laufen · Person: angreifen · Auto: einsteigen",
+                "Maus links: laufen · Auto: einsteigen (links schießt nie)",
                 "",
                 "",
             ),
-            ("Strg + Klick: am Platz angreifen · rechts: treten", "", ""),
+            (
+                "rechts: schießen/schlagen zum Zeiger · beide Tasten: Waffenrad",
+                "",
+                "",
+            ),
         ]
     } else {
         [
             (
-                "Maus zielt · links: angreifen/schießen · rechts: treten",
+                "Maus zielt · rechts: schießen/schlagen (links schießt nie)",
                 "",
                 "",
             ),
-            ("", "", ""),
+            ("beide Maustasten: Waffenrad", "", ""),
         ]
     };
     for (i, (t, _, _)) in mouse_rows.iter().enumerate() {

@@ -914,7 +914,7 @@ fn click_walks_attacks_and_enters() {
         "angekommen"
     );
     assert!(w.player.click.is_none());
-    // Klick auf eine Person: hinlaufen und zuschlagen (Fäuste)
+    // Klick auf eine Person ohne Angriffsrecht (PC: links schießt nie): nur hinlaufen
     let i = ped_in_front(&mut w, 60.);
     let (px, py, id) = (w.peds[i].x, w.peds[i].y, w.peds[i].id);
     let hp = w.peds[i].hp;
@@ -922,6 +922,23 @@ fn click_walks_attacks_and_enters() {
         &Input {
             click_world: Some((px, py)),
             click_pressed: true,
+            click_force: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert!(
+        matches!(w.player.click, Some(Click::Walk { .. })),
+        "ohne click_attack weder Angriff noch Strg-Angriff: {:?}",
+        w.player.click
+    );
+    w.player.click = None;
+    // mit Angriffsrecht: hinlaufen und zuschlagen (Fäuste)
+    w.update(
+        &Input {
+            click_world: Some((px, py)),
+            click_pressed: true,
+            click_attack: true,
             ..idle()
         },
         DT,

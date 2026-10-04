@@ -153,6 +153,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Native Rust-Portierung, Maus am PC: links schießt nie (läuft, steigt ein), rechts schießt bzw. schlägt immer zum
+  Zeiger, beide Tasten zusammen öffnen das Waffenrad. Treten bleibt auf V.
 - Enter in der Befehlszeile übernimmt zunächst die sichtbare Autovervollständigung; ein weiteres Enter führt sie aus.
   Die Fahrzeugschadenswerte wurden halbiert, sodass Zusammenstöße und umgefahrene Poller doppelt so viel aushalten.
 - Der Befehl `leben` repariert jetzt auch das eigene Fahrzeug vollständig und setzt ein Wrack wieder fahrbereit.

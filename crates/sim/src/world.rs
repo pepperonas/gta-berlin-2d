@@ -75,6 +75,9 @@ pub struct Input {
     pub click_held: bool,
     pub click_force: bool,
     pub click_double: bool,
+    /// Darf ein Klick angreifen (Person anklicken = zuschlagen, Strg = am Platz)? Am PC aus: dort schießt nur die
+    /// rechte Maustaste, ein Linksklick auf eine Person läuft bloß hin.
+    pub click_attack: bool,
     /// Mitfahren: einsteigen bzw. aussteigen (Flanke, G / Steuerkreuz unten)
     pub ride: bool,
 }
@@ -1641,8 +1644,13 @@ impl World {
         if let Some(at) = input.click_world {
             if input.click_pressed {
                 self.player.click_t = 0.15;
-                self.player.click =
-                    self.click_intent(at, input.click_force, input.click_double, walk);
+                self.player.click = self.click_intent(
+                    at,
+                    input.click_force && input.click_attack,
+                    input.click_double,
+                    input.click_attack,
+                    walk,
+                );
             } else if input.click_held {
                 match &mut self.player.click {
                     Some(Click::Walk { follow: true, .. }) => {
@@ -1849,11 +1857,13 @@ impl World {
 
     /// Was ein Klick bedeutet (combat.js clickIntent): Person → angreifen, heiles Auto daneben oder Doppelklick →
     /// einsteigen, weiter weg → nur hinlaufen, sonst (Boden, Wrack) hinlaufen; mit Strg am Platz angreifen.
+    /// Ohne `attack` greift ein Klick nie an: Personen und fahrende Radler werden nur angelaufen.
     fn click_intent(
         &mut self,
         at: (f64, f64),
         force: bool,
         double: bool,
+        attack: bool,
         walk: impl Fn(&mut World, (f64, f64)) -> Option<Vec<(f64, f64)>>,
     ) -> Option<Click> {
         let lvl = self.player.level.lvl;
@@ -1868,7 +1878,7 @@ impl World {
         if force {
             return Some(Click::Force { at, ped });
         }
-        if let Some(id) = ped {
+        if let Some(id) = ped.filter(|_| attack) {
             return Some(Click::Target {
                 ped: id,
                 done: false,
@@ -1880,7 +1890,7 @@ impl World {
             .filter(|b| b.state != crate::bikes::State::Gone && b.level.lvl == lvl)
             .find(|b| (b.x - at.0).hypot(b.y - at.1) < crate::bikes::RADIUS + 5.)
             .map(|b| (b.id, b.state == crate::bikes::State::Ride));
-        if let Some((id, riding)) = bike {
+        if let Some((id, riding)) = bike.filter(|&(_, riding)| attack || !riding || double) {
             return Some(Click::Bike {
                 bike: id,
                 attack: riding && !double,
