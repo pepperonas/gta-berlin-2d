@@ -2,7 +2,7 @@
 //! einem deterministischen Simulationsschritt. Eingaben kommen als abstrakter Zustand ([`Input`]), Ausgaben als
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
 //!
-//! Noch nicht portiert: Linienverkehr und U-Bahnhöfe, Jogger und Hundehalter.
+//! Noch nicht portiert: Jogger und Hundehalter.
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
 use crate::city::{City, Ground, Solid, point_along};
@@ -130,6 +130,9 @@ pub struct Player {
     pub click_t: f64,
     /// fährt mit bzw. führt eine Bahn (ride.rs)
     pub ride: Option<crate::ride::Ride>,
+    /// im U-Bahnhof (station.rs); nach dem Hinaufgehen nicht gleich wieder hinunter
+    pub inside: Option<crate::station::Inside>,
+    pub entry_guard: Option<(f64, f64)>,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -222,6 +225,11 @@ pub struct World {
     /// vom Spieler übernommener Zug; Tunnelansicht 0 (oben) … 1 (unter Tage)
     pub player_train: Option<crate::ride::PlayerTrain>,
     pub underground: f64,
+    /// Bahnhöfe (aus dem Fahrplan), die um die Figur und ihr Zähler
+    pub stations: crate::station::Cache,
+    pub st_near: Vec<crate::station::Station>,
+    pub st_tick: u32,
+    pub st_gen: u64,
     /// Straßenbahnwagen nahe der Kamera als Hindernisse (transitlive.rs)
     pub rail_obs: Vec<crate::traffic::RailObs>,
     /// Pfützen je Kante (Aquaplaning und Darstellung), mit den Rollern um die Kamera abgebaut
@@ -305,6 +313,8 @@ impl World {
                 click: None,
                 click_t: 0.,
                 ride: None,
+                inside: None,
+                entry_guard: None,
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -343,6 +353,10 @@ impl World {
             ug: Default::default(),
             player_train: None,
             underground: 0.,
+            stations: Default::default(),
+            st_near: Vec::new(),
+            st_tick: 0,
+            st_gen: u64::MAX,
             scoot_t: -99.,
             rhythm_t: -99.,
             life_t: -99.,
@@ -962,6 +976,8 @@ impl World {
         self.transit_populated = false;
         self.rail_obs.clear();
         self.player_train = None;
+        self.player.inside = None;
+        self.player.entry_guard = None;
         self.hangers.clear();
         self.populated = false;
     }
@@ -1534,6 +1550,17 @@ impl World {
         let lvl = self.player.level.lvl;
         let (px, py) = (self.player.x, self.player.y);
         let walk = |w: &mut World, to: (f64, f64)| {
+            // im Bahnhof: gerade Linie, keep_inside hält am Bahnsteig
+            if let Some(st) = w
+                .player
+                .inside
+                .as_ref()
+                .and_then(|i| w.stations.by_id.get(&i.id))
+            {
+                let (mut x, mut y) = to;
+                st.keep_inside(&mut x, &mut y, PLAYER_RADIUS);
+                return Some(vec![(px, py), (x, y)]);
+            }
             crate::footpath::find_foot_path(w, (px, py), to, lvl).filter(|p| p.len() > 1)
         };
         if let Some(at) = input.click_world {
@@ -2155,6 +2182,18 @@ impl World {
         } else {
             p.move_speed = 0.;
         }
+        // im U-Bahnhof: nur Bahnsteig und Säulen
+        if let Some(st) = self
+            .player
+            .inside
+            .as_ref()
+            .and_then(|i| self.stations.by_id.get(&i.id))
+        {
+            let p = &mut self.player;
+            st.keep_inside(&mut p.x, &mut p.y, PLAYER_RADIUS);
+            p.swimming = false;
+            return;
+        }
         self.push_circle_out(PLAYER_RADIUS);
         let p = &mut self.player;
         p.x = p.x.clamp(8., self.city.width - 8.);
@@ -2193,6 +2232,10 @@ impl World {
         {
             self.player.level = c.level;
             self.player.level_init = true;
+        } else if self.player.ride.is_some() {
+            // im Wagen: update_ride setzt die Ebene (Gleis, Tunnel)
+        } else if self.player.inside.is_some() {
+            self.player.level.lvl = -2; // im U-Bahnhof
         } else if !self.player.level_init {
             self.player.level.lvl =
                 initial_level(&mut self.city, self.player.x, self.player.y, None, 30.);
@@ -2374,13 +2417,23 @@ impl World {
             .as_ref()
             .is_some_and(|r| r.kind == crate::ride::RideKind::Driver);
         let dead = self.player.combat.dead;
+        if input.enter_exit
+            && !dead
+            && self.player.in_car.is_none()
+            && self.player.inside.is_none()
+            && self.player.ride.is_none()
+        {
+            self.update_station_presence(input); // F am Eingang: hinunter zum Bahnsteig
+        }
         if input.ride && !dead && self.player.in_car.is_none() && !driver {
             if self.player.ride.is_some() {
                 self.alight_transit();
+            } else if self.player.inside.is_some() {
+                self.board_at_platform();
             } else {
                 self.board_transit();
             }
-        } else if input.enter_exit && !dead {
+        } else if input.enter_exit && !dead && self.player.inside.is_none() {
             if driver {
                 self.leave_train();
             } else if self.player.ride.is_none() {
@@ -2403,6 +2456,7 @@ impl World {
                 }
             }
         }
+        self.refresh_stations();
         // Wenden verbraucht den Tastendruck (sonst öffnete er gleich die Türen am neuen ersten Halt)
         let turned = input.action && driver && self.at_terminus() && self.turn_around();
         let train_input = Input {
@@ -2450,6 +2504,9 @@ impl World {
         } else if !self.player.combat.dead && self.player.ride.is_none() {
             let input = &self.click_control(input, dt);
             self.update_player_on_foot(input, dt);
+            let mut no_enter = *input;
+            no_enter.enter_exit = false; // hinunter nur einmal je Tastendruck (oben schon geprüft)
+            self.update_station_presence(&no_enter);
             crate::combat::update_player_combat(self, &input.combat, dt);
         }
         if self.player.in_car.is_some() || self.player.combat.dead {
@@ -2610,7 +2667,10 @@ impl World {
         });
 
         // Spieler zu Fuß gegen Autos
-        if self.player.in_car.is_none() && self.player.ride.is_none() {
+        if self.player.in_car.is_none()
+            && self.player.ride.is_none()
+            && self.player.inside.is_none()
+        {
             for i in 0..self.cars.len() {
                 let o = self.cars[i].obb();
                 let p = &self.player;
@@ -2902,7 +2962,9 @@ impl World {
 
     pub fn update_camera(&mut self, dt: f64) {
         let (mut tx, mut ty, mut zoom) = (self.player.x, self.player.y, FOOT_ZOOM);
-        if let Some(r) = &self.player.ride {
+        if self.player.inside.is_some() {
+            zoom = 1.1; // im U-Bahnhof: mehr vom Bahnsteig im Bild
+        } else if let Some(r) = &self.player.ride {
             let ahead = if r.kind == crate::ride::RideKind::Driver {
                 r.speed * 0.6
             } else {
@@ -2938,6 +3000,18 @@ impl World {
         let pos = match &self.player.ride {
             // im Wagen: an der letzten Haltestelle (world.js rideExit; bei S-/U-Bahn deren Straßenpunkt)
             Some(r) => (r.last_stop.x, r.last_stop.y),
+            // im U-Bahnhof: am näheren Ausgang oben
+            None if self.player.inside.is_some() => self
+                .player
+                .inside
+                .as_ref()
+                .and_then(|i| self.stations.by_id.get(&i.id))
+                .map(|st| {
+                    let (u, _) = st.to_local(self.player.x, self.player.y);
+                    let ex = &st.exits[if u < 0. { 0 } else { 1 }];
+                    (ex.x, ex.y)
+                })
+                .unwrap_or((self.player.x, self.player.y)),
             None => self
                 .player_car()
                 .map(|c| (c.x, c.y))

@@ -67,7 +67,12 @@ impl World {
     pub fn rail_obstacle_at(&self, x: f64, y: f64, head_on: Option<f64>) -> bool {
         let hit = |ox: f64, oy: f64, r: f64| (ox - x).hypot(oy - y) < r;
         let p = &self.player;
-        if p.in_car.is_none() && p.ride.is_none() && !p.combat.dead && hit(p.x, p.y, 22.) {
+        if p.in_car.is_none()
+            && p.ride.is_none()
+            && p.inside.is_none()
+            && !p.combat.dead
+            && hit(p.x, p.y, 22.)
+        {
             return true;
         }
         for c in &self.cars {
@@ -453,6 +458,7 @@ impl World {
             let pl = &mut self.player;
             if pl.in_car.is_none()
                 && pl.ride.is_none()
+                && pl.inside.is_none()
                 && let Some(m) = circle_vs_obb(pl.x, pl.y, 7., &ob)
             {
                 pl.x += m.nx * m.depth;

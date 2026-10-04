@@ -431,8 +431,35 @@ pub fn draw(
         hint = Some(n.text.clone());
         hint_y = 720. - my - 150.;
     }
+    // U-Bahnhof: Einsteigen am Bahnsteig bzw. Eingang an der Straße
+    if hint.is_none()
+        && let Some(st) = w
+            .player
+            .inside
+            .as_ref()
+            .and_then(|i| w.station_by_id(&i.id))
+        && let Some((t, _)) = w.boardable(st, w.player.x, w.player.y)
+    {
+        hint = Some(format!("G: Einsteigen {} → {}", t.line, t.dest));
+    }
     if hint.is_none()
         && car.is_none()
+        && w.player.inside.is_none()
+        && w.player.ride.is_none()
+        && w.player.level.lvl == 0
+        && let Some((st, _, _)) =
+            w.entrance_near(w.player.x, w.player.y, berlin_sim::station::REACH)
+    {
+        hint = Some(format!(
+            "F: Hinunter zur {}-Bahn {}",
+            if st.sbahn { "S" } else { "U" },
+            st.name
+        ));
+    }
+    if hint.is_none()
+        && car.is_none()
+        && w.player.ride.is_none()
+        && w.player.inside.is_none()
         && w.cars
             .iter()
             .any(|c| !c.wrecked && (c.x - w.player.x).hypot(c.y - w.player.y) < ENTER_DIST)
@@ -590,7 +617,7 @@ pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f3
 
 /// Waffe und Magazin unten rechts (hud.js drawWeaponPanel); `r`/`b` = rechte bzw. untere Kante.
 /// Hex-Farbe einer Linie („#c00“, „cc0000“) → Farbe, sonst `None`.
-fn line_color(s: &str) -> Option<[f32; 4]> {
+pub fn line_color(s: &str) -> Option<[f32; 4]> {
     let h = s.trim_start_matches('#');
     let v = u32::from_str_radix(h, 16).ok()?;
     match h.len() {
@@ -640,7 +667,7 @@ fn ride_bar(w: &World, h: &mut Hud) {
     };
     let p = &tr.patterns[pid];
     let driver = r.kind == RideKind::Driver;
-    let (bw, bh) = (500., if driver { 112. } else { 64. });
+    let (bw, bh) = (500., if driver { 112. } else { 86. });
     // mittig; steht oben rechts der Auftrag, weicht die Leiste nach links aus
     let pv = PlayerView {
         x: w.player.x,
@@ -701,7 +728,12 @@ fn ride_bar(w: &World, h: &mut Hud) {
     } else {
         format!("Nächster Halt: {next}")
     };
-    let line2 = fit(h, &line2, 15., if driver { bw - 28. } else { bw - 210. });
+    let tip = if r.underground && !dwelling {
+        "Aussteigen nur am Bahnsteig"
+    } else {
+        "G: aussteigen"
+    };
+    let line2 = fit(h, &line2, 15., bw - 28.);
     h.text(
         &line2,
         x + 14.,
@@ -712,12 +744,7 @@ fn ride_bar(w: &World, h: &mut Hud) {
         true,
     );
     if !driver {
-        let tip = if r.underground && !dwelling {
-            "Aussteigen nur am Bahnsteig"
-        } else {
-            "G: aussteigen"
-        };
-        h.text(tip, x + bw - 14., y + 56., 13., GREY, Align::Right, true);
+        h.text(tip, x + 14., y + 78., 13., GREY, Align::Left, true);
     } else if let Some(t) = &w.player_train {
         let kmh = (t.v * 0.36).round();
         h.text(

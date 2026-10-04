@@ -985,3 +985,36 @@ fahren als KI auf ihrer Linie voran, S- und U-Bahn sind am oberirdischen Gleis s
 Nässe) und das Trinkgeld. Ein Integrationstest am Alexanderplatz steigt in eine fahrende Straßenbahn, fährt mit,
 steigt aus, übernimmt eine Bahn am Führerstand, fährt an, bremst mit der Notbremse und verlässt den Führerstand.
 140 Rust-Tests.
+
+## Nahverkehr C: begehbare U-Bahnhöfe und Tunnelansicht (04.10.2026)
+
+`sim/station.rs` portiert `station.js` und den Bahnhofsteil von `world.js`, `game/underground.rs` portiert
+`stationview.js` und `tunnelview.js`.
+- **Bahnhöfe aus dem Fahrplan:** Die Karte kennt keine Grundrisse. Alle unterirdischen Halte gleichen Namens
+  (aus dem ganzen Fahrplan, nie aus einer Umkreisabfrage) mit gleich verlaufender Strecke bilden einen
+  Mittelbahnsteig genau unter der echten Strecke: so lang wie der längste Zug plus Rand, je ein Gleis rechts der
+  Fahrtrichtung, Säulen in der Mitte, an beiden Enden eine Treppe. Unterirdisch heißt: an fünf Punkten entlang jedes
+  haltenden Zugs liegt in 15 m kein gleich gerichtetes sichtbares Gleis.
+- **Eingänge:** am nächsten Gehweg über den Treppen, dazu einer am OSM-Bahnhofssymbol, wenn dort keiner in Reichweite
+  liegt. An der Straße als Treppenschacht mit Geländer und U-/S-Schild gezeichnet; in 7 m Reichweite zeigt der HUD
+  „F: Hinunter zur U-/S-Bahn …“. Die Liste wird alle 0,5 s erneuert, auch im Auto.
+- **Drinnen:** Die Figur behält ihre echten Koordinaten auf Ebene −2; Bewegung und Kollision laufen im
+  Bahnhofsrahmen (entlang der Strecke / quer), die Bahnsteigkante und die Wände halten fest. Die Treppe führt zum
+  zugehörigen Ausgang hinauf. Straßenbahnen, Gleiskollision, Passanten und Schussreaktionen übergehen eine Figur im
+  Bahnhof. Ein Spielstand landet am nächsten Ausgang.
+- **Züge:** Fahrplanzüge halten am Bahnsteig, wo der Fahrplan sie hinstellt; G steigt in den Wagen vor der Figur.
+  Wer unter Tage aussteigt, steht auf dem Bahnsteig des nächsten Halts. Die Abfahrtstafeln nennen die nächsten zwei
+  Züge je Richtung, wartende Fahrgäste stehen je nach Tageszeit am Bahnsteig.
+- **Darstellung:** Innen- und Tunnelansicht liegen im Bildraum über der Stadt (nach dem Lichtpass), damit der Bahnhof
+  immer beleuchtet ist; die Kamera zoomt im Bahnhof auf 1,1. Während einer Fahrt unter Tage zeichnet die
+  Tunnelansicht die Röhren mit Licht und den Zug, die Stadt bleibt gedämpft darunter.
+  `--bildschirm bahnhof` geht am Kottbusser Tor hinunter ([Bild](images/native/bahnhof.png)),
+  `--bildschirm tunnelfahrt` setzt die Figur in eine fahrende U-Bahn ([Bild](images/native/tunnelfahrt.png),
+  U8 Richtung Moritzplatz).
+
+**Validierung:** Ein Integrationstest am Kottbusser Tor findet den U8-Bahnhof, geht über den Eingang hinunter,
+läuft auf dem Bahnsteig, steigt in einen haltenden Zug, steigt am nächsten Halt aus und kommt über die Treppe wieder
+hinauf. 142 Rust-Tests.
+
+Noch nicht portiert: Jogger und Hundehalter (die Passanten haben noch keine Arten), Bahnhofssymbole auf der
+Minikarte und die Bar-Belegung über HTTP (der native Stand liest nur eine Datei).

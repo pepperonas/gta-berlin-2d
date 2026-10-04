@@ -603,6 +603,12 @@ impl World {
                 });
                 return false;
             }
+            // unter Tage mit begehbarem Bahnhof: auf dessen Bahnsteig neben dem Wagen
+            if st.underground && self.platform_arrival(st.pid, st.stop, r.car) {
+                let (x, y) = (self.player.x, self.player.y);
+                self.events.push(Event::Alight { hop: false, x, y });
+                return true;
+            }
             let (x, y) = self.station_exit(st.pid, st.stop);
             self.player.ride = None;
             (self.player.x, self.player.y) = (x, y);

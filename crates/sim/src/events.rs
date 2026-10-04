@@ -62,6 +62,17 @@ pub enum Event {
     TurnAround {
         line: String,
     },
+    /// U-Bahnhof betreten bzw. über die Treppe verlassen
+    StationEnter {
+        x: f64,
+        y: f64,
+        name: String,
+    },
+    StationExit {
+        x: f64,
+        y: f64,
+        name: String,
+    },
     /// Straßenbahn klingelt vor einem Hindernis
     TramBell {
         x: f64,

@@ -1645,3 +1645,135 @@ fn ride_and_drive_a_tram_at_alexanderplatz() {
     assert!(w.player.ride.is_none(), "Führerstand verlassen");
     assert!(w.player_train.is_some(), "Zug bleibt stehen");
 }
+
+#[test]
+fn walkable_ubahn_station_at_kottbusser_tor() {
+    use berlin_sim::transit::Transit;
+    use berlin_sim::world::TeleportSpot;
+    let mut w = world(131);
+    w.set_transit(Transit::read(&root()).expect("transit.json"));
+    let ov = berlin_map_loader::overview::Overview::read(&root()).unwrap();
+    let kt = ov
+        .stations
+        .iter()
+        .find(|s| s.name.contains("Kottbusser Tor") && s.cat == "ubahn")
+        .expect("Kottbusser Tor");
+    let Some(TeleportSpot::Spot { x, y, angle, .. }) =
+        w.find_teleport_spot(kt.at.x as f64, kt.at.y as f64)
+    else {
+        panic!("Teleport")
+    };
+    w.teleport_to(x, y, angle);
+    run(&mut w, 60, idle());
+    let near = w.stations_near(w.player.x, w.player.y, 1500.);
+    eprintln!(
+        "Bahnhöfe: {:?}",
+        near.iter()
+            .map(|s| (s.name.as_str(), s.lines.clone(), s.exits.len()))
+            .collect::<Vec<_>>()
+    );
+    let st = near
+        .iter()
+        .find(|s| s.name == "Kottbusser Tor" && s.lines.iter().any(|l| l == "U8"))
+        .expect("U8-Bahnsteig unter Tage")
+        .clone();
+    assert!(st.exits.len() >= 2 && st.hl > 400.);
+    // zum Eingang, F: hinunter
+    let ex = st.exits[0].clone();
+    (w.player.x, w.player.y) = (ex.x + 5., ex.y);
+    run(&mut w, 31, idle()); // Bahnhofsliste um die Figur auffrischen
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    let inside = w.player.inside.clone().expect("im Bahnhof");
+    assert_eq!(w.player.level.lvl, -2);
+    let st = w.station_by_id(&inside.id).unwrap().clone();
+    // nicht durch Säulen und Kanten: weit nach außen laufen bleibt am Bahnsteig
+    run(
+        &mut w,
+        120,
+        Input {
+            move_x: 0.3,
+            move_y: 1.,
+            ..idle()
+        },
+    );
+    let (_, v) = st.to_local(w.player.x, w.player.y);
+    assert!(
+        v.abs() <= berlin_sim::station::HALF,
+        "am Bahnsteig gehalten"
+    );
+    // an die Kante neben einen haltenden Zug und einsteigen
+    let mut boarded = false;
+    for _ in 0..60 * 600 {
+        run(&mut w, 1, idle());
+        let trains = w.trains_at(&st);
+        if let Some(t) = trains.iter().find(|t| t.dwelling) {
+            let c = t.cars[2];
+            (w.player.x, w.player.y) =
+                st.to_world(c.0, t.dir as f64 * (berlin_sim::station::HALF - 6.));
+            run(
+                &mut w,
+                1,
+                Input {
+                    ride: true,
+                    ..idle()
+                },
+            );
+            if w.player.ride.is_some() {
+                boarded = true;
+                break;
+            }
+        }
+    }
+    assert!(boarded, "in die U8 eingestiegen");
+    assert!(w.player.inside.is_none());
+    // mitfahren bis zum nächsten Halt, dort auf den Bahnsteig aussteigen
+    let mut arrived = false;
+    let mut left = false;
+    let r0 = w.player.ride.clone().unwrap();
+    let first_stop = w.vehicle_state(&r0.r).unwrap().stop;
+    for _ in 0..60 * 300 {
+        run(&mut w, 1, idle());
+        let Some(r) = w.player.ride.clone() else {
+            break;
+        };
+        let vs = w.vehicle_state(&r.r).expect("Zug");
+        if vs.dwelling && vs.stop != first_stop {
+            run(
+                &mut w,
+                1,
+                Input {
+                    ride: true,
+                    ..idle()
+                },
+            );
+            arrived = w.player.inside.is_some();
+            left = true;
+            break;
+        }
+    }
+    assert!(left, "Halt erreicht");
+    assert!(
+        arrived,
+        "auf dem Bahnsteig des nächsten Bahnhofs ausgestiegen"
+    );
+    // zur Treppe und hinauf
+    let st2 = w
+        .station_by_id(&w.player.inside.as_ref().unwrap().id)
+        .unwrap()
+        .clone();
+    assert_ne!(st2.name, "Kottbusser Tor");
+    let (sx, sy) = st2.to_world(st2.hl - 10., 0.);
+    (w.player.x, w.player.y) = (sx, sy);
+    run(&mut w, 3, idle());
+    assert!(w.player.inside.is_none(), "über die Treppe hinauf");
+    assert_eq!(w.player.level.lvl, 0);
+    let out = st2.exits[1].clone();
+    assert!((w.player.x - out.x).hypot(w.player.y - out.y) < 1.);
+}

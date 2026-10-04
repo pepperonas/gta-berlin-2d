@@ -230,6 +230,38 @@ impl Hud {
             extra: [0.; 4],
         });
     }
+    /// Gedrehtes Rechteck in Bildschirmpixeln (Mitte, halbe Ausdehnung, Winkel, Eckenradius).
+    #[allow(clippy::too_many_arguments)]
+    pub fn quad_px(
+        &mut self,
+        cx: f32,
+        cy: f32,
+        hw: f32,
+        hh: f32,
+        angle: f32,
+        color: [f32; 4],
+        radius: f32,
+    ) {
+        self.items.push(HudItem {
+            center: [cx, cy],
+            half: [hw, hh],
+            angle,
+            shape: 0.,
+            color,
+            extra: [radius, 0., 0., 0.],
+        });
+    }
+    /// Gedrehte Ellipse in Bildschirmpixeln.
+    pub fn ellipse_px(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, angle: f32, color: [f32; 4]) {
+        self.items.push(HudItem {
+            center: [cx, cy],
+            half: [rx, ry],
+            angle,
+            shape: 1.,
+            color,
+            extra: [0.; 4],
+        });
+    }
     /// Weicher Fleck in Bildschirmpixeln (Wolkenschatten, Nebel): Deckkraft fällt zum Rand auf 0.
     pub fn blob_px(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, angle: f32, color: [f32; 4]) {
         self.items.push(HudItem {

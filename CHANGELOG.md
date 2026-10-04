@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Nahverkehr C: begehbare U-Bahnhöfe aus dem Fahrplan (Eingänge an der Straße,
+  Bahnsteig mit Treppen, Säulen, Abfahrtstafeln und Wartenden, Einsteigen am Bahnsteig, Aussteigen unter Tage am
+  nächsten Bahnsteig) und die Tunnelansicht bei Fahrten unter Tage (`--bildschirm bahnhof|tunnelfahrt`).
 - Native Rust-Portierung, Phasen 1–2: Cargo-Workspace mit winit/wgpu, Metal-/DX12-
   Konfiguration, steuerbarer Kamera und 60-/120-FPS-Zielmodus. Asynchrones Streaming
   der bestehenden Berlin-Kacheln, indizierte GPU-Meshes für Straßen/Flächen/Gebäude,

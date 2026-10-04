@@ -50,6 +50,8 @@ pub struct Play {
     pub vehicle_show: bool,
     /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
     pub demo_drive: bool,
+    /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
+    pub demo_station: Option<bool>,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -251,6 +253,7 @@ impl Play {
             demo_combat: false,
             vehicle_show: false,
             demo_drive: false,
+            demo_station: None,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -910,6 +913,97 @@ fn demo_combat_input(w: &World, input: &mut Input) {
 
 /// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
 /// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+/// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
+fn demo_station_step(w: &mut World, ride: bool) -> bool {
+    if w.player.ride.is_some() {
+        return true;
+    }
+    if let Some(st) = w
+        .player
+        .inside
+        .as_ref()
+        .and_then(|i| w.station_by_id(&i.id))
+        .cloned()
+    {
+        if !ride {
+            return true;
+        }
+        // nächster fahrender Zug unter Tage: direkt als Fahrgast hinein (Aufnahmen sollen nicht minutenlang warten)
+        let refs: Vec<berlin_sim::ride::Ref> = match w.transit.as_ref() {
+            Some(tr) => w
+                .transit_state
+                .tracked
+                .iter()
+                .filter(|(pid, _)| tr.patterns[**pid].mode.rail())
+                .flat_map(|(&pid, s)| {
+                    s.veh.iter().map(move |v| berlin_sim::ride::Ref::Veh {
+                        pid,
+                        key: v.key.clone(),
+                    })
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        for r in refs {
+            let Some(vs) = w.vehicle_state(&r) else {
+                continue;
+            };
+            let c = vs.cars[2.min(vs.cars.len() - 1)];
+            if !vs.underground || vs.dwelling || (c.x - st.x).hypot(c.y - st.y) > 20000. {
+                continue;
+            }
+            let Some(tr) = w.transit.as_ref() else { break };
+            let p = &tr.patterns[vs.pid];
+            let i = vs.stop.saturating_sub(1);
+            let (sx, sy, _) = berlin_sim::transit::point_on_shape(tr.shape_of(p), p.stops[i]);
+            w.player.ride = Some(berlin_sim::ride::Ride {
+                kind: berlin_sim::ride::RideKind::Passenger,
+                r,
+                mode: vs.mode,
+                car: 2,
+                last_stop: berlin_sim::ride::LastStop {
+                    x: sx,
+                    y: sy,
+                    name: p.stop_names.get(i).cloned().unwrap_or_default(),
+                    i,
+                    pid: vs.pid,
+                },
+                since: w.time,
+                line: p.name.clone(),
+                dest: p.stop_names.last().cloned().unwrap_or_default(),
+                speed: vs.speed,
+                underground: true,
+            });
+            w.player.inside = None;
+            return true;
+        }
+        if let Some(t) = w.trains_at(&st).into_iter().find(|t| t.dwelling) {
+            let c = t.cars[2.min(t.cars.len() - 1)];
+            (w.player.x, w.player.y) =
+                st.to_world(c.0, t.dir as f64 * (berlin_sim::station::HALF - 6.));
+            w.board_at_platform();
+        }
+        return false;
+    }
+    let (x, y) = (w.player.x, w.player.y);
+    let Some(st) = w.stations_near(x, y, 1500.).into_iter().min_by(|a, b| {
+        (a.x - x)
+            .hypot(a.y - y)
+            .total_cmp(&(b.x - x).hypot(b.y - y))
+    }) else {
+        return false;
+    };
+    let ex = st.exits[0].clone();
+    (w.player.x, w.player.y) = (ex.x, ex.y);
+    w.st_tick = 0;
+    w.refresh_stations();
+    w.update_station_presence(&Input {
+        enter_exit: true,
+        ..Default::default()
+    });
+    false
+}
+
 /// Aufnahmen: Figur an den Führerstand der nächsten Straßenbahn stellen und übernehmen.
 fn demo_take_tram(w: &mut World) {
     use berlin_sim::ride::{Near, Ref};
@@ -1573,6 +1667,12 @@ impl Game for Play {
             self.vehicle_show = false;
             w2.vehicle_show();
         }
+        if let Some(ride) = self.demo_station
+            && !w2.loading
+            && demo_station_step(w2, ride)
+        {
+            self.demo_station = None;
+        }
         if self.demo_drive && !w2.loading {
             if w2.player_train.is_none() {
                 demo_take_tram(w2);
@@ -2004,6 +2104,7 @@ impl Game for Play {
         }
         life_bodies(w, &near, out);
         rail_bodies(&self.trains, &self.tram_segs, w, out);
+        crate::underground::entrance_bodies(w, out);
         for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
             let depth = if p.level.lvl >= 1 { 0.549 } else { 0.618 };
             let (x, y, a) = (p.x as f32, p.y as f32, p.facing as f32);
@@ -2193,8 +2294,22 @@ impl Game for Play {
         out: &mut berlin_engine::hud::Hud,
     ) {
         let engine = self.world.player_car().map(|_| self.listener.engine());
-        crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
-        crate::weatherfx::overlay(&self.world, out);
+        if let Some(st) = self
+            .world
+            .player
+            .inside
+            .as_ref()
+            .and_then(|i| self.world.station_by_id(&i.id))
+            .cloned()
+        {
+            // im U-Bahnhof: der Bahnhof statt der Stadt (kein Wetter, kein Himmel)
+            crate::underground::draw_station(&self.world, &st, camera, viewport, out);
+        } else {
+            crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
+            crate::weatherfx::overlay(&self.world, out);
+            crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
+            crate::underground::entrance_letters(&self.world, camera, viewport, out);
+        }
         self.hud_width = out.width;
         match self.screen {
             Screen::Title => {
