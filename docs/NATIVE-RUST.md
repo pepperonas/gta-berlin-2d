@@ -560,7 +560,7 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
 - **Treten:** V bzw. B.
 - **Nachladen:** R bzw. X.
 - **Waffe wechseln:** Q oder RB vor, LB zurück, 1–6 direkt.
-- **Zielen:** rechter Stick. Eine Mauszielung gibt es noch nicht.
+- **Zielen:** rechter Stick (mit Zielhilfe) oder Maus (siehe unten).
 
 **Darstellung** (`game/effects.rs` + Figuren in `play.rs`):
 - Mündungsfeuer (nachts auch als Lichtquelle), Leuchtspuren und Einschläge (Staub bzw. Funken auf Blech).
@@ -583,7 +583,7 @@ Aufnahme: [Pistole, Waffenanzeige und Blut](images/native/kampf.png). `--kampf-d
 Pistole und schießt auf den nächsten Passanten.
 
 **Noch offen:**
-- Maus zum Zielen und Klicksteuerung (Diablo-Schema)
+- Klicksteuerung zum Laufen (Diablo-Schema)
 - Waffenrad
 - Polizei und Rettungsdienst (`services.js`)
 - Waffen-Statistik je Waffe
@@ -598,3 +598,33 @@ Pistole und schießt auf den nächsten Passanten.
 - ein beschossener KI-Fahrer steigt aus und flieht
 
 Die GPU-Aufnahme wurde visuell kontrolliert.
+
+## Maus (04.10.2026)
+
+Die Engine meldet dem Spiel die Maus (`engine::Mouse` in `Keys`). Die Lage gibt es dreifach: im Bild, auf dem
+Boden (über die Kamera zurückgerechnet) und im HUD (720er-Einheiten). Dazu kommen die Tasten gehalten und als
+Flanke, das Mausrad in Rasten und ob sich die Maus bewegt hat. Flanken und Rad gelten wie die Tasten genau einen
+Simulationsschritt.
+
+- **Zu Fuß** (klassisches Schema):
+  - Die Figur schaut zum Zeiger. Die linke Taste greift an bzw. schießt, die rechte tritt.
+  - Der Zeiger rastet auf Personen und Autos darunter ein (`combat::pick_target`); sonst gibt es mit der Maus
+    keine Zielhilfe.
+  - Ein Fadenkreuz zeigt das Ziel, beim Nahkampf ein Punkt.
+  - Wer zuletzt bewegt wurde, zielt: Maus oder rechter Stick bzw. Trigger.
+  - Das Mausrad zoomt wie bisher.
+- **Menüs:** Zeigen wählt aus, Klicken bestätigt; deaktivierte Einträge reagieren nicht. Steuerungstafel und
+  Statistik schließt ein Klick.
+- **Stadtplan:** Das Rad zoomt um den Zeiger (der Ort darunter bleibt stehen), Ziehen mit der linken Taste
+  verschiebt.
+
+**Noch offen:**
+- Diablo-Schema (Klick zum Laufen mit Wegsuche, Klick auf Autos zum Einsteigen)
+- Waffenrad mit rechter Taste
+- Teleport per Klick auf den Stadtplan
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 106 Rust-Tests laufen erfolgreich. Neu getestet:
+- Trefferflächen der Menüeinträge samt Lücken; Zeigen und Klicken; deaktivierte Einträge reagieren nicht
+- auf echten Kacheln: der Zeiger rastet auf die Person ein, und Figur und Ziel zeigen genau auf ihre Mitte
+
+Mit echter Maus wurde nicht gespielt.

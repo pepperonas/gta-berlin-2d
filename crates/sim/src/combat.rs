@@ -207,6 +207,8 @@ pub struct CombatInput {
     /// rechter Stick
     pub aim_x: f64,
     pub aim_y: f64,
+    /// Maus: Zielpunkt auf dem Boden (Kartenpixel); hat Vorrang vor dem Stick
+    pub aim_world: Option<(f64, f64)>,
 }
 
 /// Wehrt sich dieser Passant? Fest je Person (aus der Nummer, nicht aus dem Welt-Zufall).
@@ -400,6 +402,31 @@ pub fn aim_assist(w: &mut World, ang: f64, range: f64, cone: f64) -> f64 {
         }
     }
     ang
+}
+
+/// Was liegt unter dem Mauszeiger? Lebende Person (Körper + 4 px) vor Auto (gedrehtes Rechteck + 2 px); liefert
+/// dessen Mitte (combat.js pickTarget).
+pub fn pick_target(w: &World, x: f64, y: f64) -> Option<(f64, f64)> {
+    let lvl = w.player.level.lvl;
+    let ped = w
+        .peds
+        .iter()
+        .filter(|p| p.state != PedState::Dead && p.level.lvl == lvl)
+        .map(|p| ((p.x - x).hypot(p.y - y), p))
+        .filter(|(d, _)| *d < PED_RADIUS + 4.)
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((_, p)) = ped {
+        return Some((p.x, p.y));
+    }
+    w.cars
+        .iter()
+        .filter(|c| c.lvl() == lvl && Some(c.id) != w.player.in_car)
+        .find(|c| {
+            let (s, co) = c.angle.sin_cos();
+            let (dx, dy) = (x - c.x, y - c.y);
+            (dx * co + dy * s).abs() < c.hw + 2. && (-dx * s + dy * co).abs() < c.hh + 2.
+        })
+        .map(|c| (c.x, c.y))
 }
 
 /// Ziele im Nahkampfbogen (Passanten und Autos).
@@ -689,12 +716,17 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
     if w.player.stun > 0. {
         return;
     }
-    // Zielen: rechter Stick, sonst Blickrichtung; mit Stick oder beim Angriff hilft die Zielhilfe
-    let explicit = input.aim_x.hypot(input.aim_y) > 0.35;
-    let mut ang = if explicit {
-        input.aim_y.atan2(input.aim_x)
-    } else {
-        w.player.angle
+    // Zielen: Maus › rechter Stick › Blickrichtung; die Maus rastet nur auf dem Ziel unter dem Zeiger ein, am Stick
+    // (und beim Angriff ohne Maus) hilft die Zielhilfe
+    let (px, py) = (w.player.x, w.player.y);
+    let mouse = input
+        .aim_world
+        .map(|(x, y)| pick_target(w, x, y).unwrap_or((x, y)));
+    let explicit = mouse.is_some() || input.aim_x.hypot(input.aim_y) > 0.35;
+    let mut ang = match mouse {
+        Some((x, y)) => (y - py).atan2(x - px),
+        None if explicit => input.aim_y.atan2(input.aim_x),
+        None => w.player.angle,
     };
     // Einzelfeuer (Pistole, Schrotflinte) je Druck, Dauerfeuer (MP) und Nahkampf solange gehalten
     let attacking = if wp.auto || wp.melee {
@@ -703,8 +735,10 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
         input.fire_pressed
     };
     if explicit || input.fire || input.kick {
-        let range = if wp.melee { 60. } else { wp.range };
-        ang = aim_assist(w, ang, range, ASSIST_CONE);
+        if mouse.is_none() {
+            let range = if wp.melee { 60. } else { wp.range };
+            ang = aim_assist(w, ang, range, ASSIST_CONE);
+        }
         w.player.angle = ang;
     }
     let c = &mut w.player.combat;

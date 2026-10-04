@@ -41,6 +41,9 @@ pub struct Play {
     trigger_was: bool,
     /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
     pub demo_combat: bool,
+    /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
+    mouse_aim: bool,
+    cursor: Option<Vec2>,
     /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
     pub fx: crate::effects::Effects,
 }
@@ -179,6 +182,8 @@ impl Play {
             result_menu: None,
             trigger_was: false,
             demo_combat: false,
+            mouse_aim: false,
+            cursor: None,
             fx: Default::default(),
         })
     }
@@ -313,7 +318,9 @@ impl Play {
                     let menu = self
                         .result_menu
                         .get_or_insert_with(|| crate::menu::result_menu(state == State::Success));
-                    let pick = menu.input(mk);
+                    let y = if state == State::Success { 400. } else { 330. };
+                    let mp = menu.mouse(self.hud_width / 2., y, &keys.mouse);
+                    let pick = mp.or(menu.input(mk));
                     let success = state == State::Success;
                     match pick {
                         Some(Pick::Choose(Action::Retry)) => {
@@ -338,7 +345,8 @@ impl Play {
             }
             Screen::Title => {
                 if !self.world.loading {
-                    match self.menu.input(mk) {
+                    let mp = self.menu.mouse(self.hud_width / 2., 350., &keys.mouse);
+                    match mp.or(self.menu.input(mk)) {
                         Some(Pick::Choose(Action::Continue)) => {
                             self.ui_sound();
                             self.start(true)
@@ -370,7 +378,8 @@ impl Play {
                 true
             }
             Screen::Paused => {
-                match self.menu.input(mk) {
+                let mp = self.menu.mouse(self.hud_width / 2., 280., &keys.mouse);
+                match mp.or(self.menu.input(mk)) {
                     Some(Pick::Back | Pick::Choose(Action::Resume)) => {
                         self.screen = Screen::Playing
                     }
@@ -404,13 +413,14 @@ impl Play {
                     }
                     _ => {}
                 }
-                if mk.up || mk.down || mk.confirm || mk.back {
+                if mk.up || mk.down || mk.confirm || mk.back || mp.is_some() {
                     self.ui_sound();
                 }
                 true
             }
             Screen::Controls(from_title) | Screen::Stats(from_title) => {
-                if mk.back || mk.confirm {
+                let click = keys.mouse.left_pressed || keys.mouse.right_pressed;
+                if mk.back || mk.confirm || click {
                     self.ui_sound();
                     self.screen = if from_title {
                         Screen::Title
@@ -516,6 +526,7 @@ pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInp
             .map_or(0, |i| i as u8 + 1),
         aim_x: rx as f64,
         aim_y: ry as f64,
+        aim_world: None,
     }
 }
 
@@ -640,8 +651,8 @@ impl Game for Play {
         }
         self.bigmap.toggle(keys);
         if self.bigmap.open {
-            let f = self.bigmap.view(self.hud_width).f;
-            self.bigmap.control(keys, dt as f32, f);
+            let v = self.bigmap.view(self.hud_width);
+            self.bigmap.control(keys, dt as f32, v);
         }
         if keys.pressed.contains(&KeyCode::KeyM)
             && let Some(a) = &self.audio
@@ -685,6 +696,21 @@ impl Game for Play {
         };
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
+        }
+        // Maus oder Controller zielt: wer zuletzt bewegt wurde
+        let m = keys.mouse;
+        if m.moved || m.left_pressed || m.right_pressed {
+            self.mouse_aim = true;
+        }
+        if keys.pad.rx.hypot(keys.pad.ry) > 0.35 || keys.pad.rt > 0.5 {
+            self.mouse_aim = false;
+        }
+        self.cursor = m.hud;
+        if self.mouse_aim && !self.bigmap.open && w2.player.in_car.is_none() {
+            input.combat.aim_world = m.world.map(|p| (p.x as f64, p.y as f64));
+            input.combat.fire |= m.left;
+            input.combat.fire_pressed |= m.left_pressed;
+            input.combat.kick |= m.right_pressed;
         }
         // Trigger als Taste: Flanke gegenüber dem letzten Schritt
         let trigger = keys.pad.rt > 0.5;
@@ -1045,6 +1071,15 @@ impl Game for Play {
         }
         let warn = self.world.road_warning();
         crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
+        let p = &self.world.player;
+        if self.screen == Screen::Playing
+            && self.mouse_aim
+            && p.in_car.is_none()
+            && !p.combat.dead
+            && let Some(c) = self.cursor
+        {
+            crate::hud::crosshair(out, c, p.combat.weapon().melee);
+        }
         if let Some(m) = &self.result_menu {
             let y = if self.world.mission.state == State::Success {
                 400.
@@ -1233,6 +1268,7 @@ mod tests {
             pressed: &none,
             pad,
             pad_pressed: edges,
+            mouse: Default::default(),
         };
         let i = input_from(&keys, true);
         assert_eq!(i.throttle, 1., "Taste W und Trigger: das Stärkere zählt");
@@ -1247,6 +1283,7 @@ mod tests {
                     ..Default::default()
                 },
                 pad_pressed: Pad::default(),
+                mouse: Default::default(),
             },
             false,
         );
@@ -1280,6 +1317,7 @@ mod tests {
                     pressed: &pressed,
                     pad: Pad::default(),
                     pad_pressed: Pad::default(),
+                    mouse: Default::default(),
                 },
                 DT,
             );

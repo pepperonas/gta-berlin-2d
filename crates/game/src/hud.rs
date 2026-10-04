@@ -708,6 +708,22 @@ pub fn hurt(h: &mut Hud, c: &berlin_sim::combat::Combat) {
     }
 }
 
+/// Fadenkreuz am Mauszeiger (zu Fuß): Ring mit Lücken, beim Nahkampf ein kleiner Punkt.
+pub fn crosshair(h: &mut Hud, at: Vec2, melee: bool) {
+    let (x, y) = (at.x, at.y);
+    let dark = [0., 0., 0., 0.7];
+    if melee {
+        h.ellipse(x, y, 4., 4., dark);
+        h.ellipse(x, y, 2.5, 2.5, WHITE);
+        return;
+    }
+    for (a0, a1) in [(0.25, 1.32), (1.82, 2.89), (3.39, 4.46), (4.96, 6.03)] {
+        h.arc(x, y, 10., 3.2, a0, a1, dark);
+        h.arc(x, y, 10.6, 1.6, a0, a1, WHITE);
+    }
+    h.ellipse(x, y, 1.6, 1.6, WHITE);
+}
+
 /// Tausenderpunkte wie `toLocaleString('de-DE')`.
 pub fn group(v: i64) -> String {
     let s = v.unsigned_abs().to_string();

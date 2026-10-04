@@ -789,3 +789,36 @@ fn a_shot_at_car_makes_the_driver_flee() {
     assert!(c.driver.is_none() && !c.wrecked, "Fahrer ist ausgestiegen");
     assert!(w.peds.len() > peds, "und rennt als Passant weg");
 }
+
+#[test]
+fn mouse_aim_snaps_onto_the_target_under_the_cursor() {
+    use berlin_sim::combat::{CombatInput, pick_target};
+    let mut w = world(24);
+    run(&mut w, 10, idle());
+    let i = ped_in_front(&mut w, 40.);
+    let (tx, ty) = (w.peds[i].x, w.peds[i].y);
+    // knapp neben die Person gezeigt: rastet auf ihre Mitte ein
+    assert_eq!(pick_target(&w, tx + 3., ty - 2.), Some((tx, ty)));
+    assert_eq!(pick_target(&w, tx + 30., ty + 30.), None);
+    let aim = CombatInput {
+        aim_world: Some((tx + 3., ty - 2.)),
+        ..Default::default()
+    };
+    run(
+        &mut w,
+        1,
+        Input {
+            combat: aim,
+            ..idle()
+        },
+    );
+    let want = (ty - w.player.y).atan2(tx - w.player.x);
+    assert!(
+        (w.player.combat.aim - want).abs() < 1e-9,
+        "zielt genau auf die Mitte"
+    );
+    assert!(
+        (w.player.angle - want).abs() < 1e-9,
+        "die Figur schaut zum Zeiger"
+    );
+}

@@ -105,6 +105,31 @@ impl Menu {
         }
         k.back.then_some(Pick::Back)
     }
+    /// Eintrag unter dem Punkt (HUD-Einheiten), so wie `draw_menu` ihn zeichnet.
+    pub fn at(&self, cx: f32, y: f32, p: glam::Vec2) -> Option<usize> {
+        if (p.x - cx).abs() > 190. {
+            return None;
+        }
+        let rel = p.y - (y - 24.);
+        let i = (rel / 58.).floor();
+        (i >= 0. && rel - i * 58. <= 48. && (i as usize) < self.items.len()).then_some(i as usize)
+    }
+    /// Maus: Zeigen wählt aus, Klicken bestätigt (deaktivierte Einträge reagieren nicht).
+    pub fn mouse(&mut self, cx: f32, y: f32, m: &berlin_engine::Mouse) -> Option<Pick> {
+        let i = m.hud.and_then(|p| self.at(cx, y, p))?;
+        if !self.items[i].enabled {
+            return None;
+        }
+        if m.left_pressed {
+            self.index = i;
+            return Some(Pick::Choose(self.items[i].action));
+        }
+        if m.moved && i != self.index {
+            self.index = i;
+            return Some(Pick::Move);
+        }
+        None
+    }
 }
 
 const fn item(action: Action, label: &'static str) -> Item {
@@ -485,6 +510,37 @@ mod tests {
         assert_eq!(m.input(MenuKeys::default()), None);
         let m = title_menu(true);
         assert_eq!(m.items[m.index].action, Action::Continue);
+    }
+    #[test]
+    fn mouse_points_and_clicks_entries() {
+        use glam::Vec2;
+        let mut m = pause_menu();
+        // Einträge bei y = 280 + i·58, je 48 hoch, 380 breit um cx
+        assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
+        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 58. * 2.)), Some(2));
+        assert_eq!(
+            m.at(640., 280., Vec2::new(640., 280. + 30.)),
+            None,
+            "Lücke zwischen zwei Einträgen"
+        );
+        assert_eq!(m.at(640., 280., Vec2::new(900., 280.)), None);
+        let mut mouse = berlin_engine::Mouse {
+            hud: Some(Vec2::new(640., 280. + 58.)),
+            moved: true,
+            ..Default::default()
+        };
+        assert_eq!(m.mouse(640., 280., &mouse), Some(Pick::Move));
+        assert_eq!(m.index, 1);
+        mouse.moved = false;
+        mouse.left_pressed = true;
+        assert_eq!(
+            m.mouse(640., 280., &mouse),
+            Some(Pick::Choose(Action::Save))
+        );
+        // deaktivierte Einträge reagieren nicht
+        let mut t = title_menu(false);
+        mouse.hud = Some(Vec2::new(640., 350.));
+        assert_eq!(t.mouse(640., 350., &mouse), None);
     }
     #[test]
     fn screens_draw_within_the_frame() {

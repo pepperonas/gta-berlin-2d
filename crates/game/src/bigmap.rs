@@ -160,6 +160,8 @@ pub struct BigMap {
     /// Zeichnung für die Engine, bis sie abgeholt ist
     pub mesh: Option<berlin_map_loader::overview::OverlayMesh>,
     cache: Option<(View, Vec<Placed>)>,
+    /// Ziehen mit der Maus: letzter Zeigerpunkt (HUD)
+    drag: Option<Vec2>,
 }
 
 impl BigMap {
@@ -178,6 +180,7 @@ impl BigMap {
             },
             mesh: Some(ov.mesh),
             cache: None,
+            drag: None,
         }
     }
     pub fn toggle(&mut self, keys: &Keys) -> bool {
@@ -223,7 +226,27 @@ impl BigMap {
         }
     }
     /// Verschieben und Zoomen (je Simulationsschritt).
-    pub fn control(&mut self, keys: &Keys, dt: f32, f: f32) {
+    pub fn control(&mut self, keys: &Keys, dt: f32, v: View) {
+        let f = v.f;
+        // Maus: Rad zoomt um den Zeiger, Ziehen verschiebt (hud.js zoomBigMap/panBigMap)
+        let m = keys.mouse;
+        if m.wheel != 0.
+            && let Some(p) = m.hud
+        {
+            // der Weltpunkt unter dem Zeiger bleibt, wo er ist
+            let world = (p - Vec2::new(v.ox, v.oy)) / f;
+            let f0 = f / self.z;
+            self.z = (self.z * (m.wheel * 0.18).exp()).clamp(1., ZOOM_MAX);
+            let f1 = f0 * self.z;
+            self.center = world - (p - Vec2::new(v.x + v.w / 2., v.y + v.h / 2.)) / f1;
+        }
+        if m.left
+            && !m.left_pressed
+            && let (Some(p), Some(last)) = (m.hud, self.drag)
+        {
+            self.center -= (p - last) / f;
+        }
+        self.drag = if m.left { m.hud } else { None };
         let held = |k: KeyCode| keys.held.contains(&k);
         let p = &keys.pad;
         let mut d = Vec2::new(

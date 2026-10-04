@@ -54,6 +54,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Nahkampfbogen, Zielhilfe am Stick, Kämpfer unter den Passanten, beschossene Fahrer fliehen, K. o. mit
   Krankenhaus und Gebühr; Mündungsfeuer, Leuchtspuren, Blut, Lebensleiste, Waffenanzeige, Kampfklänge und
   Kampfstatistik. `--kampf-demo` für Aufnahmen.
+- Native Rust-Fassung: Maus. Zu Fuß zielt die Figur auf den Zeiger (rastet auf Personen und Autos ein), links
+  angreifen, rechts treten, Fadenkreuz; Menüs per Zeigen und Klicken; Stadtplan mit Rad-Zoom um den Zeiger und
+  Ziehen.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

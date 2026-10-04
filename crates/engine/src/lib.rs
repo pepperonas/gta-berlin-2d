@@ -19,7 +19,7 @@ use std::{
 };
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, MouseScrollDelta, WindowEvent},
+    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::PhysicalKey,
     window::{Window, WindowId},
@@ -78,6 +78,22 @@ pub struct LightSource {
     pub pad: f32,
 }
 
+/// Maus: Lage im Bild (Pixel), auf dem Boden (Kartenpixel) und im HUD (Basiseinheiten, 720 Zeilen); Tasten
+/// gehalten und als Flanke bis zum nächsten Simulationsschritt, Mausrad (Rasten) und ob sie sich bewegt hat.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Mouse {
+    pub screen: Option<Vec2>,
+    pub world: Option<Vec2>,
+    pub hud: Option<Vec2>,
+    pub left: bool,
+    pub right: bool,
+    pub left_pressed: bool,
+    pub right_pressed: bool,
+    pub left_released: bool,
+    pub wheel: f32,
+    pub moved: bool,
+}
+
 /// Gehaltene und in diesem Schritt neu gedrückte Tasten.
 pub struct Keys<'a> {
     pub held: &'a HashSet<KeyCode>,
@@ -85,6 +101,7 @@ pub struct Keys<'a> {
     /// Gamepad: gehaltener Zustand und Tastenflanken seit dem letzten Schritt
     pub pad: pad::Pad,
     pub pad_pressed: pad::Pad,
+    pub mouse: Mouse,
 }
 
 /// Spiel, das die Engine mit festem Schritt antreibt (die Simulation selbst kennt weder Fenster noch GPU).
@@ -177,6 +194,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         smoke_frames,
         error: None,
         focused: true,
+        mouse: Mouse::default(),
     };
     EventLoop::new()?.run_app(&mut app)?;
     if let Some(error) = app.error {
@@ -209,6 +227,7 @@ struct App {
     lights: Vec<LightSource>,
     smoke_started: Instant,
     capture: Option<PathBuf>,
+    mouse: Mouse,
 }
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -280,10 +299,34 @@ impl ApplicationHandler for App {
                     }
                 }
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse.screen = Some(Vec2::new(position.x as f32, position.y as f32));
+                self.mouse.moved = true;
+            }
+            WindowEvent::CursorLeft { .. } => self.mouse.screen = None,
+            WindowEvent::MouseInput { state, button, .. } => {
+                let down = state == ElementState::Pressed;
+                match button {
+                    MouseButton::Left => {
+                        self.mouse.left_pressed |= down && !self.mouse.left;
+                        self.mouse.left_released |= !down && self.mouse.left;
+                        self.mouse.left = down;
+                    }
+                    MouseButton::Right => {
+                        self.mouse.right_pressed |= down && !self.mouse.right;
+                        self.mouse.right = down;
+                    }
+                    _ => {}
+                }
+            }
             WindowEvent::MouseWheel { delta, .. } => {
                 let amount = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y * 0.15,
                     MouseScrollDelta::PixelDelta(p) => p.y as f32 * 0.0015,
+                };
+                self.mouse.wheel += match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.,
                 };
                 if self.game.is_some() {
                     self.zoom_factor = (self.zoom_factor * amount.exp()).clamp(0.5, 2.);
@@ -313,19 +356,41 @@ impl ApplicationHandler for App {
                     // fester Simulationsschritt; kurze Tastendrücke gelten bis zum nächsten Schritt
                     let step = game.step_seconds();
                     self.accumulator = (self.accumulator + dt as f64).min(step * 5.);
+                    let viewport = renderer.viewport();
+                    let mut mouse = self.mouse;
+                    mouse.world = mouse
+                        .screen
+                        .map(|p| self.camera.screen_to_ground(p, viewport));
+                    mouse.hud = mouse.screen.map(|p| p / (viewport.y / 720.).max(0.25));
+                    let mut stepped = false;
                     while self.accumulator >= step {
+                        stepped = true;
                         game.step(
                             &Keys {
                                 held: &self.keys,
                                 pressed: &self.pressed,
                                 pad: self.pads.state,
                                 pad_pressed: self.pads.edges,
+                                mouse,
                             },
                             step,
                         );
                         self.pressed.clear();
                         self.pads.edges = pad::Pad::default();
+                        // Flanken und Rad gelten genau einen Schritt
+                        mouse.left_pressed = false;
+                        mouse.right_pressed = false;
+                        mouse.left_released = false;
+                        mouse.wheel = 0.;
+                        mouse.moved = false;
                         self.accumulator -= step;
+                    }
+                    if stepped {
+                        self.mouse.left_pressed = false;
+                        self.mouse.right_pressed = false;
+                        self.mouse.left_released = false;
+                        self.mouse.wheel = 0.;
+                        self.mouse.moved = false;
                     }
                     if game.quit() {
                         event_loop.exit();
