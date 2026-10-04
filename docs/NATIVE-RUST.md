@@ -1087,8 +1087,7 @@ nachts stärker, und ein dunkler Rand auf 17 % in den Ecken. [Bild](images/nativ
 
 **Abweichungen:** Soft-Light gibt es als feste Mischfunktion nicht; bei 2–6 % Deckkraft ist es eine Tönung mit dem
 Faktor 1 + a·(2c − 1), auf das hellste Glied normiert, weil das Bildziel nicht über 1 aufhellen kann. Die Vignette
-dunkelt ab, statt die fast schwarze Farbe einzumischen. Bloom fehlt noch (er braucht eine weichgezeichnete Kopie der
-Lichtkarte).
+dunkelt ab, statt die fast schwarze Farbe einzumischen.
 
 ## Silhouetten verdeckter Figuren (04.10.2026)
 
@@ -1136,3 +1135,11 @@ ohne Fahrplan fährt im festen Takt (zwei Züge je 150 s) ein Zug über die näc
 (Tiefpass 90 Hz, `Mix::rumble`). Im U-Bahnhof ist die Mischung eine gedämpfte Halle: Grundrauschen, stark gedämpft,
 Züge rumpeln lauter (×1,3), von oben kommt nichts an (`Mix::station`). Geprüft im Kottbusser-Tor-Test: oben unter dem
 U1-Viadukt rumpelt binnen einer Minute ein Zug, unten gilt die Hallenmischung; Unit-Test für den festen Takt.
+
+## Bloom (04.10.2026)
+
+Port von `lighting.js drawBloom`: Nachts (Dunkelheit über 0,3) überstrahlen helle Stellen der Lichtkarte –
+Ampeln, Scheinwerfer, Leuchtreklame, Laternen. `lighting.wgsl bloom_fs` nimmt die Lichtkarte wie
+`brightness(0,55) contrast(5)`, zeichnet sie mit 13 Abtastungen auf zwei Ringen weich und legt sie mit der Mischung
+„screen“ (Quelle·(1 − Ziel) + Ziel) über das Bild, Stärke max(0, Dunkelheit − 0,3)·0,32 wie in JS. Kein eigenes
+Ziel nötig: die Lichtkarte liegt ohnehin in halber Auflösung vor. Das Reklamebild oben zeigt den Bloom.

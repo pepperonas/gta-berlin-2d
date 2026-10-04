@@ -857,6 +857,10 @@ impl Renderer {
             pass.draw(0..3, 0..1);
             pass.set_pipeline(&self.light.ambient_composite);
             pass.draw(0..3, 0..1);
+            if self.lighting.dark > 0.3 {
+                pass.set_pipeline(&self.light.bloom);
+                pass.draw(0..3, 0..1);
+            }
         }
         let m = self.lighting.minutes.rem_euclid(1440.);
         if self.lighting.windows > 0.001 || !(330. ..=1380.).contains(&m) {

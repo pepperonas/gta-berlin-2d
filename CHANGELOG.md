@@ -8,6 +8,7 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Bloom – nachts überstrahlen Ampeln, Scheinwerfer und Leuchtreklame.
 - Native Rust-Portierung: Rumpeln vorbeifahrender Bahnen (auch im Tunnel) und die gedämpfte Halle im U-Bahnhof.
 - Native Rust-Portierung: nachts Schaufensterlicht auf dem Gehweg und Leuchtreklame vor Kneipen, Clubs, Spätis,
   Imbissen und Hotels (`--bildschirm reklame`).

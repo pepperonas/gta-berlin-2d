@@ -133,3 +133,22 @@ struct FullOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f
     let v = 0.17 * clamp((length(c) - r0) / (r1 - r0), 0.0, 1.0);
     return vec4(pow(f, vec3(2.2)) * (1.0 - v), 1.0);
 }
+
+// Bloom (lighting.js drawBloom): helle Stellen der Lichtkarte überstrahlen. Quelle wie brightness(0,55) contrast(5),
+// weichgezeichnet (13 Abtastungen auf zwei Ringen), Mischung „screen“. Stärke max(0, Dunkelheit − 0,3) · 0,32.
+fn bloom_src(uv: vec2<f32>) -> vec3<f32> {
+    let c = textureSample(atlas, atlas_sampler, uv).rgb * 0.55;
+    return clamp((c - 0.5) * 5.0 + 0.5, vec3(0.0), vec3(1.0));
+}
+@fragment fn bloom_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let strength = max(0.0, camera.ambient.w - 0.3) * 0.32;
+    let px = vec2(6.0) / camera.viewport;
+    var sum = bloom_src(in.uv) * 0.2;
+    for (var i = 0; i < 6; i++) {
+        let a = f32(i) * 1.0471976;
+        let d = vec2(cos(a), sin(a));
+        sum += bloom_src(in.uv + d * px) * 0.08;
+        sum += bloom_src(in.uv + d * px * 2.2) * 0.0533;
+    }
+    return vec4(sum * strength, 1.0);
+}

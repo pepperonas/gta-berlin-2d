@@ -23,6 +23,7 @@ pub(crate) struct LightPass {
     pub light_composite: wgpu::RenderPipeline,
     pub ambient_composite: wgpu::RenderPipeline,
     pub grade: wgpu::RenderPipeline,
+    pub bloom: wgpu::RenderPipeline,
     pub mask: Target,
     pub lightmap: Target,
     sampler: wgpu::Sampler,
@@ -59,6 +60,19 @@ const ADD: wgpu::BlendState = wgpu::BlendState {
     },
     alpha: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+/// Quelle · (1 − Ziel) + Ziel („screen“, Bloom).
+const SCREEN: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::OneMinusDst,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::Zero,
         dst_factor: wgpu::BlendFactor::One,
         operation: wgpu::BlendOperation::Add,
     },
@@ -255,6 +269,15 @@ impl LightPass {
                 &[],
                 cx.surface,
                 MULTIPLY,
+                Some(depth_test(wgpu::CompareFunction::Always)),
+            ),
+            bloom: cx.pipeline(
+                "Bloom",
+                "full_vs",
+                "bloom_fs",
+                &[],
+                cx.surface,
+                SCREEN,
                 Some(depth_test(wgpu::CompareFunction::Always)),
             ),
             mask: cx.target(&sampler, "Schattenmaske", MASK_FORMAT, w, h),
