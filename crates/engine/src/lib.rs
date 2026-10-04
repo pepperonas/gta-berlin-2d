@@ -125,8 +125,20 @@ pub struct FrameStats {
     pub work_ms: f32,
 }
 
+/// Vibration des Controllers: starker (tiefer) und schwacher (heller) Motor 0…1, Dauer in ms.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rumble {
+    pub strong: f32,
+    pub weak: f32,
+    pub ms: u32,
+}
+
 /// Spiel, das die Engine mit festem Schritt antreibt (die Simulation selbst kennt weder Fenster noch GPU).
 pub trait Game {
+    /// Neue Vibration für den Controller (einmal je Bild abgeholt; `None` = nichts Neues).
+    fn rumble(&mut self) -> Option<Rumble> {
+        None
+    }
     /// Zeiten des vorigen Bildes (jedes Bild einmal, vor `hud`).
     fn frame_stats(&mut self, _stats: FrameStats) {}
     /// Fester Simulationsschritt in Sekunden.
@@ -473,6 +485,9 @@ impl ApplicationHandler for App {
                     }
                     if let Some(mesh) = game.take_overview() {
                         renderer.set_overview(&mesh);
+                    }
+                    if let Some(r) = game.rumble() {
+                        self.pads.rumble(r.strong, r.weak, r.ms);
                     }
                     game.frame_stats(FrameStats {
                         dt,

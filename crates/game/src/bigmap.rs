@@ -274,10 +274,9 @@ impl BigMap {
             moved: 0.,
         }
     }
-    pub fn toggle(&mut self, keys: &Keys) -> bool {
-        let t = keys.pressed.contains(&KeyCode::Tab)
-            || keys.pad_pressed.view
-            || (self.open && keys.pad_pressed.b);
+    /// `map` = Stadtplan-Taste der Belegung gedrückt; offen schließt auch B.
+    pub fn toggle(&mut self, keys: &Keys, map: bool) -> bool {
+        let t = map || (self.open && keys.pad_pressed.b);
         if t && self.labels.width > 0. {
             self.open = !self.open;
             if self.open {

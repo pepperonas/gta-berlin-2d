@@ -61,6 +61,17 @@ pub struct Surface {
     pub grip: f64,
     pub top: f64,
 }
+/// Antriebskraft für Pedalstellung `t` (0…1): bis 90 % linear bis `grip` (höchstens die Motorkraft), darüber weich
+/// bis zur vollen Motorkraft; `t` = 1 ergibt genau `engine`.
+pub fn pedal_force(t: f64, engine: f64, grip: f64) -> f64 {
+    if t >= 1. {
+        return engine;
+    }
+    let usable = engine.min(grip.max(0.));
+    let over = ((t - 0.9) / 0.1).clamp(0., 1.);
+    let s = over * over * (3. - 2. * over);
+    usable * (t / 0.9).min(1.) + (engine - usable).max(0.) * s
+}
 /// Zustand für Anzeige und Tests.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct DynState {
@@ -271,9 +282,19 @@ pub fn step_dynamics(
             fxr += (fb * (1. - spec.bias)).min(mu_b * fzr * abs);
         }
         if ctl.throttle > 0. && fwd {
-            let fd = ctl.throttle * drive_curve.force / drive_curve.traction
+            let engine = drive_curve.force / drive_curve.traction
                 * launch_traction
                 * if u < vmax { 1. } else { 0. };
+            // Pedal auf die Haftung abgebildet: die Antriebskraft überstieg schon bei halbem Gas die Reifenhaftung,
+            // der Rest des Pedalwegs (Controller-Trigger) war wirkungslos. Bis 90 % Pedal wächst sie gleichmäßig bis
+            // zum Haftungslimit der angetriebenen Achse(n), die letzten 10 % geben die übrige Motorkraft frei –
+            // Vollgas (1, auch jede Taste) bleibt exakt wie vorher, samt Durchdrehen ohne ESP.
+            let grip = match spec.drive {
+                Drive::Fwd => mu_x * fzf,
+                Drive::Rwd => mu_x * fzr,
+                Drive::Awd => mu_x * (fzf + fzr),
+            } * if assist.esp { ESP[0] } else { 1. };
+            let fd = pedal_force(ctl.throttle, engine, grip);
             let share = match spec.drive {
                 Drive::Fwd => 1.,
                 Drive::Rwd => 0.,
@@ -488,6 +509,24 @@ mod tests {
         top: 1.,
     };
 
+    #[test]
+    fn pedal_uses_the_whole_travel_up_to_grip_and_full_stays_full() {
+        let (engine, grip) = (12_000., 6_000.);
+        assert_eq!(pedal_force(1., engine, grip), engine, "Vollgas unverändert");
+        assert_eq!(pedal_force(0., engine, grip), 0.);
+        assert!((pedal_force(0.45, engine, grip) - grip / 2.).abs() < 1e-6, "halber Weg = halbe Haftung");
+        assert!((pedal_force(0.9, engine, grip) - grip).abs() < 1e-6, "bei 90 % an der Haftungsgrenze");
+        let mut last = 0.;
+        for i in 0..=100 {
+            let f = pedal_force(i as f64 / 100., engine, grip);
+            assert!(f >= last - 1e-9, "monoton");
+            last = f;
+        }
+        // schwacher Motor (unter der Haftung): linear bis zur vollen Motorkraft
+        assert!((pedal_force(0.45, 3_000., grip) - 1_500.).abs() < 1e-6);
+        assert_eq!(pedal_force(0.95, 3_000., grip), 3_000.);
+    }
+
     fn run(
         model: &str,
         secs: f64,
@@ -517,6 +556,30 @@ mod tests {
     }
     fn kmh(b: &Body) -> f64 {
         b.vx.hypot(b.vy) * 0.36
+    }
+
+    /// Halbes Pedal beschleunigt etwa halb so stark wie Vollgas (vorher fast gleich stark – der Controller-Trigger
+    /// wirkte wie ein Schalter); Vollgas bleibt unverändert.
+    #[test]
+    fn half_pedal_accelerates_about_half_as_hard() {
+        let at = |t: f64| {
+            let (b, _) = run(
+                "limousine",
+                1.,
+                Controls {
+                    throttle: t,
+                    ..Default::default()
+                },
+                DRY,
+                0.,
+            );
+            kmh(&b)
+        };
+        let (half, full) = (at(0.45), at(1.));
+        assert!(full > 30., "Vollgas nach 1 s: {full}");
+        let r = half / full;
+        assert!(r > 0.35 && r < 0.65, "halb {half:.1} gegen voll {full:.1} km/h");
+        assert!(at(0.2) < at(0.45) && at(0.45) < at(0.8), "über den ganzen Weg steigend");
     }
 
     #[test]

@@ -505,33 +505,68 @@ pub fn draw_teleport(h: &mut Hud, name: Option<&str>) {
     );
 }
 
-/// Belegung der nativen Fassung: Aufgabe, Controller, Tastatur.
-pub const CONTROLS: &[(&str, &str, &str)] = &[
-    ("Laufen / Lenken", "Linker Stick", "WASD / Pfeile"),
-    ("Sprinten · langsam gehen", "A halten", "Umschalt · Alt"),
-    ("Gas / Bremse · Rückwärts", "RT / LT", "W / S"),
-    ("Handbremse", "RB oder B", "Leertaste"),
-    ("ESP · ABS umschalten (im Auto)", "–", "X · Y/Z"),
-    ("Einsteigen / Aussteigen · Bahn führen", "Y", "F"),
-    ("Mitfahren (Bus, Bahn)", "Steuerkreuz unten", "G"),
-    ("Aktion (Auftrag, Einladen)", "A", "E"),
-    ("Hupe (im Auto) · Nachladen (zu Fuß)", "X", "H · R"),
-    (
-        "Angreifen / Schießen · Treten",
-        "RT · B",
-        "Rechte Maus / Strg · V",
-    ),
-    ("Waffe wechseln", "RB / LB", "Q · 1–6"),
-    ("Waffenrad", "LB halten", "Beide Maustasten halten"),
-    ("Zielen", "Rechter Stick", "Maus"),
-    ("Stadtplan", "Ansicht-Taste", "Tab"),
-    ("Uhr +1 h · Wetter · Ton · Speichern", "–", "T · N · M · F5"),
-    ("Zoom · Befehlszeile", "–", "Mausrad · Enter"),
-    ("Pause", "Menü-Taste", "Esc / P"),
-    ("Menüs", "Steuerkreuz, A / B", "Pfeile, Enter / Esc"),
-];
+/// Übersicht der Steuerung aus der aktuellen Belegung: Aufgabe, Controller, Tastatur (je Aktion die erste Taste).
+pub fn control_rows(b: &crate::bindings::Bindings) -> Vec<(String, String, String)> {
+    use crate::bindings::Action as A;
+    let key = |a: A| {
+        b.keys_of(a)
+            .iter()
+            .flatten()
+            .find_map(|k| crate::bindings::key_name(*k))
+            .unwrap_or("–")
+    };
+    let pad = |a: A| b.pad_of(a).map_or("–", |p| p.name());
+    let join = |xs: &[&str]| xs.join(" · ");
+    let both = |label: &str, acts: &[A]| {
+        (
+            label.to_string(),
+            join(&acts.iter().map(|&a| pad(a)).collect::<Vec<_>>()),
+            join(&acts.iter().map(|&a| key(a)).collect::<Vec<_>>()),
+        )
+    };
+    vec![
+        (
+            "Laufen / Lenken".into(),
+            "Linker Stick".into(),
+            [A::Up, A::Left, A::Down, A::Right].map(key).join(" "),
+        ),
+        both("Sprinten · langsam/ruhig zielen", &[A::Sprint, A::Slow]),
+        both("Gas · Bremse/rückwärts", &[A::Throttle, A::Brake]),
+        both("Handbremse · Hupe", &[A::Handbrake, A::Horn]),
+        both("ESP · ABS (im Auto)", &[A::Esp, A::Abs]),
+        both("Ein-/Aussteigen · Aktion", &[A::EnterExit, A::Use]),
+        both("Mitfahren (Bus, Bahn)", &[A::Ride]),
+        both(
+            "Angreifen · Treten · Nachladen",
+            &[A::Fire, A::Kick, A::Reload],
+        ),
+        {
+            let (l, p, k) = both(
+                "Waffe: nächste · Waffenrad",
+                &[A::NextWeapon, A::WeaponWheel],
+            );
+            (l, p, format!("{k} · 1–6"))
+        },
+        ("Zielen".into(), "Rechter Stick".into(), "Maus".into()),
+        both("Kamera näher · weiter", &[A::ZoomIn, A::ZoomOut]),
+        both(
+            "Stadtplan · Pause · Befehlszeile",
+            &[A::Map, A::Pause, A::Console],
+        ),
+        both(
+            "Uhr · Wetter · Ton · Speichern",
+            &[A::Clock, A::Weather, A::Mute, A::Save],
+        ),
+        (
+            "Menüs".into(),
+            "Steuerkreuz, A / B".into(),
+            "Pfeile, Enter / Esc".into(),
+        ),
+    ]
+}
 
-pub fn draw_controls(h: &mut Hud, diablo: bool) {
+pub fn draw_controls(h: &mut Hud, diablo: bool, b: &crate::bindings::Bindings) {
+    let controls = control_rows(b);
     let vw = h.width;
     h.rect(0., 0., vw, 720., [0.02, 0.024, 0.04, 0.9], 0.);
     h.text("STEUERUNG", vw / 2., 100., 44., YELLOW, Align::Center, true);
@@ -586,9 +621,9 @@ pub fn draw_controls(h: &mut Hud, diablo: bool) {
     // Spaltenbreiten aus dem Text (die Bitmapschrift läuft breiter als die Browserschrift)
     let size = 16.;
     let col = |n: usize, h: &Hud| {
-        CONTROLS
+        controls
             .iter()
-            .map(|r| h.text_width([r.0, r.1, r.2][n], size))
+            .map(|r| h.text_width([&r.0, &r.1, &r.2][n], size))
             .fold(0., f32::max)
             + 36.
     };
@@ -607,7 +642,7 @@ pub fn draw_controls(h: &mut Hud, diablo: bool) {
         true,
     );
     let row = 25.;
-    for (i, (a, b, k)) in CONTROLS.iter().enumerate() {
+    for (i, (a, b, k)) in controls.iter().enumerate() {
         let y = 240. + i as f32 * row;
         if i % 2 == 0 {
             h.rect(
@@ -639,7 +674,7 @@ pub fn draw_controls(h: &mut Hud, diablo: bool) {
             true,
         );
     }
-    footer(h, "Esc / B: Zurück");
+    footer(h, "Enter / A: Belegung ändern · Esc / B: Zurück");
 }
 
 #[cfg(test)]
@@ -718,22 +753,23 @@ mod tests {
         let mut h = Hud::new([1280., 720.]);
         draw_title(&mut h, &title_menu(true), false);
         draw_pause(&mut h, &pause_menu(), 3, Some(95.));
-        draw_controls(&mut h, true);
+        let binds = crate::bindings::Bindings::default();
+        draw_controls(&mut h, true, &binds);
         draw_stats(&mut h, &Default::default(), &Default::default(), true);
         assert!(h.items.len() > 500);
         // Steuerungstafel: jede Spalte endet vor der nächsten
         let size = 16.;
-        let wa = CONTROLS
+        let wa = control_rows(&binds)
             .iter()
-            .map(|r| h.text_width(r.0, size))
+            .map(|r| h.text_width(&r.0, size))
             .fold(0., f32::max);
-        let wb = CONTROLS
+        let wb = control_rows(&binds)
             .iter()
-            .map(|r| h.text_width(r.1, size))
+            .map(|r| h.text_width(&r.1, size))
             .fold(0., f32::max);
-        let wc = CONTROLS
+        let wc = control_rows(&binds)
             .iter()
-            .map(|r| h.text_width(r.2, size))
+            .map(|r| h.text_width(&r.2, size))
             .fold(0., f32::max);
         assert!(wa + wb + wc + 108. < h.width, "Tafel passt in 16:9");
         // Statistik: längste Beschriftung endet vor der Spalte „dieses Spiel“ (600 − 150 − Zahlbreite)

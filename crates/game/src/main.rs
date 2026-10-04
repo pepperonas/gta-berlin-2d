@@ -1,5 +1,7 @@
 mod barfeed;
 mod bigmap;
+mod bindings;
+mod bindmenu;
 mod carart;
 mod console;
 mod effects;
@@ -11,6 +13,7 @@ mod menu;
 mod neon;
 mod play;
 mod raster;
+mod rumble;
 mod snowtracks;
 mod sound;
 mod streetfurn;
@@ -165,12 +168,13 @@ fn main() -> Result<()> {
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame",
+                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame",
                 )?;
                 ensure!(
                     [
                         "pause",
                         "steuerung",
+                        "belegung",
                         "statistik",
                         "waffenrad",
                         "teleport",
@@ -183,7 +187,7 @@ fn main() -> Result<()> {
                         "reklame"
                     ]
                     .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame"
+                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame"
                 );
                 screen = Some(v);
             }
@@ -304,6 +308,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     match screen.as_deref() {
         Some("pause") => play.pause(),
         Some("steuerung") => play.screen = play::Screen::Controls(false),
+        Some("belegung") => play.screen = play::Screen::Bindings(false),
         Some("statistik") => play.screen = play::Screen::Stats(false),
         Some("waffenrad") => play.demo_wheel(),
         Some("teleport") => play.demo_teleport(),

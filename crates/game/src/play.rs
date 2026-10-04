@@ -40,6 +40,7 @@ pub struct Play {
     seed: u32,
     /// Stick-Stellung des letzten Schritts (Menüauswahl per Stick als Flanke)
     stick_prev: f32,
+    stick_prev_x: f32,
     quit: bool,
     /// Statistik: dieses Spiel, insgesamt, Stand des gespeicherten Spiels (für „Fortsetzen“)
     pub stats: berlin_sim::stats::Stats,
@@ -48,7 +49,14 @@ pub struct Play {
     tracker: berlin_sim::stats::Tracker,
     stats_written: f64,
     result_menu: Option<crate::menu::Menu>,
-    trigger_was: bool,
+    /// frei belegbare Steuerung (settings.json `bindings`) und ihre Tafel
+    pub bindings: crate::bindings::Bindings,
+    bindmenu: crate::bindmenu::BindMenu,
+    /// Kamerazoom über die Belegung (Kamera näher/weiter), Faktor auf den Spielzoom
+    zoom_user: f32,
+    /// Controller-Vibration: Regeln und die nächste abzuholende
+    rumbler: crate::rumble::Rumbler,
+    rumble_out: Option<berlin_engine::Rumble>,
     /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
     pub demo_combat: bool,
     /// `--drift-demo`: im eigenen Auto Vollgas mit Handbremse und Lenkung (Reifenqualm, Bremsspuren prüfen)
@@ -100,16 +108,17 @@ pub struct Play {
     teleport_auto: bool,
 }
 
-/// Einstellungen neben dem Spielstand (`settings.json`): Steuerschema.
+/// Einstellungen neben dem Spielstand (`settings.json`): Steuerschema und Tastenbelegung.
 fn settings_path(st: &FileStorage) -> std::path::PathBuf {
     st.path.with_file_name("settings.json")
 }
-fn read_scheme(st: &FileStorage) -> bool {
-    std::fs::read(settings_path(st))
+fn read_settings(st: &FileStorage) -> (bool, crate::bindings::Bindings) {
+    let v = std::fs::read(settings_path(st))
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-        .and_then(|v| v["controls"].as_str().map(|c| c != "classic"))
-        .unwrap_or(true)
+        .unwrap_or_default();
+    let diablo = v["controls"].as_str().is_none_or(|c| c != "classic");
+    (diablo, crate::bindings::Bindings::from_json(&v["bindings"]))
 }
 
 /// Statistikdatei neben dem Spielstand: `{"total": …, "saved": …}`.
@@ -134,6 +143,8 @@ pub enum Screen {
     /// Steuerung bzw. Statistik; merkt sich, ob „Zurück“ zum Titel führt
     Controls(bool),
     Stats(bool),
+    /// Belegungstafel (aus der Steuerungstafel); merkt sich die Herkunft wie `Controls`
+    Bindings(bool),
 }
 
 /// Wie das Programm startet.
@@ -231,7 +242,11 @@ impl Play {
                 return;
             }
             Screen::Controls(_) => {
-                crate::menu::draw_controls(out, self.diablo);
+                crate::menu::draw_controls(out, self.diablo, &self.bindings);
+                return;
+            }
+            Screen::Bindings(_) => {
+                self.bindmenu.draw(out, &self.bindings);
                 return;
             }
             Screen::Stats(from_title) => {
@@ -318,7 +333,8 @@ impl Play {
             .as_ref()
             .is_some_and(|st| read_save(st as &dyn Storage).is_some());
         let (stats_total, stats_saved) = save.as_ref().map(read_stats).unwrap_or_default();
-        let diablo = save.as_ref().is_none_or(read_scheme);
+        let (diablo, bindings) = save.as_ref().map(read_settings).unwrap_or_default();
+        let diablo = save.is_none() || diablo;
         let stats = if start == Start::Continue && screen == Screen::Playing && has_save {
             stats_saved.clone()
         } else {
@@ -370,6 +386,7 @@ impl Play {
                 .filter(|p| p.exists()),
             seed,
             stick_prev: 0.,
+            stick_prev_x: 0.,
             quit: false,
             stats,
             stats_total,
@@ -377,7 +394,11 @@ impl Play {
             tracker: Default::default(),
             stats_written: 0.,
             result_menu: None,
-            trigger_was: false,
+            bindings,
+            bindmenu: Default::default(),
+            zoom_user: 1.,
+            rumbler: Default::default(),
+            rumble_out: None,
             demo_combat: false,
             demo_drift: false,
             vehicle_show: false,
@@ -721,6 +742,18 @@ impl Play {
         self.console_actions(actions, now);
         r
     }
+    /// `settings.json` schreiben: Steuerschema und (abweichende) Tastenbelegung.
+    fn write_settings(&self) {
+        if let Some(st) = &self.storage {
+            let v = serde_json::json!({
+                "controls": if self.diablo { "diablo" } else { "classic" },
+                "bindings": self.bindings.to_json(),
+            });
+            if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
+                eprintln!("Einstellungen nicht gespeichert: {e}");
+            }
+        }
+    }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
         self.menu = crate::menu::pause_menu();
@@ -734,12 +767,17 @@ impl Play {
     fn step_screens(&mut self, keys: &Keys, dt: f64) -> bool {
         use crate::menu::{Action, Pick};
         let mk = crate::menu::MenuKeys::from(keys, self.stick_prev);
+        let bk = crate::bindmenu::BindKeys::from(keys, (self.stick_prev_x, self.stick_prev));
         self.stick_prev = keys.pad.ly;
+        self.stick_prev_x = keys.pad.lx;
         // solange Kacheln fehlen, steht die Welt ohnehin still; weiterladen auch in den Menüs
         if self.world.loading
             && (matches!(
                 self.screen,
-                Screen::Paused | Screen::Controls(false) | Screen::Stats(false)
+                Screen::Paused
+                    | Screen::Controls(false)
+                    | Screen::Stats(false)
+                    | Screen::Bindings(false)
             ) || (self.screen == Screen::Playing
                 && (self.teleport.is_some() || self.console.open)))
         {
@@ -797,15 +835,13 @@ impl Play {
                 true
             }
             Screen::Playing => {
-                let pause = keys.pressed.contains(&KeyCode::Escape)
-                    || keys.pressed.contains(&KeyCode::KeyP)
-                    || keys.pad_pressed.menu;
-                if pause && self.bigmap.open && !keys.pad_pressed.menu {
+                use crate::bindings::Action as B;
+                let pause = self.bindings.pressed(keys, B::Pause);
+                if pause && self.bigmap.open && !self.bindings.pad_pressed(keys, B::Pause) {
                     self.bigmap.open = false;
                     return false;
                 }
-                let enter = keys.pressed.contains(&KeyCode::Enter)
-                    || keys.pressed.contains(&KeyCode::NumpadEnter);
+                let enter = self.bindings.pressed(keys, B::Console);
                 if enter
                     && !self.bigmap.open
                     && !self.world.loading
@@ -937,11 +973,41 @@ impl Play {
             {
                 self.diablo = !self.diablo;
                 self.ui_sound();
-                if let Some(st) = &self.storage {
-                    let v = serde_json::json!({ "controls": if self.diablo { "diablo" } else { "classic" } });
-                    if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
-                        eprintln!("Einstellungen nicht gespeichert: {e}");
+                self.write_settings();
+                true
+            }
+            Screen::Controls(from_title) if mk.confirm || keys.mouse.left_pressed => {
+                // Enter/A bzw. Klick: Belegung ändern
+                self.ui_sound();
+                self.bindmenu = Default::default();
+                self.screen = Screen::Bindings(from_title);
+                if from_title {
+                    self.world.update(&Input::default(), dt);
+                }
+                true
+            }
+            Screen::Bindings(from_title) => {
+                let out = self
+                    .bindmenu
+                    .step(bk, &mut self.bindings, self.real_t, self.hud_width);
+                self.real_t += dt;
+                match out {
+                    crate::bindmenu::Out::Changed => {
+                        self.ui_sound();
+                        self.write_settings();
                     }
+                    crate::bindmenu::Out::Back => {
+                        self.ui_sound();
+                        self.screen = Screen::Controls(from_title);
+                    }
+                    crate::bindmenu::Out::Stay => {
+                        if bk.up || bk.down || bk.left || bk.right {
+                            self.ui_sound();
+                        }
+                    }
+                }
+                if from_title {
+                    self.world.update(&Input::default(), dt);
                 }
                 true
             }
@@ -983,65 +1049,80 @@ pub fn radial_deadzone(x: f32, y: f32, dz: f32) -> (f32, f32) {
     (x * k, y * k)
 }
 
-/// Tasten und Gamepad → abstrakte Eingabe (Belegung wie `input.js`).
-pub fn input_from(keys: &Keys, driving: bool) -> Input {
-    let held = |a: KeyCode, b: KeyCode| keys.held.contains(&a) || keys.held.contains(&b);
-    let pressed = |k: KeyCode| keys.pressed.contains(&k);
+/// Gas bzw. Bremse aus der Belegung: Taste = voll, Trigger über die Kennlinie (Totzone, progressiv), andere
+/// Controller-Taste = voll. Die stärkere Quelle zählt.
+fn pedal(
+    b: &crate::bindings::Bindings,
+    keys: &Keys,
+    a: crate::bindings::Action,
+    gamma: f32,
+) -> f64 {
+    use crate::bindings::{PadButton, trigger_curve};
+    let key: f32 = if b.key_held(keys, a) { 1. } else { 0. };
+    let pad = match b.pad_of(a) {
+        Some(PadButton::LT | PadButton::RT) => trigger_curve(b.pad_value(keys, a), gamma),
+        Some(_) => b.pad_value(keys, a),
+        None => 0.,
+    };
+    f64::from(key.max(pad))
+}
+
+/// Tasten und Gamepad → abstrakte Eingabe über die frei belegbare Steuerung (`bindings.rs`).
+pub fn input_from(keys: &Keys, driving: bool, b: &crate::bindings::Bindings) -> Input {
+    use crate::bindings::{Action as A, BRAKE_GAMMA, THROTTLE_GAMMA, steer_curve};
     let axis = |pos: bool, neg: bool| (pos as i32 - neg as i32) as f64;
-    let (p, pe) = (&keys.pad, &keys.pad_pressed);
-    let (plx, ply) = radial_deadzone(p.lx, p.ly, 0.22);
-    let kx = axis(
-        held(KeyCode::KeyD, KeyCode::ArrowRight),
-        held(KeyCode::KeyA, KeyCode::ArrowLeft),
-    );
-    let ky = axis(
-        held(KeyCode::KeyS, KeyCode::ArrowDown),
-        held(KeyCode::KeyW, KeyCode::ArrowUp),
-    );
+    let p = &keys.pad;
+    let (plx, ply) = radial_deadzone(p.lx, p.ly, 0.18);
+    let kx = axis(b.key_held(keys, A::Right), b.key_held(keys, A::Left));
+    let ky = axis(b.key_held(keys, A::Down), b.key_held(keys, A::Up));
     // Stick überstimmt die Tasten nur, wenn er ausgelenkt ist
     let lx = if plx != 0. { plx as f64 } else { kx };
     let ly = if ply != 0. { ply as f64 } else { ky };
-    let up = held(KeyCode::KeyW, KeyCode::ArrowUp);
-    let down = held(KeyCode::KeyS, KeyCode::ArrowDown);
+    // Lenken: Stick über die Lenk-Kennlinie (feine Mitte), sonst die Tasten
+    let stick = steer_curve(p.lx, b.steer_sens);
+    let steer = if stick != 0. { stick as f64 } else { kx };
     Input {
         move_x: if driving { 0. } else { lx },
         move_y: if driving { 0. } else { ly },
-        sprint: held(KeyCode::ShiftLeft, KeyCode::ShiftRight) || (!driving && p.a),
-        walk_slow: held(KeyCode::AltLeft, KeyCode::AltRight),
+        sprint: !driving && b.held(keys, A::Sprint),
+        walk_slow: !driving && b.held(keys, A::Slow),
         throttle: if driving {
-            f64::from(u8::from(up)).max(p.rt as f64)
+            pedal(b, keys, A::Throttle, THROTTLE_GAMMA)
         } else {
             0.
         },
         brake: if driving {
-            f64::from(u8::from(down)).max(p.lt as f64)
+            pedal(b, keys, A::Brake, BRAKE_GAMMA)
         } else {
             0.
         },
-        steer: if driving { lx.clamp(-1., 1.) } else { 0. },
-        handbrake: driving && (keys.held.contains(&KeyCode::Space) || p.rb || p.b),
-        horn: keys.held.contains(&KeyCode::KeyH) || p.x,
-        enter_exit: pressed(KeyCode::KeyF) || pe.y,
-        action: pressed(KeyCode::KeyE) || pe.a,
-        action_held: keys.held.contains(&KeyCode::KeyE) || p.a,
-        esp_toggle: pressed(KeyCode::KeyX),
-        abs_toggle: pressed(KeyCode::KeyY) || pressed(KeyCode::KeyZ),
-        ride: pressed(KeyCode::KeyG) || pe.down,
-        combat: combat_input(keys, driving),
+        steer: if driving { steer.clamp(-1., 1.) } else { 0. },
+        handbrake: driving && b.held(keys, A::Handbrake),
+        horn: driving && b.held(keys, A::Horn),
+        enter_exit: b.pressed(keys, A::EnterExit),
+        action: b.pressed(keys, A::Use),
+        action_held: b.held(keys, A::Use),
+        esp_toggle: driving && b.pressed(keys, A::Esp),
+        abs_toggle: driving && b.pressed(keys, A::Abs),
+        ride: !driving && b.pressed(keys, A::Ride),
+        combat: combat_input(keys, driving, b),
         ..Default::default()
     }
 }
 
-/// Kampf zu Fuß (input.js): Strg/RT feuert, V/B tritt, R/X lädt nach, Q/RB nächste, LB vorige Waffe, 1–6 direkt,
-/// rechter Stick zielt. Die Flanke des Triggers ergänzt `Play::step` (der Stand des letzten Schritts liegt dort).
-pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInput {
+/// Kampf zu Fuß über die Belegung (Standard: Strg/RT feuert, V/B tritt, R/X lädt nach, Q/RB nächste Waffe; das
+/// Waffenrad liegt in `Play::step`), 1–6 wählen fest, der rechte Stick zielt.
+pub fn combat_input(
+    keys: &Keys,
+    driving: bool,
+    b: &crate::bindings::Bindings,
+) -> berlin_sim::combat::CombatInput {
+    use crate::bindings::Action as A;
     if driving {
         return Default::default();
     }
     let pressed = |k: KeyCode| keys.pressed.contains(&k);
-    let (p, pe) = (&keys.pad, &keys.pad_pressed);
-    let ctrl =
-        keys.held.contains(&KeyCode::ControlLeft) || keys.held.contains(&KeyCode::ControlRight);
+    let p = &keys.pad;
     let (rx, ry) = radial_deadzone(p.rx, p.ry, 0.22);
     let digits = [
         KeyCode::Digit1,
@@ -1052,12 +1133,12 @@ pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInp
         KeyCode::Digit6,
     ];
     berlin_sim::combat::CombatInput {
-        fire: ctrl || p.rt > 0.5,
-        fire_pressed: pressed(KeyCode::ControlLeft) || pressed(KeyCode::ControlRight),
-        kick: pressed(KeyCode::KeyV) || pe.b,
-        reload: pressed(KeyCode::KeyR) || pe.x,
-        weapon_next: pressed(KeyCode::KeyQ) || pe.rb,
-        // LB: tippen = vorige Waffe, halten = Waffenrad (Play::step)
+        fire: b.held(keys, A::Fire),
+        fire_pressed: b.pressed(keys, A::Fire),
+        kick: b.pressed(keys, A::Kick),
+        reload: b.pressed(keys, A::Reload),
+        weapon_next: b.pressed(keys, A::NextWeapon),
+        // Waffenrad-Taste: tippen = vorige Waffe, halten = Waffenrad (Play::step)
         weapon_prev: false,
         weapon_slot: digits
             .iter()
@@ -1873,10 +1954,12 @@ impl Game for Play {
         if self.step_screens(keys, dt) {
             return;
         }
-        if keys.pressed.contains(&KeyCode::F5) {
+        use crate::bindings::Action as Bind;
+        let bind = self.bindings.clone();
+        if bind.pressed(keys, Bind::Save) {
             self.save();
         }
-        self.bigmap.toggle(keys);
+        self.bigmap.toggle(keys, bind.pressed(keys, Bind::Map));
         if self.bigmap.open {
             let v = self.bigmap.view(self.hud_width);
             if let Some(at) = self.bigmap.control(keys, dt as f32, v)
@@ -1885,7 +1968,7 @@ impl Game for Play {
                 self.request_teleport(at.x as f64, at.y as f64);
             }
         }
-        if keys.pressed.contains(&KeyCode::KeyM)
+        if bind.pressed(keys, Bind::Mute)
             && let Some(a) = &self.audio
         {
             let muted = a.toggle_mute();
@@ -1898,7 +1981,7 @@ impl Game for Play {
             self.poll_bars();
         }
         let w2 = &mut self.world;
-        if keys.pressed.contains(&KeyCode::KeyN) {
+        if bind.pressed(keys, Bind::Weather) {
             // Wetter durchschalten: Tagesverlauf → klar → … → Schneesturm → Tagesverlauf
             let kinds = berlin_sim::weather::KINDS;
             let next = match w2.force_weather {
@@ -1915,7 +1998,7 @@ impl Game for Play {
                 .unwrap_or_else(|| "Wetter: Tagesverlauf".into());
             w2.notice = Some(berlin_sim::world::Notice { text, t: 1.8 });
         }
-        if keys.pressed.contains(&KeyCode::KeyT) {
+        if bind.pressed(keys, Bind::Clock) {
             w2.clock = (w2.clock + 60.) % 1440.;
             w2.notice = Some(berlin_sim::world::Notice {
                 text: format!("Uhr {}", format_clock(w2.clock)),
@@ -1932,7 +2015,7 @@ impl Game for Play {
                 .ride
                 .as_ref()
                 .is_some_and(|r| r.kind == berlin_sim::ride::RideKind::Driver);
-            input_from(keys, w2.player.in_car.is_some() || drives_train)
+            input_from(keys, w2.player.in_car.is_some() || drives_train, &bind)
         };
         if self.vehicle_show && !w2.loading {
             self.vehicle_show = false;
@@ -2005,7 +2088,7 @@ impl Game for Play {
         if m.moved || m.left_pressed || m.right_pressed {
             self.mouse_aim = true;
         }
-        if keys.pad.rx.hypot(keys.pad.ry) > 0.35 || keys.pad.rt > 0.5 {
+        if keys.pad.rx.hypot(keys.pad.ry) > 0.35 || bind.pad_value(keys, Bind::Fire) > 0.5 {
             self.mouse_aim = false;
         }
         self.cursor = m.hud;
@@ -2043,10 +2126,12 @@ impl Game for Play {
             // klassisch: die Maus zielt, gefeuert wird mit rechts (oben) oder Strg
             input.combat.aim_world = world_pt;
         }
-        // Trigger als Taste: Flanke gegenüber dem letzten Schritt
-        let trigger = keys.pad.rt > 0.5;
-        input.combat.fire_pressed |= trigger && !self.trigger_was && input.combat.fire;
-        self.trigger_was = trigger;
+        // Kamera näher/weiter (gehalten, sanft; Mausrad zoomt in der Engine zusätzlich)
+        let zoom = bind.held(keys, Bind::ZoomIn) as i32 - bind.held(keys, Bind::ZoomOut) as i32;
+        if zoom != 0 && !self.bigmap.open {
+            self.zoom_user =
+                (self.zoom_user * (zoom as f32 * 1.4 * dt as f32).exp()).clamp(0.6, 1.8);
+        }
         if self.auto_enter && !w2.loading && w2.player.in_car.is_none() {
             self.auto_enter = false;
             if let Some((x, y)) = w2
@@ -2097,12 +2182,16 @@ impl Game for Play {
         {
             outcomes.push(self.wheel_m.choose(i));
         }
-        if keys.pad_pressed.lb && alive_foot {
+        if bind.pad_pressed(keys, Bind::WeaponWheel) && alive_foot {
             self.wheel_p.press(t, hud_center);
         }
         self.wheel_p.tick(t, alive_foot, cur, n);
         self.wheel_p.aim(keys.pad.rx, keys.pad.ry);
-        if self.wheel_p.down && !keys.pad.lb {
+        if self.wheel_p.down
+            && !bind
+                .pad_of(Bind::WeaponWheel)
+                .is_some_and(|p| p.held(&keys.pad))
+        {
             let o = self.wheel_p.release(t);
             if o.tap {
                 input.combat.weapon_prev = true;
@@ -2152,6 +2241,24 @@ impl Game for Play {
             self.fx.click_ring(at);
         }
         self.fx.ingest(&self.world.events);
+        // Controller-Vibration aus Stößen und dem Schlupf des eigenen Autos
+        if self.bindings.rumble {
+            let w = &self.world;
+            let own = w.player.in_car;
+            let drive = own.and_then(|id| w.car(id)).and_then(|c| {
+                c.dyn_state.as_ref().map(|d| crate::rumble::Drive {
+                    spin: d.spin_f.max(d.spin_r),
+                    lock: d.lock_r,
+                    assist: d.esp > 0.05,
+                })
+            });
+            if let Some(r) =
+                self.rumbler
+                    .step(&w.events, (w.player.x, w.player.y), own, drive, w.time)
+            {
+                self.rumble_out = Some(r);
+            }
+        }
         self.fx.step(dt as f32);
         self.fx.tires(&mut self.world, dt as f32);
         self.trails
@@ -2186,14 +2293,17 @@ impl Game for Play {
         let c = self.world.camera;
         if matches!(
             self.screen,
-            Screen::Title | Screen::Controls(true) | Screen::Stats(true)
+            Screen::Title | Screen::Controls(true) | Screen::Stats(true) | Screen::Bindings(true)
         ) {
             // langsame Kreisfahrt über dem Kiez (main.js demo-Kamera, kleiner Radius: geladene Kacheln)
             let t = self.world.time;
             let (x, y) = (c.x + (t * 0.05).cos() * 900., c.y + (t * 0.07).sin() * 600.);
             return (Vec2::new(x as f32, y as f32), 0.8);
         }
-        (Vec2::new(c.x as f32, c.y as f32), c.zoom as f32)
+        (
+            Vec2::new(c.x as f32, c.y as f32),
+            c.zoom as f32 * self.zoom_user,
+        )
     }
     fn quit(&self) -> bool {
         self.quit
@@ -2746,6 +2856,9 @@ impl Game for Play {
         }
         parts.join(" · ")
     }
+    fn rumble(&mut self) -> Option<berlin_engine::Rumble> {
+        self.rumble_out.take()
+    }
     fn frame_stats(&mut self, stats: berlin_engine::FrameStats) {
         self.fps.push(stats.dt, stats.work_ms);
     }
@@ -3040,9 +3153,13 @@ mod tests {
             mouse: Default::default(),
             typed: "",
         };
-        let i = input_from(&keys, true);
+        let b = crate::bindings::Bindings::default();
+        let i = input_from(&keys, true, &b);
         assert_eq!(i.throttle, 1., "Taste W und Trigger: das Stärkere zählt");
-        assert!((i.brake - 0.2).abs() < 1e-6 && i.steer < -0.5 && i.enter_exit);
+        // Bremse über die progressive Kennlinie: 20 % Trigger bremsen nur leicht
+        let lt = crate::bindings::trigger_curve(0.2, crate::bindings::BRAKE_GAMMA) as f64;
+        assert!((i.brake - lt).abs() < 1e-6 && i.brake < 0.06, "{}", i.brake);
+        assert!(i.steer < -0.5 && i.enter_exit);
         let walk = input_from(
             &Keys {
                 held: &none,
@@ -3057,6 +3174,7 @@ mod tests {
                 typed: "",
             },
             false,
+            &b,
         );
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
     }

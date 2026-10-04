@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Tastatur und Xbox-Controller frei belegbar (Steuerung → Enter/A: Belegungstafel mit
+  Konfliktanzeige und „alles auf Standard“), Controller-Vibration (abschaltbar), Lenkempfindlichkeit einstellbar;
+  ESP, ABS und Kamera-Zoom am Controller belegt.
 - Native Rust-Portierung: Befehle `fps` (Bildrate, Arbeitszeit je Bild, längstes Bild), `ebenen` (Ebenen und
   Portale) und `silhouetten` in der Befehlszeile; `--drift-demo` als Prüfstand für Reifeneffekte.
 - Native Rust-Portierung: Nebel dämpft das Fensterlicht (`fogK`); Radfahrer, E-Roller und Bahnwagen bekommen unter
@@ -153,6 +156,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Native Rust-Portierung: Gas und Bremse am Controller nutzen den ganzen Triggerweg (progressive Kennlinie, Pedal auf
+  das Haftungslimit abgebildet; vorher war ab halbem Gas schon fast Vollgas erreicht). Vollgas unverändert.
+  Lenkstick mit kleinerer Totzone und feinerer Mitte.
 - Native Rust-Portierung, Maus am PC: links schießt nie (läuft, steigt ein), rechts schießt bzw. schlägt immer zum
   Zeiger, beide Tasten zusammen öffnen das Waffenrad. Treten bleibt auf V.
 - Enter in der Befehlszeile übernimmt zunächst die sichtbare Autovervollständigung; ein weiteres Enter führt sie aus.

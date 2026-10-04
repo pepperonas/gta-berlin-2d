@@ -23,6 +23,9 @@ pub struct Pad {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+    /// Sticks gedrückt (L3/R3)
+    pub ls: bool,
+    pub rs: bool,
 }
 impl Pad {
     /// Tasten, die in `now` gedrückt sind und in `before` nicht (Flanken), in `self` sammeln.
@@ -30,7 +33,16 @@ impl Pad {
         macro_rules! edge {
             ($($f:ident),*) => { $( self.$f |= now.$f && !before.$f; )* };
         }
-        edge!(a, b, x, y, lb, rb, view, menu, up, down, left, right);
+        edge!(
+            a, b, x, y, lb, rb, view, menu, up, down, left, right, ls, rs
+        );
+        // Trigger: Flanke beim Überschreiten des halben Wegs (als 1 vermerkt)
+        if now.lt > 0.5 && before.lt <= 0.5 {
+            self.lt = 1.;
+        }
+        if now.rt > 0.5 && before.rt <= 0.5 {
+            self.rt = 1.;
+        }
     }
 }
 
@@ -38,6 +50,10 @@ pub(crate) struct Gamepads {
     gilrs: Option<gilrs::Gilrs>,
     pub state: Pad,
     pub edges: Pad,
+    /// laufende Vibration (muss leben, solange sie spielt)
+    effect: Option<gilrs::ff::Effect>,
+    /// Vibration ist mit diesem Controller nicht möglich (einmal gemeldet, dann still)
+    ff_failed: bool,
 }
 impl Gamepads {
     pub fn new() -> Self {
@@ -52,8 +68,58 @@ impl Gamepads {
             gilrs,
             state: Pad::default(),
             edges: Pad::default(),
+            effect: None,
+            ff_failed: false,
         }
     }
+    /// Vibration: starker (tiefer) und schwacher (heller) Motor 0…1 für `ms` Millisekunden. Ersetzt eine laufende.
+    /// Ohne Force-Feedback (z. B. unter macOS, die gilrs dort nicht anbietet) geschieht nichts.
+    pub fn rumble(&mut self, strong: f32, weak: f32, ms: u32) {
+        use gilrs::ff::{BaseEffect, BaseEffectType, EffectBuilder, Replay, Ticks};
+        if self.ff_failed {
+            return;
+        }
+        let Some(g) = self.gilrs.as_mut() else { return };
+        let ids: Vec<_> = g
+            .gamepads()
+            .filter(|(_, gp)| gp.is_connected() && gp.is_ff_supported())
+            .map(|(id, _)| id)
+            .take(1)
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let mag = |v: f32| (v.clamp(0., 1.) * u16::MAX as f32) as u16;
+        let replay = Replay {
+            play_for: Ticks::from_ms(ms),
+            ..Default::default()
+        };
+        let built = EffectBuilder::new()
+            .add_effect(BaseEffect {
+                kind: BaseEffectType::Strong {
+                    magnitude: mag(strong),
+                },
+                scheduling: replay,
+                ..Default::default()
+            })
+            .add_effect(BaseEffect {
+                kind: BaseEffectType::Weak {
+                    magnitude: mag(weak),
+                },
+                scheduling: replay,
+                ..Default::default()
+            })
+            .gamepads(&ids)
+            .finish(g);
+        match built.and_then(|e| e.play().map(|_| e)) {
+            Ok(e) => self.effect = Some(e),
+            Err(e) => {
+                eprintln!("Vibration nicht verfügbar: {e}");
+                self.ff_failed = true;
+            }
+        }
+    }
+
     /// Ereignisse abholen und den Zustand des ersten verbundenen Controllers lesen.
     pub fn poll(&mut self) {
         let Some(g) = self.gilrs.as_mut() else { return };
@@ -93,6 +159,8 @@ impl Gamepads {
                 down: btn(Button::DPadDown),
                 left: btn(Button::DPadLeft),
                 right: btn(Button::DPadRight),
+                ls: btn(Button::LeftThumb),
+                rs: btn(Button::RightThumb),
             };
         }
         self.edges.latch_edges(&before, &now);

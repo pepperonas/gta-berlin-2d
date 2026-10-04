@@ -626,6 +626,42 @@ Simulationsschritt.
 
 Mit echter Maus wurde nicht gespielt.
 
+## Steuerung: freie Belegung, Controller-Kennlinien, Vibration (04.10.2026)
+
+Nutzerbefund: Gas und Bremse über die Trigger waren zu aggressiv. **Gemessen** (Limousine, trocken, 0–50 km/h): 10 %
+Gas 8,7 s, 30 % 2,7 s, **50 % schon 1,7 s und damit fast Vollgas (1,5 s)** – die Antriebskraft überstieg ab halbem
+Pedal die Reifenhaftung, die obere Hälfte des Triggers war wirkungslos (Muscle-Car schon ab 30 %). Die Bremse ging
+linear bis 1,42 g, ein Drittel Druck gab 0,5 g.
+- **Pedal auf die Haftung** (`dynamics.rs pedal_force`): bis 90 % Pedal wächst die Antriebskraft gleichmäßig bis
+  zum Haftungslimit der angetriebenen Achse(n) (mit ESP dessen Grenze), die letzten 10 % geben die übrige
+  Motorkraft frei. Vollgas (1, jede Taste) ist exakt wie vorher, samt Durchdrehen ohne ESP. Test
+  `half_pedal_accelerates_about_half_as_hard`, gegengeprüft (mit der alten Abbildung: halb 32,7 gegen voll
+  33,5 km/h nach 1 s).
+- **Trigger-Kennlinie** (`bindings.rs trigger_curve`): Totzone 6 % (Ruherauschen), voll ab 96 %, progressiv
+  (Gas γ 1,35, Bremse γ 1,7). Ergebnis Limousine: Trigger 40 % → 0–50 in 6,6 s, 60 % 3,1 s, 80 % 1,8 s, 90 % 1,5 s;
+  Bremse 40 % 0,33 g, 60 % 0,69 g, 100 % unverändert 1,42 g.
+- **Lenkstick** (`steer_curve`): Totzone 10 % statt 22 %, Expo-Kurve mit feiner Mitte, Empfindlichkeit 50–150 %
+  einstellbar; Laufen behält die runde Totzone (jetzt 18 %).
+- **Freie Belegung** (`bindings.rs`): 29 Aktionen mit je zwei Tastaturtasten und einer Xbox-Taste (Trigger zählen ab
+  halbem Weg als Taste, Gas/Bremse lesen sie analog). Kontexte zu Fuß/im Auto/überall: dieselbe Taste darf in
+  getrennten Bereichen doppelt liegen (B tritt zu Fuß, X hupt im Auto und lädt zu Fuß nach); echte Doppelungen
+  zeigt die Tafel rot mit Partner. Fest – damit man sich nicht aussperrt – bleiben Menübedienung, Ziffern 1–6,
+  Maus und Sticks. `settings.json` → `"bindings"` speichert nur die Abweichungen vom Standard.
+- **Neu belegt am Controller:** ESP auf Steuerkreuz ↑, ABS auf rechten Stick drücken, Kamera näher/weiter auf
+  Steuerkreuz →/←, LT zu Fuß = langsam/ruhig zielen. Handbremse nur noch RB (B tritt zu Fuß).
+- **Belegungstafel** (`bindmenu.rs`, Steuerungstafel → Enter/A oder Klick): Vibration, Lenkempfindlichkeit, alles
+  auf Standard, dann jede Aktion; Enter/A/Klick auf eine Zelle wartet auf die neue Taste (Esc bricht ab,
+  Rücktaste/Entf/X leert, Controller-Zellen geben nach 6 s auf). Die Steuerungstafel zeigt die aktuelle Belegung.
+  `--bildschirm belegung` öffnet sie direkt.
+- **Vibration** (`rumble.rs` + `pad.rs rumble`, `Game::rumble`): Stöße bei Unfall (nach Stärke), Treffer und Tod, ein
+  kurzes Zucken beim eigenen Schuss (Schrotflinte kräftiger), feines Rattern bei durchdrehenden oder blockierenden
+  Rädern (alle 90 ms nachgelegt); abschaltbar. **Nicht auf Hardware geprüft:** gilrs bietet Force-Feedback unter
+  Windows und Linux; unter macOS meldet der Controller keins, dann geschieht nichts (einmalige Meldung).
+- **Prüfung:** Unit-Tests für Kennlinien, Belegung (Konflikte, JSON hin und zurück, kaputte Einträge), Tafel
+  (Belegen, Leeren, Abbrechen, Zeitlimit, Maus, Standard, Zeichnen ohne Überlappung – dieser Test fand zu breite
+  Beschriftungen), Vibrationsregeln und Eingabe. **Die Tafel ist nicht im Bild abgenommen:** zum Zeitpunkt der
+  Arbeit stellte der Mac keine Fenster dar (alle GPU-Aufnahmen blieben ohne Bild, auch bisher funktionierende).
+
 ## Mausbelegung (04.10.2026, Nutzerwunsch)
 
 In beiden Schemata (Diablo und klassisch) gilt am PC:
