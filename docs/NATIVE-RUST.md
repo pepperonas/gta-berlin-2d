@@ -617,7 +617,6 @@ Simulationsschritt.
   verschiebt.
 
 **Noch offen:**
-- Waffenrad mit rechter Taste
 - (Diablo-Schema: siehe unten)
 - Teleport per Klick auf den Stadtplan
 
@@ -762,3 +761,22 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
 - auf echten Kacheln bei klarem Wetter: der Bestand füllt sich, die Räder kommen voran und sind nie in einem Haus
 - Kapern ergibt das passende Fahrzeug samt Ereignis
 - ein Treffer holt den Fahrer vom Rad, er wird ein Passant
+
+## Waffenrad (04.10.2026)
+
+`game/wheel.rs` ist ein Port von `weaponwheel.js`: eine Taste, die getippt etwas anderes tut als gehalten.
+- **Maus rechts:** tippen tritt, halten (zu Fuß, nach 0,22 s) öffnet das Rad am Zeiger, im Bild gehalten.
+  Gewählt ist das Feld in Zeigerrichtung ab der Mitte (Totzone 14). Loslassen oder Linksklick nimmt die Waffe,
+  1–6 wählt direkt.
+- **Controller LB:** tippen nimmt die vorige Waffe, halten öffnet das Rad in der Bildmitte; der rechte Stick
+  wählt, losgelassen bleibt die Wahl.
+- **Bei offenem Rad:** Das Spiel läuft weich in Zeitlupe (×0,3). Schießen, Klicken und Zielen ruhen. Steigt die
+  Figur ein oder geht K. o., schließt das Rad ohne Wahl.
+- **Darstellung:** sechs Felder mit Waffenname, Magazin und Taste; das gezeigte ist gelb, die gewählte Waffe
+  gelb beschriftet. Die Mitte zeigt Name und Magazin, darunter steht ein Bedienhinweis. Am Controller zeigt ein
+  Zeiger die Stickrichtung.
+
+`--bildschirm waffenrad` öffnet das Rad für Aufnahmen ([Bild](images/native/waffenrad.png)).
+
+**Validierung:** neue Tests für Feldzuordnung (oben = 0, im Uhrzeigersinn, Totzone), Tippen gegen Halten, Wahl
+per Zeiger, Stick und Ziffer, Schließen beim Einsteigen und Zeitlupe; 117 Rust-Tests.

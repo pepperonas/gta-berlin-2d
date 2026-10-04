@@ -51,6 +51,11 @@ pub struct Play {
     /// letzter Linksklick (Spielzeit, HUD-Punkt) für den Doppelklick
     last_click: Option<(f64, Vec2)>,
     ctrl_held: bool,
+    /// Waffenrad (Maus rechts, Controller LB), Echtzeit für das Halten, Zeitlupe
+    wheel_m: crate::wheel::WheelButton,
+    wheel_p: crate::wheel::WheelButton,
+    real_t: f64,
+    time_scale: f64,
     /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
     pub fx: crate::effects::Effects,
 }
@@ -208,6 +213,10 @@ impl Play {
             diablo,
             last_click: None,
             ctrl_held: false,
+            wheel_m: Default::default(),
+            wheel_p: Default::default(),
+            real_t: 0.,
+            time_scale: 1.,
             fx: Default::default(),
         })
     }
@@ -295,6 +304,18 @@ impl Play {
             c.cargo = false;
         }
         self.result_menu = None;
+    }
+    /// Aufnahme: Waffenrad offen in der Bildmitte, die Pistole gezeigt.
+    pub fn demo_wheel(&mut self) {
+        let c = Vec2::new(self.hud_width / 2., 360.);
+        self.wheel_m.press(0., c);
+        self.wheel_m
+            .tick(1., true, 0, berlin_sim::combat::WEAPONS.len());
+        self.wheel_m.mov(c + Vec2::new(60., 30.));
+        self.real_t = 10.;
+        self.wheel_m.opened_at = 0.;
+        // offen halten, ohne dass ein Loslassen der (nicht gedrückten) Taste es schließt
+        self.wheel_m.down = false;
     }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
@@ -569,7 +590,8 @@ pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInp
         kick: pressed(KeyCode::KeyV) || pe.b,
         reload: pressed(KeyCode::KeyR) || pe.x,
         weapon_next: pressed(KeyCode::KeyQ) || pe.rb,
-        weapon_prev: pe.lb,
+        // LB: tippen = vorige Waffe, halten = Waffenrad (Play::step)
+        weapon_prev: false,
         weapon_slot: digits
             .iter()
             .position(|&d| pressed(d))
@@ -873,7 +895,6 @@ impl Game for Play {
                 });
                 self.last_click = m.hud.map(|h| (now, h));
             }
-            input.combat.kick |= m.right_pressed;
             if ctrl {
                 // Strg allein zielt mit der Maus (Fadenkreuz), feuern mit Klick oder Strg-Taste
                 input.combat.aim_world = world_pt;
@@ -882,7 +903,6 @@ impl Game for Play {
             input.combat.aim_world = world_pt;
             input.combat.fire |= m.left;
             input.combat.fire_pressed |= m.left_pressed;
-            input.combat.kick |= m.right_pressed;
         }
         // Trigger als Taste: Flanke gegenüber dem letzten Schritt
         let trigger = keys.pad.rt > 0.5;
@@ -899,7 +919,89 @@ impl Game for Play {
                 input.enter_exit = true;
             }
         }
-        w2.update(&input, dt);
+        // Waffenrad: rechte Maustaste bzw. LB (tippen oder halten)
+        self.real_t += dt;
+        let alive_foot = on_foot && !w2.player.combat.dead;
+        let (t, cur) = (self.real_t, w2.player.combat.weapon);
+        let n = berlin_sim::combat::WEAPONS.len();
+        let hud_center = Vec2::new(self.hud_width / 2., 360.);
+        if m.right_pressed && alive_foot {
+            self.wheel_m.press(t, m.hud.unwrap_or(hud_center));
+        }
+        if let Some(p) = m.hud {
+            self.wheel_m.mov(p);
+        }
+        if self.wheel_m.tick(t, alive_foot, cur, n).opened {
+            // ganz im Bild halten
+            let r = crate::wheel::RADIUS + 24.;
+            let c = self.wheel_m.center;
+            self.wheel_m.place(Vec2::new(
+                c.x.clamp(r, (self.hud_width - r).max(r)),
+                c.y.clamp(r, 720. - r - 30.),
+            ));
+        }
+        let mut outcomes = Vec::new();
+        if self.wheel_m.down && !m.right {
+            let o = self.wheel_m.release(t);
+            if o.tap {
+                input.combat.kick = true;
+            }
+            outcomes.push(o);
+        }
+        if self.wheel_m.open
+            && m.left_pressed
+            && let Some(i) = self.wheel_m.hover
+        {
+            outcomes.push(self.wheel_m.choose(i));
+        }
+        if keys.pad_pressed.lb && alive_foot {
+            self.wheel_p.press(t, hud_center);
+        }
+        self.wheel_p.tick(t, alive_foot, cur, n);
+        self.wheel_p.aim(keys.pad.rx, keys.pad.ry);
+        if self.wheel_p.down && !keys.pad.lb {
+            let o = self.wheel_p.release(t);
+            if o.tap {
+                input.combat.weapon_prev = true;
+            }
+            outcomes.push(o);
+        }
+        let open = self.wheel_m.open || self.wheel_p.open;
+        if open {
+            // Zifferntaste wählt und schließt
+            let digits = [
+                KeyCode::Digit1,
+                KeyCode::Digit2,
+                KeyCode::Digit3,
+                KeyCode::Digit4,
+                KeyCode::Digit5,
+                KeyCode::Digit6,
+            ];
+            if let Some(i) = digits.iter().position(|d| keys.pressed.contains(d)) {
+                outcomes.push(self.wheel_m.choose(i));
+                outcomes.push(self.wheel_p.choose(i));
+            }
+            // bei offenem Rad kein Schuss, kein Klick, Ziel eingefroren
+            input.combat.fire = false;
+            input.combat.fire_pressed = false;
+            input.combat.kick = false;
+            input.combat.aim_world = None;
+            input.combat.aim_x = 0.;
+            input.combat.aim_y = 0.;
+            input.combat.weapon_slot = 0;
+            input.click_world = None;
+            input.click_pressed = false;
+            input.click_held = false;
+        }
+        if let Some(i) = outcomes.iter().find_map(|o| o.pick) {
+            input.combat.weapon_slot = i as u8 + 1;
+        }
+        self.time_scale = crate::wheel::ease_time_scale(
+            self.time_scale,
+            self.wheel_m.open || self.wheel_p.open,
+            dt,
+        );
+        w2.update(&input, dt * self.time_scale);
         if input.click_pressed
             && let (Some(at), Some(berlin_sim::world::Click::Walk { .. })) =
                 (input.click_world, &self.world.player.click)
@@ -1392,6 +1494,17 @@ impl Game for Play {
             && let Some(c) = self.cursor
         {
             crate::hud::crosshair(out, c, p.combat.weapon().melee);
+        }
+        for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
+            if wh.open && self.screen == Screen::Playing {
+                crate::wheel::draw(
+                    out,
+                    wh,
+                    &self.world.player.combat,
+                    self.real_t - wh.opened_at,
+                    pad,
+                );
+            }
         }
         if let Some(m) = &self.result_menu {
             let y = if self.world.mission.state == State::Success {

@@ -71,6 +71,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Fahrräder und E-Roller (`sim/bikes.rs` nach `bikes.js`): auf Radstreifen bzw. am
   Fahrbahnrand, Ampeln und Hindernisse, Stürze nach Zusammenstoß oder Treffer, Räder nehmen und kapern,
   Radfahrer als Ziele und per Klick; Statistik dazu.
+- Native Rust-Fassung: Waffenrad (`game/wheel.rs` nach `weaponwheel.js`): rechte Maustaste bzw. LB halten,
+  Zeiger oder Stick wählt, Zeitlupe; tippen tritt bzw. nimmt die vorige Waffe.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.
