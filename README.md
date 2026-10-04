@@ -1,5 +1,39 @@
 # GTA Berlin
 
+<!-- Badges: erzeugt von tools/badges.mjs, aktualisiert vom Commit-Hook tools/githooks/pre-commit -->
+<p>
+<img src="docs/badges/version.svg" alt="Version">
+<img src="docs/badges/status.svg" alt="Status">
+<img src="docs/badges/semver.svg" alt="SemVer">
+<img src="docs/badges/changelog.svg" alt="Changelog">
+<img src="docs/badges/lang.svg" alt="Sprache">
+<br>
+<img src="docs/badges/loc.svg" alt="Codezeilen">
+<img src="docs/badges/loc-rust.svg" alt="Rust-Codezeilen">
+<img src="docs/badges/loc-js.svg" alt="JavaScript-Codezeilen">
+<img src="docs/badges/loc-wgsl.svg" alt="WGSL-Codezeilen">
+<br>
+<img src="docs/badges/tests.svg" alt="Unit-Tests">
+<img src="docs/badges/tests-rust.svg" alt="Rust-Tests">
+<img src="docs/badges/tests-js.svg" alt="JS-Tests">
+<br>
+<img src="docs/badges/rust.svg" alt="Rust">
+<img src="docs/badges/crates.svg" alt="Crates">
+<img src="docs/badges/wgpu.svg" alt="wgpu">
+<img src="docs/badges/winit.svg" alt="winit">
+<img src="docs/badges/cpal.svg" alt="Audio">
+<img src="docs/badges/graphics.svg" alt="Grafik">
+<img src="docs/badges/platform.svg" alt="Plattform">
+<img src="docs/badges/xbox.svg" alt="Xbox-Hülle">
+<br>
+<img src="docs/badges/node.svg" alt="Node">
+<img src="docs/badges/js-deps.svg" alt="JS-Abhängigkeiten">
+<img src="docs/badges/map.svg" alt="Karte">
+<img src="docs/badges/area.svg" alt="Berlin">
+<img src="docs/badges/tiles.svg" alt="Kacheln">
+<img src="docs/badges/osm.svg" alt="OSM-Stand">
+</p>
+
 ## Native Rust-Portierung – Phase 5
 
 Die native Fassung läuft mit `cargo run` (macOS: Metal, Windows: DX12) und ist
@@ -636,6 +670,11 @@ bediente Halte, Trinkgeld, Auf- und Abspringen. Gespeichert wird lokal in **Inde
 Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 ## Stand und Prüfumfang
+
+Codezeilen und Testanzahl in den Badges oben zählt `node tools/badges.mjs` (Codezeilen ohne Leer- und
+Kommentarzeilen aus allen versionierten Quelldateien, Tests statisch: Rust `#[test]`, JS `test(`). Der Commit-Hook
+`tools/githooks/pre-commit` schreibt sie bei jedem Commit neu; einmal je Klon einrichten mit
+`git config core.hooksPath tools/githooks`. `node tools/badges.mjs --check` meldet veraltete Badges.
 
 **Aktueller Prüfstand vom 04.10.2026:** `npm test` vollständig grün, **471 von 471 Tests**. Die 18 Fehlschläge vom
 01.10. sind aufgelöst: 17 Tests prüften noch Regeln von vor dem Umbau (Verletzte fallen nicht um, Einsteigen und

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Hält die README-Badges (docs/badges/) bei jedem Commit aktuell: Codezeilen, Tests, Versionen.
+# Einrichten (einmal je Klon): git config core.hooksPath tools/githooks
+# Gezählt wird der Arbeitsbaum, nicht der Index — für einen Teil-Commit ist der Wert darum der Stand der Platte.
+node tools/badges.mjs || exit 1
+git add docs/badges

@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- README-Badges (Version, Codezeilen je Sprache, Unit-Tests je Sprache, Rust/wgpu/winit/cpal, Karte, Kacheln,
+  OSM-Stand u. a.), erzeugt von `tools/badges.mjs` und bei jedem Commit vom Hook `tools/githooks/pre-commit`
+  aktualisiert (`git config core.hooksPath tools/githooks`).
 - Native Rust-Portierung: Wegpunkt mit Route. Klick bzw. A auf dem Stadtplan (oder `ziel <Ort>`) setzt ihn, die
   Route erscheint violett auf Stadtplan und Minikarte mit Restentfernung; berechnet über ganz Berlin, mit
   Einbahnstraßen und Abbiegeverboten, und sie meidet Hauptstraßen mit viel Verkehr und Ampeln zugunsten ruhiger
