@@ -1127,3 +1127,12 @@ geladenen Kacheln.
 
 **Validierung:** Unit-Tests für die Schriftzüge je Art, Farben und Flackern. **Abweichung:** die Schrift ist die
 Bitmapschrift des HUD statt einer serifenlosen Systemschrift.
+
+## Rumpeln der Bahnen und Bahnhofshalle (04.10.2026)
+
+Port von `ambience.js trainRumble` und dem Bahnhofszweig von `ambienceAt`: Mit Fahrplan rumpeln echte Züge in der
+Nähe (S-/U-Bahn bis 450 px, auch im Tunnel unter der Straße; Straßenbahn bis 250 px und halb so laut; Busse nicht),
+ohne Fahrplan fährt im festen Takt (zwei Züge je 150 s) ein Zug über die nächste Hochbahn. Klang: tiefes Rauschen
+(Tiefpass 90 Hz, `Mix::rumble`). Im U-Bahnhof ist die Mischung eine gedämpfte Halle: Grundrauschen, stark gedämpft,
+Züge rumpeln lauter (×1,3), von oben kommt nichts an (`Mix::station`). Geprüft im Kottbusser-Tor-Test: oben unter dem
+U1-Viadukt rumpelt binnen einer Minute ein Zug, unten gilt die Hallenmischung; Unit-Test für den festen Takt.

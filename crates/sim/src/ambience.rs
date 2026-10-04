@@ -1,7 +1,8 @@
 //! Umgebungsklang an der Kamera (Port der in der Simulation vorhandenen Teile von `ambience.js`): Stadtrauschen,
 //! Verkehr, Vögel in Grün und Bäumen bei Tag, Wasser am Ufer, Regen, Wind und Böen, Dämpfung im Auto und durch
 //! Schnee, Martinshörner und Nachtleben (Stimmengewirr vor Bars und Leuten am Lebensplatz, gedämpfte Clubmusik).
-//! Die Hochbahn folgt mit dem Nahverkehr.
+//! Dazu das Rumpeln der Bahnen (echte Fahrplanzüge in der Nähe, ohne Fahrplan ein fester Takt an der Hochbahn) und
+//! die gedämpfte Halle im U-Bahnhof.
 use crate::city::{CircleKind, PolyKind, Solid, bounds_of};
 use crate::collision::Rect;
 use crate::world::World;
@@ -31,6 +32,58 @@ pub struct Mix {
     pub music: f64,
     pub bar_pan: f64,
     pub night_feed: f64,
+    /// Rumpeln vorbeifahrender Bahnen (tiefes Rauschen)
+    pub rumble: f64,
+    /// im U-Bahnhof (gedämpfte Halle)
+    pub station: bool,
+}
+
+/// Hochbahn-Hörweite, Takt und Dauer eines Zuges ohne Fahrplan (`ambience.js AMB`)
+pub const HOCHBAHN_HEAR: f64 = 450.;
+pub const TRAIN_EVERY: f64 = 150.;
+pub const TRAIN_LEN: f64 = 14.;
+
+/// Rumpeln echter Fahrplanzüge um (x, y): Straßenbahn bis 250 px und halb so laut, S-/U-Bahn bis 450 px (auch im
+/// Tunnel unter der Straße). Busse rumpeln nicht.
+pub fn train_rumble(w: &World, x: f64, y: f64) -> f64 {
+    use crate::transit::{Mode, point_on_shape, position_at};
+    let Some(tr) = w.transit.as_deref() else {
+        return 0.;
+    };
+    let mut r = 0f64;
+    for (&id, track) in &w.transit_state.tracked {
+        let Some(p) = tr.patterns.get(id) else {
+            continue;
+        };
+        if p.mode == Mode::Bus {
+            continue;
+        }
+        let (radius, k) = if p.mode == Mode::Tram {
+            (250., 0.5)
+        } else {
+            (HOCHBAHN_HEAR, 1.)
+        };
+        for v in track.veh.iter().filter(|v| !v.gone) {
+            let pos = position_at(p, v.tau);
+            let (qx, qy, _) = point_on_shape(tr.shape_of(p), pos.s);
+            let d = (qx - x).hypot(qy - y);
+            if d < radius {
+                r = r.max((1. - d / radius) * k);
+            }
+        }
+    }
+    r
+}
+
+/// Ohne Fahrplan: fester Takt an der Hochbahn (zwei Züge je 150 s, je 14 s), nur in Hörweite einer Hochbahn.
+pub fn fixed_rumble(time: f64, hochbahn: f64) -> f64 {
+    let phase = time.rem_euclid(TRAIN_EVERY);
+    let train = phase < TRAIN_LEN || (phase - TRAIN_EVERY / 2.).abs() < TRAIN_LEN / 2.;
+    if hochbahn < HOCHBAHN_HEAR && train {
+        1. - hochbahn / HOCHBAHN_HEAR
+    } else {
+        0.
+    }
 }
 
 /// so weit hört man ein Martinshorn (px)
@@ -80,6 +133,16 @@ pub fn bird_level(minutes: f64) -> f64 {
 
 pub fn ambience_at(w: &mut World) -> Mix {
     let (cx, cy) = (w.camera.x, w.camera.y);
+    // im U-Bahnhof: gedämpftes Grundrauschen der Halle, Züge rumpeln laut, von oben kommt kaum etwas an
+    if w.player.inside.is_some() {
+        return Mix {
+            hum: 0.5,
+            muffle: 0.9,
+            rumble: (train_rumble(w, cx, cy) * 1.3).clamp(0., 1.),
+            station: true,
+            ..Mix::default()
+        };
+    }
     let box_ = Rect::around(cx, cy, HEAR);
     let (mut green, mut water) = (0f64, 0f64);
     for h in w.city.polys.query(&box_) {
@@ -170,7 +233,26 @@ pub fn ambience_at(w: &mut World) -> Mix {
         }
     }
     let nl = w.nightlife_at(cx, cy);
+    // Bahnen: mit Fahrplan das Rumpeln echter Züge, sonst ein fester Takt an der Hochbahn
+    let rumble = if w.transit.is_some() {
+        train_rumble(w, cx, cy)
+    } else {
+        let mut hochbahn = f64::INFINITY;
+        for h in w.city.rails.query(&Rect::around(cx, cy, HOCHBAHN_HEAR)) {
+            let l = w.city.rails.get(h);
+            if !l.bridge {
+                continue;
+            }
+            for s in l.pts.windows(2) {
+                let d2 = crate::city::seg_dist2(cx, cy, s[0].0, s[0].1, s[1].0, s[1].1);
+                hochbahn = hochbahn.min(d2.sqrt());
+            }
+        }
+        fixed_rumble(w.time, hochbahn)
+    };
     Mix {
+        rumble: rumble.clamp(0., 1.),
+        station: false,
         bar: bar.max(nl.crowd).clamp(0., 1.),
         music: nl.music * hush,
         bar_pan: nl.pan,
@@ -226,5 +308,16 @@ mod tests {
             0,
             "keine Kirche"
         );
+    }
+
+    #[test]
+    fn fixed_rumble_follows_the_beat_and_distance() {
+        assert!(fixed_rumble(5., 100.) > 0.7, "Zug unterwegs, nah");
+        assert_eq!(fixed_rumble(40., 100.), 0., "zwischen den Zügen");
+        assert!(
+            fixed_rumble(75., 100.) > 0.7,
+            "zweiter Zug zur Hälfte des Takts"
+        );
+        assert_eq!(fixed_rumble(5., 500.), 0., "zu weit weg");
     }
 }

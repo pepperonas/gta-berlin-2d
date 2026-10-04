@@ -1678,6 +1678,15 @@ fn walkable_ubahn_station_at_kottbusser_tor() {
         .expect("U8-Bahnsteig unter Tage")
         .clone();
     assert!(st.exits.len() >= 2 && st.hl > 400.);
+    // oben am Kottbusser Tor (U1 auf dem Viadukt, U8 darunter) rumpelt binnen einer Minute ein Zug vorbei
+    let mut loudest = 0f64;
+    for _ in 0..60 {
+        run(&mut w, 60, idle());
+        let m = berlin_sim::ambience::ambience_at(&mut w);
+        assert!(!m.station);
+        loudest = loudest.max(m.rumble);
+    }
+    assert!(loudest > 0.2, "Rumpeln {loudest}");
     // zum Eingang, F: hinunter
     let ex = st.exits[0].clone();
     (w.player.x, w.player.y) = (ex.x + 5., ex.y);
@@ -1692,6 +1701,11 @@ fn walkable_ubahn_station_at_kottbusser_tor() {
     );
     let inside = w.player.inside.clone().expect("im Bahnhof");
     assert_eq!(w.player.level.lvl, -2);
+    let m = berlin_sim::ambience::ambience_at(&mut w);
+    assert!(
+        m.station && m.muffle > 0.8 && m.traffic == 0.,
+        "gedämpfte Halle: {m:?}"
+    );
     let st = w.station_by_id(&inside.id).unwrap().clone();
     // nicht durch Säulen und Kanten: weit nach außen laufen bleibt am Bahnsteig
     run(

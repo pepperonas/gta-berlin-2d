@@ -199,6 +199,8 @@ struct Ambience {
     rain_low: NoiseLayer,
     wind: NoiseLayer,
     whistle: NoiseLayer,
+    /// Rumpeln der Bahnen (tiefes Rauschen)
+    rumble: NoiseLayer,
     /// Martinshorn (Dreieck, tief/hoch im Wechsel)
     siren: Osc,
     siren_g: Smooth,
@@ -317,6 +319,7 @@ impl Synth {
             rain_low: l(Bandpass, 900., 0.5),
             wind: l(Bandpass, 380., 1.4),
             whistle: l(Bandpass, 900., 12.),
+            rumble: l(Lowpass, 90., 0.7),
             siren: Osc::new(Wave::Triangle, 440.),
             siren_g: Smooth::new(0.),
             next_chirp: 0.,
@@ -666,6 +669,7 @@ impl Synth {
         set(&mut a.hum.gain, 0.018 * m.hum);
         set(&mut a.traffic.gain, 0.05 * m.traffic);
         set(&mut a.water.gain, 0.012 * m.water);
+        set(&mut a.rumble.gain, 0.16 * m.rumble);
         let rain = m.rain;
         set(
             &mut a.rain.gain,
@@ -1151,6 +1155,7 @@ impl Synth {
                 + a.rain_low.next(sr, block)
                 + a.wind.next(sr, block)
                 + a.whistle.next(sr, block)
+                + a.rumble.next(sr, block)
                 + a.siren.next(sr, 0.) * a.siren_g.tick();
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
