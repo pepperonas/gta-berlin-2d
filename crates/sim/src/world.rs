@@ -210,6 +210,13 @@ pub struct World {
     life_cache: crate::life::LifeCache,
     /// abgestellte E-Roller je Kante um die Kamera (nur Darstellung)
     pub scooters: std::collections::BTreeMap<i64, Vec<crate::bikes::ParkedScooter>>,
+    /// Fahrplan (transit.json), verfolgte Muster, Busse schon aufgestellt, Tunnel-Zwischenspeicher
+    pub transit: Option<Box<crate::transit::Transit>>,
+    pub transit_state: crate::transit::State,
+    pub transit_populated: bool,
+    pub ug: crate::tunnel::Cache,
+    /// Straßenbahnwagen nahe der Kamera als Hindernisse (transitlive.rs)
+    pub rail_obs: Vec<crate::traffic::RailObs>,
     /// Pfützen je Kante (Aquaplaning und Darstellung), mit den Rollern um die Kamera abgebaut
     pub puddles: HashMap<i64, Vec<crate::traction::Puddle>>,
     scoot_t: f64,
@@ -321,6 +328,11 @@ impl World {
             life_cache: Default::default(),
             scooters: Default::default(),
             puddles: HashMap::new(),
+            rail_obs: Vec::new(),
+            transit: None,
+            transit_state: Default::default(),
+            transit_populated: false,
+            ug: Default::default(),
             scoot_t: -99.,
             rhythm_t: -99.,
             life_t: -99.,
@@ -924,6 +936,12 @@ impl World {
         self.flocks.clear();
         self.scooters.clear();
         self.puddles.clear();
+        self.transit_state = crate::transit::State {
+            seed: self.seed,
+            ..Default::default()
+        };
+        self.transit_populated = false;
+        self.rail_obs.clear();
         self.hangers.clear();
         self.populated = false;
     }
@@ -950,6 +968,7 @@ impl World {
                     time: self.time,
                     res: &mut self.res,
                     events: &mut ev,
+                    rails: &[],
                 };
                 narrow_free(&mut ctx, lane)
             };
@@ -1013,6 +1032,7 @@ impl World {
                 time: self.time,
                 res: &mut self.res,
                 events: &mut ev,
+                rails: &[],
             };
             narrow_free(&mut ctx, lane)
         };
@@ -1064,6 +1084,7 @@ impl World {
                 time: self.time,
                 res: &mut self.res,
                 events: &mut ev,
+                rails: &[],
             };
             claim_narrow(&mut ctx, id, lane, seg);
             self.cars.push(car);
@@ -1173,6 +1194,7 @@ impl World {
                 || matches!(c.role, Role::Parked | Role::Curb)
                 || c.driver == Some(Driver::Player)
                 || (c.duty.is_some() && !c.done)
+                || c.bus.is_some()
         };
         let stuck = |c: &Car| {
             c.driver == Some(Driver::Npc)
@@ -1196,7 +1218,9 @@ impl World {
             .cars
             .iter()
             .filter(|c| {
-                c.driver == Some(Driver::Npc) || (c.driver.is_none() && c.role == Role::Traffic)
+                c.bus.is_none()
+                    && (c.driver == Some(Driver::Npc)
+                        || (c.driver.is_none() && c.role == Role::Traffic))
             })
             .count();
         if npc < self.car_target {
@@ -2419,6 +2443,7 @@ impl World {
                 time: self.time,
                 res: &mut self.res,
                 events: &mut self.events,
+                rails: &self.rail_obs,
             };
             update_service(&mut self.cars[i], ctx.lanes, ctx.city, ctx.rng, dt);
             drive_ai(&mut self.cars[i], &mut ctx, dt);
@@ -2473,6 +2498,7 @@ impl World {
             let c = &self.cars[i];
             (self.player.x, self.player.y, self.player.angle) = (c.x, c.y, c.angle);
         }
+        self.update_transit(dt);
         self.update_levels();
 
         // Beschossene Autos: KI-Fahrer steigt aus und rennt weg. Wracks: ebenso, Wrack verschwindet später außer Sicht

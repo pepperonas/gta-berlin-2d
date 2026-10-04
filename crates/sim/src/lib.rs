@@ -31,5 +31,8 @@ pub mod soundscape;
 pub mod stats;
 pub mod traction;
 pub mod traffic;
+pub mod transit;
+pub mod transitlive;
+pub mod tunnel;
 pub mod weather;
 pub mod world;

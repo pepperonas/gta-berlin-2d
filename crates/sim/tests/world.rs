@@ -1408,3 +1408,63 @@ fn nightlife_feed_fills_bars_and_sound() {
     let wet = w.nightlife_at(lx, ly).crowd;
     assert!(dry < 1. && wet < dry, "{wet} < {dry}");
 }
+
+#[test]
+fn timetable_buses_and_trains_run_in_kreuzberg() {
+    use berlin_sim::transit::{Mode, Transit};
+    let mut w = world(111);
+    let t0 = std::time::Instant::now();
+    w.set_transit(Transit::read(&root()).expect("transit.json"));
+    eprintln!("Fahrplan geladen in {:?}", t0.elapsed());
+    run(&mut w, 120, idle());
+    let tr = w.transit.as_ref().unwrap();
+    let modes: std::collections::BTreeSet<Mode> = w
+        .transit_state
+        .tracked
+        .keys()
+        .map(|&id| tr.patterns[id].mode)
+        .collect();
+    assert!(
+        modes.contains(&Mode::Bus) && modes.contains(&Mode::UBahn),
+        "{modes:?}"
+    );
+    let buses = w.cars.iter().filter(|c| c.bus.is_some()).count();
+    assert!(buses > 0, "Busse fahren als KI-Fahrzeuge");
+    assert!(
+        w.cars
+            .iter()
+            .filter(|c| c.bus.is_some())
+            .all(|c| c.kind == "bus" && c.line.is_some())
+    );
+    // Busse folgen ihrem Linienweg und kommen voran (solange sie in der Nähe sind)
+    let mut last: std::collections::HashMap<u32, f64> = Default::default();
+    let mut progress = 0.;
+    for _ in 0..10 {
+        for c in &w.cars {
+            if let Some(b) = &c.bus {
+                if let Some(s0) = last.get(&c.id) {
+                    progress += (b.s - s0).max(0.);
+                }
+                last.insert(c.id, b.s);
+            }
+        }
+        run(&mut w, 60, idle());
+    }
+    assert!(
+        progress > 200.,
+        "Busse kommen auf ihrer Linie voran ({progress:.0} px)"
+    );
+    // U1-Hochbahn sichtbar um den Görlitzer Bahnhof (oberirdisch), Wagen liegen am Gleis
+    let (cx, cy) = (w.camera.x, w.camera.y);
+    let vis = w.transit_visible(berlin_sim::collision::Rect::around(cx, cy, 6000.));
+    eprintln!(
+        "sichtbar: {:?}",
+        vis.iter()
+            .map(|v| (v.line.as_str(), v.mode, v.cars.len()))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        vis.iter().any(|v| v.mode == Mode::UBahn),
+        "Hochbahn sichtbar"
+    );
+}

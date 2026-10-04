@@ -27,6 +27,23 @@ pub enum Event {
         x: f64,
         y: f64,
     },
+    /// Straßenbahn klingelt vor einem Hindernis
+    TramBell {
+        x: f64,
+        y: f64,
+    },
+    /// Bus hält (Linie, Haltestelle) bzw. Wartende steigen ein
+    BusStop {
+        x: f64,
+        y: f64,
+        line: String,
+        stop: String,
+    },
+    BusBoard {
+        x: f64,
+        y: f64,
+        n: usize,
+    },
     /// Auto schwimmt in einer Pfütze auf (`player` = das eigene)
     Aquaplane {
         x: f64,

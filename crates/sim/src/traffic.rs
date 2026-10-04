@@ -67,6 +67,90 @@ pub struct Ai {
     /// Arbeitshalte (Paketwagen, Müllauto): Fahrstrecke seit dem letzten Halt und Abstand bis zum nächsten
     pub odo: f64,
     pub next_stop: Option<f64>,
+    /// Linienweg (Bus): an jeder Kreuzung die Spur, die auf dem Weg vorankommt
+    pub follow: Option<Follow>,
+    /// weicht einer Straßenbahn aus
+    pub tram_yield: bool,
+}
+
+/// Linienweg, dem ein Bus folgt: Punkte, Bogenlängen, bisherige Lage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Follow {
+    pub pts: std::sync::Arc<Vec<Pt>>,
+    pub cum: std::sync::Arc<Vec<f64>>,
+    pub s: f64,
+}
+
+/// Nächster Punkt auf einem Weg ab Bogenlänge s0, nur ein Fenster voraus (Schleifen springen nicht zurück):
+/// (Bogenlänge, Abstand).
+pub fn project_near(pts: &[Pt], cum: &[f64], x: f64, y: f64, s0: f64, ahead: f64) -> (f64, f64) {
+    let mut best = (s0, f64::INFINITY);
+    let n = cum.len().min(pts.len());
+    if n < 2 {
+        return best;
+    }
+    let mut i = 0;
+    while i < n - 2 && cum[i + 1] < s0 - 50. {
+        i += 1;
+    }
+    while i < n - 1 && cum[i] <= s0 + ahead {
+        let (a, b) = (pts[i], pts[i + 1]);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let l2 = (dx * dx + dy * dy).max(1e-9);
+        let t = (((x - a.0) * dx + (y - a.1) * dy) / l2).clamp(0., 1.);
+        let d = (a.0 + dx * t - x).hypot(a.1 + dy * t - y);
+        if d < best.1 {
+            best = (cum[i] + t * l2.sqrt(), d);
+        }
+        i += 1;
+    }
+    best
+}
+
+/// Linienweg folgen (traffic.js followLine): die Nachfolgespur (auch Busspuren), deren erste 60 m im Mittel am
+/// dichtesten am Weg liegen und dabei auf ihm vorankommen; sonst die, deren Ende dem Wegpunkt 60 m voraus am
+/// nächsten kommt.
+fn follow_line(f: &mut Follow, lanes: &mut LaneGraph, city: &City, lane: LaneId) -> Option<LaneId> {
+    let next = lanes.next(city, lane, true);
+    let mut best: Option<(LaneId, f64, f64)> = None;
+    for &n in &next {
+        let Some(l) = lanes.lane(n) else { continue };
+        let (mut sum, mut last) = (0., f.s);
+        for u in [0.25, 0.5, 0.75, 1.] {
+            let p = point_along(&l.pts, l.len.min(600.) * u);
+            let (qs, qd) = project_near(&f.pts, &f.cum, p.x, p.y, last, 4000.);
+            sum += qd;
+            last = last.max(qs);
+        }
+        let d = sum / 4.;
+        if last <= f.s + 5. || d > 140. {
+            continue;
+        }
+        if best.is_none_or(|b| d < b.1) {
+            best = Some((n, d, last));
+        }
+    }
+    if let Some((n, _, s)) = best {
+        f.s = s;
+        return Some(n);
+    }
+    let total = *f.cum.last().unwrap_or(&0.);
+    let aim = crate::city::point_along(&f.pts, (f.s + 600.).min(total));
+    let cur = lanes.lane(lane)?;
+    let end = *cur.pts.last()?;
+    let mut bd = (end.0 - aim.x).hypot(end.1 - aim.y);
+    let mut pick = None;
+    for &n in &next {
+        let Some(e) = lanes.lane(n).and_then(|l| l.pts.last().copied()) else {
+            continue;
+        };
+        let d = (e.0 - aim.x).hypot(e.1 - aim.y);
+        if d < bd {
+            bd = d;
+            pick = Some(n);
+        }
+    }
+    pick
 }
 
 /// Entfernungsfeld über den Spurgraph zum Zielspurstück (traffic.js goalField).
@@ -208,6 +292,8 @@ pub struct Agent {
     pub lvl: i8,
     pub driver: Option<Driver>,
     pub wrecked: bool,
+    /// setzt gerade vor einer Straßenbahn zurück (der Hintermann setzt mit zurück)
+    pub tram_yield: bool,
 }
 impl Agent {
     pub fn of(c: &Car) -> Self {
@@ -223,8 +309,47 @@ impl Agent {
             lvl: c.lvl(),
             driver: c.driver,
             wrecked: c.wrecked,
+            tram_yield: c
+                .ai
+                .as_ref()
+                .is_some_and(|a| a.tram_yield && a.reverse_t > 0.),
         }
     }
+}
+
+/// Straßenbahnwagen als festes, fahrendes Hindernis (transitlive.rs).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RailObs {
+    pub x: f64,
+    pub y: f64,
+    pub angle: f64,
+    pub hw: f64,
+    pub hh: f64,
+    pub vx: f64,
+    pub vy: f64,
+}
+/// px: so nah vor einer entgegenkommenden Straßenbahn setzt ein Auto zurück
+pub const TRAM_YIELD: f64 = 160.;
+/// Wie weit vor dem Kopf einer entgegenkommenden Straßenbahn dieses Auto in ihrem Weg steht (∞: gar nicht).
+pub fn tram_head_on(car: &Car, rails: &[RailObs]) -> f64 {
+    let r = 24. + 0.4 * car.hw + 4.;
+    let mut best = f64::INFINITY;
+    for o in rails {
+        if (o.angle - car.angle).cos() > -0.5 {
+            continue;
+        }
+        let (s, c) = o.angle.sin_cos();
+        let mut d = 10.;
+        while d <= TRAM_YIELD && d < best {
+            let (px, py) = (o.x + c * (o.hw + d), o.y + s * (o.hw + d));
+            if (car.x - px).hypot(car.y - py) < r {
+                best = d;
+                break;
+            }
+            d += 15.;
+        }
+    }
+    best
 }
 /// Fußgänger für die Hinderniserkennung.
 #[derive(Debug, Clone, Copy)]
@@ -249,6 +374,8 @@ pub struct Ctx<'a> {
     pub time: f64,
     pub res: &'a mut Reservations,
     pub events: &'a mut Vec<Event>,
+    /// Straßenbahnwagen nahe der Kamera
+    pub rails: &'a [RailObs],
 }
 
 fn turn_speed(angle: f64) -> f64 {
@@ -285,6 +412,8 @@ impl Ai {
             urgent: false,
             odo: 0.,
             next_stop: None,
+            follow: None,
+            tram_yield: false,
         }
     }
     fn append_lane(&mut self, lanes: &LaneGraph, city: &City, lane: LaneId, from_s: f64) {
@@ -330,14 +459,17 @@ impl Ai {
         rng: &mut Rng,
         forced: Option<LaneId>,
     ) -> bool {
-        let toward = self.field.as_ref().and_then(|f| {
-            lanes
-                .next(city, self.lane, false)
+        let lane = self.lane;
+        let toward = match (&self.field, &mut self.follow) {
+            (Some(f), _) => lanes
+                .next(city, lane, false)
                 .into_iter()
                 .filter_map(|n| f.dist.get(&n).map(|d| (*d, n)))
                 .min_by(|a, b| a.0.total_cmp(&b.0))
-                .map(|(_, n)| n)
-        });
+                .map(|(_, n)| n),
+            (None, Some(fl)) => follow_line(fl, lanes, city, lane),
+            _ => None,
+        };
         let Some(next) = forced
             .or(toward)
             .or_else(|| lanes.choose_next(city, self.lane, rng))
@@ -621,6 +753,24 @@ fn obstacle_ahead(car: &Car, ai: &Ai, cx: &mut Ctx) -> Obstacles {
     if let Some((px, py, pl)) = cx.player_on_foot {
         check(cx, px, py, pl, 17., None, false, true, false);
     }
+    // Straßenbahnwagen: warten, bis sie vorbei sind
+    for r in cx.rails {
+        let a = Agent {
+            id: u32::MAX,
+            x: r.x,
+            y: r.y,
+            vx: r.vx,
+            vy: r.vy,
+            angle: r.angle,
+            hw: r.hw,
+            hh: r.hh,
+            lvl: 0,
+            driver: None,
+            wrecked: false,
+            tram_yield: false,
+        };
+        check(cx, r.x, r.y, 0, 22., Some(&a), false, false, false);
+    }
     o
 }
 
@@ -825,6 +975,14 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
         target = target.min((2. * 90. * kb * (zc - 30.).max(0.)).sqrt());
     }
     let ob = obstacle_ahead(car, ai, cx);
+    // Die Straßenbahn hat Vorrang: kommt sie frontal im eigenen Weg entgegen, setzt das Auto zurück; wer direkt
+    // hinter einem so zurücksetzenden Auto steht, setzt mit zurück
+    let rail_head = tram_head_on(car, cx.rails);
+    ai.tram_yield =
+        rail_head < TRAM_YIELD || (ob.blocker.is_some_and(|b| b.tram_yield) && ob.d_car < 80.);
+    if ai.tram_yield {
+        ai.reverse_t = ai.reverse_t.max(0.3);
+    }
     let d = ob.d_other.min(ob.d_car);
     let gate = entry_gate(car, ai, cx, d > 70. && vf > -2., dt);
     ai.blink = blink_for(ai, cx.lanes, car.x, car.y);

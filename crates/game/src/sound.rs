@@ -39,6 +39,8 @@ impl Listener {
                 }
                 Event::Door { x, y } => Some((Sfx::Door, near(x, y))),
                 Event::Aquaplane { x, y, .. } => Some((Sfx::Splash(1.), near(x, y))),
+                Event::TramBell { x, y } => Some((Sfx::TramBell(1.), near(x, y))),
+                Event::BusStop { .. } | Event::BusBoard { .. } => None,
                 Event::Carjack { x, y, .. } => Some((Sfx::Carjack, near(x, y))),
                 Event::BikeDown { x, y, .. } => Some((Sfx::Hit, near(x, y))),
                 Event::Bump { .. } => Some((Sfx::Hit, 1.)),

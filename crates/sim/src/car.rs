@@ -74,6 +74,9 @@ pub struct Car {
     pub blue: bool,
     pub duty: Option<crate::services::Duty>,
     pub done: bool,
+    /// Linienbus (transitlive.rs) und seine Linie
+    pub bus: Option<Box<crate::transitlive::BusDuty>>,
+    pub line: Option<String>,
     /// Warnblinker (Paketwagen hält in zweiter Reihe) bzw. Müllabfuhr bei der Arbeit
     pub hazard: bool,
     pub work: bool,
@@ -129,6 +132,8 @@ impl Car {
             blue: false,
             duty: None,
             done: false,
+            bus: None,
+            line: None,
             hazard: false,
             work: false,
             skid: 0.,

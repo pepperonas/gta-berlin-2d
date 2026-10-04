@@ -177,6 +177,14 @@ pub struct Portal {
     pub lo: i8,
     pub hi: i8,
 }
+/// Gleis (Mittellinie; Tunnelgleise verwirft der Build): Brücke, U-Bahn, Ebene.
+#[derive(Debug, Clone)]
+pub struct RailLine {
+    pub pts: Vec<Pt>,
+    pub bridge: bool,
+    pub subway: bool,
+    pub lvl: i8,
+}
 #[derive(Debug, Clone)]
 pub struct LevelPath {
     pub pts: Vec<Pt>,
@@ -300,6 +308,7 @@ enum Owned {
     Poi(u32, Vec<(i32, i32)>),
     Addr(u32, Vec<(i32, i32)>),
     Furn(u32, Vec<(i32, i32)>),
+    Rail(u32, Vec<(i32, i32)>),
     Dens(String),
 }
 
@@ -400,6 +409,7 @@ pub struct TileData {
     pois: Vec<Poi>,
     addrs: Vec<Address>,
     furn: Vec<Furn>,
+    rails: Vec<(i64, bool, bool, Vec<Pt>, i8)>,
     dens: Option<(f64, Vec<f64>)>,
 }
 /// Gebäude: (ID, Höhe m, Ringe, eigene Wandzüge)
@@ -713,6 +723,17 @@ impl TileData {
                 kind: int(&r[2])? as u8,
             });
         }
+        let mut rails = Vec::new();
+        for v in list("rails")? {
+            let r = row(v, 4)?;
+            rails.push((
+                int(&r[0])?,
+                int(&r[1])? != 0,
+                int(&r[2])? != 0,
+                undelta(&r[3])?,
+                opt_num(r, 4)? as i8,
+            ));
+        }
         let dens = j["dens"].as_object().and_then(|d| {
             Some((
                 d.get("cell")?.as_f64()?,
@@ -727,6 +748,7 @@ impl TileData {
             pois,
             addrs,
             furn,
+            rails,
             dens,
             key,
             names,
@@ -862,6 +884,8 @@ pub struct City {
     pub pois: Layer<Poi>,
     pub addresses: Layer<Address>,
     pub furn: Layer<Furn>,
+    /// Gleismittellinien (oberirdisch; für Tunnel/Zugsichtbarkeit)
+    pub rails: Layer<RailLine>,
     pub dens: HashMap<String, Dens>,
     /// Kieze (Punkt + Name) und Ortsteile (Ringe) aus dem Index
     pub kieze: Vec<Named>,
@@ -976,6 +1000,7 @@ impl City {
             pois: Layer::new(400.),
             addresses: Layer::new(400.),
             furn: Layer::new(256.),
+            rails: Layer::new(256.),
             dens: HashMap::new(),
             kieze: j["kieze"]
                 .as_array()
@@ -1215,6 +1240,7 @@ impl City {
                 Owned::Poi(h, k) => self.pois.drop_item(h, &k),
                 Owned::Addr(h, k) => self.addresses.drop_item(h, &k),
                 Owned::Furn(h, k) => self.furn.drop_item(h, &k),
+                Owned::Rail(h, k) => self.rails.drop_item(h, &k),
                 Owned::Dens(key) => {
                     self.dens.remove(&key);
                 }
@@ -1450,6 +1476,19 @@ impl City {
                 let b = bounds_of(&pts);
                 let (h, k) = city.paths.add(LevelPath { pts, lvl }, &b);
                 vec![Owned::Path(h, k)]
+            });
+        }
+        for (gid, bridge, subway, pts, lvl) in d.rails {
+            self.acquire(&mut t, format!("r{gid}"), |city| {
+                let b = bounds_of(&pts);
+                let line = RailLine {
+                    pts,
+                    bridge,
+                    subway,
+                    lvl,
+                };
+                let (h, k) = city.rails.add(line, &b);
+                vec![Owned::Rail(h, k)]
             });
         }
         for (gid, kind, pts, lvl) in d.walls {

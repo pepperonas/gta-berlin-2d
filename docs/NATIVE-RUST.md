@@ -923,3 +923,33 @@ Netzwerk-Abhängigkeit); live gilt jede Auslastung als frisch.
 Feed-Lesen. Ein Integrationstest prüft am echten Kiez: Feed-Bar lauter, Quelle in der richtigen Richtung, Raucher am
 Lebensplatz, Mix mit Feed-Anteil, Regen macht leiser. Ein Spieltest liest den echten Feed, wenn er vorhanden ist:
 121 Bars, mindestens 90 % in Berlin, Wochenprofile. 134 Rust-Tests.
+
+## Nahverkehr A: Fahrplan, Busse, Straßenbahnen, S- und U-Bahn (04.10.2026)
+
+- **Fahrplan (`sim/transit.rs`, nach `transit.js`):** liest `transit.json` (VBB-GTFS, 2707 Fahrtverläufe, in
+  ~40 ms) mit Linienwegen samt Bogenlängen, Halten, Fahr-/Haltezeiten und Abfahrten je Tagesart. Der Fahrplan
+  bestimmt nur den Takt zur Spielzeit (Abfahrten je Stunde ±30 min, Fahrten nach Mitternacht zum Vortag); die
+  Fahrzeuge fahren in Echtzeit. Verfolgt werden Muster in 1,2 km um die Kamera, je Muster virtuelle Fahrzeuge aus
+  ihrer Fahrzeit τ (`scan` einmal je Sekunde, dann `advance`). `train_cars` legt die Wagen entlang des Weges.
+- **In der Welt (`sim/transitlive.rs`):**
+  - **Straßenbahnen** halten vor Hindernissen (Figur, Autos, Räder, Passanten 2–8 m voraus), klingeln nach 2,5 s
+    und schieben frontalen Gegenverkehr nach 20 s beiseite. Ihre Wagen sind feste, fahrende Hindernisse
+    (`World::rail_obs`): Autos und Figur werden herausgeschoben, schnelle Autos nehmen Schaden. Die KI wartet hinter
+    ihnen, und ein Auto, dem eine Bahn frontal entgegenkommt, setzt zurück (`traffic.rs tram_head_on`, der
+    Hintermann mit).
+  - **Busse** werden in 220 m um die Kamera zu KI-Fahrzeugen (außer Sicht, beim Aufbau sofort) auf der Spur, die
+    am Linienweg liegt und in seine Richtung zeigt. Sie folgen dem Weg (`Ai::follow`, auch über Busspuren) und
+    halten an jeder Haltestelle für die Haltezeit; Wartende am Lebensplatz steigen ein (`Event::BusStop`/`BusBoard`).
+    Wer den Weg 8 s verliert oder 25 s nicht vorankommt, gibt die Linie auf; ferne und fertige Busse verschwinden
+    außer Sicht, ein gekaperter bleibt.
+  - **S- und U-Bahn** erscheinen nur, wo ihr Gleis oberirdisch liegt (`tunnel.rs`, mit Fahrtrichtung ±35°). Die
+    Sim-Stadt liest dafür die Gleismittellinien der Kacheln (`City::rails`).
+- **Darstellung (`play.rs rail_bodies`):** Wagen nach `railart.js` (Kasten, Dach mit Geräten, Zierlinie,
+  Führerstand mit Scheinwerfern, Schlusslichter, Stromabnehmer), auf dem Viadukt über dem Verkehr; Straßenbahngleise
+  als zwei Schienen in der Fahrbahn. Klingel als Klang. Busse sind gelbe Fahrzeuge der Art `bus`
+  ([Bild](images/native/strassenbahn.png), Alexanderplatz).
+- **Aufnahmen:** `--befehl "tp Alexanderplatz"` führt beim Start einen Befehl der Befehlszeile aus.
+
+**Validierung:** Unit-Tests für Takt, Lage zur Fahrzeit, Wagenfolge, Musterindex, Tramgleis-Nähe, Abfahrten und
+Anhalten. Ein Integrationstest prüft in Kreuzberg mit dem echten Fahrplan: Busse und U-Bahn werden verfolgt, Busse
+fahren als KI auf ihrer Linie voran, S- und U-Bahn sind am oberirdischen Gleis sichtbar. 137 Rust-Tests.

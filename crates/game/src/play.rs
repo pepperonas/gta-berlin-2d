@@ -68,6 +68,9 @@ pub struct Play {
     pub fx: crate::effects::Effects,
     /// Reifenspuren im Schnee (nur Darstellung)
     pub trails: crate::snowtracks::Trails,
+    /// sichtbare Bahnen und Straßenbahngleise um die Kamera (nach jedem Schritt erneuert)
+    trains: Vec<berlin_sim::transitlive::Visible>,
+    tram_segs: Vec<(berlin_sim::city::Pt, berlin_sim::city::Pt)>,
     /// Befehlszeile (Enter) und ihre Ortsliste aus dem Stadtplan
     pub console: crate::console::Console,
     pub places: Vec<crate::console::Place>,
@@ -121,12 +124,17 @@ pub enum Start {
 
 fn fresh_world(root: &Path, seed: u32) -> Result<World> {
     let city = City::open(root, Box::new(ThreadedSource::new(root)?))?;
-    Ok(World::new(
+    let mut w = World::new(
         city,
         seed,
         berlin_sim::world::TRAFFIC_CARS,
         berlin_sim::world::TRAFFIC_PEDS,
-    ))
+    );
+    match berlin_sim::transit::Transit::read(root) {
+        Ok(t) => w.set_transit(t),
+        Err(e) => eprintln!("Kein Nahverkehr: {e:#}"),
+    }
+    Ok(w)
 }
 
 /// Bar-Auslastungs-Feed lesen und an die Stadt hängen (Datei wie `npm run bars:fetch` sie schreibt).
@@ -253,6 +261,8 @@ impl Play {
             time_scale: 1.,
             fx: Default::default(),
             trails: Default::default(),
+            trains: Vec::new(),
+            tram_segs: Vec::new(),
         };
         match play.reload_bars() {
             Ok(m) if play.bars_file.is_some() => eprintln!("Nachtleben: {m}"),
@@ -433,7 +443,7 @@ impl Play {
     }
     /// Befehlszeile bedienen (Welt steht): Tasten und getippter Text, danach die Folgen der Befehle.
     fn step_console(&mut self, keys: &Keys) {
-        use crate::console::{Action, Ctx, Key};
+        use crate::console::{Ctx, Key};
         let p = |k: KeyCode| keys.pressed.contains(&k);
         let held = |k: KeyCode| keys.held.contains(&k);
         let shift = held(KeyCode::ShiftLeft) || held(KeyCode::ShiftRight);
@@ -476,37 +486,53 @@ impl Play {
             };
             self.console.key(key, &mut ctx, now, shift);
             let actions = std::mem::take(&mut ctx.actions);
-            for a in actions {
-                match a {
-                    Action::Teleport { x, y, .. } => {
-                        self.teleport = Some(((x, y), None));
-                        self.teleport_auto = true;
-                    }
-                    Action::Stats => self.screen = Screen::Stats(false),
-                    Action::Cheat(_) => {
-                        self.stats.bump("cheats");
-                        self.stats_total.bump("cheats");
-                    }
-                    Action::Money(m) => self.tracker.set_money(m),
-                    Action::Bars(arg) => {
-                        match arg.as_deref() {
-                            Some("aus") => self.bars_file = None,
-                            Some("neu") | None => {}
-                            Some(p) => self.bars_file = Some(p.into()),
-                        }
-                        let r = self.reload_bars();
-                        let (msg, ok) = match r {
-                            Ok(m) => (m, true),
-                            Err(e) => (e, false),
-                        };
-                        self.console.log.push((msg, ok, now));
-                    }
-                }
-            }
+            self.console_actions(actions, now);
             if !self.console.open {
                 break;
             }
         }
+    }
+    fn console_actions(&mut self, actions: Vec<crate::console::Action>, now: f64) {
+        use crate::console::Action;
+        for a in actions {
+            match a {
+                Action::Teleport { x, y, .. } => {
+                    self.teleport = Some(((x, y), None));
+                    self.teleport_auto = true;
+                }
+                Action::Stats => self.screen = Screen::Stats(false),
+                Action::Cheat(_) => {
+                    self.stats.bump("cheats");
+                    self.stats_total.bump("cheats");
+                }
+                Action::Money(m) => self.tracker.set_money(m),
+                Action::Bars(arg) => {
+                    match arg.as_deref() {
+                        Some("aus") => self.bars_file = None,
+                        Some("neu") | None => {}
+                        Some(p) => self.bars_file = Some(p.into()),
+                    }
+                    let (msg, ok) = match self.reload_bars() {
+                        Ok(m) => (m, true),
+                        Err(e) => (e, false),
+                    };
+                    self.console.log.push((msg, ok, now));
+                }
+            }
+        }
+    }
+    /// Befehlszeile ausführen, ohne sie zu öffnen (`--befehl`, Aufnahmen): Ergebnis als Meldung.
+    pub fn run_command(&mut self, line: &str) -> crate::console::Outcome {
+        let mut ctx = crate::console::Ctx {
+            world: &mut self.world,
+            places: &self.places,
+            actions: Vec::new(),
+        };
+        let r = crate::console::execute(line, &mut ctx);
+        let actions = std::mem::take(&mut ctx.actions);
+        let now = self.world.time;
+        self.console_actions(actions, now);
+        r
     }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
@@ -880,6 +906,151 @@ fn demo_combat_input(w: &World, input: &mut Input) {
 
 /// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
 /// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+/// Bahnen (railart.js drawTrainCar): Wagenkasten, Dach mit Geräten, Zierlinie, Führerstand mit Scheinwerfern,
+/// Schlusslichter, Stromabnehmer der Straßenbahn; dazu die Straßenbahngleise in der Fahrbahn.
+fn rail_bodies(
+    trains: &[berlin_sim::transitlive::Visible],
+    tram_segs: &[(berlin_sim::city::Pt, berlin_sim::city::Pt)],
+    w: &World,
+    out: &mut Vec<Body>,
+) {
+    use berlin_sim::transit::Mode;
+    // Gleise: zwei Schienen im Abstand der Normalspur
+    for &(a, b) in tram_segs {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let l = dx.hypot(dy);
+        if l < 1. {
+            continue;
+        }
+        let (nx, ny) = (-dy / l, dx / l);
+        for off in [-7.2, 7.2] {
+            out.push(Body {
+                center: [
+                    ((a.0 + b.0) / 2. + nx * off) as f32,
+                    ((a.1 + b.1) / 2. + ny * off) as f32,
+                ],
+                half: [l as f32 / 2. + 0.5, 0.75],
+                angle: dy.atan2(dx) as f32,
+                shape: 4.,
+                depth: 0.8492,
+                color: [0.42, 0.42, 0.44, 0.9],
+            });
+        }
+    }
+    let sun = crate::play::world_light(w).sun;
+    let (sdx, sdy) = (sun.dx as f32 * 6., sun.dy as f32 * 6.);
+    for t in trains {
+        let (side, roof, line) = match t.mode {
+            Mode::Tram => (0xf2c230, 0xe8e4d8, 0x3a3a3a),
+            Mode::SBahn => (0x9b2b25, 0x5b5f66, 0xd9a441),
+            _ => (0xf0c419, 0x6a6457, 0x3a3a3a),
+        };
+        for (c, &lvl) in t.cars.iter().zip(&t.lvl) {
+            let depth = if lvl >= 1 { 0.547 } else { 0.6205 };
+            let (x, y, a) = (c.x as f32, c.y as f32, c.angle as f32);
+            let (l, wd) = (c.l as f32, c.w as f32);
+            let (fx, fy) = (a.cos(), a.sin());
+            let push =
+                |out: &mut Vec<Body>, cx: f32, cy: f32, hx: f32, hy: f32, d: f32, col: [f32; 4]| {
+                    out.push(Body {
+                        center: [cx, cy],
+                        half: [hx, hy],
+                        angle: a,
+                        shape: 4.,
+                        depth: d,
+                        color: col,
+                    })
+                };
+            push(
+                out,
+                x + sdx,
+                y + sdy,
+                l / 2.,
+                wd / 2.,
+                depth + 0.0006,
+                [0., 0., 0., 0.28],
+            );
+            push(out, x, y, l / 2., wd / 2., depth, rgba(side, 1.));
+            push(
+                out,
+                x,
+                y,
+                l / 2. - 2.,
+                wd / 2. - 3.,
+                depth - 0.0001,
+                rgba(roof, 1.),
+            );
+            let mut u = -l / 2. + 16.;
+            while u < l / 2. - 10. {
+                push(
+                    out,
+                    x + fx * u,
+                    y + fy * u,
+                    4.,
+                    wd / 2. - 5.,
+                    depth - 0.0002,
+                    shade(rgba(roof, 1.), 0.85),
+                );
+                u += 22.;
+            }
+            for k in [-1f32, 1.] {
+                let (ox, oy) = (-fy * (wd / 2. - 0.6) * k, fx * (wd / 2. - 0.6) * k);
+                push(
+                    out,
+                    x + ox,
+                    y + oy,
+                    l / 2.,
+                    0.6,
+                    depth - 0.0003,
+                    rgba(line, 1.),
+                );
+            }
+            if t.mode == Mode::Tram {
+                push(out, x, y, 6., 0.5, depth - 0.0004, rgba(0x333333, 1.));
+            }
+            if c.first {
+                let (hx, hy) = (x + fx * (l / 2. - 3.5), y + fy * (l / 2. - 3.5));
+                push(
+                    out,
+                    hx,
+                    hy,
+                    1.5,
+                    wd / 2. - 3.,
+                    depth - 0.0004,
+                    rgba(0x26303c, 1.),
+                );
+                let glow = if t.lit { 1. } else { 0.7 };
+                for k in [-1f32, 1.] {
+                    let (ox, oy) = (-fy * (wd / 2. - 3.5) * k, fx * (wd / 2. - 3.5) * k);
+                    push(
+                        out,
+                        x + fx * (l / 2. - 0.8) + ox,
+                        y + fy * (l / 2. - 0.8) + oy,
+                        0.8,
+                        1.5,
+                        depth - 0.0005,
+                        rgba(0xfff6c8, glow),
+                    );
+                }
+            }
+            if c.last {
+                for k in [-1f32, 1.] {
+                    let (ox, oy) = (-fy * (wd / 2. - 3.5) * k, fx * (wd / 2. - 3.5) * k);
+                    push(
+                        out,
+                        x - fx * (l / 2. - 0.8) + ox,
+                        y - fy * (l / 2. - 0.8) + oy,
+                        0.8,
+                        1.5,
+                        depth - 0.0005,
+                        rgba(0x8a1c1c, 1.),
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Stadtleben am Boden: abgestellte E-Roller, Tauben und Enten (fliegende Tauben über den Dächern).
 fn life_bodies(w: &World, near: &dyn Fn(f64, f64) -> bool, out: &mut Vec<Body>) {
     use berlin_sim::animals::{Kind, State};
@@ -1496,6 +1667,10 @@ impl Game for Play {
         self.fx.step(dt as f32);
         self.trails
             .record(&self.world.cars, self.world.time, self.world.weather.snow);
+        let view =
+            berlin_sim::collision::Rect::around(self.world.camera.x, self.world.camera.y, 2600.);
+        self.trains = self.world.transit_visible(view);
+        self.tram_segs = self.world.tram_track_segments(view);
         berlin_sim::stats::track_step(
             &mut [&mut self.stats, &mut self.stats_total],
             &mut self.tracker,
@@ -1766,6 +1941,7 @@ impl Game for Play {
             bike_bodies(b, w.time, out);
         }
         life_bodies(w, &near, out);
+        rail_bodies(&self.trains, &self.tram_segs, w, out);
         for p in w.peds.iter().filter(|p| near(p.x, p.y)) {
             let depth = if p.level.lvl >= 1 { 0.549 } else { 0.618 };
             let (x, y, a) = (p.x as f32, p.y as f32, p.facing as f32);
