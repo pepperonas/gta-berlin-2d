@@ -21,6 +21,9 @@ pub struct Play {
     listener: crate::sound::Listener,
     /// beim ersten geladenen Schritt ins eigene Auto setzen (`--im-auto`)
     pub auto_enter: bool,
+    pub bigmap: crate::bigmap::BigMap,
+    /// HUD-Breite des letzten Bildes (Basiseinheiten), für die Kartenbedienung im Simulationsschritt
+    hud_width: f32,
 }
 
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
@@ -58,7 +61,16 @@ impl Play {
             eprintln!("Spielstand geladen: {}", st.path.display());
             world.apply_save(data);
         }
+        let bigmap = match berlin_map_loader::overview::Overview::read(root) {
+            Ok(ov) => crate::bigmap::BigMap::new(ov),
+            Err(e) => {
+                eprintln!("Stadtplan nicht verfügbar: {e:#}");
+                crate::bigmap::BigMap::default()
+            }
+        };
         Ok(Self {
+            bigmap,
+            hud_width: 1280.,
             world,
             storage: save,
             saved_for: 0,
@@ -179,7 +191,12 @@ impl Game for Play {
         if keys.pressed.contains(&KeyCode::F5) {
             self.save();
         }
-        if (keys.pressed.contains(&KeyCode::KeyM) || keys.pad_pressed.view)
+        self.bigmap.toggle(keys);
+        if self.bigmap.open {
+            let f = self.bigmap.view(self.hud_width).f;
+            self.bigmap.control(keys, dt as f32, f);
+        }
+        if keys.pressed.contains(&KeyCode::KeyM)
             && let Some(a) = &self.audio
         {
             let muted = a.toggle_mute();
@@ -220,7 +237,12 @@ impl Game for Play {
             w2.restart_mission();
             return;
         }
-        let mut input = input_from(keys, w2.player.in_car.is_some());
+        // offene Karte: die Welt läuft weiter, der Spieler bekommt keine Eingaben
+        let mut input = if self.bigmap.open {
+            Input::default()
+        } else {
+            input_from(keys, w2.player.in_car.is_some())
+        };
         if self.auto_enter && !w2.loading && w2.player.in_car.is_none() {
             self.auto_enter = false;
             if let Some((x, y)) = w2
@@ -421,6 +443,9 @@ impl Game for Play {
         }
         crate::weatherfx::bodies(w, out);
     }
+    fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
+        self.bigmap.mesh.take()
+    }
     fn status(&self) -> String {
         let w = &self.world;
         if w.loading {
@@ -476,6 +501,11 @@ impl Game for Play {
     ) {
         let engine = self.world.player_car().map(|_| self.listener.engine());
         crate::weatherfx::overlay(&self.world, out);
+        self.hud_width = out.width;
+        if self.bigmap.open {
+            self.bigmap.draw(&self.world, out);
+            return;
+        }
         let warn = self.world.road_warning();
         crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
     }

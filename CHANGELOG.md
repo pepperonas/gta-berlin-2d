@@ -41,6 +41,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   `--wetter ART` und Taste N.
 - Native Rust-Fassung: Minikarte unten links (echte Kartenmeshes mit zweiter Kamera im HUD-Rechteck, Häuser als
   dunkle Grundrisse; Autos, Ziel am Rand, Spielerpfeil, Nordmarke).
+- Native Rust-Fassung: große Karte (Tab/View): Stadtplan aus `overview.json` mit eigener Linien-/Flächen-Pipeline,
+  Zoom 1–64, Beschriftung von Bezirken, Ortsteilen, Kiezen und Bahnhöfen ohne Überlappung; `--stadtplan ZOOM`.
+  Die View-Taste schaltet jetzt die Karte statt des Tons (Ton: M).
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

@@ -346,7 +346,7 @@ Ladeanzeige. Aufnahmen: [Tag](images/native/hud-day.png), [Nacht im Auto](images
 **Gamepad** (`engine/pad.rs` über `gilrs`): erster verbundener Controller, Tastenflanken bleiben bis zum nächsten
 Simulationsschritt erhalten. Belegung wie `input.js`: linker Stick Gehen/Lenken (radiale Totzone 0,22), RT Gas,
 LT Bremse/rückwärts, RB oder B Handbremse, X Hupe, Y Ein-/Aussteigen, A Aktion (halten: einladen; zu Fuß
-sprinten), View Ton an/aus. Tastatur und Controller lassen sich mischen; ausgelenkte Sticks haben Vorrang.
+sprinten), View Stadtplan (bis 04.10.2026: Ton an/aus; Ton jetzt nur Taste M). Tastatur und Controller lassen sich mischen; ausgelenkte Sticks haben Vorrang.
 
 `--im-auto` setzt den Spieler beim Start ins eigene Auto (für Aufnahmen und Tests).
 
@@ -414,8 +414,45 @@ Punkt, außer Sicht am Rand festgehalten. Dazu kommen der Spielerpfeil, ein Rahm
 **Noch offen:**
 - Bahnhofssymbole (kein Nahverkehr portiert)
 - Lebensleiste
-- große Karte mit Beschriftung (`overview.json`, `maplabels.js`)
+- (große Karte: siehe unten)
 
 **Validierung:** Clippy und Formatprüfung sind sauber, alle 87 Rust-Tests laufen erfolgreich. Neu ist ein Test
 der Ausschnittsgeometrie: Mitte am Spieler, Trennung unter/über, Ziel am Rand. Die GPU-Aufnahme wurde visuell
 kontrolliert.
+
+## Große Karte (04.10.2026)
+
+Tab bzw. die View-Taste öffnet den Stadtplan von ganz Berlin (`hud.js drawBigMap`). Das Spiel läuft weiter, der
+Spieler bekommt solange keine Eingaben.
+- **Bedienung:** WASD, Pfeiltasten oder der linke Stick verschieben die Karte. +/−, Bild↑/↓ bzw. RT/LT zoomen
+  stufenlos von ganz Berlin (1) bis 64. Tab oder B schließt sie wieder.
+- **Startoption:** `--stadtplan ZOOM` öffnet die Karte gleich beim Start, ab Zoom über 1 um den Spieler. Das
+  ist für Aufnahmen gedacht.
+- **Daten:** `map_loader/overview.rs` liest `overview.json` und dazu Grenze und Bezirke aus `index.json`.
+  - Flächen und Wasser werden mit earcut trianguliert, Löcher sind dabei berücksichtigt.
+  - Straßen in vier Klassen, Bahnen, Bezirksgrenzen und die Stadtgrenze werden zu Linien-Vierecken.
+  - Ihre Breite steht in Bildschirmpunkten und hat zwei Stufen; ab Zoom 4 sind die Linien dicker.
+  - Außerhalb der Stadtgrenze wird der Plan abgedunkelt.
+- **Engine:** Die Zeichnung wird einmal hochgeladen (`Game::take_overview` → `Renderer::set_overview`). Die eigene
+  `overlay.wgsl`-Pipeline dehnt die Linien im Vertex-Shader je Zoom. Gezeichnet wird über denselben
+  Kartenausschnitt-Mechanismus wie die Minikarte (`Hud::overview_inset`).
+- **Beschriftung** (`game/bigmap.rs place_labels`, nach `maplabels.js`): Je nach Metern pro HUD-Pixel erscheinen
+  Bezirke, Ortsteile, Kieze sowie U- und S-Bahnhöfe. Bahnhöfe haben ein U- bzw. S-Symbol. Gesetzt wird gierig,
+  das Größere zuerst; was sich überlappen würde, entfällt. Freigehalten bleibt die Hinweisleiste. Die Platzierung
+  wird je Ansicht gemerkt.
+- **Punkte:** Späti rot, Ziel gelb, Spieler weiß.
+
+Aufnahmen: [ganz Berlin](images/native/stadtplan-1.png), [Kreuzberg, Zoom 12](images/native/stadtplan-12.png).
+
+**Noch offen:**
+- Straßennamen entlang der Straßen (die Bitmapschrift kann noch nicht gedreht werden)
+- Mausbedienung
+- Teleport per Klick
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 91 Rust-Tests laufen erfolgreich. Neu getestet:
+- Rückrechnung der Deltas, Füllung mit Loch und Linien-Geometrie
+- der echte Stadtplan: 12 Bezirke, alle Indizes gültig
+- Begrenzung der Ansicht auf Berlin
+- Stufen und Überlappungsfreiheit der Beschriftung
+
+GPU-Aufnahmen bei Zoom 1 und 12 wurden visuell kontrolliert.

@@ -1,3 +1,4 @@
+mod bigmap;
 mod hud;
 mod play;
 mod sound;
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
     let mut sound = true;
     let mut in_car = false;
     let mut force_weather: Option<&'static str> = None;
+    let mut stadtplan: Option<f32> = None;
     let mut audio_wav: Option<std::path::PathBuf> = None;
     let mut audio_secs = 20.;
     while let Some(arg) = args.next() {
@@ -89,6 +91,17 @@ fn main() -> Result<()> {
             "--check-map" => check_map = true,
             "--stumm" | "--mute" => sound = false,
             "--im-auto" => in_car = true,
+            "--stadtplan" => {
+                let z: f32 = args
+                    .next()
+                    .context("Zoom für --stadtplan fehlt (1 = ganz Berlin)")?
+                    .parse()?;
+                ensure!(
+                    (1.0..=bigmap::ZOOM_MAX).contains(&z),
+                    "--stadtplan erwartet 1..64"
+                );
+                stadtplan = Some(z);
+            }
             "--wetter" | "--weather" => {
                 let k = args.next().context("Wetterart fehlt")?;
                 force_weather = Some(
@@ -134,8 +147,8 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--audio-wav DATEI [--audio-seconds N]]\n\
-Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--audio-wav DATEI [--audio-seconds N]]\n\
+Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
                 return Ok(());
@@ -220,6 +233,15 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     let mut play = play;
     play.auto_enter = in_car;
     play.world.force_weather = force_weather;
+    if let Some(z) = stadtplan {
+        // Karte offen, bei Zoom > 1 um den Spieler
+        play.bigmap.open = true;
+        play.bigmap.z = z;
+        if z > 1. {
+            play.bigmap.center =
+                glam::Vec2::new(play.world.player.x as f32, play.world.player.y as f32);
+        }
+    }
     if let Some(c) = clock {
         play.world.clock = c;
     }

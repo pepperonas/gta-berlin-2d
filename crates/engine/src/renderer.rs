@@ -9,6 +9,7 @@ use berlin_map_loader::{
     format::TileKey,
     geom::Bounds,
     mesh::{Mesh, ShadowVertex, Sprite, Vertex},
+    overview::{OverlayMesh, OverlayVertex},
     stream::Snapshot,
 };
 use glam::Vec2;
@@ -57,6 +58,8 @@ pub(crate) struct Renderer {
     map: Option<MapInset>,
     map_uniform: wgpu::Buffer,
     map_bind: wgpu::BindGroup,
+    overlay_pipeline: wgpu::RenderPipeline,
+    overview: Option<(wgpu::Buffer, wgpu::Buffer, u32)>,
 }
 impl Renderer {
     pub async fn new(window: Arc<Window>, scale: f32, lighting: Lighting) -> Result<Self> {
@@ -106,7 +109,8 @@ impl Renderer {
                 concat!(
                     include_str!("scene.wgsl"),
                     include_str!("lighting.wgsl"),
-                    include_str!("hud.wgsl")
+                    include_str!("hud.wgsl"),
+                    include_str!("overlay.wgsl")
                 )
                 .into(),
             ),
@@ -335,6 +339,42 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+        let overlay_attrs = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x2, 3 => Float32x4];
+        let overlay_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Stadtplan"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("overlay_vs"),
+                compilation_options: Default::default(),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: size_of::<OverlayVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &overlay_attrs,
+                }],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("overlay_fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: Default::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            multiview_mask: None,
+            cache: None,
+        });
         let font = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("HUD-Schrift"),
             size: wgpu::Extent3d {
@@ -432,6 +472,8 @@ impl Renderer {
             map: None,
             map_uniform,
             map_bind,
+            overlay_pipeline,
+            overview: None,
         })
     }
     pub fn viewport(&self) -> Vec2 {
@@ -529,6 +571,27 @@ impl Renderer {
         self.light.set_lights(&self.device, &self.queue, lights);
     }
     /// HUD-Elemente des nächsten Bildes (Bildschirm-Pixel).
+    /// Stadtplan einmalig hochladen (große Karte).
+    pub fn set_overview(&mut self, mesh: &OverlayMesh) {
+        if mesh.indices.is_empty() {
+            return;
+        }
+        let vertices = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Stadtplan"),
+                contents: bytemuck::cast_slice(&mesh.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let indices = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Stadtplan-Indizes"),
+                contents: bytemuck::cast_slice(&mesh.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        self.overview = Some((vertices, indices, mesh.indices.len() as u32));
+    }
     pub fn set_hud(&mut self, items: &[HudItem], map: Option<MapInset>) {
         self.hud_count = items.len() as u32;
         self.map = map.filter(|m| m.rect[2] >= 4. && m.rect[3] >= 4. && m.span > 0.);
@@ -545,7 +608,7 @@ impl Renderer {
                 0.,
             ];
             u.extend([0.3, -0.5, 0.8, 0.]);
-            u.extend([self.scale, 1., 0., 0.]);
+            u.extend([self.scale, 1., m.px, if m.detail { 1. } else { 0. }]);
             u.extend([0.; 8]);
             self.queue
                 .write_buffer(&self.map_uniform, 0, bytemuck::cast_slice(&u));
@@ -778,12 +841,21 @@ impl Renderer {
                 pass.set_scissor_rect(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32);
                 pass.set_bind_group(0, &self.map_bind, &[]);
                 pass.set_bind_group(1, &self.atlas_bind, &[]);
-                pass.set_pipeline(&self.pipeline);
-                for tile in self.tiles.values().filter(|t| t.bounds.intersects(area)) {
-                    if let (Some(v), Some(i)) = (&tile.vertices, &tile.indices) {
+                if m.overview {
+                    if let Some((v, i, n)) = &self.overview {
+                        pass.set_pipeline(&self.overlay_pipeline);
                         pass.set_vertex_buffer(0, v.slice(..));
                         pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
-                        pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+                        pass.draw_indexed(0..*n, 0, 0..1);
+                    }
+                } else {
+                    pass.set_pipeline(&self.pipeline);
+                    for tile in self.tiles.values().filter(|t| t.bounds.intersects(area)) {
+                        if let (Some(v), Some(i)) = (&tile.vertices, &tile.indices) {
+                            pass.set_vertex_buffer(0, v.slice(..));
+                            pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
+                            pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+                        }
                     }
                 }
                 pass.set_viewport(0., 0., w, h, 0., 1.);

@@ -3,6 +3,7 @@ pub mod citycodes;
 pub mod format;
 pub mod geom;
 pub mod mesh;
+pub mod overview;
 pub mod projection;
 pub mod roofs;
 pub mod stream;

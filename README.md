@@ -9,7 +9,7 @@ und Spielstände als JSON-Datei; seit Phase 4 Tag und Nacht mit Schatten,
 Laternen und Scheinwerfern (`--uhr 22:30`, Taste T: +1 Stunde); seit Phase 5
 synthetisierter Klang (Motoren, Reifen, Verkehr, Stadt; Taste M, `--stumm`),
 dazu HUD, Gamepad und Wetter (Regen, Schnee, Nebel, Gewitter, Glätte;
-`--wetter heavysnow`, Taste N). Karten, Menüs, Waffen und Nahverkehr folgen;
+`--wetter heavysnow`, Taste N), Minikarte und Stadtplan (Tab). Karten, Menüs, Waffen und Nahverkehr folgen;
 das Browser-Spiel bleibt die vollständige Referenz.
 
 ```bash

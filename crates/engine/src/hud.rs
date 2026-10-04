@@ -42,7 +42,7 @@ const EXTRA: &[(char, [u8; 8])] = &[
 /// Ersatz für typografische Zeichen ohne eigene Bitmap.
 fn fold(c: char) -> char {
     match c {
-        '–' | '—' => '-',
+        '–' | '—' | '−' => '-',
         '„' | '“' | '”' => '"',
         '‚' | '‘' | '’' => '\'',
         '…' => '.',
@@ -144,6 +144,12 @@ pub struct MapInset {
     /// Weltbreite des Ausschnitts (px)
     pub span: f32,
     pub split: u32,
+    /// Stadtplan (`Renderer::set_overview`) statt der Kartenkacheln
+    pub overview: bool,
+    /// feinere/dickere Linienstufe des Stadtplans
+    pub detail: bool,
+    /// HUD-Maßstab (Pixel je Basiseinheit) für Linienbreiten
+    pub px: f32,
 }
 pub struct Hud {
     pub items: Vec<HudItem>,
@@ -172,7 +178,19 @@ impl Hud {
             center,
             span,
             split: self.items.len() as u32,
+            overview: false,
+            detail: false,
+            px: s,
         });
+    }
+    /// Stadtplan in das Rechteck (Basiseinheiten); `span` = Weltbreite des Rechtecks.
+    pub fn overview_inset(&mut self, rect: [f32; 4], center: [f32; 2], span: f32, detail: bool) {
+        let [x, y, w, h] = rect;
+        self.map_inset(x, y, w, h, center, span);
+        if let Some(m) = self.map.as_mut() {
+            m.overview = true;
+            m.detail = detail;
+        }
     }
     /// Strich von (x0, y0) nach (x1, y1) mit runden Enden.
     pub fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, width: f32, color: [f32; 4]) {
@@ -335,7 +353,8 @@ mod tests {
     use super::*;
     #[test]
     fn cells_cover_german_text() {
-        for c in "Kisten für den Kiez – Größe ÄÖÜäöüß 12:30 € → ✓".chars() {
+        for c in "Kisten für den Kiez – Größe +/−  ÄÖÜäöüß 12:30 € → ✓".chars()
+        {
             assert!(cell(c).is_some(), "Zeichen {c:?} fehlt");
         }
         assert_eq!(cell('A'), Some(65));

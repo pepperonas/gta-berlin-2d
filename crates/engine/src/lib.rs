@@ -107,6 +107,10 @@ pub trait Game {
     fn lights(&mut self, _out: &mut Vec<LightSource>) {}
     /// Anzeigen über dem Bild; `camera` + `viewport` rechnen Weltpunkte in Bildschirm-Pixel um.
     fn hud(&mut self, _camera: &camera::Camera, _viewport: Vec2, _out: &mut hud::Hud) {}
+    /// Stadtplan für die große Karte; wird einmal abgeholt und hochgeladen.
+    fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
+        None
+    }
 }
 
 pub use winit::keyboard::KeyCode;
@@ -329,6 +333,9 @@ impl ApplicationHandler for App {
                     game.lights(&mut self.lights);
                     renderer.set_lights(&self.lights);
                     let viewport = renderer.viewport();
+                    if let Some(mesh) = game.take_overview() {
+                        renderer.set_overview(&mesh);
+                    }
                     let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
                     game.hud(&self.camera, viewport, &mut overlay);
                     renderer.set_hud(&overlay.items, overlay.map);
