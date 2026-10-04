@@ -57,6 +57,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Native Rust-Fassung: Maus. Zu Fuß zielt die Figur auf den Zeiger (rastet auf Personen und Autos ein), links
   angreifen, rechts treten, Fadenkreuz; Menüs per Zeigen und Klicken; Stadtplan mit Rad-Zoom um den Zeiger und
   Ziehen.
+- Native Rust-Fassung: Diablo-Schema zu Fuß (Standard, ←/→ in der Steuerungstafel, `settings.json`): Klick läuft
+  mit Wegsuche (`sim/footpath.rs`) hin, greift Personen an, steigt in Autos ein; Strg + Klick greift am Platz an.
+  Smoke-Tests und Aufnahmen ignorieren Eingaben.
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.
 - Begrenzte Bewegungseffekte: Reifenrauch, Staub, Gischt, Schneestaub, Sprung-/Landewolken und Schwimmwellen.

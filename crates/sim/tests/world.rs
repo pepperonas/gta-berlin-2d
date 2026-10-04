@@ -822,3 +822,129 @@ fn mouse_aim_snaps_onto_the_target_under_the_cursor() {
         "die Figur schaut zum Zeiger"
     );
 }
+
+#[test]
+fn foot_path_goes_around_buildings() {
+    use berlin_sim::footpath::{find_foot_path, foot_free};
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    let lvl = w.player.level.lvl;
+    let from = (w.player.x, w.player.y);
+    // Ziele jenseits eines Hauses (Gerade blockiert); Hinterhöfe ohne Zugang sind unerreichbar – dann endet der Weg
+    // am nächsten erreichbaren Punkt, das prüfen alle Kandidaten, das Herumlaufen der erste erreichbare
+    let mut around = None;
+    for r in [250., 400., 600.] {
+        for k in 0..24 {
+            let a = k as f64 * std::f64::consts::TAU / 24.;
+            let to = (from.0 + a.cos() * r, from.1 + a.sin() * r);
+            if !foot_free(&mut w, to.0, to.1, lvl) {
+                continue;
+            }
+            let blocked = (1..40).any(|s| {
+                let t = s as f64 / 40.;
+                w.city
+                    .in_building(from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t)
+                    .is_some()
+            });
+            if !blocked {
+                continue;
+            }
+            let path = find_foot_path(&mut w, from, to, lvl).expect("Weg");
+            assert_eq!(path[0], from);
+            // kein Wegpunkt und keine Strecke durch ein Haus
+            for seg in path.windows(2) {
+                for s in 0..=20 {
+                    let t = s as f64 / 20.;
+                    let (x, y) = (
+                        seg[0].0 + (seg[1].0 - seg[0].0) * t,
+                        seg[0].1 + (seg[1].1 - seg[0].1) * t,
+                    );
+                    assert!(
+                        w.city.in_building(x, y).is_none(),
+                        "Weg durchs Haus bei {x},{y}"
+                    );
+                }
+            }
+            let end = *path.last().unwrap();
+            if around.is_none() && end == to {
+                around = Some(path.len());
+            }
+        }
+    }
+    let n = around.expect("mindestens ein Ziel hinter einem Haus ist erreichbar");
+    assert!(n >= 3, "um das Haus herum braucht es Ecken");
+}
+
+#[test]
+fn click_walks_attacks_and_enters() {
+    use berlin_sim::world::Click;
+    let mut w = world(32);
+    run(&mut w, 5, idle());
+    let lvl = w.player.level.lvl;
+    // Klick auf freien Boden in der Nähe: die Figur läuft hin
+    let from = (w.player.x, w.player.y);
+    let to = (0..16)
+        .map(|k| {
+            let a = k as f64 * std::f64::consts::TAU / 16.;
+            (from.0 + a.cos() * 120., from.1 + a.sin() * 120.)
+        })
+        .find(|&(x, y)| berlin_sim::footpath::foot_free(&mut w, x, y, lvl))
+        .expect("freier Punkt");
+    w.update(
+        &Input {
+            click_world: Some(to),
+            click_pressed: true,
+            click_held: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert!(matches!(w.player.click, Some(Click::Walk { .. })));
+    run(&mut w, 600, idle());
+    assert!(
+        (w.player.x - to.0).hypot(w.player.y - to.1) < 8.,
+        "angekommen"
+    );
+    assert!(w.player.click.is_none());
+    // Klick auf eine Person: hinlaufen und zuschlagen (Fäuste)
+    let i = ped_in_front(&mut w, 60.);
+    let (px, py, id) = (w.peds[i].x, w.peds[i].y, w.peds[i].id);
+    let hp = w.peds[i].hp;
+    w.update(
+        &Input {
+            click_world: Some((px, py)),
+            click_pressed: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert!(matches!(w.player.click, Some(Click::Target { ped, .. }) if ped == id));
+    run(&mut w, 180, idle());
+    let p = w.peds.iter().find(|p| p.id == id).unwrap();
+    assert!(p.hp < hp, "getroffen");
+    // Klick auf das eigene Auto in der Nähe (Doppelklick): hinlaufen, kurz an der Tür, einsteigen
+    let pc = w.player_car_id.unwrap();
+    let (cx, cy) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    w.update(
+        &Input {
+            click_world: Some((cx, cy)),
+            click_pressed: true,
+            click_double: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert!(
+        matches!(
+            w.player.click,
+            Some(Click::Enter {
+                approach: false,
+                ..
+            })
+        ),
+        "{:?}",
+        w.player.click
+    );
+    run(&mut w, 1200, idle());
+    assert_eq!(w.player.in_car, Some(pc), "eingestiegen");
+}

@@ -44,8 +44,25 @@ pub struct Play {
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
+    /// Steuerschema zu Fuß am PC: Diablo (Klick, Standard) oder klassisch (WASD + Maus zielt)
+    pub diablo: bool,
+    /// letzter Linksklick (Spielzeit, HUD-Punkt) für den Doppelklick
+    last_click: Option<(f64, Vec2)>,
+    ctrl_held: bool,
     /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
     pub fx: crate::effects::Effects,
+}
+
+/// Einstellungen neben dem Spielstand (`settings.json`): Steuerschema.
+fn settings_path(st: &FileStorage) -> std::path::PathBuf {
+    st.path.with_file_name("settings.json")
+}
+fn read_scheme(st: &FileStorage) -> bool {
+    std::fs::read(settings_path(st))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| v["controls"].as_str().map(|c| c != "classic"))
+        .unwrap_or(true)
 }
 
 /// Statistikdatei neben dem Spielstand: `{"total": …, "saved": …}`.
@@ -133,6 +150,7 @@ impl Play {
             .as_ref()
             .is_some_and(|st| read_save(st as &dyn Storage).is_some());
         let (stats_total, stats_saved) = save.as_ref().map(read_stats).unwrap_or_default();
+        let diablo = save.as_ref().is_none_or(read_scheme);
         let stats = if start == Start::Continue && screen == Screen::Playing && has_save {
             stats_saved.clone()
         } else {
@@ -184,6 +202,9 @@ impl Play {
             demo_combat: false,
             mouse_aim: false,
             cursor: None,
+            diablo,
+            last_click: None,
+            ctrl_held: false,
             fx: Default::default(),
         })
     }
@@ -418,15 +439,40 @@ impl Play {
                 }
                 true
             }
+            Screen::Controls(_)
+                if keys.pressed.contains(&KeyCode::ArrowLeft)
+                    || keys.pressed.contains(&KeyCode::ArrowRight)
+                    || keys.pad_pressed.left
+                    || keys.pad_pressed.right =>
+            {
+                self.diablo = !self.diablo;
+                self.ui_sound();
+                if let Some(st) = &self.storage {
+                    let v = serde_json::json!({ "controls": if self.diablo { "diablo" } else { "classic" } });
+                    if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
+                        eprintln!("Einstellungen nicht gespeichert: {e}");
+                    }
+                }
+                true
+            }
             Screen::Controls(from_title) | Screen::Stats(from_title) => {
                 let click = keys.mouse.left_pressed || keys.mouse.right_pressed;
                 if mk.back || mk.confirm || click {
                     self.ui_sound();
-                    self.screen = if from_title {
-                        Screen::Title
+                    if from_title {
+                        self.screen = Screen::Title;
                     } else {
-                        Screen::Paused
-                    };
+                        // zurück in die Pause: deren Menü (die Tafel ist auch vom Titel aus erreichbar)
+                        let keep = self
+                            .menu
+                            .items
+                            .iter()
+                            .any(|i| i.action == crate::menu::Action::Resume);
+                        self.screen = Screen::Paused;
+                        if !keep {
+                            self.menu = crate::menu::pause_menu();
+                        }
+                    }
                 }
                 if from_title {
                     self.world.update(&Input::default(), dt);
@@ -491,6 +537,7 @@ pub fn input_from(keys: &Keys, driving: bool) -> Input {
         esp_toggle: pressed(KeyCode::KeyX),
         abs_toggle: pressed(KeyCode::KeyY) || pressed(KeyCode::KeyZ),
         combat: combat_input(keys, driving),
+        ..Default::default()
     }
 }
 
@@ -706,8 +753,33 @@ impl Game for Play {
             self.mouse_aim = false;
         }
         self.cursor = m.hud;
-        if self.mouse_aim && !self.bigmap.open && w2.player.in_car.is_none() {
-            input.combat.aim_world = m.world.map(|p| (p.x as f64, p.y as f64));
+        self.ctrl_held =
+            keys.held.contains(&KeyCode::ControlLeft) || keys.held.contains(&KeyCode::ControlRight);
+        let on_foot = !self.bigmap.open && w2.player.in_car.is_none();
+        let world_pt = m.world.map(|p| (p.x as f64, p.y as f64));
+        if self.diablo && on_foot {
+            // Diablo: Klick läuft hin bzw. greift an oder steigt ein, Strg + Klick greift am Platz an,
+            // rechte Taste tritt
+            let ctrl = keys.held.contains(&KeyCode::ControlLeft)
+                || keys.held.contains(&KeyCode::ControlRight);
+            input.click_world = world_pt;
+            input.click_held = m.left;
+            input.click_pressed = m.left_pressed;
+            input.click_force = ctrl && m.left;
+            if m.left_pressed {
+                let now = w2.time;
+                input.click_double = self.last_click.is_some_and(|(t, p)| {
+                    now - t < 0.35 && m.hud.is_some_and(|h| h.distance(p) < 20.)
+                });
+                self.last_click = m.hud.map(|h| (now, h));
+            }
+            input.combat.kick |= m.right_pressed;
+            if ctrl {
+                // Strg allein zielt mit der Maus (Fadenkreuz), feuern mit Klick oder Strg-Taste
+                input.combat.aim_world = world_pt;
+            }
+        } else if self.mouse_aim && on_foot {
+            input.combat.aim_world = world_pt;
             input.combat.fire |= m.left;
             input.combat.fire_pressed |= m.left_pressed;
             input.combat.kick |= m.right_pressed;
@@ -728,6 +800,12 @@ impl Game for Play {
             }
         }
         w2.update(&input, dt);
+        if input.click_pressed
+            && let (Some(at), Some(berlin_sim::world::Click::Walk { .. })) =
+                (input.click_world, &self.world.player.click)
+        {
+            self.fx.click_ring(at);
+        }
         self.fx.ingest(&self.world.events);
         self.fx.step(dt as f32);
         berlin_sim::stats::track_step(
@@ -1056,7 +1134,7 @@ impl Game for Play {
                 return;
             }
             Screen::Controls(_) => {
-                crate::menu::draw_controls(out);
+                crate::menu::draw_controls(out, self.diablo);
                 return;
             }
             Screen::Stats(from_title) => {
@@ -1072,8 +1150,10 @@ impl Game for Play {
         let warn = self.world.road_warning();
         crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
         let p = &self.world.player;
+        let ctrl_aim = !self.diablo || self.ctrl_held;
         if self.screen == Screen::Playing
             && self.mouse_aim
+            && ctrl_aim
             && p.in_car.is_none()
             && !p.combat.dead
             && let Some(c) = self.cursor

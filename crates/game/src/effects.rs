@@ -45,7 +45,11 @@ pub struct Effects {
     puffs: Vec<Puff>,
     splats: std::collections::VecDeque<Splat>,
     seq: u32,
+    /// Ring am Boden, wohin ein Klick die Figur schickt (main.js clickFx)
+    ring: Option<([f32; 2], f32)>,
 }
+/// so lange sieht man den Klickring (s)
+const RING_S: f32 = 0.45;
 
 impl Effects {
     /// Ereignisse eines Schritts übernehmen.
@@ -107,6 +111,9 @@ impl Effects {
             }
         }
     }
+    pub fn click_ring(&mut self, at: (f64, f64)) {
+        self.ring = Some(([at.0 as f32, at.1 as f32], RING_S));
+    }
     fn add_splat(&mut self, at: [f32; 2], r: [f32; 2], angle: f32) {
         self.splats.push_back(Splat {
             at,
@@ -119,6 +126,12 @@ impl Effects {
         }
     }
     pub fn step(&mut self, dt: f32) {
+        if let Some((_, t)) = self.ring.as_mut() {
+            *t -= dt;
+            if *t <= 0. {
+                self.ring = None;
+            }
+        }
         for t in &mut self.tracers {
             t.t -= dt;
         }
@@ -151,6 +164,18 @@ impl Effects {
                 shape: 1.,
                 depth: 0.83,
                 color: [0.42 - 0.18 * k, 0.03, 0.03, 0.85 * fade],
+            });
+        }
+        if let Some((at, t)) = self.ring {
+            let k = t / RING_S;
+            let r = 6. + (1. - k) * 8.;
+            out.push(Body {
+                center: at,
+                half: [r, r * 0.75],
+                angle: 0.,
+                shape: 2.,
+                depth: 0.82,
+                color: [1., 0.83, 0.24, 0.85 * k],
             });
         }
         for t in &self.tracers {

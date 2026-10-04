@@ -619,8 +619,8 @@ Simulationsschritt.
   verschiebt.
 
 **Noch offen:**
-- Diablo-Schema (Klick zum Laufen mit Wegsuche, Klick auf Autos zum Einsteigen)
 - Waffenrad mit rechter Taste
+- (Diablo-Schema: siehe unten)
 - Teleport per Klick auf den Stadtplan
 
 **Validierung:** Clippy und Formatprüfung sind sauber, alle 106 Rust-Tests laufen erfolgreich. Neu getestet:
@@ -628,3 +628,34 @@ Simulationsschritt.
 - auf echten Kacheln: der Zeiger rastet auf die Person ein, und Figur und Ziel zeigen genau auf ihre Mitte
 
 Mit echter Maus wurde nicht gespielt.
+
+## Diablo-Schema (04.10.2026)
+
+Wie im Browser ist zu Fuß am PC jetzt das Diablo-Schema der Standard. Die Steuerungstafel schaltet mit ←/→ auf
+das klassische Schema (WASD, die Maus zielt) um. Die Wahl liegt in `settings.json` neben dem Spielstand.
+
+- **Wegsuche** (`sim/footpath.rs`, Port von `footpath.js`):
+  - A* auf einem 8-px-Raster im Rechteck um Start und Ziel (Rand 20 m, höchstens 250 m Kante, 60 000 Knoten).
+  - Zellen werden erst beim Besuch mit derselben Hindernisprüfung wie die Kollision geprüft (Häuser, Wände,
+    Bäume, Poller, Kisten, stehende Autos).
+  - Keine Diagonale schneidet eine Ecke. Ein unerreichbares Ziel (geschlossener Hinterhof) führt zur
+    nächstgelegenen erreichbaren Zelle.
+  - Der Weg wird über Sichtlinien geglättet.
+- **Klick** (`World::click_control`/`click_intent`, Port von `clickControl`/`clickIntent`):
+  - Boden: hinlaufen. Gehalten läuft die Figur dem Zeiger nach, der Weg wird alle 0,15 s neu gesucht.
+  - Person: hinlaufen bis in Waffenreichweite und angreifen; gehalten weiter, bis sie liegt.
+  - Heiles Auto neben der Figur oder Doppelklick: hinlaufen, 0,35 s an der Tür, einsteigen. Ein Auto weiter weg
+    wird nur angelaufen. Ein Wrack zählt als Boden.
+  - Strg + Klick: am Platz angreifen, wohin gezeigt wird, mit Fadenkreuz.
+  - Rechte Taste: treten. WASD bricht jeden Klickauftrag ab.
+  - Ein Ring am Boden zeigt das Laufziel.
+- **Engine:** Im Smoke-Test und bei Aufnahmen gibt die Engine keine Eingaben mehr an das Spiel. Eine Taste, die
+  zufällig ins Aufnahmefenster ging, hatte die Steuerungstafel geschlossen.
+- **Behoben:** Aus der Steuerungstafel zurück in die Pause stand dort das Titelmenü.
+
+**Validierung:** Clippy und Formatprüfung sind sauber, alle 108 Rust-Tests laufen erfolgreich. Neu auf echten
+Kacheln getestet:
+- Wege zu Zielen hinter Häusern verlaufen nie durch ein Haus; mindestens eines ist erreichbar und braucht Ecken.
+- Klick auf den Boden: die Figur kommt an.
+- Klick auf eine Person: hinlaufen und treffen.
+- Doppelklick aufs eigene Auto: einsteigen.

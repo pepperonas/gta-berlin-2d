@@ -357,6 +357,16 @@ impl ApplicationHandler for App {
                     let step = game.step_seconds();
                     self.accumulator = (self.accumulator + dt as f64).min(step * 5.);
                     let viewport = renderer.viewport();
+                    // Smoke-Test und Aufnahme: keine Eingaben (Tasten, die zufällig ins Fenster gehen, verfälschten
+                    // sonst das Bild)
+                    let quiet = self.smoke_frames.is_some();
+                    if quiet {
+                        self.keys.clear();
+                        self.pressed.clear();
+                        self.mouse = Mouse::default();
+                        self.pads.state = pad::Pad::default();
+                        self.pads.edges = pad::Pad::default();
+                    }
                     let mut mouse = self.mouse;
                     mouse.world = mouse
                         .screen

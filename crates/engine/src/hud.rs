@@ -46,6 +46,8 @@ fn fold(c: char) -> char {
         '„' | '“' | '”' => '"',
         '‚' | '‘' | '’' => '\'',
         '…' => '.',
+        '‹' | '←' => '<',
+        '›' => '>',
         _ => c,
     }
 }
@@ -353,7 +355,7 @@ mod tests {
     use super::*;
     #[test]
     fn cells_cover_german_text() {
-        for c in "Kisten für den Kiez – Größe +/−  ÄÖÜäöüß 12:30 € → ✓".chars()
+        for c in "Kisten für den Kiez – Größe +/− ‹›←  ÄÖÜäöüß 12:30 € → ✓".chars()
         {
             assert!(cell(c).is_some(), "Zeichen {c:?} fehlt");
         }

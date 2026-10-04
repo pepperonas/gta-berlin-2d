@@ -399,7 +399,11 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("Hupe (im Auto) · Nachladen (zu Fuß)", "X", "H · R"),
     ("Angreifen / Schießen · Treten", "RT · B", "Strg · V"),
     ("Waffe wechseln", "RB / LB", "Q · 1–6"),
-    ("Zielen", "Rechter Stick", "Blickrichtung"),
+    (
+        "Zielen",
+        "Rechter Stick",
+        "Maus (Diablo: Strg)",
+    ),
     ("Stadtplan", "Ansicht-Taste", "Tab"),
     ("Uhr +1 Stunde · Wetter wechseln", "–", "T · N"),
     ("Ton umschalten · Speichern", "–", "M · F5"),
@@ -408,10 +412,54 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
     ("Menüs", "Steuerkreuz, A / B", "Pfeile, Enter / Esc"),
 ];
 
-pub fn draw_controls(h: &mut Hud) {
+pub fn draw_controls(h: &mut Hud, diablo: bool) {
     let vw = h.width;
     h.rect(0., 0., vw, 720., [0.02, 0.024, 0.04, 0.9], 0.);
-    h.text("STEUERUNG", vw / 2., 110., 44., YELLOW, Align::Center, true);
+    h.text("STEUERUNG", vw / 2., 100., 44., YELLOW, Align::Center, true);
+    let scheme = if diablo {
+        "Zu Fuß am PC:  ‹ Diablo (Klick) ›   ← / → wechselt"
+    } else {
+        "Zu Fuß am PC:  ‹ Klassisch (WASD + Maus) ›   ← / → wechselt"
+    };
+    h.text(
+        scheme,
+        vw / 2.,
+        136.,
+        16.,
+        [0.87, 0.87, 0.87, 1.],
+        Align::Center,
+        true,
+    );
+    let mouse_rows: [(&str, &str, &str); 2] = if diablo {
+        [
+            (
+                "Maus links: laufen · Person: angreifen · Auto: einsteigen",
+                "",
+                "",
+            ),
+            ("Strg + Klick: am Platz angreifen · rechts: treten", "", ""),
+        ]
+    } else {
+        [
+            (
+                "Maus zielt · links: angreifen/schießen · rechts: treten",
+                "",
+                "",
+            ),
+            ("", "", ""),
+        ]
+    };
+    for (i, (t, _, _)) in mouse_rows.iter().enumerate() {
+        h.text(
+            t,
+            vw / 2.,
+            160. + i as f32 * 20.,
+            14.,
+            [0.75, 0.75, 0.75, 1.],
+            Align::Center,
+            true,
+        );
+    }
     // Spaltenbreiten aus dem Text (die Bitmapschrift läuft breiter als die Browserschrift)
     let size = 16.;
     let col = |n: usize, h: &Hud| {
@@ -425,19 +473,19 @@ pub fn draw_controls(h: &mut Hud) {
     let total = wa + wb + wc;
     let x0 = vw / 2. - total / 2.;
     let grey = [0.67, 0.67, 0.67, 1.];
-    h.text("Controller", x0 + wa, 170., size, grey, Align::Left, true);
+    h.text("Controller", x0 + wa, 214., size, grey, Align::Left, true);
     h.text(
         "Tastatur",
         x0 + wa + wb,
-        170.,
+        214.,
         size,
         grey,
         Align::Left,
         true,
     );
-    let row = 26.;
+    let row = 25.;
     for (i, (a, b, k)) in CONTROLS.iter().enumerate() {
-        let y = 200. + i as f32 * row;
+        let y = 240. + i as f32 * row;
         if i % 2 == 0 {
             h.rect(
                 x0 - 12.,
@@ -547,7 +595,7 @@ mod tests {
         let mut h = Hud::new([1280., 720.]);
         draw_title(&mut h, &title_menu(true), false);
         draw_pause(&mut h, &pause_menu(), 3, Some(95.));
-        draw_controls(&mut h);
+        draw_controls(&mut h, true);
         draw_stats(&mut h, &Default::default(), &Default::default(), true);
         assert!(h.items.len() > 500);
         // Steuerungstafel: jede Spalte endet vor der nächsten

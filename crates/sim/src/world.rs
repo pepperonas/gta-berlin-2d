@@ -72,7 +72,40 @@ pub struct Input {
     pub abs_toggle: bool,
     /// Kampf (nur zu Fuß wirksam)
     pub combat: crate::combat::CombatInput,
+    /// Klicksteuerung zu Fuß (Diablo-Schema): Zeigerpunkt, gedrückt/gehalten, mit Strg, Doppelklick
+    pub click_world: Option<(f64, f64)>,
+    pub click_pressed: bool,
+    pub click_held: bool,
+    pub click_force: bool,
+    pub click_double: bool,
 }
+
+/// Laufender Klickauftrag der Spielfigur (world.js `p.click`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Click {
+    /// Weg abarbeiten; `follow` = beim Halten dem Zeiger nachlaufen
+    Walk {
+        path: Vec<(f64, f64)>,
+        i: usize,
+        follow: bool,
+    },
+    /// zur Person laufen und angreifen (`done` = schon ein Angriff)
+    Target { ped: u32, done: bool },
+    /// zum Auto laufen; `approach` = nur danebenstellen, sonst kurz an der Tür und einsteigen
+    Enter {
+        car: u32,
+        approach: bool,
+        path: Vec<(f64, f64)>,
+        i: usize,
+        to: (f64, f64),
+        door: Option<f64>,
+    },
+    /// mit Strg: am Platz angreifen, wohin gezeigt wird (bzw. auf die Person darunter)
+    Force { at: (f64, f64), ped: Option<u32> },
+}
+/// Klick: an der Tür stehen (s), Doppelklick-Fenster (s), Annäherung über die Einsteigweite hinaus (px).
+pub const CLICK_DOOR: f64 = 0.35;
+pub const CLICK_NEAR_CAR: f64 = 30.;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -90,6 +123,8 @@ pub struct Player {
     pub level: crate::levels::LevelState,
     pub level_init: bool,
     pub combat: crate::combat::Combat,
+    pub click: Option<Click>,
+    pub click_t: f64,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -214,6 +249,8 @@ impl World {
                 level: Default::default(),
                 level_init: false,
                 combat: Default::default(),
+                click: None,
+                click_t: 0.,
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -656,11 +693,19 @@ impl World {
     }
 
     fn try_enter(&mut self) -> bool {
+        self.try_enter_car(None)
+    }
+    /// Einsteigen ins nächste heile Auto in Reichweite, mit `only` nur in dieses (Klick auf ein Auto).
+    fn try_enter_car(&mut self, only: Option<u32>) -> bool {
         let (px, py) = (self.player.x, self.player.y);
         let mut best = None;
-        let mut bd = ENTER_DIST;
+        let mut bd = if only.is_some() {
+            ENTER_DIST + 10.
+        } else {
+            ENTER_DIST
+        };
         for (i, c) in self.cars.iter().enumerate() {
-            if c.wrecked {
+            if c.wrecked || only.is_some_and(|id| id != c.id) {
                 continue;
             }
             let d = (c.x - px).hypot(c.y - py);
@@ -699,6 +744,247 @@ impl World {
         self.events.push(Event::Door { x, y });
         true
     }
+    /// Klicksteuerung zu Fuß (world.js clickControl): macht aus dem Klick die normalen Eingaben (Laufrichtung,
+    /// Zielen, Angriff) und steigt am Ziel ins Auto. WASD bricht den Auftrag ab.
+    fn click_control(&mut self, input: &Input, dt: f64) -> Input {
+        let mut out = *input;
+        if input.move_x.hypot(input.move_y) > 0.05 {
+            self.player.click = None;
+            return out;
+        }
+        let lvl = self.player.level.lvl;
+        let (px, py) = (self.player.x, self.player.y);
+        let walk = |w: &mut World, to: (f64, f64)| {
+            crate::footpath::find_foot_path(w, (px, py), to, lvl).filter(|p| p.len() > 1)
+        };
+        if let Some(at) = input.click_world {
+            if input.click_pressed {
+                self.player.click_t = 0.15;
+                self.player.click =
+                    self.click_intent(at, input.click_force, input.click_double, walk);
+            } else if input.click_held {
+                match &mut self.player.click {
+                    Some(Click::Walk { follow: true, .. }) => {
+                        self.player.click_t -= dt;
+                        if self.player.click_t <= 0. {
+                            // gehalten: dem Zeiger nachlaufen (Weg alle 0,15 s neu)
+                            self.player.click_t = 0.15;
+                            if let Some(path) = walk(self, at) {
+                                self.player.click = Some(Click::Walk {
+                                    path,
+                                    i: 1,
+                                    follow: true,
+                                });
+                            }
+                        }
+                    }
+                    Some(Click::Force { at: a, ped: None }) => *a = at,
+                    _ => {}
+                }
+            }
+        }
+        let stop = |o: &mut Input| {
+            o.move_x = 0.;
+            o.move_y = 0.;
+            o.combat.fire = false;
+            o.combat.fire_pressed = false;
+        };
+        let Some(click) = self.player.click.clone() else {
+            return out;
+        };
+        let ped_pos = |w: &World, id: u32| {
+            w.peds
+                .iter()
+                .find(|p| p.id == id && p.state != PedState::Dead)
+                .map(|p| (p.x, p.y))
+        };
+        let toward = |o: &mut Input, (x, y): (f64, f64)| {
+            let d = (x - px).hypot(y - py).max(1e-9);
+            o.move_x = (x - px) / d;
+            o.move_y = (y - py) / d;
+        };
+        match click {
+            Click::Force { at, ped } => {
+                if !input.click_held && !input.click_pressed {
+                    self.player.click = None;
+                    return out;
+                }
+                let aim = ped.and_then(|id| ped_pos(self, id)).unwrap_or(at);
+                out.combat.aim_world = Some(aim);
+                out.combat.fire = true;
+                out.combat.fire_pressed = input.click_pressed || self.player.combat.cool <= 0.;
+            }
+            Click::Target { ped, done } => {
+                let Some(o) = ped_pos(self, ped) else {
+                    self.player.click = None;
+                    return out;
+                };
+                let wp = self.player.combat.weapon();
+                let d = (o.0 - px).hypot(o.1 - py);
+                let reach = if wp.melee {
+                    wp.range + 6.
+                } else {
+                    wp.range * 0.85
+                };
+                if d > reach {
+                    toward(&mut out, o);
+                    return out;
+                }
+                // in Reichweite: ein Klick = ein Angriff; gehalten: weiter, bis die Person liegt
+                let ready = self.player.combat.cool <= 0.;
+                if !input.click_held && done && ready {
+                    self.player.click = None;
+                    return out;
+                }
+                if ready {
+                    self.player.click = Some(Click::Target { ped, done: true });
+                }
+                out.combat.aim_world = Some(o);
+                out.combat.fire = true;
+                out.combat.fire_pressed = ready;
+            }
+            Click::Enter {
+                car,
+                approach,
+                mut path,
+                mut i,
+                mut to,
+                door,
+            } => {
+                let Some((cx, cy)) = self
+                    .car(car)
+                    .filter(|c| !c.wrecked && Some(c.id) != self.player.in_car)
+                    .map(|c| (c.x, c.y))
+                else {
+                    self.player.click = None;
+                    return out;
+                };
+                let d = (cx - px).hypot(cy - py);
+                if d < ENTER_DIST - 2. {
+                    stop(&mut out);
+                    self.player.angle = (cy - py).atan2(cx - px);
+                    if approach {
+                        self.player.click = None;
+                        return out;
+                    }
+                    // an der Tür: kurz stehen bleiben (Tür auf), dann einsteigen
+                    let left = match door {
+                        None => {
+                            self.events.push(Event::Door { x: cx, y: cy });
+                            CLICK_DOOR
+                        }
+                        Some(t) => t - dt,
+                    };
+                    if left <= 0. {
+                        self.player.click = None;
+                        self.try_enter_car(Some(car));
+                    } else if let Some(Click::Enter { door, .. }) = self.player.click.as_mut() {
+                        *door = Some(left);
+                    }
+                    return out;
+                }
+                // Weg zum Auto (um Häuser herum), neu, wenn es weggefahren ist
+                if path.is_empty() || (cx - to.0).hypot(cy - to.1) > 30. {
+                    path = walk(self, (cx, cy)).unwrap_or_default();
+                    i = 1;
+                    to = (cx, cy);
+                }
+                while path.get(i).is_some_and(|q| (q.0 - px).hypot(q.1 - py) < 5.) {
+                    i += 1;
+                }
+                let goal = path.get(i).copied().unwrap_or((cx, cy));
+                toward(&mut out, goal);
+                out.combat.fire = false;
+                out.combat.fire_pressed = false;
+                self.player.click = Some(Click::Enter {
+                    car,
+                    approach,
+                    path,
+                    i,
+                    to,
+                    door,
+                });
+            }
+            Click::Walk {
+                path,
+                mut i,
+                follow,
+            } => {
+                while path.get(i).is_some_and(|q| (q.0 - px).hypot(q.1 - py) < 5.) {
+                    i += 1;
+                }
+                let Some(&q) = path.get(i) else {
+                    self.player.click = None;
+                    return out;
+                };
+                toward(&mut out, q);
+                self.player.click = Some(Click::Walk { path, i, follow });
+            }
+        }
+        out
+    }
+
+    /// Was ein Klick bedeutet (combat.js clickIntent): Person → angreifen, heiles Auto daneben oder Doppelklick →
+    /// einsteigen, weiter weg → nur hinlaufen, sonst (Boden, Wrack) hinlaufen; mit Strg am Platz angreifen.
+    fn click_intent(
+        &mut self,
+        at: (f64, f64),
+        force: bool,
+        double: bool,
+        walk: impl Fn(&mut World, (f64, f64)) -> Option<Vec<(f64, f64)>>,
+    ) -> Option<Click> {
+        let lvl = self.player.level.lvl;
+        let ped = self
+            .peds
+            .iter()
+            .filter(|p| p.state != PedState::Dead && p.level.lvl == lvl)
+            .map(|p| ((p.x - at.0).hypot(p.y - at.1), p.id))
+            .filter(|(d, _)| *d < pedestrians::RADIUS + 4.)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, id)| id);
+        if force {
+            return Some(Click::Force { at, ped });
+        }
+        if let Some(id) = ped {
+            return Some(Click::Target {
+                ped: id,
+                done: false,
+            });
+        }
+        let car = self
+            .cars
+            .iter()
+            .filter(|c| c.lvl() == lvl && Some(c.id) != self.player.in_car)
+            .find(|c| {
+                let (s, co) = c.angle.sin_cos();
+                let (dx, dy) = (at.0 - c.x, at.1 - c.y);
+                (dx * co + dy * s).abs() < c.hw + 2. && (-dx * s + dy * co).abs() < c.hh + 2.
+            })
+            .map(|c| {
+                (
+                    c.id,
+                    c.wrecked,
+                    (c.x - self.player.x).hypot(c.y - self.player.y),
+                )
+            });
+        if let Some((id, false, d)) = car {
+            return Some(Click::Enter {
+                car: id,
+                approach: !(d <= ENTER_DIST + CLICK_NEAR_CAR || double),
+                path: Vec::new(),
+                i: 1,
+                to: (f64::NAN, f64::NAN),
+                door: None,
+            });
+        }
+        let path = walk(self, at)?;
+        Some(Click::Walk {
+            path,
+            i: 1,
+            follow: true,
+        })
+    }
+
     /// K. o.: nach kurzer Pause ins nächste Krankenhaus (Gebühr), ein laufender Auftrag platzt (world.js updateKnockout).
     fn update_knockout(&mut self, dt: f64) {
         use crate::combat::{HOSPITAL_FEE, RESPAWN_DELAY};
@@ -1105,9 +1391,14 @@ impl World {
             }
             c.horn_was = c.horn;
         } else if !self.player.combat.dead {
+            let input = &self.click_control(input, dt);
             self.update_player_on_foot(input, dt);
+            crate::combat::update_player_combat(self, &input.combat, dt);
         }
-        crate::combat::update_player_combat(self, &input.combat, dt);
+        if self.player.in_car.is_some() || self.player.combat.dead {
+            self.player.click = None;
+            crate::combat::update_player_combat(self, &input.combat, dt);
+        }
         if self.player.combat.dead {
             self.update_knockout(dt);
         }
