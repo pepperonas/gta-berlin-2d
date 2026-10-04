@@ -66,6 +66,17 @@ pub const PAX_RESET: f64 = 0.2;
 pub const BUMP_H: f64 = 0.012;
 pub const BUMP_L: f64 = 0.35;
 pub const BUMP_ZETA: f64 = 0.3;
+/// Aquaplaning: Wasserhöhe, ab der es droht (mm); Beginn bei diesem Anteil von v_ap; verbleibende Haftung
+pub const AQUA_WATER_MM: f64 = 2.5;
+pub const AQUA_ONSET: f64 = 0.75;
+pub const AQUA_REST: f64 = 0.1;
+/// Bordstein: so lange (s) entlastet ein Aufprall bei 10 m/s die Achse, Restlast in der Zeit, Tempoverlust
+/// je m/s Tempo und m Bordsteinhöhe
+pub const CURB_HOP_S: f64 = 0.1;
+pub const CURB_LOAD: f64 = 0.15;
+pub const CURB_LOSS: f64 = 0.25;
+/// Wer so viel Bodenfreiheit über der Bordsteinhöhe hat, steigt fast ungestört auf
+pub const CURB_EASY: f64 = 1.5;
 
 /// Eingabe (Gas, Bremse 0…1; Lenkung −1 rechts … 1 links).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -91,6 +102,10 @@ pub struct Ground {
     pub rolling_extra: f64,
     /// Unebenheit 0…1 (Kopfstein ~0,6): treibt die Federung, Radlast schwankt
     pub rough: f64,
+    /// Wasserhöhe (mm): ab 2,5 mm droht Aquaplaning
+    pub water_mm: f64,
+    /// Bordstein, über den das Rad in diesem Schritt fährt (Höhe in m, 0 = keiner)
+    pub curb: f64,
 }
 impl Ground {
     pub const DRY: Ground = Ground {
@@ -98,19 +113,47 @@ impl Ground {
         tire_factor: 1.,
         rolling_extra: 0.,
         rough: 0.,
+        water_mm: 0.,
+        curb: 0.,
     };
+    /// Haftbeiwert relativ zu trockenem Asphalt samt Reifenfaktor
+    pub fn grip(&self) -> f64 {
+        self.mu_rel * self.tire_factor
+    }
 }
-/// Untergrund je Achse (vorn, hinten).
+/// Untergrund je Rad: vorn links, vorn rechts, hinten links, hinten rechts.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Env {
-    pub axle: [Ground; 2],
+    pub wheel: [Ground; 4],
 }
 impl Default for Env {
     fn default() -> Self {
-        Self {
-            axle: [Ground::DRY; 2],
-        }
+        Self::uniform(Ground::DRY)
     }
+}
+impl Env {
+    /// Überall derselbe Untergrund.
+    pub fn uniform(g: Ground) -> Self {
+        Self { wheel: [g; 4] }
+    }
+    /// Mittel über die Räder einer Achse (0 vorn, 1 hinten).
+    pub fn axle(&self, i: usize, f: impl Fn(&Ground) -> f64) -> f64 {
+        (f(&self.wheel[i * 2]) + f(&self.wheel[i * 2 + 1])) / 2.
+    }
+}
+
+/// Aquaplaning: Einsetzgeschwindigkeit (m/s) nach Reifendruck, Profil (neu 1, abgefahren 0,8) und Breite.
+pub fn aquaplaning_speed(kpa: f64, profile: f64, width_mm: f64) -> f64 {
+    6.36 * kpa.max(1.).sqrt() * profile * (225. / width_mm.max(10.)).powf(0.25) / 3.6
+}
+/// Anteil der Nässehaftung, der beim Aufschwimmen bleibt: ab 2,5 mm Wasser Teil-Aquaplaning ab 0,75·v_ap,
+/// voll bei v_ap (Rest 10 %).
+pub fn aquaplaning_grip(speed: f64, v_ap: f64, water_mm: f64) -> f64 {
+    if water_mm < AQUA_WATER_MM {
+        return 1.;
+    }
+    let t = ((speed - AQUA_ONSET * v_ap) / ((1. - AQUA_ONSET) * v_ap)).clamp(0., 1.);
+    1. - (1. - AQUA_REST) * t
 }
 
 /// Zustand eines Fahrzeugs.
@@ -162,6 +205,13 @@ pub struct State {
     /// Vollbremsung mit stehenden Fahrgästen: Zähler (je Bremsung einmal) und laufender Zustand
     pub passenger_falls: u32,
     pub hard_brake: bool,
+    /// Aufschwimmen je Achse 0…1 (1 = volles Aquaplaning)
+    pub aqua: [f64; 2],
+    /// Bordstein: Restzeit, in der die Achse entlastet ist; Zähler der Bordsteinstöße
+    pub hop: [f64; 2],
+    pub curb_hits: u32,
+    /// Profiltiefe als Faktor (neu 1, abgefahren 0,8; 0 = neu)
+    pub tread: f64,
 }
 impl State {
     pub fn speed(&self) -> f64 {
@@ -458,7 +508,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     // Federkraftschwankung ist die Radlastschwankung (hartes Fahrwerk auf Kopfstein = weniger Grip)
     let w0 = 2. * std::f64::consts::PI * v.chassis.hz.max(0.3);
     for (i, fz) in fz_axle.iter_mut().enumerate() {
-        let rough = env.axle[i].rough;
+        let rough = env.axle(i, |g| g.rough);
         if rough <= 0. && s.susp[i] == 0. && s.susp_v[i] == 0. {
             continue;
         }
@@ -472,6 +522,24 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         let m_ax = m * if i == 0 { v.front } else { 1. - v.front };
         *fz = (*fz + m_ax * acc).max(0.);
     }
+    // Bordstein: der Stoß entlastet die Achse kurz (das Rad springt, lenkt bzw. greift kaum) und kostet Tempo; viel
+    // Bodenfreiheit (SUV, Geländewagen) steigt fast ungestört auf
+    for (i, fz) in fz_axle.iter_mut().enumerate() {
+        let h_c = env.wheel[i * 2].curb.max(env.wheel[i * 2 + 1].curb);
+        if h_c > 0. && speed > 1. {
+            let easy = v.clearance > h_c * CURB_EASY;
+            let k = if easy { 0.25 } else { 1. } * (speed / 10.).min(1.5);
+            s.hop[i] = s.hop[i].max(CURB_HOP_S * k);
+            let loss = CURB_LOSS * h_c * speed * if easy { 0.2 } else { 1. }
+                + if v.clearance < h_c { 0.5 } else { 0. };
+            s.vx -= dir * loss.min(speed * 0.3);
+            s.curb_hits += 1;
+        }
+        if s.hop[i] > 0. {
+            s.hop[i] -= dt;
+            *fz *= CURB_LOAD;
+        }
+    }
     let dlat = if v.track > 0. {
         m * s.ay_f * h / v.track * tr
     } else {
@@ -480,9 +548,14 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let share = [v.front, 1. - v.front];
     let nom = [m * G * v.front / 2., m * G * (1. - v.front) / 2.];
     let mut cap_lat = [0.; 2];
+    // Haftgrenze je Rad (links, rechts) – unterschiedlicher Grip links und rechts zieht beim Bremsen zur Seite
+    let mut cap_w = [0.; 4];
+    let v_ap = aquaplaning_speed(
+        v.tire_kpa,
+        if s.tread > 0. { s.tread } else { 1. },
+        v.tire_width_mm,
+    );
     for i in 0..2 {
-        let g = env.axle[i];
-        let mu0 = (v.tire.mu * g.mu_rel * g.tire_factor * feel.grip()).max(feel.ice_grip_min);
         let d = dlat * share[i] / 2.;
         let wheels = [
             (fz_axle[i] / 2. - d).clamp(0., fz_axle[i]),
@@ -490,13 +563,18 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         ];
         s.fz[i * 2] = wheels[0];
         s.fz[i * 2 + 1] = wheels[1];
-        cap_lat[i] = wheels
-            .iter()
-            .map(|&fz| {
-                let mu = mu0 * (1. - LOAD_SENS * (fz / nom[i].max(1.) - 1.)).max(0.5);
-                mu * fz
-            })
-            .sum();
+        // Aquaplaning je Achse (Wasser im Mittel der beiden Räder)
+        let water = env.axle(i, |g| g.water_mm);
+        let aq = aquaplaning_grip(speed, v_ap, water);
+        let aq = 1. - (1. - aq) * feel.aqua();
+        s.aqua[i] = ((1. - aq) / (1. - AQUA_REST)).clamp(0., 1.);
+        for (k, &fz) in wheels.iter().enumerate() {
+            let g = env.wheel[i * 2 + k];
+            let mu0 = (v.tire.mu * g.grip() * feel.grip() * aq).max(feel.ice_grip_min);
+            let mu = mu0 * (1. - LOAD_SENS * (fz / nom[i].max(1.) - 1.)).max(0.5);
+            cap_w[i * 2 + k] = mu * fz;
+        }
+        cap_lat[i] = cap_w[i * 2] + cap_w[i * 2 + 1];
     }
     let cap_long = [cap_lat[0] * v.tire.mu_long, cap_lat[1] * v.tire.mu_long];
     // Antrieb, Schalten
@@ -532,7 +610,8 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     // Haftgrenze. Am Reifen kommt das Moment an, das nach dem Beschleunigen der Drehmassen übrig bleibt; ist die
     // Haftung die Grenze, beschleunigt das Auto mit der vollen Reifenkraft.
     let still = speed < 0.05;
-    let cr = v.tire.rolling + (env.axle[0].rolling_extra + env.axle[1].rolling_extra) / 2.;
+    let cr =
+        v.tire.rolling + (env.axle(0, |g| g.rolling_extra) + env.axle(1, |g| g.rolling_extra)) / 2.;
     let f_roll = if still { 0. } else { cr * m * G * dir };
     let f_drag = 0.5 * RHO * v.cw_a * s.vx * s.vx.abs();
     if f_drive != 0. {
@@ -592,6 +671,20 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         // Bremsen wirkt entgegen der Bewegung; im Stand hält es (Haftreibung)
         let demand = drive_i - if still { 0. } else { brake_i * dir };
         let c = cap_long[i].max(1.);
+        // angetriebene Achse: das offene Differential gibt beiden Rädern dasselbe Moment – das Rad mit weniger
+        // Haftung dreht zuerst durch; eine Sperre gibt einen Teil weiter, starr/Vectoring alles
+        let (cl, cr_w) = (cap_w[i * 2], cap_w[i * 2 + 1]);
+        let c_drive = (match v.diff {
+            Diff::Open => 2. * cl.min(cr_w),
+            Diff::Lsd => (2. * cl.min(cr_w) * 1.6).min(cl + cr_w),
+            Diff::Locked | Diff::Vectoring => cl + cr_w,
+        } * v.tire.mu_long)
+            .max(1.);
+        let c = if demand * dir > 0. && drive_i * dir > 0. && !v.two_wheel {
+            c.min(c_drive)
+        } else {
+            c
+        };
         let mut lat_k = 1.;
         s.spin[i] = false;
         s.locked[i] = false;
@@ -636,9 +729,35 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
             fx[i] = demand.signum() * c * (ABS_HOLD - ABS_STEER * inp.steer.abs() - rear);
             s.slip[i] = -v.tire.peak_slip_ratio;
         }
-        let used = (fx[i] / c).clamp(-1., 1.);
+        let used = (fx[i] / cap_long[i].max(1.)).clamp(-1., 1.);
         let lat = cap_lat[i] * (1. - used * used).max(0.).sqrt() * lat_k;
         fy[i] = -lat * mf(alpha[i]);
+    }
+    // Längskräfte links/rechts: beim Bremsen (ABS je Rad) und mit Sperre teilt sich die Kraft nach der Haftung
+    // der Räder auf, das offene Differential treibt beide gleich; der Unterschied dreht das Auto zur griffigeren
+    // Seite
+    let mut mz_split = 0.;
+    if v.track > 0. && !v.two_wheel {
+        for i in 0..2 {
+            // beide Räder bekommen dieselbe Kraft; was ein Rad nicht überträgt, übernimmt das andere (ABS je Rad,
+            // Sperre) – das offene Differential treibt beide gleich (seine Grenze steckt schon in `c_drive`)
+            let braking = fx[i] * dir < 0.;
+            if braking || (drive[i] != 0. && v.diff != Diff::Open) {
+                let (cl, cr_w) = (
+                    cap_w[i * 2] * v.tire.mu_long,
+                    cap_w[i * 2 + 1] * v.tire.mu_long,
+                );
+                let half = fx[i].abs() / 2.;
+                let (mut fl, mut fr) = (half.min(cl), half.min(cr_w));
+                let rest = fx[i].abs() - fl - fr;
+                if rest > 0. {
+                    fl += rest.min((cl - fl).max(0.));
+                    fr += (fx[i].abs() - fl - fr).max(0.);
+                }
+                let sign = fx[i].signum();
+                mz_split += v.track / 2. * sign * (fr - fl);
+            }
+        }
     }
     // Sperrdifferential: weniger Leistungsverlust durch durchdrehende Räder (Phase 3 verfeinert)
     if v.diff != Diff::Open {
@@ -652,11 +771,11 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let (sr, cr_) = delta_r.sin_cos();
     let mut fxb = fx[0] * cd - fy[0] * sd + fx[1] * cr_ - fy[1] * sr - f_drag - f_roll;
     let fyb = fx[0] * sd + fy[0] * cd + fx[1] * sr + fy[1] * cr_;
-    let mut mz = a * (fx[0] * sd + fy[0] * cd) - b * (fx[1] * sr + fy[1] * cr_);
+    let mut mz = a * (fx[0] * sd + fy[0] * cd) - b * (fx[1] * sr + fy[1] * cr_) + mz_split;
     // Soll-Gierrate (ESP, Lenk-Assist, Untersteuer-Anzeige)
     // (Querhaftung, die neben der aktuellen Längsbeschleunigung übrig bleibt – das misst ein echtes ESP über den
     // Querbeschleunigungssensor)
-    let mu_now = v.tire.mu * env.axle[0].mu_rel * env.axle[0].tire_factor * feel.grip();
+    let mu_now = v.tire.mu * env.axle(0, Ground::grip) * feel.grip();
     let long_used = (s.ax_f / (mu_now * v.tire.mu_long * G).max(0.1)).clamp(-1., 1.);
     let mu_lat = mu_now * (1. - long_used * long_used).max(0.).sqrt().max(0.2);
     let r_ref = yaw_reference(v, s.vx, delta, delta_r, mu_lat);
@@ -1051,12 +1170,10 @@ mod tests {
         // nach aus
         let db = db();
         let v = db.get("sportwagen_s").unwrap();
-        let wet = Env {
-            axle: [Ground {
-                mu_rel: 0.7,
-                ..Ground::DRY
-            }; 2],
-        };
+        let wet = Env::uniform(Ground {
+            mu_rel: 0.7,
+            ..Ground::DRY
+        });
         let peak = |esp: Esp| {
             let feel = Feel::simulation();
             let mut s = State {
@@ -1120,12 +1237,10 @@ mod tests {
     fn cobbles_shake_the_suspension_and_cost_grip() {
         let db = db();
         let v = db.get("kompakt_benzin").unwrap();
-        let cob = Env {
-            axle: [Ground {
-                rough: 0.6,
-                ..Ground::DRY
-            }; 2],
-        };
+        let cob = Env::uniform(Ground {
+            rough: 0.6,
+            ..Ground::DRY
+        });
         let feel = Feel::simulation();
         let mut s = State {
             vx: 14.,
@@ -1190,5 +1305,187 @@ mod tests {
         let mut c = State::default();
         brake_stop(car, &mut c, 100.);
         assert_eq!(c.passenger_falls, 0);
+    }
+
+    #[test]
+    fn aquaplaning_sets_in_at_typical_speeds() {
+        let kmh = |kpa: f64, w: f64| aquaplaning_speed(kpa, 1., w) * 3.6;
+        // Pkw 240 kPa, 205 mm: Teil-Aquaplaning ab rund 75 km/h
+        let car = kmh(240., 205.);
+        assert!((car * AQUA_ONSET - 75.).abs() < 5., "{car}");
+        // breite Sportreifen früher, abgefahrenes Profil noch früher, Lkw praktisch nie
+        assert!(kmh(240., 305.) < car);
+        assert!(aquaplaning_speed(240., 0.8, 205.) * 3.6 < car * 0.85);
+        // (Lkw-Reifen 850 kPa: erst über 120 km/h – schneller als jeder Lkw fährt)
+        assert!(kmh(850., 315.) * AQUA_ONSET > 120.);
+        // unter 2,5 mm Wasser keines
+        assert_eq!(aquaplaning_grip(40., 20., 2.), 1.);
+        assert!((aquaplaning_grip(20., 20., 4.) - AQUA_REST).abs() < 1e-12);
+    }
+
+    /// Gierrate nach `secs` mit Lenkung `steer` bei `kmh` auf `env` (ESP aus).
+    fn yaw_after(v: &Vehicle, env: &Env, kmh: f64, inp: Input, secs: f64) -> State {
+        let feel = Feel::simulation();
+        let mut s = State {
+            vx: kmh / 3.6,
+            gear: v.gearbox.ratios.len().saturating_sub(2),
+            ..Default::default()
+        };
+        for _ in 0..(secs * HZ) as usize {
+            step(v, &feel, &mut s, &inp, env, STEP);
+        }
+        s
+    }
+
+    #[test]
+    fn floating_front_axle_does_not_steer() {
+        let db = db();
+        let v = db.get("kompakt_benzin").unwrap();
+        let wet = Ground {
+            mu_rel: 0.72,
+            ..Ground::DRY
+        };
+        let flooded = Ground {
+            water_mm: 6.,
+            ..wet
+        };
+        let inp = Input {
+            throttle: 0.4,
+            steer: 0.4,
+            esp: Some(Esp::Off),
+            ..Default::default()
+        };
+        let normal = yaw_after(v, &Env::uniform(wet), 110., inp, 0.5);
+        let mut env = Env::uniform(wet);
+        env.wheel[0] = flooded;
+        env.wheel[1] = flooded;
+        let float = yaw_after(v, &env, 110., inp, 0.5);
+        // (Spielgefühl `aquaplaning_staerke` 0,8: es bleibt ein Rest Lenkung)
+        assert!(float.aqua[0] > 0.7 && float.aqua[1] == 0.);
+        assert!(
+            float.r.abs() < normal.r.abs() * 0.4,
+            "{} gegen {}",
+            float.r,
+            normal.r
+        );
+    }
+
+    #[test]
+    fn split_grip_braking_pulls_toward_the_grippy_side() {
+        let db = db();
+        let v = db.get("kompakt_benzin").unwrap();
+        // links (Index 0/2) nasses Gras, rechts Asphalt; Lenkung geradeaus, ESP aus
+        let grass = Ground {
+            mu_rel: 0.35,
+            ..Ground::DRY
+        };
+        let mut env = Env::default();
+        env.wheel[0] = grass;
+        env.wheel[2] = grass;
+        let inp = Input {
+            brake: 1.,
+            esp: Some(Esp::Off),
+            ..Default::default()
+        };
+        let s = yaw_after(v, &env, 80., inp, 0.8);
+        // Gierwinkel gegen den Uhrzeigersinn positiv: nach rechts = negativ
+        assert!(s.yaw < -0.05, "{}", s.yaw);
+        // überall gleich: geradeaus
+        let even = yaw_after(v, &Env::default(), 80., inp, 0.8);
+        assert!(even.yaw.abs() < 1e-6);
+    }
+
+    #[test]
+    fn open_differential_spins_the_slippery_wheel_a_locked_one_pulls() {
+        let db = db();
+        let base = db.get("kompakt_benzin").unwrap().clone();
+        let ice = Ground {
+            mu_rel: 0.12,
+            ..Ground::DRY
+        };
+        let mut env = Env::default();
+        env.wheel[0] = ice; // Frontantrieb: linkes Vorderrad auf Eis
+        let launch = |v: &Vehicle| {
+            let feel = Feel::simulation();
+            let mut s = State::default();
+            let inp = Input {
+                throttle: 1.,
+                esp: Some(Esp::Off),
+                ..Default::default()
+            };
+            for _ in 0..(2. * HZ) as usize {
+                step(v, &feel, &mut s, &inp, &env, STEP);
+            }
+            s.vx
+        };
+        let open = launch(&base);
+        let mut locked = base.clone();
+        locked.diff = Diff::Locked;
+        let lock = launch(&locked);
+        let dry = {
+            let feel = Feel::simulation();
+            let mut s = State::default();
+            for _ in 0..(2. * HZ) as usize {
+                step(
+                    &base,
+                    &feel,
+                    &mut s,
+                    &Input {
+                        throttle: 1.,
+                        ..Default::default()
+                    },
+                    &Env::default(),
+                    STEP,
+                );
+            }
+            s.vx
+        };
+        assert!(
+            open < lock && lock < dry * 1.01,
+            "offen {open}, starr {lock}, trocken {dry}"
+        );
+        assert!(open < dry * 0.6, "offen {open}, trocken {dry}");
+    }
+
+    #[test]
+    fn curbs_bounce_cars_and_barely_bother_high_suvs() {
+        let db = db();
+        let low = db.get("sportwagen_s").unwrap();
+        let high = db.get("gelaendewagen").unwrap();
+        assert!(high.clearance > low.clearance * 1.5);
+        let hit = |v: &Vehicle| {
+            let feel = Feel::simulation();
+            let mut s = State {
+                vx: 30. / 3.6,
+                gear: 1,
+                ..Default::default()
+            };
+            let mut env = Env::default();
+            env.wheel[0].curb = 0.12;
+            env.wheel[1].curb = 0.12;
+            let inp = Input {
+                steer: 0.5,
+                esp: Some(Esp::Off),
+                ..Default::default()
+            };
+            step(v, &feel, &mut s, &inp, &env, STEP);
+            let v0 = s.vx;
+            let fz = s.fz[0] + s.fz[1];
+            for _ in 0..3 {
+                step(v, &feel, &mut s, &inp, &Env::default(), STEP);
+            }
+            (30. / 3.6 - v0, fz, s.curb_hits)
+        };
+        let (loss_low, fz_low, n) = hit(low);
+        let (loss_high, fz_high, _) = hit(high);
+        assert_eq!(n, 1);
+        assert!(
+            loss_low > loss_high * 2.,
+            "tief {loss_low}, hoch {loss_high}"
+        );
+        // die Vorderachse hebt kurz ab (fast keine Radlast → keine Lenkung)
+        let static_f = low.mass_empty * G * low.front;
+        assert!(fz_low < static_f * 0.3, "{fz_low}");
+        assert!(fz_high < high.mass_empty * G * high.front * 0.3);
     }
 }

@@ -87,6 +87,11 @@ pub struct Car {
     pub dyn_state: Option<DynState>,
     /// Fahrphysik-Zustand (vphys, Spielerauto mit Fahrzeugdaten)
     pub phys: Option<Box<crate::vphys::State>>,
+    /// Untergrund je Rad für den nächsten Schritt (von der Welt gesetzt); welches Rad auf der Fahrbahn stand
+    /// (Bordsteinwechsel); Winterreifen statt der Sommerreifen
+    pub env: Option<Box<crate::vphys::Env>>,
+    pub wheel_road: [Option<bool>; 4],
+    pub season_tire: Option<&'static str>,
     pub esp: bool,
     pub esp_full: bool,
     pub abs: bool,
@@ -145,6 +150,9 @@ impl Car {
             level_init: false,
             dyn_state: None,
             phys: None,
+            env: None,
+            wheel_road: [None; 4],
+            season_tire: None,
             esp: true,
             esp_full: false,
             abs: true,
@@ -236,7 +244,7 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     if car.driver == Some(Driver::Player)
         && info.top.is_none()
         && !car.wrecked
-        && let Some(v) = crate::vehdata::game_vehicle(car.model_name()).filter(|v| !v.two_wheel)
+        && let Some(v) = vphys_vehicle(car)
     {
         step_vphys(car, v, ctl, ground.unwrap_or(Ground::Road), dt);
         return;
@@ -336,6 +344,14 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     }
 }
 
+/// Datensatz für den Fahrphysik-Kern (vierrädrig, mit Daten; Winterreifen, wenn die Welt sie gewählt hat).
+pub fn vphys_vehicle(car: &Car) -> Option<&'static crate::vehdata::Vehicle> {
+    if car.kind_info().top.is_some() || car.wrecked {
+        return None;
+    }
+    crate::vehdata::game_vehicle_tire(car.model_name(), car.season_tire).filter(|v| !v.two_wheel)
+}
+
 /// Spielerauto über den Fahrphysik-Kern. Das Spiel rechnet in Pixeln (10 px = 1 m) mit y nach unten und
 /// Winkeln im Uhrzeigersinn; `vphys` in Metern, y nach links, Gierwinkel gegen den Uhrzeigersinn. Der Kern
 /// rechnet jeden Schritt im Fahrzeugsystem ab dem aktuellen Ort; Lage und Geschwindigkeiten kommen jedes Mal aus
@@ -351,22 +367,30 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     let (sa, ca) = car.angle.sin_cos();
     let vf = car.vx * ca + car.vy * sa;
     let vr = -car.vx * sa + car.vy * ca;
+    let env_set = car.env.take();
     let s = car.phys.get_or_insert_with(Default::default);
     (s.x, s.y, s.yaw) = (0., 0., 0.);
     s.vx = vf / PX;
     s.vy = -vr / PX;
     s.r = -car.ang_vel;
     // Untergrund (Phase 4 rechnet je Rad): Haftung aus Untergrund und Witterung, Kopfstein rüttelt
-    let base = Road {
-        mu_rel: surf.grip * tr.lat,
-        tire_factor: 1.,
-        rolling_extra: (surf.drag - 1.) * 0.02,
-        rough: if ground == Ground::Cobble { 0.6 } else { 0. },
-    };
-    let mut front = base;
-    if aq {
-        front.mu_rel *= Aqua::LAT;
-    }
+    // Untergrund je Rad aus der Welt (`World::wheel_env`); ohne ihn (Tests ohne Welt) einheitlich aus dem
+    // Untergrund unter der Mitte und der Witterung
+    let env = env_set.map(|e| *e).unwrap_or_else(|| {
+        let base = Road {
+            mu_rel: surf.grip * tr.lat,
+            rough: if ground == Ground::Cobble { 0.6 } else { 0. },
+            rolling_extra: (surf.drag - 1.) * 0.02,
+            ..Road::DRY
+        };
+        let mut front = base;
+        if aq {
+            front.mu_rel *= Aqua::LAT;
+        }
+        Env {
+            wheel: [front, front, base, base],
+        }
+    });
     let esp = match (car.esp, car.esp_full) {
         (false, _) => Esp::Off,
         (true, true) => Esp::Full,
@@ -381,16 +405,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
         esp: Some(esp),
         no_abs: !car.abs,
     };
-    step(
-        v,
-        feel,
-        s,
-        &inp,
-        &Env {
-            axle: [front, base],
-        },
-        dt,
-    );
+    step(v, feel, s, &inp, &env, dt);
     // zurück ins Spielsystem
     let (dx, dy) = (s.x * PX, -s.y * PX);
     car.x += dx * ca - dy * sa;

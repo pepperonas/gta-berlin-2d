@@ -36,6 +36,7 @@ pub mod soundscape;
 pub mod station;
 pub mod stationlevels;
 pub mod stats;
+pub mod surface;
 pub mod traction;
 pub mod traffic;
 pub mod transit;

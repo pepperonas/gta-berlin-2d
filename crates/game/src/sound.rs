@@ -36,6 +36,7 @@ impl Listener {
                     Some((Sfx::Crash(strength as f32), near(x, y)))
                 }
                 Event::Knock { x, y, .. } => Some((Sfx::Knock(1.), near(x, y))),
+                Event::Curb { x, y, .. } => Some((Sfx::Knock(0.5), near(x, y))),
                 Event::Horn { x, y, npc } => {
                     Some((Sfx::Horn(if npc { 0.6 } else { 1. }), near(x, y)))
                 }

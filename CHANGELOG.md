@@ -8,6 +8,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 4: Untergrund und Wetter je Rad. Belag aus der Karte (Asphalt,
+  Kopfstein, Platten, unbefestigt, Gehweg, Gras), Straßenbahnschienen und Pfützen unter jedem Rad, dazu Nässe,
+  Wasserfilm bei Starkregen auf Hauptstraßen, Schnee (Hauptstraßen festgefahren bzw. Matsch, Nebenstraßen
+  Neuschnee), Eis und neu Glatteis aus Eisregen (mit Ankündigung „Eisregen – Glatteis!“). Ungleicher Grip links
+  und rechts zieht beim Bremsen zur griffigeren Seite, das offene Differential lässt das Rad auf Eis durchdrehen.
+  Aquaplaning nach Reifendruck, Profil und Breite (Pkw ab rund 75 km/h, Lkw praktisch nie); schwimmt die
+  Vorderachse, lenkt das Auto nicht. Bordsteine lassen Pkw kurz abheben, SUVs steigen fast ungestört auf.
+  Alltagsautos fahren im Winter Winter- oder Ganzjahresreifen, Sportwagen behalten ihre Sommerreifen.
 - Native Rust-Portierung, Fahrphysik Phase 3: Das Spielerauto fährt jetzt mit dem neuen Physikkern und den
   kalibrierten Fahrzeugdaten (alle vierrädrigen Modelle; Zweiräder folgen in Phase 5).
   - Bremsen: Druckaufbau, Fading über die Bremsentemperatur (Trommeln merklich nach drei harten Bremsungen,

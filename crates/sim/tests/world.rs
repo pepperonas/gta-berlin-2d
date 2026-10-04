@@ -2114,3 +2114,84 @@ fn no_spawn_at_the_line_of_a_narrow_held_by_oncoming_traffic() {
         "vor der Linie erlaubt (es hält dann)"
     );
 }
+
+/// Fahrphysik Phase 4: Untergrund je Rad aus der echten Karte und dem Wetter.
+#[test]
+fn wheels_feel_cobbles_rain_snow_and_glaze() {
+    use berlin_map_loader::citycodes::surface as sf;
+    let mut w = world(8);
+    let pc = w.player_car_id.unwrap();
+    let (px, py) = (w.player.x, w.player.y);
+    // eine breite Kopfsteinstraße in der Nähe, das Auto mittig darauf
+    let e = w
+        .city
+        .edges
+        .values()
+        .filter(|e| e.cs.surface == sf::COBBLE && e.w > 60. && e.len > 300. && e.lvl == 0)
+        .min_by(|a, b| {
+            let d = |e: &&berlin_sim::city::Edge| (e.pts[0].0 - px).hypot(e.pts[0].1 - py);
+            d(a).total_cmp(&d(b))
+        })
+        .expect("Kopfsteinstraße")
+        .clone();
+    let p = berlin_sim::city::point_along(&e.pts, e.len / 2.);
+    let i = w.cars.iter().position(|c| c.id == pc).unwrap();
+    (w.cars[i].x, w.cars[i].y, w.cars[i].angle) = (p.x, p.y, p.uy.atan2(p.ux));
+    let v = berlin_sim::vehdata::game_vehicle(w.cars[i].model_name()).unwrap();
+    let tire_mu = |w: &mut World| {
+        let env = w.wheel_env(i, v);
+        env.wheel.map(|g| g.mu_rel)
+    };
+    w.temp = 15.;
+    w.weather = Default::default();
+    let dry = tire_mu(&mut w);
+    assert!(
+        dry.iter().all(|&m| (m - 0.8).abs() < 1e-9),
+        "Kopfstein trocken {dry:?}"
+    );
+    let env = w.wheel_env(i, v);
+    assert!(env.wheel.iter().all(|g| g.rough > 0.5), "Kopfstein rüttelt");
+    w.weather.wet = 1.;
+    let wet = tire_mu(&mut w);
+    assert!(
+        wet.iter().all(|&m| (m - 0.5).abs() < 0.03),
+        "Kopfstein nass {wet:?}"
+    );
+    // Glatteis aus Eisregen
+    w.weather = Default::default();
+    w.weather.glaze = 1.;
+    let glaze = tire_mu(&mut w);
+    assert!(glaze.iter().all(|&m| m < 0.1), "Glatteis {glaze:?}");
+    // Kälte: Alltagsauto bekommt Winter- oder Ganzjahresreifen
+    w.weather = Default::default();
+    w.temp = -2.;
+    w.wheel_env(i, v);
+    let season = w.cars[i].season_tire;
+    assert!(
+        !berlin_sim::vehdata::swaps_in_winter(&v.tire.id) || season.is_some(),
+        "{} {:?}",
+        v.tire.id,
+        season
+    );
+}
+
+#[test]
+fn freezing_rain_lays_glaze_with_a_warning() {
+    let mut w = world(8);
+    w.force_weather = Some("rain");
+    w.force_temp = Some(-2.);
+    let mut warned = false;
+    for _ in 0..600 {
+        let before = w.weather.glaze;
+        run(&mut w, 1, idle());
+        if before == 0. && w.weather.glaze > 0. {
+            warned = w
+                .notice
+                .as_ref()
+                .is_some_and(|n| n.text.contains("Glatteis"));
+            break;
+        }
+    }
+    assert!(w.weather.glaze > 0., "Glatteis");
+    assert!(warned, "Ankündigung");
+}

@@ -90,6 +90,19 @@ pub const SNOW_MELT: f64 = 1. / 1500.;
 pub const SNOW_RAIN_MELT: f64 = 1. / 150.;
 pub const ICE_RISE: f64 = 1. / 10.;
 pub const ICE_MELT: f64 = 1. / 20.;
+/// Eisregen: Regen bei Frost überzieht alles in rund 2 Spielminuten mit Glatteis; taut über 0 °C ab
+pub const GLAZE_RISE: f64 = 1. / 120.;
+pub const GLAZE_MELT: f64 = 1. / 60.;
+/// Glatteis aus Eisregen (Regenstärke `rain`, Lufttemperatur `temp_c`).
+pub fn step_glaze(glaze: f64, rain: f64, temp_c: f64, dt: f64) -> f64 {
+    if temp_c > 0. {
+        (glaze - GLAZE_MELT * dt).max(0.)
+    } else if rain > 0.05 {
+        (glaze + GLAZE_RISE * rain.min(1.) * dt).min(1.)
+    } else {
+        glaze
+    }
+}
 
 /// JS `x | 0`: ToInt32.
 fn i32of(x: f64) -> f64 {

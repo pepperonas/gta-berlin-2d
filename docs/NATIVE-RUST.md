@@ -1617,3 +1617,28 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
   schreibt die exakten Werte zurück. Die Simulation sieht nie einen interpolierten Wert.
 - Kalibrierung danach: 179 von 205 Zielwerten in der Toleranz (wie zu Gate 2).
 
+## Fahrphysik Phase 4: Untergründe und Wetter (04.10.2026)
+
+- **`sim/surface.rs`** (rein): `resolve(Spot, Weather) → Mix` (gewichtete Untergründe aus `surfaces.json`,
+  Wasserhöhe, Unebenheit), `ground(db, tire, mix) → vphys::Ground` (Reifenfaktor je Kategorie eingerechnet). Nässe
+  mischt trocken/nass; Starkregen über `FILM_RAIN` legt auf Hauptstraßen (Klasse 1–4) einen Wasserfilm bis
+  `FILM_MM`; Pfützen `PUDDLE_MM`; Schnee/Eis/Glatteis werden darübergeblendet; überdacht bleibt trocken.
+- **`World::wheel_env`** fragt je Rad `City::pavement_at` (Untergrund + Belagsgruppe + Hauptstraße), Schienen
+  (`tram_track_near` 0,9 m), Pfützen und die Witterung an der Fahrzeugmitte (`road_condition`: Überdachung, Brücken
+  frieren zuerst) ab. Bordstein = Wechsel Fahrbahn ↔ Gehweg unter dem Rad (`car.wheel_road`), 12 cm.
+  Winterreifen: unter 7 °C oder bei Schnee bekommen Autos mit `eco`/`sommer_std`/`transporter` je Auto fest
+  `winter` (70 %) oder `ganzjahr` (`vehdata::game_vehicle_tire`, `car.season_tire`).
+- **`vphys`** rechnet Haftung je Rad (`Env.wheel` FL, FR, RL, RR). Längskräfte: beide Räder bekommen dieselbe Kraft,
+  was eines nicht überträgt, übernimmt das andere (ABS je Rad, Sperre) – der Unterschied ergibt das Giermoment
+  (`mz_split`). ⚠️ Nicht nach Haftung verteilen: dann bekam beim Kurvenfahren das äußere Rad mehr Antrieb und drehte
+  das Auto künstlich ein (Querbeschleunigung der Kalibrierung +0,03…0,11 g). Offenes Differential: Antrieb bis
+  2× Haftung des schwächeren Rads. Aquaplaning `aquaplaning_speed` (6,36·√kPa·Profil·(225/Breite)^0,25), ab
+  `AQUA_WATER_MM` Teil-Aquaplaning ab 0,75·v_ap, Rest 10 %, Stärke über `feel.aquaplaning_staerke`; `State.aqua`
+  je Achse. Bordstein: Achse `CURB_HOP_S` entlastet, Tempoverlust, mit Bodenfreiheit (`bodenfreiheit`, sonst aus
+  der Klasse) über 1,5× Bordsteinhöhe nur ein Viertel.
+- **Wetter:** `GroundWeather.glaze` (`weather::step_glaze`): Regen bei Frost legt in ~2 Spielminuten Glatteis
+  (Notiz + Warnschild „Glatteis!“); auslösbar mit `wetter regen` + `temp -2`.
+- Ereignisse `Curb` (Klang), `Aquaplane` jetzt aus dem Physikkern. Kalibrierung unverändert 179/205.
+- Nicht umgesetzt (keine Daten): Bremsschwellen, Laub (keine Jahreszeit), Wasser in Unterführungen,
+  Durchfahrtshöhen; sichtbar trocknende Fahrspuren und Reif-Schimmer fehlen noch in der Darstellung.
+

@@ -1895,6 +1895,35 @@ impl City {
         None
     }
 
+    /// Belag unter einem Rad: Untergrund, Belagsgruppe der Fahrbahn (`citycodes::surface`, außerhalb der Fahrbahn
+    /// `ASPHALT`) und ob es eine Hauptstraße ist (Autobahn bis Kreisstraße: Spurrinnen, festgefahrener Schnee).
+    pub fn pavement_at(&mut self, x: f64, y: f64, lvl: Option<i8>) -> (Ground, u8, bool) {
+        use berlin_map_loader::citycodes::surface as sf;
+        for h in self.edge_segs.query(&Rect::new(x, y, 0., 0.)) {
+            let s = *self.edge_segs.get(h);
+            let e = s.edge.and_then(|id| self.edges.get(&id));
+            if let Some(l) = lvl
+                && !Self::on_level(&s, e, l)
+            {
+                continue;
+            }
+            let (half, code, main) = match (e, s.junction) {
+                (Some(e), _) => (e.w / 2., e.cs.surface, (1..=4).contains(&e.cls)),
+                (None, Some(j)) => (j.r, if j.cobble { sf::COBBLE } else { sf::ASPHALT }, false),
+                _ => continue,
+            };
+            if seg_dist2(x, y, s.ax, s.ay, s.bx, s.by) <= half * half {
+                let g = if code == sf::COBBLE {
+                    Ground::Cobble
+                } else {
+                    Ground::Road
+                };
+                return (g, code, main);
+            }
+        }
+        (self.surface_at(x, y, lvl), sf::ASPHALT, false)
+    }
+
     /// Untergrund an (x, y). `lvl` = Ebene dessen, der dort steht (Brücke: nur die Brücke zählt).
     pub fn surface_at(&mut self, x: f64, y: f64, lvl: Option<i8>) -> Ground {
         if x < 0. || y < 0. || x > self.width || y > self.height {

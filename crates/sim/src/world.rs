@@ -2361,8 +2361,16 @@ impl World {
         }
         let cond = road_condition(&mut self.city, &w, c.x, c.y, c.lvl());
         self.cars[i].traction = traction_of(&cond);
-        // Aufschwimmen in einer Pfütze: Mitte, dann beide Vorderräder; nicht erneut, solange es noch schwimmt
+        // Aufschwimmen in einer Pfütze: Mitte, dann beide Vorderräder; nicht erneut, solange es noch schwimmt.
+        // (Das Spielerauto mit Fahrphysik schwimmt über die Wasserhöhe je Rad auf, `wheel_env`.)
         let c = &self.cars[i];
+        if c.phys.is_some() && c.driver == Some(crate::car::Driver::Player) {
+            let (ax, ay) = self.gust_accel(&self.cars[i]);
+            let c = &mut self.cars[i];
+            c.vx += ax * dt;
+            c.vy += ay * dt;
+            return;
+        }
         let (ca, sa) = (c.angle.cos(), c.angle.sin());
         let vf = c.vx * ca + c.vy * sa;
         if !cond.covered
@@ -2401,6 +2409,105 @@ impl World {
         c.vy += ay * dt;
     }
 
+    /// Untergrund je Rad eines Autos mit Fahrphysik (vorn links, vorn rechts, hinten links, hinten rechts): Belag
+    /// aus der Karte, Straßenbahnschienen, Pfützen, Witterung; dazu Bordsteinwechsel und im Winter die Reifen.
+    pub fn wheel_env(&mut self, i: usize, v: &crate::vehdata::Vehicle) -> crate::vphys::Env {
+        use crate::city::Ground as G;
+        use crate::surface::{Material, Spot, Weather, ground, resolve};
+        use berlin_map_loader::citycodes::surface as sf;
+        const CURB_M: f64 = 0.12;
+        let w = self.weather;
+        let c = &self.cars[i];
+        let (x, y, lvl, id) = (c.x, c.y, c.lvl(), c.id);
+        let (sa, ca) = c.angle.sin_cos();
+        let (along, side) = (c.hw * 0.68, c.hh * 0.82);
+        // links im Spielsystem (y nach unten) = (sin, −cos)
+        let (lx, ly) = (sa, -ca);
+        let wheels = [
+            (along, side),
+            (along, -side),
+            (-along, side),
+            (-along, -side),
+        ];
+        let any_weather = w.wet > 0. || w.snow > 0. || w.ice > 0. || w.glaze > 0.;
+        let cond = if any_weather {
+            crate::traction::road_condition(&mut self.city, &w, x, y, lvl)
+        } else {
+            Default::default()
+        };
+        // Winter: Alltagsautos fahren Winter- oder Ganzjahresreifen (fest je Auto)
+        let winter = self.temp < 7. || w.snow > 0.01;
+        let season = if winter && crate::vehdata::swaps_in_winter(&v.tire.id) {
+            Some(if crate::math::hash01(id as f64 * 7.13) < 0.7 {
+                "winter"
+            } else {
+                "ganzjahr"
+            })
+        } else {
+            None
+        };
+        self.cars[i].season_tire = season;
+        let v = crate::vehdata::game_vehicle_tire(self.cars[i].model_name(), season).unwrap_or(v);
+        let wx = Weather {
+            wet: cond.wet,
+            snow: cond.snow,
+            ice: cond.ice,
+            glaze: if cond.covered { 0. } else { w.glaze },
+            rain: self.sky.p.rain,
+            temp: self.temp,
+            covered: cond.covered,
+        };
+        let db = crate::vehdata::shared();
+        let mut env = crate::vphys::Env::default();
+        for (k, (a, b)) in wheels.into_iter().enumerate() {
+            let (px, py) = (x + ca * a + lx * b, y + sa * a + ly * b);
+            let (g, code, main) = self.city.pavement_at(px, py, Some(lvl));
+            let material = match g {
+                G::Cobble => Material::Cobble,
+                G::Road if code == sf::PLATES => Material::Plates,
+                G::Road if code == sf::UNPAVED => Material::Unpaved,
+                G::Road => Material::Asphalt,
+                G::Sidewalk => Material::Plates,
+                G::Plaza | G::Building => Material::Concrete,
+                G::Grass => Material::Grass,
+                G::Water => Material::Water,
+            };
+            let road = g.is_road();
+            let rail = road
+                && self
+                    .transit
+                    .as_mut()
+                    .is_some_and(|t| t.tram_track_near(px, py, 9.));
+            let puddle = road
+                && w.wet > crate::traction::PUDDLE_WET
+                && self.puddle_at(px, py, lvl).is_some();
+            let mix = resolve(
+                &Spot {
+                    material,
+                    main,
+                    rail,
+                    puddle,
+                },
+                &wx,
+            );
+            let mut gr = ground(db, &v.tire, &mix);
+            // Bordstein: Wechsel zwischen Fahrbahn und Gehweg unter dem Rad
+            let on = matches!(g, G::Road | G::Cobble);
+            let off = matches!(g, G::Sidewalk);
+            let was = self.cars[i].wheel_road[k];
+            if let Some(prev) = was
+                && ((prev && off) || (!prev && on))
+            {
+                gr.curb = CURB_M;
+            }
+            if on || off {
+                self.cars[i].wheel_road[k] = Some(on);
+            }
+            env.wheel[k] = gr;
+        }
+        env
+    }
+
     /// Beschleunigung durch eine Sturmböe (px/s²): Brücken stärker, kleine Autos mehr, das Fahrdynamikmodell
     /// des Spielers bekommt nur einen Teil (es reagiert über die Reifen selbst).
     pub fn gust_accel(&self, c: &Car) -> (f64, f64) {
@@ -2434,10 +2541,17 @@ impl World {
     /// Warnschild für den Fahrer (traction.js roadWarning): nur im eigenen Fahrzeug.
     pub fn road_warning(&mut self) -> Option<&'static str> {
         let c = self.player_car()?.clone();
-        if c.aqua > 0. {
+        if c.aqua > 0.
+            || c.phys
+                .as_ref()
+                .is_some_and(|s| s.aqua[0].max(s.aqua[1]) > 0.3)
+        {
             return Some("Aquaplaning!");
         }
         let cond = road_condition(&mut self.city, &self.weather, c.x, c.y, c.lvl());
+        if self.weather.glaze > 0.05 && !cond.covered {
+            return Some("Glatteis!");
+        }
         if cond.ice > 0.2 {
             return Some("Glätte");
         }
@@ -2471,6 +2585,15 @@ impl World {
             wx::temperature_at(self.seed, self.day_count, self.clock, self.force_weather)
         });
         g.ice = wx::step_ice(g.ice, g.wet, self.temp, dt);
+        // Eisregen: klare Ankündigung, sobald er Glatteis legt
+        let glaze_was = g.glaze;
+        g.glaze = wx::step_glaze(glaze_was, self.sky.p.rain, self.temp, dt);
+        if glaze_was == 0. && g.glaze > 0. {
+            self.notice = Some(Notice {
+                text: "Eisregen – Glatteis!".into(),
+                t: 4.,
+            });
+        }
     }
 
     /// Ein Simulationsschritt.
@@ -2689,7 +2812,35 @@ impl World {
             let ground = self.city.surface_at(c.x, c.y, Some(c.lvl()));
             let c = &mut self.cars[i];
             let falls = c.phys.as_ref().map_or(0, |s| s.passenger_falls);
+            let aqua_was = c.phys.as_ref().map_or(0., |s| s.aqua[0].max(s.aqua[1]));
+            let curbs = c.phys.as_ref().map_or(0, |s| s.curb_hits);
+            // Spielerauto mit Fahrphysik: Untergrund je Rad
+            if c.driver == Some(crate::car::Driver::Player)
+                && let Some(v) = crate::car::vphys_vehicle(c)
+            {
+                let env = self.wheel_env(i, v);
+                self.cars[i].env = Some(Box::new(env));
+            }
+            let c = &mut self.cars[i];
             step_car(c, dt, Some(ground));
+            if let Some(s) = c.phys.as_ref() {
+                let aq = s.aqua[0].max(s.aqua[1]);
+                if aq > 0.5 && aqua_was <= 0.5 {
+                    self.events.push(Event::Aquaplane {
+                        x: c.x,
+                        y: c.y,
+                        car: c.id,
+                        player: true,
+                    });
+                }
+                if s.curb_hits > curbs {
+                    self.events.push(Event::Curb {
+                        x: c.x,
+                        y: c.y,
+                        car: c.id,
+                    });
+                }
+            }
             if c.phys.as_ref().is_some_and(|s| s.passenger_falls > falls) {
                 self.events.push(Event::PassengersFell {
                     x: c.x,

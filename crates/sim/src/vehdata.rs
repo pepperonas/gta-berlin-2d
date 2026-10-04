@@ -291,6 +291,8 @@ pub struct Vehicle {
     pub tire: Tire,
     pub tire_width_mm: f64,
     pub tire_kpa: f64,
+    /// Bodenfreiheit (m): Bordsteine und Bremsschwellen
+    pub clearance: f64,
     pub wheel_r: f64,
     pub cw_a: f64,
     pub cl_a: f64,
@@ -468,6 +470,7 @@ pub const KEYS: &[&str] = &[
     "rauchfahne",
     "kalibrier_zuladung",
     "wirkungsgrad",
+    "bodenfreiheit",
 ];
 /// Spielmerkmale, die unverändert in `flags` landen.
 const FLAGS: &[&str] = &[
@@ -516,15 +519,42 @@ pub fn shared() -> &'static VehicleDb {
 }
 /// Kalibriertes Fahrzeug für das Spiel (einmal je Schlüssel abgeleitet); `None` = unbekannt.
 pub fn game_vehicle(id: &str) -> Option<&'static Vehicle> {
-    static CAL: std::sync::OnceLock<HashMap<String, Vehicle>> = std::sync::OnceLock::new();
-    CAL.get_or_init(|| {
+    game_vehicle_tire(id, None)
+}
+/// Reifen, auf die Alltagsautos im Winter wechseln (Sportreifen bleiben drauf – wer im Schnee einen Supersportler
+/// klaut, hat ein Problem).
+pub const SEASON_TIRES: [&str; 2] = ["winter", "ganzjahr"];
+/// Sommerreifen, die gewechselt werden.
+pub fn swaps_in_winter(tire: &str) -> bool {
+    matches!(tire, "eco" | "sommer_std" | "transporter")
+}
+/// Wie `game_vehicle`, wahlweise mit anderem Reifen (`winter`/`ganzjahr`, nur für wechselnde Sommerreifen).
+pub fn game_vehicle_tire(id: &str, tire: Option<&str>) -> Option<&'static Vehicle> {
+    static CAL: std::sync::OnceLock<HashMap<(String, String), Vehicle>> =
+        std::sync::OnceLock::new();
+    let map = CAL.get_or_init(|| {
         let db = shared();
-        db.vehicles
-            .iter()
-            .filter_map(|v| db.calibrated(&v.id).map(|c| (v.id.clone(), c)))
-            .collect()
-    })
-    .get(id)
+        let mut out = HashMap::new();
+        for v in &db.vehicles {
+            let Some(c) = db.calibrated(&v.id) else {
+                continue;
+            };
+            if swaps_in_winter(&c.tire.id) {
+                for t in SEASON_TIRES {
+                    if let Some(tt) = db.tires.get(t) {
+                        let mut w = c.clone();
+                        w.tire = tt.clone();
+                        out.insert((v.id.clone(), t.to_string()), w);
+                    }
+                }
+            }
+            out.insert((v.id.clone(), String::new()), c);
+        }
+        out
+    });
+    let t = tire.unwrap_or("");
+    map.get(&(id.to_string(), t.to_string()))
+        .or_else(|| map.get(&(id.to_string(), String::new())))
 }
 /// Spielgefühl des Spiels (`feel.json`).
 pub fn game_feel() -> &'static Feel {
@@ -957,6 +987,15 @@ impl VehicleDb {
             tire,
             tire_width_mm: tm["breite_mm"].as_f64().unwrap_or(205.),
             tire_kpa: tm["kpa"].as_f64().unwrap_or(240.),
+            clearance: m["bodenfreiheit"].as_f64().unwrap_or(match class.as_str() {
+                "suv" | "offroad" => 0.21,
+                "van" => 0.17,
+                "lkw" | "lkw_sattel" | "bus" | "bus_gelenk" => 0.25,
+                "sport" | "supercar" | "hypercar" => 0.11,
+                "muscle" => 0.13,
+                "oldtimer" => 0.16,
+                _ => 0.14,
+            }),
             wheel_r,
             cw_a,
             cl_a,

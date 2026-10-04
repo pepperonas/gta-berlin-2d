@@ -2,7 +2,7 @@
 
 Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener Asphalt, `realismus = 1`, `grip_global = 1`; LKW und Busse voll beladen, sonst leer. Toleranzen: 0-X ±7 %, Vmax ±3 %, Bremsweg ±5 %, Querbeschleunigung ±0,05 g. Stellschrauben nur innerhalb der erlaubten Grenzen (cwA ±15 %, μ ±10 %, Übersetzung, Schaltzeit, Wirkungsgrad ±3 %, Bremskraft); Masse, Leistung und Drehmoment unverändert. Verläufe im 100-ms-Takt: `docs/kalibrierung/csv/<id>.csv`.
 
-**179 von 205 Zielwerten in der Toleranz** (87 Fahrzeuge, Laufzeit 7 s).
+**179 von 205 Zielwerten in der Toleranz** (87 Fahrzeuge, Laufzeit 12 s).
 
 | Fahrzeug | Test | Ziel | Ist | Abweichung | | Stellschrauben |
 |---|---|---|---|---|---|---|

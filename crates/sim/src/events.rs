@@ -20,6 +20,12 @@ pub enum Event {
         y: f64,
         car: u32,
     },
+    /// Rad fährt über einen Bordstein (Fahrphysik)
+    Curb {
+        x: f64,
+        y: f64,
+        car: u32,
+    },
     Horn {
         x: f64,
         y: f64,

@@ -76,6 +76,8 @@ pub struct GroundWeather {
     pub wet: f64,
     pub snow: f64,
     pub ice: f64,
+    /// Glatteis aus Eisregen (Regen bei Frost)
+    pub glaze: f64,
 }
 
 fn clamp01(v: f64) -> f64 {

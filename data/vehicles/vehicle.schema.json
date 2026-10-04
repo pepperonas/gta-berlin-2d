@@ -371,6 +371,12 @@
      "type": "number",
      "minimum": 0.5,
      "maximum": 1
+    },
+    "bodenfreiheit": {
+     "type": "number",
+     "minimum": 0.03,
+     "maximum": 0.6,
+     "description": "Bodenfreiheit in m (Bordsteine, Bremsschwellen); ohne Angabe aus der Klasse"
     }
    },
    "additionalProperties": false

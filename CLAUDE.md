@@ -43,6 +43,8 @@ reduces engine force only, never the tyre limit. Add new schema fields to `vehda
 `car.rs step_vphys` (px/y-down ↔ m/y-left conversion each step, `car.phys`); two-wheelers still `dynamics.rs`.
 Holding brake at standstill engages reverse (stop brake tests at vx ≤ 0). Render interpolation: `game/interp.rs`
 writes lerped poses before drawing and restores them in `end_frame` — never keep state from inside a frame.
+Phase 4: per-wheel grip — `sim/surface.rs` (pure mix of `surfaces.json` ids) + `World::wheel_env` (pavement,
+rails, puddles, curbs, winter tyres) → `car.env` → `vphys::Env.wheel` [FL, FR, RL, RR].
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.
