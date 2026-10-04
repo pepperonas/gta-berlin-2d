@@ -147,6 +147,36 @@ als natives UWP-Spiel starten. App-Modell, zulässige APIs, Paketierung und
 Grafikzugriff müssen separat geklärt und auf echter Hardware geprüft werden.
 60–120 FPS auf Xbox sind ein Ziel, kein Messergebnis.
 
+### TODO: Xbox-Teststrategie (vereinbart am 04.10.2026, nächster Schritt)
+
+Ausgangslage: Die Browser-Fassung war auf der Xbox nicht spielbar; die Rust-Fassung läuft dort noch gar nicht
+(Dev Mode erlaubt nur UWP-Pakete, Rust-UWP ist Tier 3, winit hat keinen UWP-Weg, die Hülle startet nur die Webseite).
+Auf dem M1 Pro gemessen (stehend, nachts, Starkregen): Simulation JS 0,63–0,71 ms je Schritt gegen Rust 0,16–0,17 ms;
+Browser hält ~99 fps nur mit selbst abgesenkter Auflösung (1920×1080), ein Ruckler von 41 ms; Rust 1,4 ms Arbeit je
+Bild in voller Auflösung. Die Reihenfolge der Schritte nach Aufwand und Aussagekraft:
+
+1. **Schnelltest der Browser-Fassung auf der Konsole** (kostet fast nichts, klärt die Ursache):
+   - [ ] Im Xbox Device Portal (`https://<xbox-ip>:11443`) *Settings → Preference Settings* „Treat UWP apps as games by
+     default“ einschalten (App-Modus: geteilte Kerne, ~45 % GPU, 1 GB; Spiel: 4 exklusive Kerne, volle GPU, 5 GB).
+   - [ ] Spiel starten, Bildrate und Ruckler beim Fahren notieren (Befehlszeile oder `globalThis.__renderer.stats`).
+   - [ ] Mit erzwungen niedriger Auflösung wiederholen (`perf.js stepResolution` / Befehl `aufloesung`).
+   - Ergebnis festhalten: Lag es am App-Modus, an der Auflösung oder an Canvas 2D selbst?
+2. **Rust-Fassung als WebAssembly in der vorhandenen Hülle** (Empfehlung; auf dem Mac entwickel- und testbar):
+   - [ ] `wasm32-unknown-unknown`-Build von `crates/game` mit wgpu (WebGPU, Rückfall WebGL2) und winit-Web,
+     im Browser auf dem Mac lauffähig.
+   - [ ] Kacheln per `fetch` statt Datei; Streaming-Thread ersetzen (Web Worker oder Laden in Häppchen je Bild –
+     Threads in WASM brauchen SharedArrayBuffer und COOP/COEP-Header, in der Hülle zu klären).
+   - [ ] Ton: cpal hat einen Web-Audio-Rückfall; Autoplay-Regel der Hülle beachten.
+   - [ ] Controller: die Nachrichten der Hülle (`{type:'gamepad', pads}` alle 8 ms) an `engine/pad.rs` weiterreichen.
+   - [ ] Messung im Browser auf dem Mac gegen die JS-Fassung (gleiche Szene, Fahren durch die Stadt).
+   - [ ] Auf der Xbox: Gibt es im WebView2 der Konsole WebGPU bzw. WebGL2? Bildrate im App- und im Spiel-Modus.
+3. **Echte UWP-Hülle mit Rust** (nur, falls 2 nicht reicht): C++/WinRT-Hülle, die `CoreWindow` und den
+   DirectX-12-Swapchain an Rust übergibt; braucht einen Windows-Rechner (oder Windows-11-ARM-VM) und klärt erst,
+   ob wgpu dort eine Oberfläche bekommt. Meiste Unbekannte.
+
+Messgrößen für alle Schritte: Bildrate (Median, p95), längstes Bild, Ruckler beim schnellen Fahren (Kachelnachladen),
+Speicher, Eingabelatenz des Controllers.
+
 ## Referenzen
 
 - [winit ApplicationHandler](https://docs.rs/winit/0.30.13/winit/application/trait.ApplicationHandler.html)

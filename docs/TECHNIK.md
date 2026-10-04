@@ -623,3 +623,6 @@ keine Spurwechsel, keine Höhenebenen außer Brücken/Hochbahn (optisch), Straß
 6. Bildrate auf der Konsole. Auf dem Mac hält der Browser mit der echten Karte bei 1280×720 und 1920×1080 die volle Bildwiederholrate (Frame-Abstand Median 10,0 ms, p95 10,9 ms, gemessen im Playwright-Chromium); über die Xbox sagt das nichts aus.
 7. Nachladen und Speicher auf der Konsole: Auf dem Mac bleiben 10–20 Kacheln geladen (JS-Heap 45–110 MB), eine Kachel
    ist höchstens 0,21 MB groß; das App-Paket wird durch die Karte ~140 MB größer.
+8. Die geplante Reihenfolge der Xbox-Tests (Spiel-Modus der Browser-Fassung, dann die Rust-Fassung als WebAssembly in
+   dieser Hülle, zuletzt eine echte UWP-Hülle) steht als TODO in
+   [NATIVE-RUST.md](NATIVE-RUST.md#todo-xbox-teststrategie-vereinbart-am-04102026-nächster-schritt).
