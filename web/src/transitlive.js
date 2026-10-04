@@ -5,7 +5,7 @@
 import { stepTransit, positionAt, pointOn, trainCars, TRANSIT, BUS, TRAIN } from './transit.js';
 import { undergroundAtS } from './tunnel.js';
 import { createCar, speedOf, damage } from './car.js';
-import { placeOnLane, dropClaims, projectNear } from './traffic.js';
+import { placeOnLane, dropClaims, projectNear, spawnAllowed } from './traffic.js';
 import { buildLaneGraph, nearestLane } from './roadgraph.js';
 import { obbVsObb, circleVsObb } from './collision.js';
 import { LIFE } from './life.js';
@@ -60,6 +60,7 @@ function materializeBus(w, p, v) {
   car.driver = 'npc';
   placeOnLane(car, w.city, hit.lane, s, w.rng);
   car.ai.follow = { pts: p.shape.pts, cum: p.shape.cum, s: pos.s };
+  if (!spawnAllowed(w, car)) return null; // direkt vor einer belegten Einfahrt: im nächsten Schritt erneut versuchen
   car.line = p.name;
   car.duty = { bus: true, pid: p.id, stop: Math.max(1, pos.stop), since: w.time, veh: v.key, s: pos.s, off: 0 };
   v.live = car.id;

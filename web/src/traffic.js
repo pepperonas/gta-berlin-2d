@@ -660,6 +660,21 @@ function deadEndNarrow(city, lane) {
   return v;
 }
 
+// Darf ein frisch platziertes Auto hier entstehen? Wer näher als der Haltabstand an seiner ersten Linie geboren wird,
+// ist im ersten Schritt schon darüber – entryGate trägt ihn dann ungeprüft ein (gedacht für den Pulk). Deshalb dort nur,
+// wenn die Einfahrt ohnehin frei wäre (sonst Gegenverkehr auf einer Engstelle, zweite Zufahrt in eine Kreuzung).
+export function spawnAllowed(world, car) {
+  const ai = car.ai;
+  if (!ai?.segs?.length) return true;
+  const cur = ai.segs[0], next = ai.segs[1];
+  // ohne nächstes Stück wählt erst der erste Fahrschritt (per Zufall) – dann muss jeder mögliche Nachfolger frei sein
+  const end = cur.kEnd ?? ai.route.length / 2 - 1;
+  const d = end < ai.i ? 0 : routeDist(ai, car, end);
+  if (d >= GATE_STOP) return true;
+  const outs = next ? [next.lane] : cur.lane.next.filter((l) => car.kind === 'bus' || !l.busOnly);
+  return outs.every((l) => mayEnter(world, car, cur.lane, l));
+}
+
 export function narrowFree(world, lane) {
   if (!lane.narrow) return true;
   const nk = narrowKey(world.city, lane.edge), t = world.nres?.get(nk);

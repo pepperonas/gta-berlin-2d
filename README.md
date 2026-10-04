@@ -637,11 +637,14 @@ Verlassen der Seite); ohne IndexedDB zählt sie nur für die Sitzung.
 
 ## Stand und Prüfumfang
 
-**Aktueller Prüfstand vom 01.10.2026:** 33 gezielte Tests für Beschleunigung, Fahrdynamik, Fahrzeugbasis und
-Motorklang-Zustand bestanden. Im zuvor ausgeführten vollständigen Lauf: 461 Tests, 444 bestanden, 17 fehlgeschlagen.
-Alle 17 Fehler sind auch mit der alten Fahrphysik reproduzierbar. Die Suite ist daher **nicht insgesamt grün**.
-Der danach ergänzte Wochentag-Befehl wurde nicht erneut automatisiert getestet. Einzelheiten und Grenzen stehen
-im [Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md#prüfstatus-und-grenzen).
+**Aktueller Prüfstand vom 04.10.2026:** `npm test` vollständig grün, **471 von 471 Tests**. Die 18 Fehlschläge vom
+01.10. sind aufgelöst: 17 Tests prüften noch Regeln von vor dem Umbau (Verletzte fallen nicht um, Einsteigen und
+Bahnhöfe per F, ESP für alle Autos, neue Klangpegel, sichtbare Zaunkollision, neue Befehlszeile) und wurden
+umgestellt; einer deckte einen echten Verkehrsfehler auf (Gegenverkehr in einer Engstelle, wenn ein neues Auto
+unmittelbar an der Haltelinie entstand), der behoben ist. **Bekannte offene Schwäche:** Auf sehr engen zweispurigen
+Straßen streifen sich KI-Autos bei Glätte in Kurven gelegentlich frontal oder verklemmen sich; das zeigt sich nur in
+einzelnen Abläufen, nicht in der Suite. Frühere Einzelheiten im
+[Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md#prüfstatus-und-grenzen).
 
 ### Historische Prüfungen früherer Versionen
 

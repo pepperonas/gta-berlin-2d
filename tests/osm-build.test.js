@@ -363,8 +363,11 @@ test('Zäune: Öffnung, wo ein Weg sie kreuzt (auch ohne Tor-Knoten), breit genu
   const hedge = L('wall').filter((w) => w.sub === 'fence' && Math.abs(w.pts[1] - hy) < 20 && Math.abs((w.pts[0] + w.pts[w.pts.length - 2]) / 2 - hx) < 60);
   assert.equal(hedge.length, 1, 'Hecke ohne Querung bleibt ganz');
   assert.ok(Math.abs(hedge[0].pts[0] - hedge[0].pts[hedge[0].pts.length - 2]) > 7 * S, 'in voller Länge');
-  // gezeichnet wird der Zaun genau so (mit Lücke)
-  assert.equal(L('fence').filter((f) => Math.abs(f.pts[1] - cy) < 20).length, 2);
+  // gezeichnet wird der Zaun genau so (mit Lücke): die OSM-Linie und – seit b4d1fc3f – zusätzlich die Kollisionslinie,
+  // damit keine Wand unsichtbar bleibt; beide mit Lücke
+  const drawn = L('fence').filter((f) => Math.abs(f.pts[1] - cy) < 20);
+  assert.equal(drawn.filter((f) => !f.collision).length, 2, 'OSM-Zaunlinie mit Lücke');
+  assert.equal(drawn.filter((f) => f.collision).length, 2, 'Kollisionslinie mit derselben Lücke');
 });
 
 test('Pollerreihe als Linie wird zu einzelnen Pollern (umfahrbar), nicht zur Wand', () => {

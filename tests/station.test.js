@@ -29,6 +29,12 @@ const walk = (w, dx, dy, secs) => { for (let i = 0; i < secs * 60; i++) updateWo
 const toward = (w, x, y, secs, stop = () => false) => {
   for (let i = 0; i < secs * 60 && !stop(); i++) { const d = Math.hypot(x - w.player.x, y - w.player.y) || 1; updateWorld(w, { ...idle(), moveX: (x - w.player.x) / d, moveY: (y - w.player.y) / d }, 1 / 60); }
 };
+// Seit b4d1fc3f öffnet Hineinlaufen keinen Bahnhof mehr: zum Eingang gehen, dann F (enterExit)
+const enterAt = (w, ex, secs) => {
+  toward(w, ex.x, ex.y, secs, () => Math.hypot(ex.x - w.player.x, ex.y - w.player.y) < STATION.reach * 0.5);
+  for (let i = 0; i < 40; i++) updateWorld(w, idle(), 1 / 60); // Eingangsliste (alle 0,5 s) auffrischen
+  updateWorld(w, { ...idle(), enterExit: true }, 1 / 60);
+};
 
 test('Bahnhöfe aus dem Fahrplan: Kottbusser Tor (U8) unter der Erde, die Hochbahn U1/U3 dort nicht; Eingänge am Gehweg', () => {
   assert.equal(stationName('S+U Alexanderplatz Bhf (Berlin)'), 'Alexanderplatz');
@@ -53,7 +59,7 @@ test('Bahnhöfe aus dem Fahrplan: Kottbusser Tor (U8) unter der Erde, die Hochba
 test('Hinein über den Eingang, unten nur auf dem Bahnsteig (Kanten, Säulen), hinaus über die Treppe, nicht gleich wieder hinein', () => {
   const { w, st } = world();
   const ex = st.exits[0];
-  toward(w, ex.x, ex.y, 3, () => !!w.player.inside);
+  enterAt(w, ex, 3);
   assert.ok(w.player.inside, 'unten');
   assert.equal(w.player.inside.id, st.id);
   assert.equal(w.player.lvl, -2);
@@ -70,18 +76,18 @@ test('Hinein über den Eingang, unten nur auf dem Bahnsteig (Kanten, Säulen), h
   assert.equal(w.player.inside, null, 'oben');
   const ex1 = st.exits[1];
   assert.ok(Math.hypot(w.player.x - ex1.x, w.player.y - ex1.y) < 2, 'am Ausgang der anderen Treppe');
-  // stehen bleiben: nicht gleich wieder hinunter
+  // stehen bleiben: nicht von selbst wieder hinunter
   for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
   assert.equal(w.player.inside, null);
-  // weg und wieder hin: hinunter
+  // weg und wieder hin, F: hinunter
   walk(w, 1, 0, 1.5);
-  toward(w, ex1.x, ex1.y, 4, () => !!w.player.inside);
+  enterAt(w, ex1, 4);
   assert.ok(w.player.inside, 'wieder unten');
 });
 
 test('Einsteigen am Bahnsteig in einen haltenden Zug, aussteigen am nächsten U-Bahnhof auf dessen Bahnsteig', () => {
   const { w, st } = world(true); // mit Stadtleben: dann läuft der Fahrplan
-  toward(w, st.exits[0].x, st.exits[0].y, 3, () => !!w.player.inside);
+  enterAt(w, st.exits[0], 3);
   assert.ok(w.player.inside);
   for (let i = 0; i < 90; i++) updateWorld(w, idle(), 1 / 60); // Fahrplan verfolgt die Muster um die Kamera
   // einen Zug Richtung Hermannplatz in den Bahnhof stellen (Fahrzeit = kurz vor der Abfahrt am Halt)
@@ -120,7 +126,7 @@ test('Einsteigen am Bahnsteig in einen haltenden Zug, aussteigen am nächsten U-
 
 test('Unten und oben getrennt: keine Ziele von der Straße, gedämpfter Klang, Spielstand oben am Ausgang', () => {
   const { w, st } = world();
-  toward(w, st.exits[0].x, st.exits[0].y, 3, () => !!w.player.inside);
+  enterAt(w, st.exits[0], 3);
   const p = w.player;
   // ein Passant „über“ der Figur auf der Straße ist kein Ziel
   w.peds.push({ id: 999999, x: p.x, y: p.y, state: 'walk', lvl: 0, hp: 100 });
@@ -132,7 +138,7 @@ test('Unten und oben getrennt: keine Ziele von der Straße, gedämpfter Klang, S
   assert.ok(st.exits.some((ex) => Math.hypot(ex.x - s.player.x, ex.y - s.player.y) < 2), 'Spielstand am Ausgang oben');
 });
 
-test('Eingang dort, wo man ihn sucht: am U-Symbol; E in der Nähe führt hinunter; oberirdische S-Bahnhöfe nicht begehbar', () => {
+test('Eingang dort, wo man ihn sucht: am U-Symbol; F in der Nähe führt hinunter; oberirdische S-Bahnhöfe nicht begehbar', () => {
   const pois = city.list('poi').filter((q) => q.cat === 'ubahn' || q.cat === 'sbahn');
   const norm = (n) => stationName(n).toLowerCase().replace(/stra(ß|ss)e\b/g, 'str').replace(/str\./g, 'str').replace(/[^a-zäöüß0-9]/g, '');
   let checked = 0;
@@ -156,12 +162,12 @@ test('Eingang dort, wo man ihn sucht: am U-Symbol; E in der Nähe führt hinunte
   for (let i = 0; i < 40; i++) updateWorld(w, idle(), 1 / 60);
   assert.ok(entranceNear(w._stNear, w.player.x, w.player.y), 'Eingang in Reichweite (Hinweis)');
   assert.equal(w.player.inside ?? null, null, 'ohne Taste nicht');
-  updateWorld(w, { ...idle(), action: true }, 1 / 60);
-  assert.ok(w.player.inside, 'mit E unten');
+  updateWorld(w, { ...idle(), enterExit: true }, 1 / 60);
+  assert.ok(w.player.inside, 'mit F unten');
   const { w: w2, st: st2 } = world();
   w2.player.x = st2.exits[0].x + STATION.reach * 1.6; w2.player.y = st2.exits[0].y;
   for (let i = 0; i < 40; i++) updateWorld(w2, idle(), 1 / 60);
-  updateWorld(w2, { ...idle(), action: true }, 1 / 60);
+  updateWorld(w2, { ...idle(), enterExit: true }, 1 / 60);
   assert.equal(w2.player.inside ?? null, null, 'zu weit weg');
 });
 
@@ -179,7 +185,7 @@ test('Fehlerfälle: Bahnhöfe unabhängig vom ersten Blick, Neustart/Teleport ho
   assert.ok(direct.some((id) => id.includes('U7')), 'U7-Bahnsteig vorhanden');
   // Neustart im Bahnhof: oben am Start, nicht zurück auf den Bahnsteig
   const { w, st } = world();
-  toward(w, st.exits[0].x, st.exits[0].y, 3, () => !!w.player.inside);
+  enterAt(w, st.exits[0], 3);
   assert.ok(w.player.inside);
   // unten: keine Straßenbahn hält für die Figur, Schüsse rufen oben keine Polizei
   assert.equal(obstacleAt(w, w.player.x, w.player.y), false, 'Straßenbahn oben hält nicht');
@@ -187,10 +193,10 @@ test('Fehlerfälle: Bahnhöfe unabhängig vom ersten Blick, Neustart/Teleport ho
   for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
   assert.equal(w.player.inside, null); assert.notEqual(w.player.lvl, -2);
   assert.ok(Math.hypot(w.player.x - city.places.playerSpawn.x, w.player.y - city.places.playerSpawn.y) < 80, 'am Start');
-  // Teleport genau auf einen Eingang: nicht sofort hinunter (erst weggehen oder E)
+  // Teleport genau auf einen Eingang: nicht sofort hinunter (erst F)
   teleportTo(w, { x: st.exits[0].x, y: st.exits[0].y, angle: 0 });
   for (let i = 0; i < 30; i++) updateWorld(w, idle(), 1 / 60);
   assert.equal(w.player.inside, null, 'bleibt oben');
-  updateWorld(w, { ...idle(), action: true }, 1 / 60);
-  assert.ok(w.player.inside, 'E führt hinunter');
+  updateWorld(w, { ...idle(), enterExit: true }, 1 / 60);
+  assert.ok(w.player.inside, 'F führt hinunter');
 });

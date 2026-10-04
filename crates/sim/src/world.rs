@@ -1127,6 +1127,10 @@ impl World {
                 events: &mut ev,
                 rails: &[],
             };
+            // direkt an der Linie geboren: nur, wenn die Einfahrt frei ist (sonst Gegenverkehr in der Engstelle)
+            if !crate::traffic::spawn_allowed(&mut ctx, &car) {
+                return None;
+            }
             claim_narrow(&mut ctx, id, lane, seg);
             self.cars.push(car);
             Some(id)

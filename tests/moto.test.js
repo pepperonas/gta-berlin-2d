@@ -42,12 +42,14 @@ test('Motorrad: Wheelie begrenzt den Anzug, Stoppie die Bremse – es bremst lä
   assert.equal(specLine(veh('motorcycle')), 'Motorrad · Vierzylinder · Kette · 150 PS');
 });
 
-test('Neue Pkw: Oldtimer bremst schlechter, Muscle-Car ohne Fahrhilfen dreht sich unter Gas, Pick-up hat leere Hinterachse', () => {
+test('Neue Pkw: Oldtimer bremst schlechter, Muscle-Car ohne ESP dreht sich unter Gas, Pick-up hat leere Hinterachse', () => {
   assert.ok(brakeDist('oldtimer') > brakeDist('limousine') * 1.3, 'Trommelbremsen');
-  // Muscle-Car: Vollgas in der Kurve – ohne ESP (Werk) bricht das Heck aus; der Hot Hatch (ESP, Front) bleibt ruhig
-  const slide = (m) => { const c = veh(m, { v0: 45 }); run(c, 1.2, { steer: 0.45, throttle: 0.25 }); let a = 0; run(c, 1.5, { throttle: 1 }, (q) => { a = Math.max(a, Math.abs(q.dyn.alphaR)); }); return a; };
-  assert.ok(slide('musclecar') > 0.3, `Muscle-Car quer (${slide('musclecar').toFixed(2)} rad)`);
-  assert.ok(slide('hothatch') < 0.15, `Hot Hatch ruhig (${slide('hothatch').toFixed(2)} rad)`);
+  // Muscle-Car: Vollgas in der Kurve. Seit 421d751e haben alle Autos ESP (kein Werks-„noAids“ mehr):
+  // mit ESP aus bricht das Heck aus, ESP fängt es ein; der Hot Hatch (Front) bleibt auch ohne ESP ruhig
+  const slide = (m, esp) => { const c = veh(m, { v0: 45, esp }); run(c, 1.2, { steer: 0.45, throttle: 0.25 }); let a = 0; run(c, 1.5, { throttle: 1 }, (q) => { a = Math.max(a, Math.abs(q.dyn.alphaR)); }); return a; };
+  assert.ok(slide('musclecar', false) > 0.3, `Muscle-Car ohne ESP quer (${slide('musclecar', false).toFixed(2)} rad)`);
+  assert.ok(slide('musclecar', true) < 0.15, `ESP fängt das Muscle-Car ein (${slide('musclecar', true).toFixed(2)} rad)`);
+  assert.ok(slide('hothatch', false) < 0.15, `Hot Hatch ruhig (${slide('hothatch', false).toFixed(2)} rad)`);
   // Pick-up auf Schnee: leichte Hinterachse → schlechter vom Fleck als ein gleich starker Allrad
   const snow = tractionOf({ snow: 1 });
   const t50 = (m) => { const c = veh(m, { traction: snow }); for (let t = 0; t < 30; t += DT) { if (kmh(c) >= 50) return t; c.controls.throttle = 1; stepCar(c, DT, null); } return 30; };

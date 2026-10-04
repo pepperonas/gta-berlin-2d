@@ -36,7 +36,8 @@ test('Schuss auf einen Radfahrer: Strahl trifft das Rad, der Fahrer stürzt (Tre
   assert.equal(b.state, 'lying', 'Rad liegt');
   assert.equal(w.peds.length, peds + 1, 'Fahrer ist jetzt ein Mensch am Boden');
   const rider = w.peds.at(-1);
-  assert.ok(rider.state === 'down' || rider.state === 'dead', `Fahrer gestürzt (${rider.state})`);
+  // seit b4d1fc3f fällt niemand mehr um: Verletzte fliehen oder wehren sich (combat.js hurtPed)
+  assert.ok(['flee', 'fight', 'dead'].includes(rider.state), `Fahrer abgeworfen und reagiert (${rider.state})`);
   assert.ok(rider.hp < 100, 'Treffer zählt');
   assert.ok(w.events.some((e) => e.type === 'bike-down' && e.player), 'Ereignis für die Statistik');
   const S = [createStats(), createStats()];
@@ -92,7 +93,7 @@ test('E-Roller wird zum E-Roller; liegendes Rad lässt sich aufheben', () => {
   assert.equal(r2.w.peds.length, peds, 'niemand wird heruntergezogen');
 });
 
-test('Maus (Diablo): Klick auf Radfahrer greift an, Doppelklick kapert; liegendes Rad: weit weg hinlaufen, nah aufsteigen', () => {
+test('Maus (Diablo): Klick auf Radfahrer greift an, Doppelklick kapert; liegendes Rad: Klick läuft hin, F steigt auf', () => {
   const { w, b } = withBike();
   assert.equal(clickIntent(w, b.x, b.y).kind, 'attack');
   assert.equal(clickIntent(w, b.x, b.y, false, { double: true }).kind, 'enter');
@@ -101,8 +102,11 @@ test('Maus (Diablo): Klick auf Radfahrer greift an, Doppelklick kapert; liegende
   assert.equal(clickIntent(w, b.x, b.y).kind, 'approach');
   w.player.x = b.x + 30;
   assert.equal(clickIntent(w, b.x, b.y).kind, 'enter');
-  // Klick aufs liegende Rad daneben: aufsteigen
+  // Klick aufs liegende Rad daneben: hinlaufen; aufsteigen seit b4d1fc3f mit F (Maus links = Bewegung)
   updateWorld(w, { ...idle(), clickWorld: { x: b.x, y: b.y }, clickPressed: true }, 1 / 60);
-  for (let i = 0; i < 120 && !w.player.inCar; i++) updateWorld(w, idle(), 1 / 60);
+  for (let i = 0; i < 120 && w.player.click; i++) updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.player.inCar, null, 'der Klick allein steigt nicht auf');
+  assert.ok(Math.hypot(w.player.x - b.x, w.player.y - b.y) < 30, 'steht am Rad');
+  updateWorld(w, { ...idle(), enterExit: true }, 1 / 60);
   assert.equal(w.cars.find((c) => c.id === w.player.inCar)?.kind, 'bicycle');
 });

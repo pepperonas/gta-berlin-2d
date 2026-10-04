@@ -38,9 +38,11 @@ test('Nahkampf: Faust trifft, wer vorn steht, nicht wer hinten steht; Tritt stö
   step(w, { ...aimAt(p, front.x, front.y), fire: true, firePressed: true });
   assert.equal(front.hp, 100 - WEAPONS[0].dmg, 'vorn getroffen');
   assert.equal(back.hp, undefined, 'hinten nicht');
-  assert.equal(front.state, 'down');
+  assert.ok(front.state === 'flee' || front.state === 'fight', `reagiert auf den Schlag (${front.state})`);
   const hp = front.hp;
   step(w, {}, 40);
+  // er flieht inzwischen (seit b4d1fc3f fällt niemand um) – für den Tritt wieder vor die Figur stellen
+  Object.assign(front, { x: p.x + Math.cos(ang) * 16, y: p.y + Math.sin(ang) * 16, state: 'idle', t: 1e6 });
   step(w, { ...aimAt(p, front.x, front.y), kick: true });
   assert.ok(front.hp <= hp - KICK.dmg || front.state === 'dead', 'Tritt trifft');
 });
@@ -205,12 +207,11 @@ function pedOfKind(w, x, y, fighter) {
   throw new Error('kein passender Passant');
 }
 
-test('Gegenwehr: wer sich wehrt, steht nach dem Schlag auf, kommt zurück und trifft; andere fliehen', () => {
+test('Gegenwehr: wer sich wehrt, bleibt stehen, schlägt zurück und trifft; andere fliehen', () => {
   const { w, p, ang } = arena();
   const f = pedOfKind(w, p.x + Math.cos(ang) * 16, p.y + Math.sin(ang) * 16, true);
   step(w, { aimWorld: { x: f.x, y: f.y }, fire: true, firePressed: true });
-  assert.equal(f.state, 'down');
-  for (let i = 0; i < 60 * 4 && f.state !== 'fight'; i++) step(w);
+  // seit b4d1fc3f bleibt er stehen und geht sofort zum Gegenangriff über
   assert.equal(f.state, 'fight', 'schlägt zurück');
   const hp0 = p.hp;
   for (let i = 0; i < 60 * 3; i++) step(w);

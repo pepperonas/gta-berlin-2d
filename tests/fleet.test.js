@@ -194,7 +194,7 @@ test('Radverkehr in der Welt: fährt auf der Fahrbahn, bleibt nicht hängen; ein
   w.cars.push(car);
   run(w, 0.3);
   assert.equal(b.state, 'lying');
-  assert.ok(w.peds.some((p) => p.state === 'down' && Math.hypot(p.x - b.x, p.y - b.y) < 60), 'Fahrer liegt');
+  assert.ok(w.peds.some((p) => p.state === 'flee' && Math.hypot(p.x - b.x, p.y - b.y) < 60), 'Fahrer abgeworfen, flieht');
 });
 
 test('Räder halten meist bei Rot; wer nicht gehorcht, fährt durch', () => {

@@ -294,6 +294,28 @@ test('Engstelle in Gegenrichtung belegt: das Auto wartet vor der Linie und rollt
   assert.ok(minGap > 30, `hielt nur ${minGap.toFixed(0)} px vor der Engstelle`);
 });
 
+test('Neues Auto hinter der Linie vor einer belegten Engstelle: dort wird keins erzeugt (sonst Gegenverkehr darin)', async () => {
+  const { placeOnLane, narrowKey, narrowDir, spawnAllowed } = await import('../web/src/traffic.js');
+  const { createCar } = await import('../web/src/car.js');
+  const lane = [...g.lanes].find((l) => !l.narrow && l.len > 200 && l.next.length === 1 && l.next[0].narrow);
+  assert.ok(lane, 'keine passende Zufahrt gefunden');
+  const nlane = lane.next[0], nk = narrowKey(city, nlane.edge);
+  const w = createWorld({ city, cars: 0, pedestrians: 0 });
+  // ganz am Ende der Zufahrt geboren: schon über der Haltelinie (Fall aus dem Dauertest, KI#63 auf der Donaustraße)
+  const b = createCar({ x: 0, y: 0 }); b.driver = 'npc'; placeOnLane(b, city, lane, lane.len - 1, w.rng);
+  const e = lane.pts; // im ersten Fahrschritt springt der Routenindex über die Linie (Punkte zählen ab 10 px als erreicht)
+  assert.ok(Math.hypot(e[e.length - 2] - b.x, e[e.length - 1] - b.y) < 10, 'Vorbedingung: unmittelbar an der Linie');
+  assert.equal(spawnAllowed(w, b), true, 'Engstelle frei: erlaubt');
+  w.nres = new Map([[nk, { dir: narrowDir(city, nlane), cars: new Set() }]]);
+  const a = createCar({ x: 0, y: 0 }); a.driver = 'npc'; placeOnLane(a, city, nlane, 10, w.rng); w.cars.push(a);
+  a.ai.claims = [{ kind: 'n', edge: nk, seg: null, lane: nlane }];
+  w.nres = new Map([[nk, { dir: -narrowDir(city, nlane), cars: new Set([a.id]) }]]); w.nresGen = city.gen;
+  assert.equal(spawnAllowed(w, b), false, 'Gegenrichtung belegt: nicht hinter der Linie erzeugen');
+  // weiter vorn auf derselben Zufahrt darf es entstehen – es hält dann vor der Linie
+  const c = createCar({ x: 0, y: 0 }); c.driver = 'npc'; placeOnLane(c, city, lane, lane.len / 2, w.rng);
+  assert.equal(spawnAllowed(w, c), true, 'vor der Linie: erlaubt');
+});
+
 test('Kreuzung von kreuzendem Verkehr belegt: das Auto wartet vor der Linie und rollt nicht hinein', async () => {
   const { placeOnLane } = await import('../web/src/traffic.js');
   const { createCar } = await import('../web/src/car.js');

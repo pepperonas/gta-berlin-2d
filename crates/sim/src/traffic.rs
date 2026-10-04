@@ -1465,6 +1465,33 @@ pub fn claim_narrow(cx: &mut Ctx, car: u32, lane: LaneId, seg: u64) {
         .insert(car);
 }
 
+/// Darf ein frisch platziertes Auto hier entstehen (`traffic.js spawnAllowed`)? Wer näher als der Haltabstand an
+/// seiner ersten Linie geboren wird, ist im ersten Schritt schon darüber – `entry_gate` trägt ihn dann ungeprüft ein
+/// (gedacht für den Pulk), auch gegen den Gegenverkehr einer Engstelle. Deshalb dort nur, wenn die Einfahrt frei wäre;
+/// steht das nächste Stück noch nicht fest, muss jeder mögliche Nachfolger frei sein.
+pub fn spawn_allowed(cx: &mut Ctx, car: &Car) -> bool {
+    let Some(ai) = car.ai.as_ref() else {
+        return true;
+    };
+    let Some(cur) = ai.segs.first().cloned() else {
+        return true;
+    };
+    let end = cur.k_end.unwrap_or(ai.route.len() as i64 - 1);
+    let d = if end < ai.i as i64 {
+        0.
+    } else {
+        ai.route_dist(car.x, car.y, end)
+    };
+    if d >= GATE_STOP {
+        return true;
+    }
+    let outs = match ai.segs.get(1) {
+        Some(n) => vec![n.lane],
+        None => cx.lanes.next(cx.city, cur.lane, car.kind == "bus"),
+    };
+    outs.into_iter().all(|l| may_enter(cx, car, cur.lane, l))
+}
+
 /// Darf auf dieser Spur (Engstelle) gerade ein Auto erzeugt werden?
 pub fn narrow_free(cx: &mut Ctx, lane: LaneId) -> bool {
     let Some(l) = cx.lanes.lane(lane) else {

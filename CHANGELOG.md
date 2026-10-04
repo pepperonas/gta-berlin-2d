@@ -183,6 +183,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Gangpendeln in der Klang-/Drehzahllogik reduziert; Reifenquietschen mit Fahrdynamik folgt tatsächlichem
   Schlupf statt allein dem Bremspedal.
 - Soundtest legt das Pkw-Modell explizit fest statt zufällig einen Diesel als Benziner zu erwarten.
+- Verkehr: Ein neues KI-Auto, das unmittelbar an der Haltelinie vor einer Engstelle entstand, rollte im ersten
+  Schritt darüber und wurde ungeprüft eingetragen – auch gegen den Gegenverkehr in der Engstelle. Neue Autos (Verkehr,
+  Einsatzfahrzeuge, Busse) entstehen dort jetzt nur, wenn die Einfahrt frei wäre (`traffic.js spawnAllowed`, in der
+  Rust-Portierung `traffic::spawn_allowed`); je ein neuer Test, beide gegengeprüft.
+- Testsuite wieder vollständig grün (471/471): 17 Tests prüften noch das Verhalten vor dem Umbau vom 01.10. (Verletzte
+  fallen nicht mehr um, Einsteigen und Bahnhöfe per F, ESP für alle Autos, neue Klangpegel, sichtbare
+  Zaunkollision, neue Befehlszeile) und wurden auf die neuen Regeln umgestellt; drei davon enthielten echte
+  Testfehler (undefinierte Variable, Text hinter einer stehengebliebenen Eingabe, bereits gesetztes Wetter).
 
 ### Dokumentation und Prüfstatus
 
@@ -192,7 +200,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - [Updatebericht](docs/SPIEL-UPDATE-2026-10-01.md) und
   [Beschleunigungsbericht mit Herstellerquellen und 45 Messreihen](docs/FAHRZEUG-BESCHLEUNIGUNG.md).
 - 33 gezielte Tests bestanden; vollständiger vorheriger Lauf 444/461 bestanden. Die 17 Fehler lassen sich
-  auch mit der alten Fahrphysik reproduzieren. Keine Behauptung einer vollständig grünen Suite.
+  auch mit der alten Fahrphysik reproduzieren. (Stand 2026-10-04: behoben, Suite 471/471 grün, siehe „Behoben“.)
+- Bekannte Schwäche (offen): Auf sehr engen zweispurigen Straßen (Gegenspuren < 3 m auseinander, z. B.
+  Eisenbahnstraße) streifen sich KI-Autos in Kurven bei Glätte gelegentlich frontal, und zwei frontal
+  voreinander stehende Autos können sich verklemmen. Zeigt sich nur in einzelnen Abläufen (andere Testreihenfolge,
+  andere Seeds), nicht in der Suite.
 - Paketversion bleibt 0.46.0; dieser Abschnitt beschreibt noch keinen eigenständigen Versionsrelease.
 
 ## [0.46.0] – 2026-09-30

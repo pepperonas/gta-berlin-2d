@@ -126,8 +126,9 @@ export function updateBike(b, world, dt) {
   place(city, b);
 }
 
-// Fahrer runter (Auto-Zusammenstoß, Schuss, Schlag): das Rad bleibt liegen, der Fahrer wird ein Passant, der gestürzt
-// am Boden liegt (fromX/fromY: woher der Stoß kam). Liefert den Fahrer (oder null, wenn kein Gehweg in der Nähe ist).
+// Fahrer runter (Auto-Zusammenstoß, Schuss, Schlag): das Rad bleibt liegen, der Fahrer wird ein Passant, der vor dem
+// Stoß flieht (knockDown; seit dem Umbau fällt niemand mehr um; fromX/fromY: woher der Stoß kam). Liefert den Fahrer
+// (oder null, wenn kein Gehweg in der Nähe ist).
 export function dismount(w, b, fromX, fromY, { fall = true } = {}) {
   b.state = 'lying'; b.t = 0; b.speed = 0; b.cross = null;
   const sp = nearestSpot(w.city, b.x, b.y);

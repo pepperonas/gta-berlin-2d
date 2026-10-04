@@ -91,10 +91,14 @@ test('Fahrzeugklang: Motor folgt der Zündfrequenz, Reifen/Quietschen nach Zusta
   try {
     const s = new Sound();
     s.unlock();
-    s.setVehicle(true, { rpm: 3000, fire: 100, load: 1, norm: 0.4, diesel: false }, { roll: 0.5, cobble: 0, wet: 0, snow: 0, skid: 1, slide: 0, wind: 0.25 }, { inCar: true, rain: 1 });
+    const tires = { roll: 0.5, cobble: 0, wet: 0, snow: 0, skid: 1, slide: 0, wind: 0.25 };
+    s.setVehicle(true, { rpm: 3000, fire: 100, load: 0, norm: 0.4, diesel: false }, tires, { inCar: true, rain: 1 });
+    const idle = s.engine.g.gain.target;
+    s.setVehicle(true, { rpm: 3000, fire: 100, load: 1, norm: 0.4, diesel: false }, tires, { inCar: true, rain: 1 });
     assert.equal(s.engine.o1.frequency.target, 100, 'Grundton = Zündfrequenz');
     assert.equal(s.engine.o2.frequency.target, 50, 'halbe Zündfrequenz für den unrunden Lauf');
-    assert.ok(s.engine.g.gain.target > 0.1, 'unter Last laut');
+    // Pegel seit dem Klang-Umbau (b4d1fc3f) mit Stimmprofil und Dämmung: unter Last deutlich lauter als ohne
+    assert.ok(s.engine.g.gain.target > idle * 2, `unter Last laut (${s.engine.g.gain.target} gegen ${idle})`);
     assert.ok(s.engine.sqg.gain.target > 0, 'Quietschen beim Rutschen');
     assert.ok(s.engine.tires.roof.g.gain.target > 0, 'Regen trommelt aufs Dach');
     assert.equal(s.engine.clm.gain.target, 0, 'Benziner nagelt nicht');

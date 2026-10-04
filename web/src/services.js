@@ -4,7 +4,7 @@
 // Einsatzfahrzeuge entstehen außer Sicht und fahren über den Spurgraph zum Ziel (traffic.js setGoal); über Rot fahren
 // sie langsam. Nur in der Welt mit Tagesrhythmus (Standardbevölkerung) – Tests mit fester Bevölkerung bleiben ruhig.
 import { createCar } from './car.js';
-import { placeOnLane, spawnSpot, setGoal, currentSeg, dropClaims, claimNarrow, narrowFree } from './traffic.js';
+import { placeOnLane, spawnSpot, setGoal, currentSeg, dropClaims, claimNarrow, narrowFree, spawnAllowed } from './traffic.js';
 import { KINDS, nextStopAfter, stopDuration, mayStopOn, EMERGENCY } from './fleet.js';
 import { LIFE } from './life.js';
 
@@ -48,7 +48,7 @@ function dispatch(w, kind, tx, ty, near = { x: tx, y: ty }, minR = 1000, maxR = 
     const car = createCar({ x: sp.x, y: sp.y, kind, color: KINDS[kind].colors[0] });
     placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
     car.driver = 'npc';
-    if (!setGoal(car, w.city, tx, ty)) continue;
+    if (!setGoal(car, w.city, tx, ty) || !spawnAllowed(w, car)) continue;
     claimNarrow(w, car, sp.lane);
     Object.assign(car.ai, { urgent: true, cruiseK: 1.3 });
     car.siren = true;

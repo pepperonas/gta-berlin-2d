@@ -5,7 +5,7 @@ import { clamp, damp } from './math.js';
 import { mulberry32 } from './rng.js';
 import { circleVsRect, circleVsCircle, circleVsObb, circleVsSegment, obbVsRect, obbVsObb, obbVsSegment, obbBounds } from './collision.js';
 import { createCar, stepCar, collideCarWorld, collideCars, speedOf, forwardSpeed, CAR_COLORS, damage, blocks } from './car.js';
-import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims } from './traffic.js';
+import { placeOnLane, spawnSpot, driveAi, claimNarrow, narrowFree, dropClaims, spawnAllowed } from './traffic.js';
 import { createPed, updatePed, scare, nearestSpot, pedSpawnSpot } from './pedestrians.js';
 import { createMission, updateMission, resetMission } from './mission.js';
 import { insideBorder, inBuilding, locationName, hash01, surfaceAt, bezirkAt, T } from './map.js';
@@ -234,6 +234,7 @@ function spawnTraffic(w, minR, maxR) {
     const car = createCar({ x: sp.x, y: sp.y, kind, color: pal[Math.floor(w.rng() * pal.length)] });
     placeOnLane(car, w.city, sp.lane, sp.s, w.rng);
     car.driver = 'npc';
+    if (!spawnAllowed(w, car)) continue; // direkt an der Linie: nur, wenn die Einfahrt frei ist
     claimNarrow(w, car, sp.lane); // auf einer Engstelle geboren: Richtung gleich belegen
     w.cars.push(car);
     return car;

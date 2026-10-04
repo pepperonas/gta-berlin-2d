@@ -122,9 +122,9 @@ test('Klick auf eine Person: hinlaufen bis in Reichweite, dann angreifen; Shift-
   assert.ok(s2 >= 1 && Math.abs(w2.player.x - x) < 0.5, 'steht und schießt');
 });
 
-test('Klick auf ein Auto: weit weg nur hinlaufen, daneben (oder Doppelklick) nach kurzem Halt an der Tür einsteigen, nie schießen', async () => {
+test('Klick auf ein Auto: hinlaufen, nie schießen; eingestiegen wird mit F', async () => {
   const { createCar } = await import('../web/src/car.js');
-  const { WEAPONS, clickIntent, CLICK } = await import('../web/src/combat.js');
+  const { WEAPONS, clickIntent } = await import('../web/src/combat.js');
   const PISTOL = WEAPONS.findIndex((q) => q.id === 'pistol');
   const place = (w) => { const car = createCar({ x: P0.x + Math.cos(ang) * 250, y: P0.y + Math.sin(ang) * 250, angle: ang, role: 'curb' }); w.cars.push(car); return car; };
   const shots = (w) => w.events.filter((e) => e.type === 'shot').length;
@@ -140,18 +140,19 @@ test('Klick auf ein Auto: weit weg nur hinlaufen, daneben (oder Doppelklick) nac
   assert.equal(s, 0, 'kein Schuss aufs Auto');
   assert.equal(w.player.inCar, null, 'nicht eingestiegen');
   assert.ok(Math.hypot(car.x - w.player.x, car.y - w.player.y) < PLAYER.enterDist, 'steht am Auto');
-  // jetzt daneben: Klick steigt ein – aber erst nach einem Moment an der Tür
+  // seit b4d1fc3f steigt nur F ein: ein weiterer Klick daneben läuft höchstens heran
   assert.equal(clickIntent(w, car.x, car.y).kind, 'enter');
   updateWorld(w, { ...idle(), ...click({ x: car.x, y: car.y }) }, 1 / 60);
-  let t = 0;
-  while (!w.player.inCar && t < 3) { updateWorld(w, idle(), 1 / 60); t += 1 / 60; }
-  assert.equal(w.player.inCar, car.id, 'eingestiegen');
-  assert.ok(t >= CLICK.door - 0.05, `kurzer Halt an der Tür (${t.toFixed(2)} s)`);
-  // Doppelklick aus der Ferne: hinlaufen und einsteigen
+  for (let i = 0; i < 60 * 3 && w.player.click; i++) updateWorld(w, idle(), 1 / 60);
+  assert.equal(w.player.inCar, null, 'Klick daneben steigt nicht ein');
+  updateWorld(w, { ...idle(), enterExit: true }, 1 / 60);
+  assert.equal(w.player.inCar, car.id, 'F steigt ein');
+  // Doppelklick aus der Ferne: hinlaufen, ebenfalls ohne einzusteigen
   const w4 = foot(); const c4 = place(w4);
   updateWorld(w4, { ...idle(), ...click({ x: c4.x, y: c4.y }, { clickDouble: true }) }, 1 / 60);
-  for (let i = 0; i < 60 * 12 && !w4.player.inCar; i++) updateWorld(w4, idle(), 1 / 60);
-  assert.equal(w4.player.inCar, c4.id, 'Doppelklick: eingestiegen');
+  for (let i = 0; i < 60 * 12 && w4.player.click; i++) updateWorld(w4, idle(), 1 / 60);
+  assert.equal(w4.player.inCar, null, 'Doppelklick: nicht eingestiegen');
+  assert.ok(Math.hypot(c4.x - w4.player.x, c4.y - w4.player.y) < PLAYER.enterDist, 'Doppelklick: steht am Auto');
   // gehalten ändert nichts daran
   const w1 = foot(); w1.player.weapon = PISTOL; const c1 = place(w1); let s1 = 0;
   for (let i = 0; i < 60 * 3; i++) { updateWorld(w1, { ...idle(), ...click({ x: c1.x, y: c1.y }, { clickPressed: i === 0, clickHeld: true }) }, 1 / 60); s1 += shots(w1); }
@@ -219,8 +220,10 @@ test('Steuerschema: Standard Diablo, im Steuerungsbildschirm mit ←/→ umschal
   const ctx = new Proxy({ measureText: (t) => ({ width: String(t).length * 11 }), createLinearGradient: () => ({ addColorStop: noop }), fillText: (t) => texts.push(String(t)) }, { get: (o, k) => (k in o ? o[k] : noop), set: (o, k, v) => { o[k] = v; return true; } });
   const hud = new Hud(ctx); hud.begin(1280, 720); hud.drawControls(g);
   assert.ok(texts.some((t) => /Diablo/.test(t)), 'Schema angezeigt');
-  assert.ok(texts.some((t) => /Linksklick/.test(t)), 'Klick-Belegung');
-  assert.ok(texts.some((t) => /rechte Maus halten/.test(t)) && !texts.some((t) => /Tab halten/.test(t)), 'Waffenrad auf rechter Maus');
+  // Belegung seit b4d1fc3f: links laufen, rechts angreifen, Waffenrad mit beiden Tasten, Einsteigen mit F
+  assert.ok(texts.some((t) => /^Linke Maus · WASD$/.test(t)), 'Klick-Belegung: links laufen');
+  assert.ok(texts.some((t) => /^Rechte Maus$/.test(t)), 'Angriff auf rechter Maus');
+  assert.ok(texts.some((t) => /^Linke \+ rechte Maus halten$/.test(t)) && !texts.some((t) => /Tab halten/.test(t)), 'Waffenrad auf beiden Maustasten');
   assert.ok(texts.some((t) => /^Umschalt · Alt$/.test(t)), 'Sprint auf Umschalt');
-  assert.ok(texts.some((t) => /rechte Maus tippen/.test(t)), 'Tritt auf rechte Maus tippen');
+  assert.ok(texts.some((t) => /^F$/.test(t)), 'Einsteigen mit F');
 });

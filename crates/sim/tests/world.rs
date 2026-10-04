@@ -1885,3 +1885,71 @@ fn direction_signs_come_from_the_tiles() {
             .all(|r| r.dir.is_finite() && r.dir.abs() <= 7.)
     );
 }
+
+/// Ein neues Auto unmittelbar an der Linie vor einer Engstelle, deren Gegenrichtung belegt ist, darf dort nicht
+/// entstehen: `entry_gate` trüge es im ersten Schritt ungeprüft ein (Gegenverkehr in der Engstelle).
+#[test]
+fn no_spawn_at_the_line_of_a_narrow_held_by_oncoming_traffic() {
+    let mut w = world(5);
+    run(&mut w, 2, idle());
+    // Zufahrt ohne Abzweig, die geradewegs in eine Engstelle führt, und deren Gegenrichtung auf derselben Kante
+    let mut ids: Vec<_> = w.lanes.lanes.keys().copied().collect();
+    ids.sort();
+    let mut found = None;
+    for id in ids {
+        let l = w.lanes.lane(id).unwrap().clone();
+        if l.narrow || l.len < 200. {
+            continue;
+        }
+        let next = w.lanes.next(&w.city, id, false);
+        if next.len() != 1 || !w.lanes.lane(next[0]).unwrap().narrow {
+            continue;
+        }
+        let n = w.lanes.lane(next[0]).unwrap().clone();
+        let opp = w
+            .lanes
+            .lanes
+            .values()
+            .find(|o| o.edge == n.edge && o.dir != n.dir && o.narrow && o.len > 30.)
+            .map(|o| o.id);
+        if let Some(o) = opp {
+            found = Some((l, o));
+            break;
+        }
+    }
+    let (lane, opp) = found.expect("Zufahrt in eine Engstelle mit Gegenrichtung");
+    let at = |l: &berlin_sim::roadgraph::Lane, s: f64| -> (f64, f64) {
+        let mut acc = 0.;
+        for p in l.pts.windows(2) {
+            let d = (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1);
+            if acc + d >= s {
+                let t = (s - acc) / d.max(1e-9);
+                return (
+                    p[0].0 + (p[1].0 - p[0].0) * t,
+                    p[0].1 + (p[1].1 - p[0].1) * t,
+                );
+            }
+            acc += d;
+        }
+        *l.pts.last().unwrap()
+    };
+    // Gegenverkehr in der Engstelle: beansprucht die Gegenrichtung
+    let o = w.lanes.lane(opp).unwrap().clone();
+    let (ox, oy) = at(&o, 10.);
+    assert!(
+        w.put_npc_car(opp, 10., ox, oy, "car").is_some(),
+        "Gegenverkehr gesetzt"
+    );
+    let (ex, ey) = at(&lane, lane.len - 1.);
+    assert!(
+        w.put_npc_car(lane.id, lane.len - 1., ex, ey, "car")
+            .is_none(),
+        "hinter der Linie gegen den Gegenverkehr erzeugt"
+    );
+    let (mx, my) = at(&lane, lane.len / 2.);
+    assert!(
+        w.put_npc_car(lane.id, lane.len / 2., mx, my, "car")
+            .is_some(),
+        "vor der Linie erlaubt (es hält dann)"
+    );
+}

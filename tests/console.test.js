@@ -61,13 +61,13 @@ test('Tasten: Enter vervollständigt Vorschläge; erneutes Enter führt aus; Tab
   type(con, 'wet', ctx);
   assert.equal(consoleKey(con, 'Tab', ctx), 'edit');
   assert.equal(con.text, 'wetter ', 'Befehl ergänzt, Leerzeichen für das Argument');
-  assert.match(con.sugg.help, /^wetter <wetter> – Wetter festlegen/, 'Hilfezeile zum Befehl');
+  assert.match(con.sugg.help, /^wetter <wetter> – .*Wert festlegen/, 'Hilfezeile zum Befehl');
   type(con, 'sch', ctx);
   assert.equal(consoleKey(con, 'ArrowDown', ctx), 'nav'); assert.equal(con.sel, 0);
   consoleKey(con, 'ArrowDown', ctx); assert.equal(con.sel, 1);
   assert.equal(consoleKey(con, 'Enter', ctx, 5, { shift: true }), 'edit');
   assert.equal(con.text, 'wetter schneesturm', 'Enter übernimmt die markierte Ergänzung');
-  assert.equal(w.forceWeather, null, 'Übernehmen führt noch nicht aus');
+  assert.equal(g.world.forceWeather, null, 'Übernehmen führt noch nicht aus');
   assert.equal(consoleKey(con, 'Enter', ctx, 5, { shift: true }), 'run');
   assert.equal(g.world.forceWeather, 'heavysnow', 'gewählter Vorschlag ausgeführt');
   assert.ok(con.open, 'Umschalt+Enter: bleibt offen'); assert.equal(con.text, '');
@@ -120,17 +120,19 @@ test('Wie eine Befehlspalette: ohne Befehlswort, Tippfehler, Enter ergänzt den 
   assert.equal(suggest('21:15', ctx).items[0]?.insert, 'zeit 21:15');
   // Enter mit unvollständigem Wert: sichtbar ergänzen, das zweite Enter führt aus.
   const con = createConsole(); openConsole(con, ctx);
+  const before = w.forceWeather; // „schnee“ oben hat schon Wetter gesetzt
   type(con, 'wetter gewit', ctx); assert.equal(consoleKey(con, 'Enter', ctx), 'edit');
-  assert.equal(con.text, 'wetter gewitter'); assert.equal(w.forceWeather, null);
+  assert.equal(con.text, 'wetter gewitter'); assert.equal(w.forceWeather, before, 'Ergänzen führt noch nicht aus');
   consoleKey(con, 'Enter', ctx);
   assert.equal(w.forceWeather, 'thunder'); assert.equal(con.hist.at(-1), 'wetter gewitter', 'Verlauf mit der vollständigen Zeile');
   openConsole(con, ctx); type(con, 'wet', ctx); consoleKey(con, 'Enter', ctx);
   assert.equal(con.text, 'wetter ', 'Enter vervollständigt auch den Befehlsnamen'); assert.ok(con.open);
+  consoleKey(con, 'Escape', ctx); assert.equal(con.text, '', 'Esc leert die Zeile');
   type(con, 'tp kotbusser tor', ctx); consoleKey(con, 'Enter', ctx);
   assert.equal(con.text, 'tp Kottbusser Tor', 'unscharfer Ortsname wird erst vervollständigt');
   assert.equal(g.teleport, null, 'die Ergänzung löst den Teleport noch nicht aus');
   consoleKey(con, 'Enter', ctx);
-  assert.equal(g.teleport?.name, 'Kottbusser Tor', 'zweites Enter führt den Treffer aus');
+  assert.match(g.teleport?.name ?? '', /^Kottbusser Tor\b/, 'zweites Enter führt den Treffer aus');
   // Klick auf einen Vorschlag übernimmt ihn
   openConsole(con, ctx); type(con, 'wet', ctx);
   assert.ok(consoleAccept(con, 0, ctx)); assert.equal(con.text, 'wetter ');
