@@ -1111,3 +1111,19 @@ unharmonische Teiltöne, 3,2 s Nachhall, Abstand 2,1 s) über den Außen-Bus, al
 Rust-Stadt jetzt die Gebäudeart (Feld 2 der Gebäudezeile, `Poly::bkind`) und fragt `City::church_near` ab – nur im
 Moment des Stundenwechsels. `ambience::bell_strikes` ist rein und getestet; ein Integrationstest findet Kirchen in den
 geladenen Kacheln.
+
+## Ladenlicht und Leuchtreklame (04.10.2026)
+
+`game/neon.rs` portiert `render.js shopGlowPoint`/`neonSigns` und `wetfx.js neonText`/`neonColor`/`neonOn`/`drawNeon`.
+- **Schaufensterlicht:** Läden, Supermärkte, Lokale, Cafés, Hotels und Bahnhöfe werfen nachts warmes Licht
+  (70 px, 255/210/150) auf den Gehweg vor sich – der Punkt liegt zwischen POI und nächster Fahrbahn, knapp vor dem
+  Bordstein, und wird je POI zwischengespeichert.
+- **Leuchtreklame** ab der Dämmerung (Deckkraft steigt mit der Dunkelheit): Kneipen, Bars und Clubs mit Namen oder
+  KNEIPE/BAR/CLUB, SPÄTI, DÖNER, PIZZA, IMBISS, HOTEL; Farbe aus sieben Neontönen, etwa jede achte Röhre flackert
+  (aus = matt in der Farbe). Schriftzug im Bildraum mit farbigem Schein, dazu ein farbiges Licht in der Lichtkarte.
+  Höchstens 40 Schilder, die nächsten zuerst; zwei Einträge für dasselbe Lokal ergeben ein Schild.
+- `--bildschirm reklame` stellt die Figur vor die nächste Stelle mit mindestens drei Schriftzügen
+  ([Bild](images/native/reklame.png), Adalbertstraße am Kottbusser Tor, 23 Uhr).
+
+**Validierung:** Unit-Tests für die Schriftzüge je Art, Farben und Flackern. **Abweichung:** die Schrift ist die
+Bitmapschrift des HUD statt einer serifenlosen Systemschrift.

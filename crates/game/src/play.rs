@@ -55,7 +55,10 @@ pub struct Play {
     /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
     pub demo_station: Option<bool>,
     pub people_show: bool,
+    /// Schaufensterlicht und Leuchtreklame (nachts)
+    neon: crate::neon::Neon,
     pub demo_covered: bool,
+    pub demo_neon: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -268,7 +271,9 @@ impl Play {
             demo_drive: false,
             demo_station: None,
             people_show: false,
+            neon: Default::default(),
             demo_covered: false,
+            demo_neon: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -1753,6 +1758,34 @@ impl Game for Play {
             self.vehicle_show = false;
             w2.vehicle_show();
         }
+        if self.demo_neon && !w2.loading {
+            self.demo_neon = false;
+            let (px, py) = (w2.player.x, w2.player.y);
+            let mut pois = w2.city.pois_near(px, py, 6000.);
+            pois.sort_by(|a, b| {
+                (a.x - px)
+                    .hypot(a.y - py)
+                    .total_cmp(&(b.x - px).hypot(b.y - py))
+            });
+            // die nächste Stelle mit mindestens drei Schriftzügen in 25 m
+            let spot = pois
+                .iter()
+                .filter(|q| crate::neon::neon_text(q).is_some())
+                .find(|q| {
+                    pois.iter()
+                        .filter(|o| crate::neon::neon_text(o).is_some())
+                        .filter(|o| (o.x - q.x).hypot(o.y - q.y) < 250.)
+                        .count()
+                        >= 3
+                });
+            if let Some(q) = spot.cloned()
+                && let Some((gx, gy)) = self.neon.glow_point(&mut w2.city, &q)
+            {
+                let (x, y) = (gx + (gx - q.x) * 0.6, gy + (gy - q.y) * 0.6);
+                (w2.player.x, w2.player.y) = (x, y);
+                (w2.camera.x, w2.camera.y) = (x, y);
+            }
+        }
         if self.demo_covered && !w2.loading {
             self.demo_covered = false;
             demo_cover(w2);
@@ -2428,6 +2461,7 @@ impl Game for Play {
             crate::weatherfx::overlay(&self.world, out);
             crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
             crate::underground::entrance_letters(&self.world, camera, viewport, out);
+            crate::neon::draw(&self.neon, camera, viewport, out);
         }
         self.hud_width = out.width;
         match self.screen {
@@ -2551,6 +2585,66 @@ impl Game for Play {
                     rgb(lp.rgb),
                     if lp.gas { 0.55 } else { 0.7 } * k,
                 );
+            }
+        }
+        // Läden, Lokale und Bahnhöfe: warmer Schein aus dem Schaufenster auf den Gehweg; dazu Leuchtreklame
+        let neon_k = ((l.dark as f32 - 0.25) * 3.).clamp(0., 1.);
+        self.neon.signs.clear();
+        self.neon.alpha = neon_k;
+        if self.world.player.inside.is_none() {
+            let t = self.world.time;
+            // nächste zuerst: die Obergrenze für Schriftzüge soll das Bild treffen, nicht den Rand
+            let mut pois = self.world.city.pois_near(cx, cy, view + 250.);
+            pois.sort_by(|a, b| {
+                let da = (a.x - cx).hypot(a.y - cy);
+                let db = (b.x - cx).hypot(b.y - cy);
+                da.total_cmp(&db)
+            });
+            for q in pois {
+                let glow = crate::neon::SHOP_GLOW.contains(&q.cat);
+                let text = if neon_k > 0. {
+                    crate::neon::neon_text(&q)
+                } else {
+                    None
+                };
+                if !glow && text.is_none() {
+                    continue;
+                }
+                let Some((gx, gy)) = self.neon.glow_point(&mut self.world.city, &q) else {
+                    continue;
+                };
+                if glow {
+                    push(out, gx, gy, 70., [1., 0.82, 0.59], 0.45 * k);
+                }
+                if let Some(text) = text
+                    && self.neon.signs.len() < crate::neon::MAX_SIGNS
+                {
+                    let (dx, dy) = (q.x - gx, q.y - gy);
+                    let d = dx.hypot(dy).max(1.);
+                    let s = self.world.city.scale;
+                    let color = crate::neon::neon_color(&q);
+                    let on = crate::neon::neon_on(&q, t);
+                    let (x, y) = (gx + dx / d * 1.6 * s, gy + dy / d * 1.6 * s);
+                    // zwei Einträge für dasselbe Lokal: nur ein Schild
+                    if self
+                        .neon
+                        .signs
+                        .iter()
+                        .any(|o| (o.x - x).hypot(o.y - y) < 3. * s)
+                    {
+                        continue;
+                    }
+                    if on {
+                        push(out, x, y + 6., 60., color, 0.6 * neon_k);
+                    }
+                    self.neon.signs.push(crate::neon::Sign {
+                        x,
+                        y,
+                        text,
+                        color,
+                        on,
+                    });
+                }
             }
         }
         let w = &self.world;

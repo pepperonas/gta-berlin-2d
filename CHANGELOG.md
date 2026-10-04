@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: nachts Schaufensterlicht auf dem Gehweg und Leuchtreklame vor Kneipen, Clubs, Spätis,
+  Imbissen und Hotels (`--bildschirm reklame`).
 - Native Rust-Portierung: Kirchenglocken schlagen zur vollen Stunde, wenn eine Kirche in Hörweite steht.
 - Native Rust-Portierung: Silhouette der Spielfigur bzw. des eigenen Fahrzeugs unter Dächern, Baumkronen und
   Viadukten (`--bildschirm verdeckt`).

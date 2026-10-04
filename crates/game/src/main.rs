@@ -5,6 +5,7 @@ mod effects;
 mod figure;
 mod hud;
 mod menu;
+mod neon;
 mod play;
 mod snowtracks;
 mod sound;
@@ -154,7 +155,7 @@ fn main() -> Result<()> {
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute oder verdeckt",
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame",
                 )?;
                 ensure!(
                     [
@@ -168,10 +169,11 @@ fn main() -> Result<()> {
                         "bahnhof",
                         "tunnelfahrt",
                         "leute",
-                        "verdeckt"
+                        "verdeckt",
+                        "reklame"
                     ]
                     .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute oder verdeckt"
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt oder reklame"
                 );
                 screen = Some(v);
             }
@@ -299,6 +301,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("tunnelfahrt") => play.demo_station = Some(true),
         Some("leute") => play.people_show = true,
         Some("verdeckt") => play.demo_covered = true,
+        Some("reklame") => play.demo_neon = true,
         Some("konsole") => {
             play.console.open(&play.places);
             play.console.set_text("tp kott", &play.places);
