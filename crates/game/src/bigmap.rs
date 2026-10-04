@@ -668,7 +668,7 @@ mod tests {
         };
         let v = m.view(1280.);
         let empty = HashSet::new();
-        let mut step = |m: &mut BigMap, mouse: Mouse| {
+        let step = |m: &mut BigMap, mouse: Mouse| {
             let keys = Keys {
                 held: &empty,
                 pressed: &empty,
