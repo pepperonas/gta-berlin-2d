@@ -1074,8 +1074,9 @@ den Vorhang halb zu.
 - Uniform: `params.z` = Anteil brennender Fenster, `sun.w` = Spieluhr in Minuten (`Lighting::windows/minutes`).
   [Bild](images/native/fenster.png), 22 Uhr.
 
-**Abweichungen:** Büros, Schulen und Hallen haben in JS einen eigenen Tagesgang; die Gebäudeart steht nicht im
-Mesh, hier folgen alle Häuser dem Wohnungs-Tagesgang. Das Fensterlicht strahlt nicht in die Lichtkarte ab und wird
+**Arbeitsstätten** (öffentliche Gebäude, Industrie, Lager) tragen an der Fassade Material 12 statt 11 und folgen
+dem Bürotagesgang aus `windows.js` (abends noch Licht, nachts fast dunkel, tagsüber gedämpft).
+**Abweichungen:** Das Fensterlicht strahlt nicht in die Lichtkarte ab und wird
 im Nebel nicht gedämpft. Geprüft per Aufnahme (Nacht: Fenster, Tag: kein einziges warmes Fensterpixel).
 
 ## Farbabstimmung und Vignette (04.10.2026)

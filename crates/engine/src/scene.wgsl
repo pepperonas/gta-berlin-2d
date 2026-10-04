@@ -68,7 +68,7 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     if in.material == 8.0 { factor = mix(1.0, 0.90 + 0.1*sin(p.y*30.0), detail); }
     if in.material == 9.0 || in.material == 10.0 { factor = 0.97 + (n-0.5)*0.10*detail; }
     var color = in.color * factor;
-    if in.material == 11.0 {
+    if in.material == 11.0 || in.material == 12.0 {
         let window = fract(p / vec2(2.5, 3.0));
         let glass = window.x > 0.35 && window.x < 0.72 && window.y > 0.28 && window.y < 0.80;
         color = mix(color, vec3(0.26, 0.32, 0.35), select(0.0, 0.85 * detail, glass));
@@ -94,12 +94,26 @@ fn whash(a: u32, b: u32, c: u32, d: u32, e: u32) -> f32 {
     x = mix32(x ^ e);
     return f32(x >> 8u) / 16777216.0;
 }
+fn office_light(m: f32) -> f32 {
+    let t = array<vec2<f32>, 8>(vec2(0.0, 0.03), vec2(360.0, 0.04), vec2(420.0, 0.35), vec2(1020.0, 0.45),
+        vec2(1140.0, 0.3), vec2(1230.0, 0.1), vec2(1320.0, 0.04), vec2(1440.0, 0.03));
+    for (var i = 1; i < 8; i++) {
+        if m <= t[i].x {
+            let a = t[i - 1];
+            let b = t[i];
+            return a.y + (b.y - a.y) * (m - a.x) / max(b.x - a.x, 1.0);
+        }
+    }
+    return 0.03;
+}
 @fragment fn window_fs(in: Out) -> @location(0) vec4<f32> {
     let frac = camera.params.z;
     let minutes = camera.sun.w;
     let m = minutes - floor(minutes / 1440.0) * 1440.0;
     let late = m < 330.0 || m > 1380.0;
-    if in.material != 11.0 || camera.params.y > 0.5 || (frac <= 0.001 && !late) { discard; }
+    if (in.material != 11.0 && in.material != 12.0) || camera.params.y > 0.5 || (frac <= 0.001 && !late) {
+        discard;
+    }
     let p = in.uv / camera.params.x;
     let cell_size = vec2(2.5, 3.0);
     let cell = floor(p / cell_size);
@@ -115,7 +129,13 @@ fn whash(a: u32, b: u32, c: u32, d: u32, e: u32) -> f32 {
     let flat_i = u32(floor((f32(col) + floor(whash(seed, face, row, 2u, 0u) * flat_w)) / flat_w));
     let home = whash(seed, face, row, flat_i, 3u);
     let room = whash(seed, face, row, col, 4u);
-    var on = 0.78 * home + 0.22 * room < frac;
+    // Arbeitsstätten: abends noch Licht, nachts fast dunkel, tagsüber nur bei Trübe sichtbar (windows.js OFFICE)
+    var lit = frac;
+    if in.material == 12.0 {
+        lit = office_light(m);
+        if m > 420.0 && m < 1140.0 { lit *= 0.7; }
+    }
+    var on = 0.78 * home + 0.22 * room < lit;
     // nachts kurz Licht in einem einzelnen Raum (Bad, Küche), je 9 Minuten neu ausgewürfelt
     if !on && late { on = whash(seed, face, row, col ^ (u32(floor(minutes / 9.0)) * 2654435761u), 5u) < 0.012; }
     if !on { discard; }

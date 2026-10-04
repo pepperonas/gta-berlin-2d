@@ -282,9 +282,16 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
     // Schattenhöhe wie lighting.js buildingHeight: max(18, Höhe × heightScale 0,5)
     mesh.building_shadow(&b.polygon.rings, (b.height * 0.5).max(18.));
     let axis = roofs::oriented_box(b);
+    // Arbeitsstätten (Büros, Schulen, Hallen) haben ihren eigenen Lichttagesgang (windows.js isWorkplace)
+    let workplace = matches!(
+        b.kind,
+        crate::citycodes::building_kind::PUBLIC
+            | crate::citycodes::building_kind::INDUSTRIAL
+            | crate::citycodes::building_kind::WAREHOUSE
+    );
     let wall_surface = Surface {
         color: wall,
-        material: 11.,
+        material: if workplace { 12. } else { 11. },
         depth: depth + 0.00004,
         normal: Vec3::Z,
     };
