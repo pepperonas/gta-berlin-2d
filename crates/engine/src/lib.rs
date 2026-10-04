@@ -117,8 +117,18 @@ pub struct Keys<'a> {
     pub typed: &'a str,
 }
 
+/// Zeiten des vorigen Bildes für eine Bildratenanzeige: Abstand zum Bild davor und Arbeitszeit (Simulation,
+/// Aufbau der Zeichenlisten und Zeichnen bis zur Abgabe an die GPU).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FrameStats {
+    pub dt: f32,
+    pub work_ms: f32,
+}
+
 /// Spiel, das die Engine mit festem Schritt antreibt (die Simulation selbst kennt weder Fenster noch GPU).
 pub trait Game {
+    /// Zeiten des vorigen Bildes (jedes Bild einmal, vor `hud`).
+    fn frame_stats(&mut self, _stats: FrameStats) {}
     /// Fester Simulationsschritt in Sekunden.
     fn step_seconds(&self) -> f64;
     fn step(&mut self, keys: &Keys, dt: f64);
@@ -131,6 +141,9 @@ pub trait Game {
     }
     /// Umrisse, die nur dort erscheinen, wo etwas Näheres davor liegt (Spielfigur unter Dach oder Baumkrone).
     fn silhouettes(&self, _out: &mut Vec<Body>) {}
+    /// Durchscheinende Effekte (Qualm, Gischt, Leuchtspuren …): nach Licht und Silhouetten gezeichnet, ohne Tiefe
+    /// zu schreiben – sie verdecken nichts. Das Licht wenden sie selbst an (Farbe bereits abgedunkelt).
+    fn effects(&self, _out: &mut Vec<Body>) {}
     /// Zeile für den Fenstertitel.
     fn status(&self) -> String;
     /// Ist die Spielwelt geladen (für Smoke-Tests)?
@@ -210,6 +223,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         interval: Duration::from_secs_f64(1.0 / fps as f64),
         next: Instant::now(),
         last: Instant::now(),
+        work_ms: 0.,
         frames: 0,
         smoke_frames,
         error: None,
@@ -237,6 +251,8 @@ struct App {
     interval: Duration,
     next: Instant,
     last: Instant,
+    /// Arbeitszeit des vorigen Bildes (ms)
+    work_ms: f32,
     frames: u32,
     smoke_frames: Option<u32>,
     error: Option<anyhow::Error>,
@@ -444,6 +460,9 @@ impl ApplicationHandler for App {
                     self.bodies.clear();
                     game.silhouettes(&mut self.bodies);
                     renderer.set_silhouettes(&self.bodies);
+                    self.bodies.clear();
+                    game.effects(&mut self.bodies);
+                    renderer.set_effects(&self.bodies);
                     renderer.set_lighting(game.lighting().unwrap_or(self.lighting));
                     self.lights.clear();
                     game.lights(&mut self.lights);
@@ -455,6 +474,10 @@ impl ApplicationHandler for App {
                     if let Some(mesh) = game.take_overview() {
                         renderer.set_overview(&mesh);
                     }
+                    game.frame_stats(FrameStats {
+                        dt,
+                        work_ms: self.work_ms,
+                    });
                     let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
                     game.hud(&self.camera, viewport, &mut overlay);
                     renderer.set_hud(&overlay.items, overlay.map);
@@ -513,7 +536,9 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                     return;
                 }
-                match renderer.render(&self.camera) {
+                let rendered = renderer.render(&self.camera);
+                self.work_ms = now.elapsed().as_secs_f32() * 1000.;
+                match rendered {
                     Ok(true) => {
                         if self.status.ready() && self.game.as_ref().is_none_or(|g| g.ready()) {
                             self.frames += 1;

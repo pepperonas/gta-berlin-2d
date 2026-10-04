@@ -4,7 +4,9 @@ mod carart;
 mod console;
 mod effects;
 mod figure;
+mod fps;
 mod hud;
+mod levelview;
 mod menu;
 mod neon;
 mod play;
@@ -39,6 +41,7 @@ fn main() -> Result<()> {
     let mut resume = false;
     let mut screen: Option<String> = None;
     let mut demo_combat = false;
+    let mut demo_drift = false;
     let mut vehicle_show = false;
     let mut seed = 1989u32;
     let mut check_sim: Option<f64> = None;
@@ -155,6 +158,10 @@ fn main() -> Result<()> {
             "--new" => new_game = true,
             "--fortsetzen" => resume = true,
             "--kampf-demo" => demo_combat = true,
+            "--drift-demo" => {
+                demo_drift = true;
+                in_car = true;
+            }
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
@@ -199,7 +206,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--audio-wav DATEI [--audio-seconds N]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Strg: angreifen · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
@@ -292,6 +299,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     let play = play::Play::new(&options.data_root, seed, Some(storage), sound, start)?;
     let mut play = play;
     play.demo_combat = demo_combat;
+    play.demo_drift = demo_drift;
     play.vehicle_show = vehicle_show;
     match screen.as_deref() {
         Some("pause") => play.pause(),

@@ -870,8 +870,17 @@ meldet das Ereignis) und Unit-Test der Reifenspuren (Schritt, Sprung, vier bzw. 
 steht die Welt (fehlende Kacheln laden weiter).
 - **Befehle:** `hilfe`, `zeit`, `tag`, `wetter` (Enter allein öffnet die Wettertafel: Typ, Temperatur, Schnee, Nässe,
   Glätte mit ←/→), `schnee`, `nass`, `glaette`, `temp`, `tempo` (Uhrtempo), `verkehr`, `passanten`, `tp`, `geld`,
-  `leben`, `munition`, `esp`, `gott`, `auto` (Pkw-Modell oder Fahrzeugart neben der Figur), `reparieren`, `stats`.
-  Deutsche und englische Aliasse wie im Browser.
+  `leben`, `munition`, `esp`, `gott`, `auto` (Pkw-Modell oder Fahrzeugart neben der Figur), `reparieren`, `stats`,
+  `fps`, `ebenen`, `silhouetten`. Deutsche und englische Aliasse wie im Browser.
+- **Anzeige-Schalter (`console::Debug`, gehören dem Spiel, nicht der Welt):** `fps` blendet oben mittig Bildrate,
+  mittlere Arbeitszeit je Bild (Simulation, Aufbau, Zeichnen bis zur Abgabe) und das längste Bild der letzten
+  Sekunde ein (grün ab 50, gelb ab 30, sonst rot; `game/fps.rs`, die Engine reicht die Zeiten über
+  `Game::frame_stats` durch). `ebenen` färbt Straßen und Wege nach ihrer Ebene (−2 lila, −1 blau, 0 weiß,
+  1 orange, 2 rot) mit der Zahl in der Mitte und zeigt Portale als gestrichelte Kreise mit „unten..oben“
+  (`game/levelview.rs`). `silhouetten` schaltet die Umrisse verdeckter Figuren. [Bild](images/native/ebenen-fps.png)
+  (Oberbaumbrücke). **Nicht portiert:** `qualitaet` und `aufloesung` – die native Fassung kennt keine
+  Qualitätsstufen und keine interne Auflösung; gemessen braucht ein Bild auf dem M1 Pro rund 2 ms, die Stellschrauben
+  des Browsers hätten hier nichts zu regeln.
 - **Palette:** Vorschläge für Befehle, feste Werte je Argument und Orte; Tippfehler werden verziehen (Levenshtein, ab
   4 Zeichen ein Fehler, ab 7 zwei). Ohne Befehlswort versteht die Zeile Uhrzeit („22:30“, „nacht“), Wochentag, Wetter
   und sichere Ortstreffer. Enter übernimmt zuerst einen abweichenden Vorschlag, das nächste führt aus; Erfolg
@@ -1235,6 +1244,24 @@ Port von `worldfx.js` und den Bremsspuren aus `render.js`, in `game/effects.rs` 
 - **Bremsspuren** an den Hinterrädern beim Rutschen, Vollbremsen ab 150 px/s oder mit Handbremse (nicht im Schnee,
   dort gibt es die Reifenspuren der Schneedecke), dunkle Striche, die nach 8 s verblassen; höchstens 600.
 Rein darstellend: Streuung aus Hashes, nie aus dem Welt-Zufall.
+
+**Überarbeitung (Nutzerbefund „Reifen werden beim Durchdrehen oder Blockieren blau animiert“):** Die Ursache war
+nicht die Partikelfarbe allein, sondern der Silhouetten-Durchgang. Die Wolken lagen als Körper mit Tiefe 0,59 *vor*
+dem Auto (0,62) und schrieben Tiefe – für die Silhouetten (Tiefentest „größer“) sah das wie ein Dach aus, und wo
+eine Wolke das Auto berührte, leuchtete dessen Umriss hellblau. Dasselbe galt für Leuchtspuren, Mündungsfeuer und
+Einschlagwölkchen. Jetzt:
+- **Eigener Effekt-Durchgang** (`Game::effects`, `Renderer::set_effects`, `effect_pipeline`): nach Licht und
+  Silhouetten, mit Tiefentest (Dächer bleiben davor), ohne Tiefe zu schreiben. Bodenspuren (Bremsspuren, Blut,
+  Klickring) bleiben normale Körper. Weil die Lichtkarte die Effekte nicht mehr erreicht, dunkeln Qualm, Gischt und
+  Staub nachts selbst mit dem Umgebungslicht ab – halb entsättigt, damit der Mondton sie nicht wieder blau färbt;
+  Glut und Mündungsfeuer leuchten weiter selbst.
+- **Farben ohne Blaustich:** Qualm warmweißes Grau, Gischt fast farblos (vorher hellblau 0,75/0,87/0,90).
+- **Form:** Qualm aus vielen dünnen Wölkchen mit Streuung in Lage, Richtung, Größe und Lebensdauer, die mit
+  Luftwiderstand zurückbleiben und aufquellen (26 statt 14 je Sekunde und Rad, Deckkraft 0,24) – eine Wolke statt
+  einzelner Ballen. Gischt fliegt als längliche Fahne hinter dem Rad her; ohne Durchdrehen sprüht Nässe erst ab
+  etwa 40 km/h.
+- **Prüfstand:** `--drift-demo` (im eigenen Auto Vollgas, dann im Wechsel Handbremse und Lenkung).
+  [Vorher/nachher](images/native/reifenqualm-vorher-nachher.png): oben vorher (trocken / Regen), unten nachher.
 
 ## Wegweiser und Laternen (04.10.2026)
 

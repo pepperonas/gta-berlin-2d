@@ -39,6 +39,9 @@ pub(crate) struct Renderer {
     silhouette_pipeline: wgpu::RenderPipeline,
     silhouettes: Option<wgpu::Buffer>,
     silhouette_count: u32,
+    effect_pipeline: wgpu::RenderPipeline,
+    effects: Option<wgpu::Buffer>,
+    effect_count: u32,
     bodies: Option<wgpu::Buffer>,
     body_capacity: usize,
     body_count: u32,
@@ -270,6 +273,20 @@ impl Renderer {
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Greater,
+        );
+        // Durchscheinende Effekte (Qualm, Gischt, Leuchtspuren, Mündungsfeuer): nach Licht und Silhouetten, mit
+        // Tiefentest (Dächer bleiben davor), aber ohne Tiefe zu schreiben – sonst zählten sie als Verdeckung und
+        // der Silhouetten-Durchgang zeichnete das Auto unter einer Reifenwolke als Umriss.
+        let effect_pipeline = make_pipeline(
+            "Berlin effects",
+            "body_vs",
+            "body_fs",
+            size_of::<Body>() as u64,
+            wgpu::VertexStepMode::Instance,
+            &body_attrs,
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::LessEqual,
         );
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera / sun"),
@@ -504,6 +521,9 @@ impl Renderer {
             silhouette_pipeline,
             silhouettes: None,
             silhouette_count: 0,
+            effect_pipeline,
+            effects: None,
+            effect_count: 0,
             bodies: None,
             body_capacity: 0,
             body_count: 0,
@@ -636,22 +656,24 @@ impl Renderer {
     /// Umrisse verdeckter Figuren (wenige; Puffer wächst bei Bedarf).
     pub fn set_silhouettes(&mut self, bodies: &[Body]) {
         self.silhouette_count = bodies.len() as u32;
-        if bodies.is_empty() {
-            return;
-        }
-        let need = std::mem::size_of_val(bodies) as u64;
-        if self.silhouettes.as_ref().is_none_or(|b| b.size() < need) {
-            self.silhouettes = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Silhouette instances"),
-                size: need.next_power_of_two().max(1024),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }));
-        }
-        if let Some(buffer) = &self.silhouettes {
-            self.queue
-                .write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
-        }
+        upload_bodies(
+            &self.device,
+            &self.queue,
+            &mut self.silhouettes,
+            bodies,
+            "Silhouette instances",
+        );
+    }
+    /// Durchscheinende Effekte (eigener Durchgang ohne Tiefenschreiben, s. `effect_pipeline`).
+    pub fn set_effects(&mut self, bodies: &[Body]) {
+        self.effect_count = bodies.len() as u32;
+        upload_bodies(
+            &self.device,
+            &self.queue,
+            &mut self.effects,
+            bodies,
+            "Effect instances",
+        );
     }
     pub fn set_lighting(&mut self, lighting: Lighting) {
         self.lighting = lighting;
@@ -904,6 +926,12 @@ impl Renderer {
             pass.set_pipeline(&self.silhouette_pipeline);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.silhouette_count);
+        }
+        if let Some(buffer) = self.effects.as_ref().filter(|_| self.effect_count > 0) {
+            pass.set_bind_group(1, &self.vehicle_bind, &[]);
+            pass.set_pipeline(&self.effect_pipeline);
+            pass.set_vertex_buffer(0, buffer.slice(..));
+            pass.draw(0..6, 0..self.effect_count);
         }
         pass.set_pipeline(&self.light.grade);
         pass.draw(0..3, 0..1);
@@ -1231,4 +1259,29 @@ fn vehicle_atlas_bind(
             },
         ],
     })
+}
+
+/// Instanzpuffer füllen, bei Bedarf vergrößern (Zweierpotenz, mindestens 1 KiB).
+fn upload_bodies(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    slot: &mut Option<wgpu::Buffer>,
+    bodies: &[Body],
+    label: &'static str,
+) {
+    if bodies.is_empty() {
+        return;
+    }
+    let need = std::mem::size_of_val(bodies) as u64;
+    if slot.as_ref().is_none_or(|b| b.size() < need) {
+        *slot = Some(device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: need.next_power_of_two().max(1024),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }));
+    }
+    if let Some(buffer) = slot {
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
+    }
 }

@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Befehle `fps` (Bildrate, Arbeitszeit je Bild, längstes Bild), `ebenen` (Ebenen und
+  Portale) und `silhouetten` in der Befehlszeile; `--drift-demo` als Prüfstand für Reifeneffekte.
 - Native Rust-Portierung: Nebel dämpft das Fensterlicht (`fogK`); Radfahrer, E-Roller und Bahnwagen bekommen unter
   Dächern und Baumkronen eine Silhouette.
 - Native Rust-Portierung: Missions-Autopilot als Integrationstest (A* über den echten Straßengraphen, Pure Pursuit,
@@ -175,6 +177,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Native Rust-Portierung: Durchdrehende oder blockierende Reifen ließen das eigene Auto hellblau aufleuchten – die
+  Reifenwolken zählten als Verdeckung und lösten dessen Silhouette aus. Qualm, Gischt, Leuchtspuren und
+  Mündungsfeuer haben jetzt einen eigenen Durchgang ohne Tiefenschreiben; Qualm ist weißgrau und wolkig statt
+  bläulicher Ballen, Gischt eine fast farblose Sprühfahne.
 - Treffer in der Luft frieren die Sprungbewegung nicht mehr ein. Die Schwimmpose beginnt erst beim Wasserkontakt;
   Sprung-/Schwimmzustand wird beim Fahrzeugeinstieg und Wiedererscheinen zurückgesetzt.
 - Tunnellichter werden nach dem Tunnelkörper gezeichnet und dadurch nicht mehr übermalt.

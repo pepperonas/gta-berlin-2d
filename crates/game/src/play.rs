@@ -27,6 +27,9 @@ pub struct Play {
     pub bigmap: crate::bigmap::BigMap,
     /// HUD-Breite des letzten Bildes (Basiseinheiten), für die Kartenbedienung im Simulationsschritt
     hud_width: f32,
+    /// Anzeige-Schalter der Befehlszeile (fps, ebenen, silhouetten)
+    debug: crate::console::Debug,
+    fps: crate::fps::Meter,
     pub screen: Screen,
     menu: crate::menu::Menu,
     root: std::path::PathBuf,
@@ -48,6 +51,8 @@ pub struct Play {
     trigger_was: bool,
     /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
     pub demo_combat: bool,
+    /// `--drift-demo`: im eigenen Auto Vollgas mit Handbremse und Lenkung (Reifenqualm, Bremsspuren prüfen)
+    pub demo_drift: bool,
     /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
     pub vehicle_show: bool,
     /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
@@ -193,6 +198,104 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
 }
 
 impl Play {
+    fn hud_main(
+        &mut self,
+        camera: &berlin_engine::camera::Camera,
+        viewport: Vec2,
+        out: &mut berlin_engine::hud::Hud,
+    ) {
+        let engine = self.world.player_car().map(|_| self.listener.engine());
+        if let Some(st) = self
+            .world
+            .player
+            .inside
+            .as_ref()
+            .and_then(|i| self.world.station_by_id(&i.id))
+            .cloned()
+        {
+            // im U-Bahnhof: der Bahnhof statt der Stadt (kein Wetter, kein Himmel)
+            crate::underground::draw_station(&self.world, &st, camera, viewport, out);
+        } else {
+            crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
+            crate::weatherfx::storm_overlay(&self.world, camera, viewport, out);
+            crate::weatherfx::overlay(&self.world, out);
+            crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
+            crate::underground::entrance_letters(&self.world, camera, viewport, out);
+            crate::streetfurn::sign_texts(&self.street_signs, camera, viewport, out);
+            crate::neon::draw(&self.neon, camera, viewport, out);
+        }
+        self.hud_width = out.width;
+        match self.screen {
+            Screen::Title => {
+                crate::menu::draw_title(out, &self.menu, self.world.loading);
+                return;
+            }
+            Screen::Controls(_) => {
+                crate::menu::draw_controls(out, self.diablo);
+                return;
+            }
+            Screen::Stats(from_title) => {
+                crate::menu::draw_stats(out, &self.stats, &self.stats_total, !from_title);
+                return;
+            }
+            _ => {}
+        }
+        if self.bigmap.open {
+            self.bigmap.draw(&self.world, out);
+            if let Some((_, spot)) = &self.teleport {
+                crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+            }
+            return;
+        }
+        let warn = self.world.road_warning();
+        crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
+        let p = &self.world.player;
+        let ctrl_aim = !self.diablo || self.ctrl_held;
+        if self.screen == Screen::Playing
+            && self.mouse_aim
+            && ctrl_aim
+            && p.in_car.is_none()
+            && !p.combat.dead
+            && let Some(c) = self.cursor
+        {
+            crate::hud::crosshair(out, c, p.combat.weapon().melee);
+        }
+        if let Some((_, spot)) = &self.teleport
+            && !self.teleport_auto
+        {
+            crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+        }
+        if self.screen == Screen::Playing {
+            crate::console::draw(out, &self.console, &self.world);
+        }
+        for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
+            if wh.open && self.screen == Screen::Playing {
+                crate::wheel::draw(
+                    out,
+                    wh,
+                    &self.world.player.combat,
+                    self.real_t - wh.opened_at,
+                    pad,
+                );
+            }
+        }
+        if let Some(m) = &self.result_menu {
+            let y = if self.world.mission.state == State::Success {
+                400.
+            } else {
+                330.
+            };
+            crate::menu::draw_menu(out, m, out.width / 2., y);
+        }
+        if self.screen == Screen::Paused {
+            crate::menu::draw_pause(
+                out,
+                &self.menu,
+                self.world.completed as u32,
+                self.world.best_time,
+            );
+        }
+    }
     pub fn new(
         root: &Path,
         seed: u32,
@@ -235,6 +338,8 @@ impl Play {
             teleport_auto: false,
             bigmap,
             hud_width: 1280.,
+            debug: Default::default(),
+            fps: Default::default(),
             world,
             storage: save,
             saved_for: 0,
@@ -274,6 +379,7 @@ impl Play {
             result_menu: None,
             trigger_was: false,
             demo_combat: false,
+            demo_drift: false,
             vehicle_show: false,
             demo_drive: false,
             demo_station: None,
@@ -564,8 +670,10 @@ impl Play {
                 world: &mut self.world,
                 places: &self.places,
                 actions: Vec::new(),
+                debug: self.debug,
             };
             self.console.key(key, &mut ctx, now, shift);
+            self.debug = ctx.debug;
             let actions = std::mem::take(&mut ctx.actions);
             self.console_actions(actions, now);
             if !self.console.open {
@@ -604,8 +712,10 @@ impl Play {
             world: &mut self.world,
             places: &self.places,
             actions: Vec::new(),
+            debug: self.debug,
         };
         let r = crate::console::execute(line, &mut ctx);
+        self.debug = ctx.debug;
         let actions = std::mem::take(&mut ctx.actions);
         let now = self.world.time;
         self.console_actions(actions, now);
@@ -1818,6 +1928,15 @@ impl Game for Play {
                 input.throttle = 1.;
             }
         }
+        if self.demo_drift && !w2.loading && w2.player.in_car.is_some() {
+            // erst Anlauf, dann im Wechsel Handbremse mit Lenkung (Heck bricht aus) und Vollgas (Räder drehen durch)
+            let t = w2.time;
+            input.throttle = 1.;
+            if t > 1.6 {
+                input.steer = if t % 2.4 < 1.2 { 0.8 } else { -0.8 };
+                input.handbrake = t % 1.2 < 0.35;
+            }
+        }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
         }
@@ -2399,7 +2518,16 @@ impl Game for Play {
     /// Umriss der Spielfigur bzw. des eigenen Fahrzeugs, wo Dach, Baumkrone oder Viadukt sie verdecken
     /// (`occlusion.js` + `render.js drawCovered`). Etwas näher als die eigenen Teile, damit der Umriss nur unter
     /// Verdeckendem erscheint.
+    fn effects(&self, out: &mut Vec<Body>) {
+        // Die Lichtkarte wirkt nur bei Dunkelheit; dann bekommen Qualm und Staub das Umgebungslicht selbst
+        let l = self.lighting().unwrap_or_default();
+        let ambient = if l.dark > 0. { l.ambient } else { [1.; 3] };
+        self.fx.effects(out, ambient);
+    }
     fn silhouettes(&self, out: &mut Vec<Body>) {
+        if !self.debug.silhouettes {
+            return;
+        }
         let w = &self.world;
         if !matches!(self.screen, Screen::Playing | Screen::Paused) || w.player.inside.is_some() {
             return;
@@ -2578,101 +2706,32 @@ impl Game for Play {
         }
         parts.join(" · ")
     }
+    fn frame_stats(&mut self, stats: berlin_engine::FrameStats) {
+        self.fps.push(stats.dt, stats.work_ms);
+    }
     fn hud(
         &mut self,
         camera: &berlin_engine::camera::Camera,
         viewport: Vec2,
         out: &mut berlin_engine::hud::Hud,
     ) {
-        let engine = self.world.player_car().map(|_| self.listener.engine());
-        if let Some(st) = self
-            .world
-            .player
-            .inside
-            .as_ref()
-            .and_then(|i| self.world.station_by_id(&i.id))
-            .cloned()
-        {
-            // im U-Bahnhof: der Bahnhof statt der Stadt (kein Wetter, kein Himmel)
-            crate::underground::draw_station(&self.world, &st, camera, viewport, out);
-        } else {
-            crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
-            crate::weatherfx::storm_overlay(&self.world, camera, viewport, out);
-            crate::weatherfx::overlay(&self.world, out);
-            crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
-            crate::underground::entrance_letters(&self.world, camera, viewport, out);
-            crate::streetfurn::sign_texts(&self.street_signs, camera, viewport, out);
-            crate::neon::draw(&self.neon, camera, viewport, out);
+        if self.debug.levels {
+            crate::levelview::draw(&mut self.world, camera, viewport, out);
         }
-        self.hud_width = out.width;
-        match self.screen {
-            Screen::Title => {
-                crate::menu::draw_title(out, &self.menu, self.world.loading);
-                return;
-            }
-            Screen::Controls(_) => {
-                crate::menu::draw_controls(out, self.diablo);
-                return;
-            }
-            Screen::Stats(from_title) => {
-                crate::menu::draw_stats(out, &self.stats, &self.stats_total, !from_title);
-                return;
-            }
-            _ => {}
-        }
-        if self.bigmap.open {
-            self.bigmap.draw(&self.world, out);
-            if let Some((_, spot)) = &self.teleport {
-                crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
-            }
-            return;
-        }
-        let warn = self.world.road_warning();
-        crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
-        let p = &self.world.player;
-        let ctrl_aim = !self.diablo || self.ctrl_held;
-        if self.screen == Screen::Playing
-            && self.mouse_aim
-            && ctrl_aim
-            && p.in_car.is_none()
-            && !p.combat.dead
-            && let Some(c) = self.cursor
-        {
-            crate::hud::crosshair(out, c, p.combat.weapon().melee);
-        }
-        if let Some((_, spot)) = &self.teleport
-            && !self.teleport_auto
-        {
-            crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
-        }
-        if self.screen == Screen::Playing {
-            crate::console::draw(out, &self.console, &self.world);
-        }
-        for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
-            if wh.open && self.screen == Screen::Playing {
-                crate::wheel::draw(
-                    out,
-                    wh,
-                    &self.world.player.combat,
-                    self.real_t - wh.opened_at,
-                    pad,
-                );
-            }
-        }
-        if let Some(m) = &self.result_menu {
-            let y = if self.world.mission.state == State::Success {
-                400.
-            } else {
-                330.
-            };
-            crate::menu::draw_menu(out, m, out.width / 2., y);
-        }
-        if self.screen == Screen::Paused {
-            crate::menu::draw_pause(
-                out,
-                &self.menu,
-                self.world.completed as u32,
-                self.world.best_time,
+        self.hud_main(camera, viewport, out);
+        if self.debug.fps {
+            let line = self.fps.line();
+            let cx = out.width / 2.;
+            let w = out.text_width(&line, 14.) + 24.;
+            out.rect(cx - w / 2., 8., w, 26., [0., 0., 0., 0.7], 6.);
+            out.text(
+                &line,
+                cx,
+                27.,
+                14.,
+                self.fps.color(),
+                berlin_engine::hud::Align::Center,
+                false,
             );
         }
     }

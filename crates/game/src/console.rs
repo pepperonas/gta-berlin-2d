@@ -299,11 +299,29 @@ pub enum Action {
     Bars(Option<String>),
 }
 
+/// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`); gehören dem Spiel, nicht der Welt.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Debug {
+    pub fps: bool,
+    pub levels: bool,
+    pub silhouettes: bool,
+}
+impl Default for Debug {
+    fn default() -> Self {
+        Self {
+            fps: false,
+            levels: false,
+            silhouettes: true,
+        }
+    }
+}
+
 /// Was ein Befehl braucht.
 pub struct Ctx<'a> {
     pub world: &'a mut World,
     pub places: &'a [Place],
     pub actions: Vec<Action>,
+    pub debug: Debug,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -521,6 +539,27 @@ pub const COMMANDS: &[Command] = &[
         help: "eigenes Auto reparieren",
         cheat: true,
         args: &[],
+    },
+    Command {
+        name: "fps",
+        aliases: &[],
+        help: "Bildrate und Zeichenzeit anzeigen",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
+    },
+    Command {
+        name: "ebenen",
+        aliases: &["levels"],
+        help: "Ebenen und Portale anzeigen",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
+    },
+    Command {
+        name: "silhouetten",
+        aliases: &[],
+        help: "Umrisse verdeckter Figuren an/aus",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
     },
     Command {
         name: "bars",
@@ -1153,6 +1192,27 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             ctx.actions.push(Action::Stats);
             ok("Statistik")
         }
+        "fps" => match on_off(a0, ctx.debug.fps) {
+            Some(on) => {
+                ctx.debug.fps = on;
+                ok(format!("FPS-Anzeige {}", if on { "an" } else { "aus" }))
+            }
+            None => err("fps an|aus"),
+        },
+        "ebenen" => match on_off(a0, ctx.debug.levels) {
+            Some(on) => {
+                ctx.debug.levels = on;
+                ok(format!("Ebenen-Ansicht {}", if on { "an" } else { "aus" }))
+            }
+            None => err("ebenen an|aus"),
+        },
+        "silhouetten" => match on_off(a0, ctx.debug.silhouettes) {
+            Some(on) => {
+                ctx.debug.silhouettes = on;
+                ok(format!("Silhouetten {}", if on { "an" } else { "aus" }))
+            }
+            None => err("silhouetten an|aus"),
+        },
         _ => err("?"),
     }
 }
@@ -1825,6 +1885,7 @@ mod tests {
                 world: w,
                 places: &places,
                 actions: Vec::new(),
+                debug: Default::default(),
             };
             let r = execute(line, &mut ctx);
             (r, ctx.actions)
@@ -1854,6 +1915,37 @@ mod tests {
         assert!(!run("schnee 7", &mut w).0.ok);
         assert!(run("gott", &mut w).0.ok && w.god);
         assert!(run("temp -5", &mut w).0.ok && w.force_temp == Some(-5.));
+        // Anzeige-Schalter: ohne Wert umschalten, an/aus setzen, Unsinn abweisen
+        let mut dbg = |line: &str, d: Debug| {
+            let mut ctx = Ctx {
+                world: &mut w,
+                places: &places,
+                actions: Vec::new(),
+                debug: d,
+            };
+            let r = execute(line, &mut ctx);
+            (r.ok, ctx.debug)
+        };
+        let d0 = Debug::default();
+        assert!(d0.silhouettes && !d0.fps && !d0.levels);
+        assert_eq!(dbg("fps", d0), (true, Debug { fps: true, ..d0 }));
+        assert_eq!(dbg("fps aus", Debug { fps: true, ..d0 }), (true, d0));
+        assert_eq!(
+            dbg("levels an", d0),
+            (true, Debug { levels: true, ..d0 }),
+            "englischer Alias"
+        );
+        assert_eq!(
+            dbg("silhouetten aus", d0),
+            (
+                true,
+                Debug {
+                    silhouettes: false,
+                    ..d0
+                }
+            )
+        );
+        assert_eq!(dbg("fps vielleicht", d0), (false, d0));
         // Konsole: Enter übernimmt erst den Vorschlag, das zweite führt aus
         let mut con = Console::default();
         con.open(&places);
@@ -1861,6 +1953,7 @@ mod tests {
             world: &mut w,
             places: &places,
             actions: Vec::new(),
+            debug: Default::default(),
         };
         for c in "zeit mit".chars() {
             con.key(Key::Char(c), &mut ctx, 0., false);

@@ -47,12 +47,23 @@ pub enum Kick {
     Snow,
 }
 impl Kick {
-    fn color(self) -> [f32; 3] {
+    /// Farbe ohne Blaustich: Reifenqualm ist warmweißes Grau, Gischt fast farbloser Sprühnebel (vorher hellblau
+    /// bzw. bläulich – las sich wie ein Leuchteffekt am Rad).
+    pub fn color(self) -> [f32; 3] {
         match self {
             Kick::Dust => [0.678, 0.604, 0.475],
-            Kick::Smoke => [0.694, 0.722, 0.733],
-            Kick::Spray => [0.745, 0.871, 0.898],
-            Kick::Snow => [0.937, 0.961, 0.973],
+            Kick::Smoke => [0.86, 0.85, 0.83],
+            Kick::Spray => [0.82, 0.83, 0.84],
+            Kick::Snow => [0.937, 0.951, 0.96],
+        }
+    }
+    /// Höchste Deckkraft: Gischt ist dünn, Qualm dichter, Staub dazwischen.
+    fn alpha(self) -> f32 {
+        match self {
+            Kick::Smoke => 0.24,
+            Kick::Spray => 0.3,
+            Kick::Dust => 0.45,
+            Kick::Snow => 0.5,
         }
     }
 }
@@ -229,7 +240,8 @@ impl Effects {
                     self.last_skid.remove(&(c.id, side));
                 }
             }
-            if !hard && wet <= 0.2 && snow <= 0.2 {
+            // ohne Durchdrehen/Blockieren: Nässe sprüht erst ab etwa 40 km/h, Schnee stäubt immer
+            if !hard && snow <= 0.2 && (wet <= 0.2 || speed < 110.) {
                 continue;
             }
             let ground = w.city.surface_at(c.x, c.y, Some(c.lvl()));
@@ -238,21 +250,39 @@ impl Effects {
             };
             live.insert(c.id);
             let next =
-                self.emit.get(&c.id).copied().unwrap_or(0.) + dt * if hard { 14. } else { 8. };
+                self.emit.get(&c.id).copied().unwrap_or(0.) + dt * if hard { 26. } else { 8. };
             self.emit.insert(c.id, next.fract());
             let (vx, vy) = (c.vx as f32, c.vy as f32);
             for _ in 0..next as usize {
                 for sd in [-1f32, 1.] {
+                    // Streuung je Partikel aus einem Hash (nie aus dem Simulationszufall): viele dünne, leicht
+                    // verschiedene Wölkchen verschmelzen zu einer Wolke statt als einzelne Ballen zu stehen
+                    self.seq = self.seq.wrapping_add(1);
+                    let seq = self.seq;
+                    let h = |m: f64| hash01(seq as f64 * 3.71 + m) as f32 - 0.5;
+                    let smoke = kind == Kick::Smoke;
+                    let spread = if smoke { 14. } else { 6. };
                     self.add(Particle {
                         kind,
                         at: [
-                            x - co * hw * 0.65 - si * sd * hh,
-                            y - si * hw * 0.65 + co * sd * hh,
+                            x - co * hw * 0.65 - si * sd * hh + h(1.) * 3.,
+                            y - si * hw * 0.65 + co * sd * hh + h(2.) * 3.,
                         ],
-                        v: [vx * 0.12 - si * sd * 9., vy * 0.12 + co * sd * 9.],
-                        size: if kind == Kick::Smoke { 7. } else { 4. },
-                        life: if kind == Kick::Smoke { 1.2 } else { 0.65 },
-                        max: if kind == Kick::Smoke { 1.2 } else { 0.65 },
+                        // Gischt fliegt als Fahne hinter dem Rad her, Qualm und Staub quellen seitlich auf
+                        v: if kind == Kick::Spray {
+                            [
+                                vx * 0.3 - si * sd * 4. + h(3.) * spread,
+                                vy * 0.3 + co * sd * 4. + h(4.) * spread,
+                            ]
+                        } else {
+                            [
+                                vx * 0.12 - si * sd * 9. + h(3.) * spread,
+                                vy * 0.12 + co * sd * 9. + h(4.) * spread,
+                            ]
+                        },
+                        size: if smoke { 4. + h(5.) * 2. } else { 3.5 },
+                        life: if smoke { 1.5 + h(6.) * 0.6 } else { 0.6 },
+                        max: if smoke { 1.5 + h(6.) * 0.6 } else { 0.6 },
                     });
                 }
             }
@@ -262,7 +292,10 @@ impl Effects {
             q.life -= dt;
             q.at[0] += q.v[0] * dt;
             q.at[1] += q.v[1] * dt;
-            q.size += dt * if q.kind == Kick::Smoke { 13. } else { 7. };
+            // Luftwiderstand: die Wolke bleibt hinter dem Auto zurück und quillt auf
+            let drag = (1. - dt * if q.kind == Kick::Smoke { 1.6 } else { 0.8 }).max(0.);
+            q.v = [q.v[0] * drag, q.v[1] * drag];
+            q.size += dt * if q.kind == Kick::Smoke { 17. } else { 7. };
         }
         self.particles.retain(|q| q.life > 0.);
         for k in &mut self.skids {
@@ -318,62 +351,35 @@ impl Effects {
             self.splats.pop_front();
         }
     }
-    /// Blut am Boden (vor den Figuren), Leuchtspuren, Mündungsfeuer und Staub über allem Bewegten.
-    pub fn bodies(&self, out: &mut Vec<Body>) {
-        // Bremsspuren: dunkle Gummistriche, die nach 8 s verblassen
-        for (i, k) in self.skids.iter().enumerate() {
-            let (dx, dy) = (k.b[0] - k.a[0], k.b[1] - k.a[1]);
-            let len = dx.hypot(dy);
-            if len < 0.3 {
-                continue;
-            }
-            out.push(Body {
-                center: [(k.a[0] + k.b[0]) / 2., (k.a[1] + k.b[1]) / 2.],
-                half: [len / 2. + 0.6, 1.3],
-                angle: dy.atan2(dx),
-                shape: 4.,
-                depth: 0.8395 + i as f32 * 1e-8,
-                color: [0.06, 0.06, 0.065, 0.32 * (k.life / SKID_S).min(1.)],
-            });
-        }
+    /// Spuren am Boden unter allem Bewegten: Bremsspuren, Blut, Klickring.
+    /// Durchscheinende Effekte für den eigenen Durchgang nach dem Licht (`Game::effects`): Reifenwolken, Leuchtspuren,
+    /// Mündungsfeuer, Einschlagwölkchen. Sie schreiben keine Tiefe, verdecken also nichts – vorher lagen sie mit
+    /// Tiefe 0,59 vor dem Auto und ließen dessen Silhouette unter jeder Reifenwolke hellblau aufleuchten.
+    /// `ambient`: Umgebungslicht (Qualm und Staub werden nachts dunkel; Glut und Mündungsfeuer leuchten selbst).
+    pub fn effects(&self, out: &mut Vec<Body>, ambient: [f32; 3]) {
+        // Umgebungslicht halb entsättigt: nachts dunkel wie die Straße, aber ohne den bläulichen Mondton (blauer
+        // Qualm las sich als Leuchteffekt am Rad)
+        let lum = ambient[0] * 0.2126 + ambient[1] * 0.7152 + ambient[2] * 0.0722;
+        let amb = ambient.map(|a| (a + lum) * 0.5);
+        let lit = |c: [f32; 3]| [c[0] * amb[0], c[1] * amb[1], c[2] * amb[2]];
         // Reifenwolken: weicher Fleck, der aufquillt und vergeht
         for q in &self.particles {
             let age = 1. - q.life / q.max;
-            let a = (std::f32::consts::PI * age).sin()
-                * if q.kind == Kick::Smoke { 0.55 } else { 0.75 };
-            let c = q.kind.color();
+            let a = (std::f32::consts::PI * age).sin() * q.kind.alpha();
+            let c = lit(q.kind.color());
+            // Gischt: längliche Fahne in Flugrichtung, sonst runde Wolke
+            let (half, angle) = if q.kind == Kick::Spray {
+                ([q.size * 1.7, q.size * 0.6], q.v[1].atan2(q.v[0]))
+            } else {
+                ([q.size, q.size], 0.)
+            };
             out.push(Body {
                 center: q.at,
-                half: [q.size, q.size],
-                angle: 0.,
+                half,
+                angle,
                 shape: 3.,
                 depth: 0.59,
-                color: [c[0], c[1], c[2], a * 0.65],
-            });
-        }
-        for s in &self.splats {
-            // trocknet nach: wird dunkler und verblasst gegen Ende
-            let k = (s.age / BLOOD_KEEP).min(1.);
-            let fade = if k > 0.8 { 1. - (k - 0.8) / 0.2 } else { 1. };
-            out.push(Body {
-                center: s.at,
-                half: s.r,
-                angle: s.angle,
-                shape: 1.,
-                depth: 0.83,
-                color: [0.42 - 0.18 * k, 0.03, 0.03, 0.85 * fade],
-            });
-        }
-        if let Some((at, t)) = self.ring {
-            let k = t / RING_S;
-            let r = 6. + (1. - k) * 8.;
-            out.push(Body {
-                center: at,
-                half: [r, r * 0.75],
-                angle: 0.,
-                shape: 2.,
-                depth: 0.82,
-                color: [1., 0.83, 0.24, 0.85 * k],
+                color: [c[0], c[1], c[2], a],
             });
         }
         for t in &self.tracers {
@@ -419,8 +425,52 @@ impl Effects {
                 color: if p.metal {
                     [1., 0.8, 0.4, 0.8 * k]
                 } else {
-                    [0.75, 0.72, 0.68, 0.6 * k]
+                    let c = lit([0.75, 0.72, 0.68]);
+                    [c[0], c[1], c[2], 0.6 * k]
                 },
+            });
+        }
+    }
+    pub fn bodies(&self, out: &mut Vec<Body>) {
+        // Bremsspuren: dunkle Gummistriche, die nach 8 s verblassen
+        for (i, k) in self.skids.iter().enumerate() {
+            let (dx, dy) = (k.b[0] - k.a[0], k.b[1] - k.a[1]);
+            let len = dx.hypot(dy);
+            if len < 0.3 {
+                continue;
+            }
+            out.push(Body {
+                center: [(k.a[0] + k.b[0]) / 2., (k.a[1] + k.b[1]) / 2.],
+                half: [len / 2. + 0.6, 1.3],
+                angle: dy.atan2(dx),
+                shape: 4.,
+                depth: 0.8395 + i as f32 * 1e-8,
+                color: [0.06, 0.06, 0.065, 0.32 * (k.life / SKID_S).min(1.)],
+            });
+        }
+        for s in &self.splats {
+            // trocknet nach: wird dunkler und verblasst gegen Ende
+            let k = (s.age / BLOOD_KEEP).min(1.);
+            let fade = if k > 0.8 { 1. - (k - 0.8) / 0.2 } else { 1. };
+            out.push(Body {
+                center: s.at,
+                half: s.r,
+                angle: s.angle,
+                shape: 1.,
+                depth: 0.83,
+                color: [0.42 - 0.18 * k, 0.03, 0.03, 0.85 * fade],
+            });
+        }
+        if let Some((at, t)) = self.ring {
+            let k = t / RING_S;
+            let r = 6. + (1. - k) * 8.;
+            out.push(Body {
+                center: at,
+                half: [r, r * 0.75],
+                angle: 0.,
+                shape: 2.,
+                depth: 0.82,
+                color: [1., 0.83, 0.24, 0.85 * k],
             });
         }
     }
@@ -472,17 +522,23 @@ mod tests {
         ]);
         let mut out = Vec::new();
         fx.bodies(&mut out);
-        assert_eq!(out.len(), 7 + 2 + 1 + 1, "Blut, Spuren, Feuer, Staub");
+        assert_eq!(out.len(), 7, "Blut am Boden");
+        let mut glow = Vec::new();
+        fx.effects(&mut glow, [1.; 3]);
+        assert_eq!(
+            glow.len(),
+            2 + 1 + 1,
+            "Spuren, Feuer, Staub im Effekt-Durchgang"
+        );
         // Blutstropfen liegen in Schlagrichtung
         assert!(fx.splats.iter().all(|s| s.at[0] > 50.));
         fx.step(0.3);
         let mut out = Vec::new();
         fx.bodies(&mut out);
-        assert_eq!(
-            out.len(),
-            7,
-            "Spuren, Feuer und Staub sind weg, das Blut bleibt"
-        );
+        assert_eq!(out.len(), 7, "das Blut bleibt");
+        let mut glow = Vec::new();
+        fx.effects(&mut glow, [1.; 3]);
+        assert!(glow.is_empty(), "Spuren, Feuer und Staub sind weg");
         fx.step(BLOOD_KEEP);
         assert_eq!(fx.blood_count(), 0);
     }
@@ -492,6 +548,46 @@ mod tests {
 mod tire_tests {
     use super::*;
     use berlin_sim::city::Ground as G;
+
+    #[test]
+    fn tire_clouds_draw_in_the_effect_pass_without_blue_tint() {
+        let mut fx = Effects::default();
+        for kind in [Kick::Smoke, Kick::Spray, Kick::Dust, Kick::Snow] {
+            fx.add(Particle {
+                kind,
+                at: [0., 0.],
+                v: [30., 0.],
+                size: 4.,
+                life: 0.5,
+                max: 1.,
+            });
+            // kein Blaustich: Blau höchstens knapp über Rot (vorher Gischt 0,90 gegen 0,75)
+            let c = kind.color();
+            assert!(c[2] - c[0] < 0.05, "{kind:?} bläulich: {c:?}");
+        }
+        // Bodenspuren-Liste: keine Wolken (sie lagen dort vor dem Auto und lösten dessen Silhouette aus)
+        let mut ground = Vec::new();
+        fx.bodies(&mut ground);
+        assert!(
+            ground.iter().all(|b| b.shape != 3.),
+            "Wolke in der Bodenspuren-Liste"
+        );
+        let mut day = Vec::new();
+        fx.effects(&mut day, [1.; 3]);
+        assert_eq!(day.iter().filter(|b| b.shape == 3.).count(), 4);
+        // Gischt als Fahne in Flugrichtung
+        let spray = day
+            .iter()
+            .find(|b| b.half[0] > b.half[1] * 2.)
+            .expect("Gischtfahne");
+        assert!(spray.angle.abs() < 1e-6);
+        // nachts dunkler, und der bläuliche Mondton färbt nicht voll durch
+        let mut night = Vec::new();
+        fx.effects(&mut night, [0.2, 0.25, 0.4]);
+        let (d, n) = (day[0].color, night[0].color);
+        assert!(n[0] < d[0] * 0.5, "nachts dunkler");
+        assert!(n[2] / n[0] < 0.4 / 0.2 * 0.8, "Mondton gedämpft: {n:?}");
+    }
 
     #[test]
     fn tire_effect_by_ground_and_weather() {
