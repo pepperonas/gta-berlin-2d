@@ -10,6 +10,7 @@ mod fps;
 mod hud;
 mod levelview;
 mod menu;
+mod nav;
 mod neon;
 mod play;
 mod raster;

@@ -514,8 +514,14 @@ mod tests {
         let (engine, grip) = (12_000., 6_000.);
         assert_eq!(pedal_force(1., engine, grip), engine, "Vollgas unverändert");
         assert_eq!(pedal_force(0., engine, grip), 0.);
-        assert!((pedal_force(0.45, engine, grip) - grip / 2.).abs() < 1e-6, "halber Weg = halbe Haftung");
-        assert!((pedal_force(0.9, engine, grip) - grip).abs() < 1e-6, "bei 90 % an der Haftungsgrenze");
+        assert!(
+            (pedal_force(0.45, engine, grip) - grip / 2.).abs() < 1e-6,
+            "halber Weg = halbe Haftung"
+        );
+        assert!(
+            (pedal_force(0.9, engine, grip) - grip).abs() < 1e-6,
+            "bei 90 % an der Haftungsgrenze"
+        );
         let mut last = 0.;
         for i in 0..=100 {
             let f = pedal_force(i as f64 / 100., engine, grip);
@@ -578,8 +584,14 @@ mod tests {
         let (half, full) = (at(0.45), at(1.));
         assert!(full > 30., "Vollgas nach 1 s: {full}");
         let r = half / full;
-        assert!(r > 0.35 && r < 0.65, "halb {half:.1} gegen voll {full:.1} km/h");
-        assert!(at(0.2) < at(0.45) && at(0.45) < at(0.8), "über den ganzen Weg steigend");
+        assert!(
+            r > 0.35 && r < 0.65,
+            "halb {half:.1} gegen voll {full:.1} km/h"
+        );
+        assert!(
+            at(0.2) < at(0.45) && at(0.45) < at(0.8),
+            "über den ganzen Weg steigend"
+        );
     }
 
     #[test]

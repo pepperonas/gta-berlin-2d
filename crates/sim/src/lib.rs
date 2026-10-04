@@ -27,6 +27,7 @@ pub mod pedestrians;
 pub mod rhythm;
 pub mod ride;
 pub mod roadgraph;
+pub mod routing;
 pub mod save;
 pub mod services;
 pub mod soundscape;

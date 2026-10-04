@@ -238,6 +238,13 @@ pub struct Labels {
     pub lines: Vec<StreetLine>,
 }
 
+/// Was ein Klick auf den Stadtplan will (Kartenpixel).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MapClick {
+    Waypoint(Vec2),
+    Teleport(Vec2),
+}
+
 #[derive(Default)]
 pub struct BigMap {
     pub open: bool,
@@ -315,9 +322,10 @@ impl BigMap {
             oy: y + h / 2. - self.center.y * f,
         }
     }
-    /// Verschieben und Zoomen (je Simulationsschritt).
-    /// Verschieben, Zoomen; liefert einen Klick (ohne Ziehen) als Kartenpunkt.
-    pub fn control(&mut self, keys: &Keys, dt: f32, v: View) -> Option<Vec2> {
+    /// Verschieben, Zoomen; liefert, was ein Klick (ohne Ziehen) bzw. eine Controller-Taste will: Linksklick/A setzt
+    /// den Wegpunkt (bzw. entfernt ihn), Rechtsklick/X teleportiert (mit Rückfrage). Am Controller zielt die
+    /// Kartenmitte (Fadenkreuz).
+    pub fn control(&mut self, keys: &Keys, dt: f32, v: View) -> Option<MapClick> {
         let f = v.f;
         // Maus: Rad zoomt um den Zeiger, Ziehen verschiebt (hud.js zoomBigMap/panBigMap)
         let m = keys.mouse;
@@ -342,15 +350,26 @@ impl BigMap {
             self.moved += p.distance(last);
         }
         let mut click = None;
+        let on_map = |p: Vec2| p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h;
+        let world = |p: Vec2| (p - Vec2::new(v.ox, v.oy)) / f;
         if m.left_released
             && self.moved <= 6.
             && let Some(p) = m.hud
-            && p.x >= v.x
-            && p.x <= v.x + v.w
-            && p.y >= v.y
-            && p.y <= v.y + v.h
+            && on_map(p)
         {
-            click = Some((p - Vec2::new(v.ox, v.oy)) / f);
+            click = Some(MapClick::Waypoint(world(p)));
+        }
+        if m.right_pressed
+            && let Some(p) = m.hud
+            && on_map(p)
+        {
+            click = Some(MapClick::Teleport(world(p)));
+        }
+        if keys.pad_pressed.a {
+            click = Some(MapClick::Waypoint(self.center));
+        }
+        if keys.pad_pressed.x {
+            click = Some(MapClick::Teleport(self.center));
         }
         self.drag = if m.left { m.hud } else { None };
         let held = |k: KeyCode| keys.held.contains(&k);
@@ -372,7 +391,8 @@ impl BigMap {
         self.z = (self.z * (rate * 1.6 * dt).exp()).clamp(1., ZOOM_MAX);
         click
     }
-    pub fn draw(&mut self, w: &World, h: &mut Hud) {
+    /// `pad`: am Controller bedient (Fadenkreuz in der Mitte zeigt, wohin A/X wirken).
+    pub fn draw(&mut self, w: &World, nav: &crate::nav::NavView, pad: bool, h: &mut Hud) {
         let v = self.view(h.width);
         h.rect(0., 0., h.width, 720., [0.047, 0.051, 0.063, 0.94], 0.);
         h.rect(v.x, v.y, v.w, v.h, [0.227, 0.239, 0.267, 1.], 10.);
@@ -392,7 +412,30 @@ impl BigMap {
             station_icon(h, &s.cat, p, r);
         }
         // Beschriftung nur neu setzen, wenn sich die Ansicht geändert hat
-        let hint = [v.x + 10., v.y + v.h - 40., v.x + 480., v.y + v.h - 10.];
+        // ausführlich, wenn es passt, sonst knapp (bei 1280 px rastet die Schrift grob)
+        let (long, short) = if pad {
+            (
+                "Stick: verschieben · LT/RT: zoomen · A: Wegpunkt setzen/entfernen · X: teleportieren · B: zurück",
+                "Stick: schieben · LT/RT: Zoom · A: Wegpunkt · X: Teleport · B: zurück",
+            )
+        } else {
+            (
+                "Ziehen/WASD: verschieben · Rad/+/−: zoomen · Klick: Wegpunkt setzen/entfernen · Rechtsklick: teleportieren",
+                "Ziehen/WASD: schieben · Rad: Zoom · Klick: Wegpunkt · Rechtsklick: Teleport",
+            )
+        };
+        let hint_text = if h.text_width(long, 13.) + 24. <= v.w - 20. {
+            long
+        } else {
+            short
+        };
+        let hint_w = h.text_width(hint_text, 13.) + 24.;
+        let hint = [
+            v.x + 10.,
+            v.y + v.h - 40.,
+            v.x + 10. + hint_w,
+            v.y + v.h - 10.,
+        ];
         let placed = match &self.cache {
             Some((cv, p)) if *cv == v => p.clone(),
             _ => {
@@ -434,6 +477,29 @@ impl BigMap {
             h.ellipse(p.x, p.y, r + 2., r + 2., [0., 0., 0., 1.]);
             h.ellipse(p.x, p.y, r, r, c);
         };
+        // Route zum Wegpunkt unter den Markierungen
+        if nav.route.len() >= 2 {
+            let to = |x: f64, y: f64| {
+                let p = v.to_screen(Vec2::new(x as f32, y as f32));
+                (p.x, p.y)
+            };
+            crate::nav::draw_route(h, &nav.route, to, [v.x, v.y, v.w, v.h], 4.);
+        }
+        if let Some((wx, wy)) = nav.waypoint {
+            let p = v.to_screen(Vec2::new(wx as f32, wy as f32));
+            if p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h {
+                crate::nav::draw_pin(h, p.x, p.y, 7.);
+            }
+        }
+        if pad {
+            // Fadenkreuz: dort wirken A (Wegpunkt) und X (Teleport)
+            let c = Vec2::new(v.x + v.w / 2., v.y + v.h / 2.);
+            for (dx, dy) in [(1., 0.), (-1., 0.), (0., 1.), (0., -1.)] {
+                let (a, b) = (c + Vec2::new(dx, dy) * 5., c + Vec2::new(dx, dy) * 14.);
+                h.line(a.x, a.y, b.x, b.y, 4., [0., 0., 0., 0.8]);
+                h.line(a.x, a.y, b.x, b.y, 2., [1.; 4]);
+            }
+        }
         let g = &w.city.places.giver;
         dot(h, (g.x, g.y), 5., [0.878, 0.231, 0.231, 1.]);
         let pv = PlayerView {
@@ -458,19 +524,25 @@ impl BigMap {
             Align::Left,
             true,
         );
+        // Legende unter der Karte links, Quellenangabe rechts; reicht die Zeile nicht für beide, rutscht die
+        // Quellenangabe eine Zeile tiefer (verkleinern hieße bei 1280 px: auf halbe Größe springen)
+        let legend = "rot = Späti · gelb = Ziel · violett = Wegpunkt · weiß = du · U/S = Bahnhof";
+        let credit = "Kartendaten © OpenStreetMap-Mitwirkende (ODbL)";
+        let below = v.y + v.h + 20.;
+        let both = h.text_width(legend, 12.) + h.text_width(credit, 12.) + 24. <= v.w;
         h.text(
-            "rot = Späti · gelb = Ziel · weiß = du · U/S = Bahnhof",
-            v.x + v.w,
-            v.y - 10.,
-            14.,
+            legend,
+            v.x,
+            below,
+            12.,
             [0.8, 0.8, 0.8, 1.],
-            Align::Right,
+            Align::Left,
             true,
         );
         h.text(
-            "Kartendaten © OpenStreetMap-Mitwirkende (ODbL)",
+            credit,
             v.x + v.w,
-            v.y + v.h + 20.,
+            if both { below } else { below + 16. },
             12.,
             [0.67, 0.67, 0.67, 1.],
             Align::Right,
@@ -485,7 +557,7 @@ impl BigMap {
             6.,
         );
         h.text(
-            "Ziehen/WASD: verschieben · Rad/+/−: zoomen · Klick: teleportieren",
+            hint_text,
             hint[0] + 12.,
             hint[1] + 20.,
             13.,

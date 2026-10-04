@@ -52,10 +52,12 @@ fn prompt(h: &mut Hud, text: &str, y: f32) {
     h.text(text, cx, y, 19., WHITE, Align::Center, true);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     w: &World,
     engine: Option<&EngineState>,
     warn: Option<&str>,
+    nav: &crate::nav::NavView,
     camera: &Camera,
     viewport: Vec2,
     h: &mut Hud,
@@ -117,7 +119,23 @@ pub fn draw(
     let ms = w.mission.state;
     // unten links: Minikarte (beim Briefing ausgeblendet)
     if ms != State::Briefing {
-        minimap(w, target, mx, 720. - my - MINI - 10., MINI, h);
+        minimap(w, target, nav, mx, 720. - my - MINI - 10., MINI, h);
+        if let Some(m) = nav.remaining_m {
+            let t = if m >= 1000. {
+                format!("Wegpunkt {:.1} km", m / 1000.).replace('.', ",")
+            } else {
+                format!("Wegpunkt {:.0} m", (m / 10.).round() * 10.)
+            };
+            h.text(
+                &t,
+                mx,
+                720. - my - MINI - 18.,
+                13.,
+                crate::nav::ROUTE_COLOR,
+                Align::Left,
+                true,
+            );
+        }
         health(h, &w.player.combat, mx, 720. - my - 6., MINI, w.time);
     }
     ride_bar(w, h);
@@ -945,7 +963,15 @@ pub fn group(v: i64) -> String {
 
 /// Minikarte (`hud.js drawMinimap`): Kartenmeshes als Ausschnitt um Spieler bzw. eigenes Auto, darüber andere Autos,
 /// das Ziel (am Rand festgehalten), der Spielerpfeil und ein „N“.
-pub fn minimap(w: &World, target: Option<(f64, f64)>, x: f32, y: f32, size: f32, h: &mut Hud) {
+pub fn minimap(
+    w: &World,
+    target: Option<(f64, f64)>,
+    nav: &crate::nav::NavView,
+    x: f32,
+    y: f32,
+    size: f32,
+    h: &mut Hud,
+) {
     let pc = w.player_car();
     let (px, py, angle) = pc.map_or((w.player.x, w.player.y, w.player.angle), |c| {
         (c.x, c.y, c.angle)
@@ -957,6 +983,16 @@ pub fn minimap(w: &World, target: Option<(f64, f64)>, x: f32, y: f32, size: f32,
     let to_mini = |wx: f64, wy: f64| (cx + (wx - px) as f32 * k, cy + (wy - py) as f32 * k);
     let inside =
         |mx: f32, my: f32| mx > x + 2. && mx < x + size - 2. && my > y + 2. && my < y + size - 2.;
+    // Route zum Wegpunkt direkt über der Karte, unter allen Symbolen
+    if nav.route.len() >= 2 {
+        crate::nav::draw_route(
+            h,
+            &nav.route,
+            to_mini,
+            [x + 1., y + 1., size - 2., size - 2.],
+            3.,
+        );
+    }
     // Bahnhöfe (OSM-Symbole) und die Eingänge der begehbaren Bahnhöfe (weiß umrandet)
     let half = f64::from(MINI_SPAN) / 2.;
     for q in w.city.pois.slab.iter() {
@@ -1012,6 +1048,17 @@ pub fn minimap(w: &World, target: Option<(f64, f64)>, x: f32, y: f32, size: f32,
         }
         h.ellipse(mx, my, 7., 7., [0., 0., 0., 1.]);
         h.ellipse(mx, my, 5.5, 5.5, YELLOW);
+    }
+    // Wegpunkt: am Rand festgehalten wie das Ziel
+    if let Some((wx, wy)) = nav.waypoint {
+        let (mut mx, mut my) = to_mini(wx, wy);
+        let lim = size / 2. - 8.;
+        let f = (mx - cx).abs().max((my - cy).abs()) / lim;
+        if f > 1. {
+            mx = cx + (mx - cx) / f;
+            my = cy + (my - cy) / f;
+        }
+        crate::nav::draw_pin(h, mx, my, 5.);
     }
     // Spielerpfeil mit dunklem Rand
     let a = angle as f32;
@@ -1070,7 +1117,15 @@ mod tests {
         let before = h.items.len() as u32;
         // Ziel weit weg: wird am Rand festgehalten
         let target = (w.player.x + 50_000., w.player.y);
-        minimap(&w, Some(target), 40., 500., MINI, &mut h);
+        minimap(
+            &w,
+            Some(target),
+            &Default::default(),
+            40.,
+            500.,
+            MINI,
+            &mut h,
+        );
         let m = h.map.expect("Kartenausschnitt");
         assert_eq!(m.center, [w.player.x as f32, w.player.y as f32]);
         assert_eq!(m.span, MINI_SPAN);

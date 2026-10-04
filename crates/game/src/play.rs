@@ -49,6 +49,8 @@ pub struct Play {
     tracker: berlin_sim::stats::Tracker,
     stats_written: f64,
     result_menu: Option<crate::menu::Menu>,
+    /// Wegpunkt und Route (Stadtplan-Klick)
+    pub nav: crate::nav::Nav,
     /// frei belegbare Steuerung (settings.json `bindings`) und ihre Tafel
     pub bindings: crate::bindings::Bindings,
     bindmenu: crate::bindmenu::BindMenu,
@@ -256,14 +258,24 @@ impl Play {
             _ => {}
         }
         if self.bigmap.open {
-            self.bigmap.draw(&self.world, out);
+            let nav = self.nav.view(self.nav_pos());
+            self.bigmap.draw(&self.world, &nav, !self.mouse_aim, out);
             if let Some((_, spot)) = &self.teleport {
                 crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
             }
             return;
         }
         let warn = self.world.road_warning();
-        crate::hud::draw(&self.world, engine.as_ref(), warn, camera, viewport, out);
+        let nav = self.nav.view(self.nav_pos());
+        crate::hud::draw(
+            &self.world,
+            engine.as_ref(),
+            warn,
+            &nav,
+            camera,
+            viewport,
+            out,
+        );
         let p = &self.world.player;
         let ctrl_aim = !self.diablo || self.ctrl_held;
         if self.screen == Screen::Playing
@@ -394,6 +406,7 @@ impl Play {
             tracker: Default::default(),
             stats_written: 0.,
             result_menu: None,
+            nav: crate::nav::Nav::start(root.to_path_buf()),
             bindings,
             bindmenu: Default::default(),
             zoom_user: 1.,
@@ -710,6 +723,11 @@ impl Play {
                     self.teleport = Some(((x, y), None));
                     self.teleport_auto = true;
                 }
+                Action::Waypoint(None) => self.nav.clear(),
+                Action::Waypoint(Some((x, y, _))) => {
+                    self.nav.clear();
+                    self.nav.toggle((x, y), 0.);
+                }
                 Action::Stats => self.screen = Screen::Stats(false),
                 Action::Cheat(_) => {
                     self.stats.bump("cheats");
@@ -741,6 +759,33 @@ impl Play {
         let now = self.world.time;
         self.console_actions(actions, now);
         r
+    }
+    /// Wo die Navigation den Spieler sieht: das gefahrene Auto bzw. die Figur.
+    fn nav_pos(&self) -> (f64, f64) {
+        let w = &self.world;
+        w.player
+            .in_car
+            .and_then(|id| w.car(id))
+            .map_or((w.player.x, w.player.y), |c| (c.x, c.y))
+    }
+    /// Route nachführen; Ankunft bzw. „keine Route“ als Meldung.
+    fn step_nav(&mut self) {
+        use berlin_sim::routing::Mode;
+        let mode = if self.world.player.in_car.is_some() {
+            Mode::Car
+        } else {
+            Mode::Foot
+        };
+        let pos = self.nav_pos();
+        let text = match self.nav.step(pos, mode, self.world.time) {
+            Some(crate::nav::NavEvent::Arrived) => "Wegpunkt erreicht",
+            Some(crate::nav::NavEvent::NoRoute) => "Keine Route zum Wegpunkt",
+            None => return,
+        };
+        self.world.notice = Some(berlin_sim::world::Notice {
+            text: text.into(),
+            t: 2.,
+        });
     }
     /// `settings.json` schreiben: Steuerschema und (abweichende) Tastenbelegung.
     fn write_settings(&self) {
@@ -1962,10 +2007,27 @@ impl Game for Play {
         self.bigmap.toggle(keys, bind.pressed(keys, Bind::Map));
         if self.bigmap.open {
             let v = self.bigmap.view(self.hud_width);
-            if let Some(at) = self.bigmap.control(keys, dt as f32, v)
-                && self.teleport.is_none()
-            {
-                self.request_teleport(at.x as f64, at.y as f64);
+            match self.bigmap.control(keys, dt as f32, v) {
+                Some(crate::bigmap::MapClick::Teleport(at)) if self.teleport.is_none() => {
+                    self.request_teleport(at.x as f64, at.y as f64);
+                }
+                Some(crate::bigmap::MapClick::Waypoint(at)) => {
+                    // ein Klick nahe am Wegpunkt (14 HUD-Einheiten) entfernt ihn
+                    let near = 14. / v.f as f64;
+                    let set = self.nav.toggle((at.x as f64, at.y as f64), near);
+                    self.world.notice = Some(berlin_sim::world::Notice {
+                        text: if !set {
+                            "Wegpunkt entfernt".into()
+                        } else if self.nav.ready() {
+                            "Wegpunkt gesetzt".into()
+                        } else {
+                            "Wegpunkt gesetzt – Route wird vorbereitet …".into()
+                        },
+                        t: 1.6,
+                    });
+                    self.ui_sound();
+                }
+                _ => {}
             }
         }
         if bind.pressed(keys, Bind::Mute)
@@ -2241,6 +2303,7 @@ impl Game for Play {
             self.fx.click_ring(at);
         }
         self.fx.ingest(&self.world.events);
+        self.step_nav();
         // Controller-Vibration aus Stößen und dem Schlupf des eigenen Autos
         if self.bindings.rumble {
             let w = &self.world;

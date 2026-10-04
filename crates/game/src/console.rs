@@ -292,6 +292,8 @@ pub enum Action {
         y: f64,
         name: String,
     },
+    /// Wegpunkt mit Route setzen (`None` = entfernen)
+    Waypoint(Option<(f64, f64, String)>),
     Stats,
     Cheat(&'static str),
     Money(f64),
@@ -473,6 +475,19 @@ pub const COMMANDS: &[Command] = &[
         help: "Fußgängerdichte (1 = normal)",
         cheat: false,
         args: &[arg("faktor", false, FACTOR)],
+    },
+    Command {
+        name: "ziel",
+        aliases: &["wegpunkt", "route", "navi"],
+        help: "Wegpunkt mit Route zu einem Ort setzen (ziel aus = entfernen)",
+        cheat: false,
+        args: &[Arg {
+            name: "ort",
+            optional: false,
+            rest: true,
+            places: true,
+            values: Values::None,
+        }],
     },
     Command {
         name: "tp",
@@ -1062,6 +1077,25 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             }
             None => err(format!("{} 0 bis 3", c.name)),
         },
+        "ziel" => {
+            let Some(q) = a0 else {
+                return err("ziel <Ort> oder ziel aus, z. B. ziel Hermannplatz");
+            };
+            if matches!(q, "aus" | "weg" | "off") {
+                ctx.actions.push(Action::Waypoint(None));
+                return ok("Wegpunkt entfernt");
+            }
+            let Some(hit) = rank_places(ctx.places, q).first().copied() else {
+                return err(format!("Kein Ort „{q}“"));
+            };
+            if !ctx.world.city.inside_border(hit.x, hit.y) {
+                return err(format!("{} liegt außerhalb", hit.name));
+            }
+            let name = hit.name.clone();
+            ctx.actions
+                .push(Action::Waypoint(Some((hit.x, hit.y, name.clone()))));
+            ok(format!("Ziel: {name}"))
+        }
         "tp" => {
             let Some(q) = a0 else {
                 return err("tp <Ort>, z. B. tp Kottbusser Tor");
@@ -1905,6 +1939,12 @@ mod tests {
         let (r, a) = run("tp Kottbusser Tor", &mut w);
         assert!(r.ok, "{}", r.msg);
         assert!(matches!(&a[0], Action::Teleport { name, .. } if name == "Kottbusser Tor"));
+        let (r, a) = run("ziel Kottbusser Tor", &mut w);
+        assert!(r.ok, "{}", r.msg);
+        assert!(matches!(&a[0], Action::Waypoint(Some((_, _, name))) if name == "Kottbusser Tor"));
+        let (r, a) = run("route aus", &mut w);
+        assert!(r.ok && a == [Action::Waypoint(None)], "Alias + aus");
+        assert!(!run("ziel", &mut w).0.ok, "ohne Ort");
         let n = w.cars.len();
         let (r, _) = run("auto motorrad", &mut w);
         assert!(r.ok, "{}", r.msg);

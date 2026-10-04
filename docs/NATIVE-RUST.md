@@ -1387,3 +1387,46 @@ geladen und gehalten (`City::load_area`).
 Autos ragen in die rechte Spur, und mit genau mittiger Linie streifte er sie bei Tempo 200 so oft, dass die Ware
 zu Schrott ging. Mit `BOT_DBG=1` protokolliert der Test jeden Zusammenstoß (Gegner, Rolle, Abstand zur
 Straßenmitte). Ergebnis: Mission in 665 s von 930 s, Belohnung 520 €.
+
+## Wegpunkt und Route (04.10.2026)
+
+**Neu gegenüber der JS-Fassung** (die keine Navigation kennt). Auf dem Stadtplan setzt ein Linksklick (ohne zu
+ziehen) bzw. **A** am Controller (Fadenkreuz in der Kartenmitte) einen Wegpunkt; derselbe Klick nahe am Pin
+entfernt ihn. Teleportieren liegt jetzt auf Rechtsklick bzw. **X**. In der Befehlszeile: `ziel <Ort>` (Aliase
+`wegpunkt`, `route`, `navi`; Orte wie bei `tp`), `ziel aus`. Die Route erscheint violett auf dem Stadtplan und auf
+der Minikarte (dort an den Rand geklemmt, darüber „Wegpunkt 2,4 km“). Ankunft im Umkreis von 30 m löscht den
+Wegpunkt; wer mehr als 25 m von der Route abkommt oder zwischen Fuß und Auto wechselt, bekommt nach höchstens 0,8 s
+eine neue. [Stadtplan](images/native/stadtplan-route.png), [Minikarte](images/native/minikarte-route.png).
+
+**Graph** (`sim/routing.rs`): aus allen ~2 900 Kacheln, nicht aus den geladenen – die Route soll auch quer durch
+die Stadt stimmen. Kanten werden über die globale ID entdoppelt, Knoten sind die globalen Vertex-IDs; dazu Ampeln
+und Abbiegeverbote aus den Kacheln. Aufbau parallel auf einem Hintergrundthread (~0,3 s, `game/nav.rs`), Anfragen
+2–18 ms. Fürs Auto gelten Einbahnstraßen, Abbiegeverbote, Sperren und die Klassen bis Spielstraße; zu Fuß alles.
+
+**Kosten = geschätzte Fahrzeit, mit Vorliebe für ruhige Straßen** (kantenbasiertes A*, Heuristik Luftlinie bei
+Höchsttempo):
+
+- Fahrzeit aus `maxspeed`, sonst nach Klasse (Autobahn 80, Bundesstraße 60, Haupt-/Sammelstraße 50, Wohnstraße 40,
+  Spielstraße 30, Schrittgeschwindigkeit 7 km/h), mit 90 % davon.
+- **Verkehrsmenge** aus den Zählungen (DTV) macht eine Kante teurer: × (1 + 0,5 · min(1, DTV/40 000)). Eine
+  Hauptstraße mit 40 000 Kfz/Tag kostet so anderthalbmal ihre Fahrzeit – parallele Wohnstraßen gewinnen, wenn der
+  Umweg klein ist.
+- **Ampel** +12 s (mittlere Wartezeit). Ohne Ampel +4 s nur, wer in eine wichtigere Straße einbiegt oder sie kreuzt
+  (Lücke abwarten); gleichrangige Ecken im Wohngebiet kosten nichts extra – sonst bestrafte jede Ecke genau die
+  Schleichwege.
+- Abbiegen rechts +4 s, links +8 s, Wenden +20 s (nur in Sackgassen erlaubt).
+- Zu Fuß: 1,4 m/s, Ampeln +5 s, keine Abbiegekosten.
+
+**Messung** an fünf 3,5–5 km-Routen um den Missionsort, gegen reine Fahrzeit: Hauptstraßen (Klasse ≤ 3) machen
+4–8 % der Strecke aus. Der Anteil an Wohnstraßen stieg auf der längsten Route von 28 auf 42 %, auf zwei weiteren
+blieb er gleich oder sank leicht (Abbiegekosten halten an langen geraden Zügen fest). Die Verkehrsgewichtung zu
+verdoppeln änderte nichts mehr – der verbleibende Anteil vielbefahrener Straßen sind vor allem Brücken über Kanal
+und Spree, an denen kein Weg vorbeiführt.
+
+**Abweichung:** Die Kosten kennen weder Stau noch die Tageszeit; DTV ist ein Tagesmittel.
+
+Unit-Tests: die ruhige Parallelstraße schlägt die belebte Hauptstraße mit Ampeln, Einbahnstraßen und
+Abbiegeverbote gelten im Auto und nicht zu Fuß, Abbiegekosten (rechts < links, geradeaus 0, Hauptstraße kreuzen),
+Einrasten und Route auf derselben Kante; Navigation: Ankunft, Neuberechnung beim Abkommen, „keine Route“ einmal
+gemeldet, Fortschritt nur vorwärts; Integration: Routen zwischen den drei Missionsorten im Auto und zu Fuß ohne
+Lücken. Befehlszeile: `ziel`, Alias, `aus`.

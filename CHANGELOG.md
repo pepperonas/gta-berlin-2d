@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Wegpunkt mit Route. Klick bzw. A auf dem Stadtplan (oder `ziel <Ort>`) setzt ihn, die
+  Route erscheint violett auf Stadtplan und Minikarte mit Restentfernung; berechnet über ganz Berlin, mit
+  Einbahnstraßen und Abbiegeverboten, und sie meidet Hauptstraßen mit viel Verkehr und Ampeln zugunsten ruhiger
+  Nebenstraßen. Teleportieren liegt jetzt auf Rechtsklick bzw. X.
 - Native Rust-Portierung: Tastatur und Xbox-Controller frei belegbar (Steuerung → Enter/A: Belegungstafel mit
   Konfliktanzeige und „alles auf Standard“), Controller-Vibration (abschaltbar), Lenkempfindlichkeit einstellbar;
   ESP, ABS und Kamera-Zoom am Controller belegt.
