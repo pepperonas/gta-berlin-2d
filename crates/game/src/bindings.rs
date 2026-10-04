@@ -557,6 +557,18 @@ pub fn bindable_key(k: KeyCode) -> bool {
 pub const TRIGGER_DEAD: f32 = 0.06;
 pub const TRIGGER_FULL: f32 = 0.96;
 pub const THROTTLE_GAMMA: f32 = 1.35;
+/// Tastatur: Gas und Bremse fahren in diesen Zeiten auf (s) bzw. zurück – eine Taste ist kein Pedal, ohne Rampe
+/// riss jeder Druck die volle Kraft an
+pub const PEDAL_UP: f64 = 0.15;
+pub const PEDAL_DOWN: f64 = 0.08;
+/// Pedalstellung `cur` einen Schritt `dt` zur Tastenstellung `target` (0/1) nachführen.
+pub fn pedal_ramp(cur: f64, target: f64, dt: f64) -> f64 {
+    if target > cur {
+        (cur + dt / PEDAL_UP).min(target)
+    } else {
+        (cur - dt / PEDAL_DOWN).max(target)
+    }
+}
 pub const BRAKE_GAMMA: f32 = 1.7;
 pub const STEER_DEAD: f32 = 0.1;
 
@@ -727,6 +739,24 @@ impl Bindings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn keyboard_pedal_ramps_up_and_down() {
+        use super::{PEDAL_DOWN, PEDAL_UP, pedal_ramp};
+        let dt = 1. / 60.;
+        let mut p = 0.;
+        let mut n = 0;
+        while p < 1. {
+            p = pedal_ramp(p, 1., dt);
+            n += 1;
+        }
+        assert!((n as f64 * dt - PEDAL_UP).abs() < dt * 1.5, "{n}");
+        let mut n = 0;
+        while p > 0. {
+            p = pedal_ramp(p, 0., dt);
+            n += 1;
+        }
+        assert!((n as f64 * dt - PEDAL_DOWN).abs() < dt * 1.5, "{n}");
+    }
     use super::*;
     use std::collections::HashSet;
 

@@ -143,6 +143,11 @@ pub trait Game {
     fn frame_stats(&mut self, _stats: FrameStats) {}
     /// Fester Simulationsschritt in Sekunden.
     fn step_seconds(&self) -> f64;
+    /// Vor dem Bild: zwischen vorigem und aktuellem Simulationsstand zeichnen (`alpha` = Anteil des angebrochenen
+    /// Schritts, 0…1). Nach dem Bild folgt `end_frame`.
+    fn interpolate(&mut self, _alpha: f64) {}
+    /// Nach dem Bild (nach `hud`).
+    fn end_frame(&mut self) {}
     fn step(&mut self, keys: &Keys, dt: f64);
     /// Kameraziel (Kartenpixel) und Zoom.
     fn camera(&self) -> (Vec2, f32);
@@ -463,6 +468,7 @@ impl ApplicationHandler for App {
                         event_loop.exit();
                         return;
                     }
+                    game.interpolate(self.accumulator / step);
                     let (position, zoom) = game.camera();
                     self.camera.position = position;
                     self.camera.zoom = (zoom * self.zoom_factor).clamp(0.5, 3.2);
@@ -495,6 +501,7 @@ impl ApplicationHandler for App {
                     });
                     let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
                     game.hud(&self.camera, viewport, &mut overlay);
+                    game.end_frame();
                     renderer.set_hud(&overlay.items, overlay.map);
                 } else if self.focused {
                     self.camera.position += movement.normalize_or_zero()

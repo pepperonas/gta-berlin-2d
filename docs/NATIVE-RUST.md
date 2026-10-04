@@ -1583,3 +1583,37 @@ Das Spiel benutzt die neue Physik noch nicht, der Umstieg folgt in Phase 3. Bis 
   - Linienbusse bremsen im Betrieb gedrosselt (stehende Fahrgäste), Klassenwert `verzoegerung_g` 0,45.
   - Querbeschleunigung von Lkw/Bus begrenzt real die Kippgrenze (Phase 6).
 
+## Fahrphysik Phase 3: Bremsen, Lenkung, Fahrwerk, Assistenten (04.10.2026)
+
+Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Datensatz hat und vier Räder trägt
+(`car.rs step_vphys`; Zweiräder bleiben bis Phase 5 auf `dynamics.rs`, KI-Verkehr arcadig bis Phase 8).
+`vehdata::game_vehicle(id)` liefert das kalibrierte Fahrzeug, `game_feel()` das Spielgefühl aus `feel.json`.
+
+- **Umrechnung:** Das Spiel rechnet in Pixeln (10 px = 1 m) mit y nach unten und Winkeln im Uhrzeigersinn; `vphys`
+  in Metern, y nach links, Gierwinkel gegen den Uhrzeigersinn. Jeder Schritt startet im Fahrzeugsystem am
+  aktuellen Ort (`car.phys`); Lage und Geschwindigkeit kommen jedes Mal aus dem Auto, Stöße wirken also direkt.
+  `dyn_state` wird für HUD, Vibration und Klang weiter befüllt (Vorzeichen im Spielsystem).
+- **Rückwärtsgang** (`select_direction`): Bremse im Stand `REV_HOLD` = 0,3 s halten, dann treibt die Bremstaste
+  rückwärts (höchstens `REV_MAX` = 7 m/s) und Gas bremst. ⚠️ Tests, die bis zum Stillstand bremsen, müssen dort
+  aufhören – sonst fährt das Auto rückwärts weiter und Weg bzw. Versatz sind verfälscht.
+- **Bremse:** Wirkung `brake_fade(v, temp)`: Bremsleistung heizt (`BRAKE_HEAT_CAP`), Stillstand und Fahrtwind kühlen;
+  Verlust bis 60 % bei `fading` 2 (Trommel). ⚠️ Trommelanlagen tragen 0,85 g – mit 1,0 g lag die Bremse über der
+  Reifenhaftung und das Fading blieb unsichtbar. ABS gibt bei Lenkeinschlag mehr Längskraft ab (`ABS_STEER` 0,35)
+  und regelt hinten vorsichtiger (`ABS_REAR`, EBD); vorher drehte sich ein Auto bei Vollbremsung mit Lenkung ein.
+- **ESP** (`esp_mode`, Stufen aus/Sport/voll; Spieler-Taste schaltet Sport → aus → voll): Soll-Gierrate aus
+  Lenkung und Tempo, begrenzt durch die **neben der Längsbeschleunigung übrige** Querhaftung. Eingriff bei zu großer
+  Gierabweichung oder Schwimmwinkel: Giermoment, Gas weg (voll 90 %, Sport 65 %). ⚠️ Regelt das ABS schon an der
+  Haftgrenze, entsteht das Moment durch Lösen einer Seite (weniger Verzögerung) – nicht durch zusätzliche Bremskraft,
+  das ergab 1,37 g. Ohne ABS kein ESP. Die Kalibrier-Kreisfahrt läuft mit ESP aus (Skidpad misst die Haftung).
+- **Lenkung:** Hinterachslenkung (`REAR_STEER_LOW/HIGH`), Lenk-Assist aus `feel.lenk_assist` (in der Kalibrierung 0).
+  ⚠️ Der kinematische Übergang unter 5 m/s lenkt mit einem blockierten Vorderrad nicht.
+- **Fahrwerk:** `Ground.rough` treibt eine Feder-Dämpfer-Federung je Achse (Eigenfrequenz `chassis.hz`), die
+  Federkraftschwankung ist die Radlastschwankung; Kopfstein = 0,6. Wanken und Nicken im Bild aus `chassis.roll/pitch`
+  (0,8 px je Grad) plus Federweg (`play.rs body_shift`).
+- **Gänge:** Der erste Gang rechnet mit der Achslast unter Beschleunigung (Heckantrieb gewinnt, Frontantrieb
+  verliert); vorher war er lang und die Limousine kam nach 2,5 s nur auf 42 km/h.
+- **Bild-Interpolation** (`game/interp.rs`): `Game::interpolate(alpha)` vor dem Bild schreibt Lagen zwischen vorigem
+  und aktuellem Schritt in die Welt (Autos, Passanten, Spieler, Kamera; über 150 px = Teleport), `end_frame`
+  schreibt die exakten Werte zurück. Die Simulation sieht nie einen interpolierten Wert.
+- Kalibrierung danach: 179 von 205 Zielwerten in der Toleranz (wie zu Gate 2).
+

@@ -9,6 +9,7 @@ mod effects;
 mod figure;
 mod fps;
 mod hud;
+mod interp;
 mod levelview;
 mod menu;
 mod nav;

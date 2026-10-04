@@ -39,7 +39,10 @@ schema; guide in its README), loader `sim/vehdata.rs`, core `sim/vphys.rs` (120 
 `sim/calibrate.rs`, tool `cargo run --release -p physics-calibrate` (writes `vehicles.calibrated.json` and
 `docs/kalibrierung/`). Never change mass/power/torque to hit a target; only the tool's screws. Rotational inertia
 reduces engine force only, never the tyre limit. Add new schema fields to `vehdata.rs KEYS` and
-`vehicle.schema.json` together (a test checks). Rerun the tool after any physics change.
+`vehicle.schema.json` together (a test checks). Rerun the tool after any physics change. Since phase 3 the player car (four wheels, with data) runs
+`car.rs step_vphys` (px/y-down ↔ m/y-left conversion each step, `car.phys`); two-wheelers still `dynamics.rs`.
+Holding brake at standstill engages reverse (stop brake tests at vx ≤ 0). Render interpolation: `game/interp.rs`
+writes lerped poses before drawing and restores them in `end_frame` — never keep state from inside a frame.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

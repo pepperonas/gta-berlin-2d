@@ -60,6 +60,10 @@ pub struct Play {
     /// Controller-Vibration: Regeln und die nächste abzuholende
     rumbler: crate::rumble::Rumbler,
     rumble_out: Option<berlin_engine::Rumble>,
+    /// Gas- und Bremsstellung der Tastatur (Rampe, `bindings::pedal_ramp`)
+    pedals: [f64; 2],
+    /// Bild-Interpolation zwischen den 60-Hz-Schritten
+    interp: crate::interp::Interp,
     /// Aufnahme-Option `--kampf-demo`: schießt mit der Pistole auf den nächsten Passanten
     pub demo_combat: bool,
     /// `--drift-demo`: im eigenen Auto Vollgas mit Handbremse und Lenkung (Reifenqualm, Bremsspuren prüfen)
@@ -418,6 +422,8 @@ impl Play {
             zoom_user: 1.,
             rumbler: Default::default(),
             rumble_out: None,
+            pedals: [0.; 2],
+            interp: Default::default(),
             demo_combat: false,
             demo_drift: false,
             vehicle_show: false,
@@ -1245,6 +1251,18 @@ fn body_shift(c: &berlin_sim::car::Car) -> (f32, f32) {
     else {
         return (0., 0.);
     };
+    // Fahrphysik mit Fahrzeugdaten: Nick- und Wankwinkel je g aus dem Fahrwerk (Grad), rund 0,8 px je Grad; die
+    // Federung über Bodenwellen (Kopfstein) rüttelt längs mit (1 cm Federweg ≈ 1 px)
+    if let (Some(s), Some(v)) = (
+        c.phys.as_ref(),
+        berlin_sim::vehdata::game_vehicle(c.model_name()),
+    ) {
+        const PX_PER_DEG: f64 = 0.8;
+        let g = berlin_sim::vehdata::G;
+        let pitch = -d.ax / g * v.chassis.pitch * PX_PER_DEG + (s.susp[0] - s.susp[1]) * 100.;
+        let roll = -d.ay / g * v.chassis.roll * PX_PER_DEG;
+        return (pitch.clamp(-6., 6.) as f32, roll.clamp(-6., 6.) as f32);
+    }
     let k = berlin_sim::carmodels::spec_of(c.model_name()).h * 0.35;
     (
         (-d.ax * k).clamp(-6., 6.) as f32,
@@ -2036,6 +2054,7 @@ impl Game for Play {
         DT
     }
     fn step(&mut self, keys: &Keys, dt: f64) {
+        self.interp.record(&self.world);
         if self.step_screens(keys, dt) {
             return;
         }
@@ -2119,6 +2138,24 @@ impl Game for Play {
                 .is_some_and(|r| r.kind == berlin_sim::ride::RideKind::Driver);
             input_from(keys, w2.player.in_car.is_some() || drives_train, &bind)
         };
+        // Tastatur: Gas und Bremse mit kurzer Rampe (analoge Trigger bleiben, wie sie sind)
+        {
+            use crate::bindings::{Action as A, pedal_ramp};
+            for (k, (a, v)) in [
+                (A::Throttle, &mut input.throttle),
+                (A::Brake, &mut input.brake),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if bind.pad_value(keys, a) > 0.02 {
+                    self.pedals[k] = *v;
+                } else {
+                    self.pedals[k] = pedal_ramp(self.pedals[k], *v, dt);
+                    *v = self.pedals[k];
+                }
+            }
+        }
         if self.vehicle_show && !w2.loading {
             self.vehicle_show = false;
             w2.vehicle_show();
@@ -2402,6 +2439,12 @@ impl Game for Play {
             self.saved_for = self.world.completed as u32;
             self.save();
         }
+    }
+    fn interpolate(&mut self, alpha: f64) {
+        self.interp.apply(&mut self.world, alpha);
+    }
+    fn end_frame(&mut self) {
+        self.interp.restore(&mut self.world);
     }
     fn camera(&self) -> (Vec2, f32) {
         let c = self.world.camera;

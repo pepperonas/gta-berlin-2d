@@ -84,8 +84,13 @@ impl Feel {
             realism: 1.,
             grip_global: 1.,
             brake_global: 1.,
-            ..Self::parse(&serde_json::from_str(FEEL).expect("feel.json")).expect("feel.json")
+            steer_assist: 0.,
+            ..Self::game()
         }
+    }
+    /// Spielgefühl aus `feel.json` (im Spiel).
+    pub fn game() -> Self {
+        Self::parse(&serde_json::from_str(FEEL).expect("feel.json")).expect("feel.json")
     }
     fn parse(j: &Value) -> Result<Self> {
         let f = |k: &str, d: f64| j[k].as_f64().unwrap_or(d);
@@ -504,6 +509,29 @@ fn empty_full(v: &Value, path: &str) -> Result<(f64, f64)> {
     Ok((num(&v["leer"], path)?, num(&v["voll"], path)?))
 }
 
+/// Gemeinsamer Datenbestand des Spiels (eingebettet, einmal geladen).
+pub fn shared() -> &'static VehicleDb {
+    static DB: std::sync::OnceLock<VehicleDb> = std::sync::OnceLock::new();
+    DB.get_or_init(|| VehicleDb::embedded().expect("Fahrzeugdaten"))
+}
+/// Kalibriertes Fahrzeug für das Spiel (einmal je Schlüssel abgeleitet); `None` = unbekannt.
+pub fn game_vehicle(id: &str) -> Option<&'static Vehicle> {
+    static CAL: std::sync::OnceLock<HashMap<String, Vehicle>> = std::sync::OnceLock::new();
+    CAL.get_or_init(|| {
+        let db = shared();
+        db.vehicles
+            .iter()
+            .filter_map(|v| db.calibrated(&v.id).map(|c| (v.id.clone(), c)))
+            .collect()
+    })
+    .get(id)
+}
+/// Spielgefühl des Spiels (`feel.json`).
+pub fn game_feel() -> &'static Feel {
+    static FEEL_GAME: std::sync::OnceLock<Feel> = std::sync::OnceLock::new();
+    FEEL_GAME.get_or_init(Feel::game)
+}
+
 impl VehicleDb {
     /// Eingebettete Daten (beim Bauen eingelesen).
     pub fn embedded() -> Result<Self> {
@@ -896,7 +924,7 @@ impl VehicleDb {
             }
         };
         // Vmax (Ziel oder aus der Leistung) für die Übersetzungen
-        let (mass_c, _) = (
+        let (mass_c, cg_c) = (
             lerp(mass_empty, mass_full, calib_load),
             lerp(cg_empty, cg_full, calib_load),
         );
@@ -997,13 +1025,18 @@ impl VehicleDb {
                 if single {
                     vec![top]
                 } else {
-                    // erster Gang: knapp an der Traktionsgrenze der Antriebsachse bei Spitzenmoment
+                    // erster Gang: knapp an der Traktionsgrenze der Antriebsachse bei Spitzenmoment – mit der
+                    // Achslast unter Beschleunigung (Heckantrieb gewinnt, Frontantrieb verliert) und dem Moment,
+                    // das die Drehmassen im ersten Gang schlucken (Massenfaktor ~1,3)
+                    let mu_l = veh_tmp.tire.mu * veh_tmp.tire.mu_long;
+                    let hl = cg_c / wheelbase;
                     let axle = match drive {
-                        Drive::Fwd => front,
-                        Drive::Rwd => 1. - front,
+                        Drive::Fwd => front / (1. + mu_l * hl),
+                        Drive::Rwd => (1. - front) / (1. - mu_l * hl).max(0.3),
                         Drive::Awd => 1.,
-                    };
-                    let grip = axle * mass_c * G * veh_tmp.tire.mu * veh_tmp.tire.mu_long;
+                    }
+                    .min(1.);
+                    let grip = axle * mass_c * G * mu_l * 1.0;
                     // … aber nicht weiter gespreizt als übliche Getriebe dieser Gangzahl (4 Gänge ×4, 5 ×4,75,
                     // 7 ×6,25, 12 ×10): ein schwacher Motor bekäme sonst einen absurd kurzen ersten Gang
                     let spread = 0.75 * gears as f64 + 1.;
@@ -1055,7 +1088,9 @@ impl VehicleDb {
                 .as_f64()
                 .unwrap_or(match bkind.as_str() {
                     "druckluft" => 0.85,
-                    "trommel" => 1.0,
+                    // Trommelanlagen der 60er: rund 0,85 g – unter der Haftung guter Reifen, deshalb spürt
+                    // man das Fading
+                    "trommel" => 0.85,
                     _ => 1.4,
                 }),
             kind: bkind,

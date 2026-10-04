@@ -197,6 +197,8 @@ pub fn lateral(v: &Vehicle, feel: &Feel) -> Run {
             throttle: th,
             brake: br,
             steer: (delta / lim).clamp(-1., 1.),
+            // ESP aus: gemessen wird die Haftgrenze (Skidpad), nicht der Regeleingriff
+            esp: Some(crate::vehdata::Esp::Off),
             ..Default::default()
         };
         if (t * 10. + 1e-6).floor() as usize >= run.trace.len() {

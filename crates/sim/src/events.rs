@@ -25,6 +25,12 @@ pub enum Event {
         y: f64,
         npc: bool,
     },
+    /// Vollbremsung im Linienbus: stehende Fahrgäste stürzen (Spielhaken für Missionen und Wertung)
+    PassengersFell {
+        x: f64,
+        y: f64,
+        car: u32,
+    },
     Door {
         x: f64,
         y: f64,

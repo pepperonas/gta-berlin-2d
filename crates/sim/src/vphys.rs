@@ -13,7 +13,7 @@
 //!
 //! Koordinaten: x/y in Metern, Gierwinkel mathematisch (gegen den Uhrzeigersinn); Geschwindigkeiten im
 //! Fahrzeugsystem (vx vorwärts, vy nach links).
-use crate::vehdata::{Diff, Drive, Feel, G, Power, RHO, Vehicle};
+use crate::vehdata::{Diff, Drive, Esp, Feel, G, Power, RHO, Vehicle};
 
 pub const HZ: f64 = 120.;
 pub const STEP: f64 = 1. / HZ;
@@ -26,10 +26,46 @@ pub const LOAD_SENS: f64 = 0.1;
 /// ABS hält diesen Anteil des Haftmaximums, Traktionskontrolle ebenso
 pub const ABS_HOLD: f64 = 0.99;
 /// … und gibt bei voller Lenkung so viel Längskraft ab, damit Seitenhalt bleibt
-pub const ABS_STEER: f64 = 0.2;
+pub const ABS_STEER: f64 = 0.35;
+/// Hinterachse: ABS/EBD regeln dort vorsichtiger, damit das Heck beim Bremsen Seitenhalt behält
+pub const ABS_REAR: f64 = 0.12;
+/// ESP: Stellstärke gegen zu großen Schwimmwinkel (1/s je rad Überschreitung)
+pub const ESP_BETA_GAIN: f64 = 10.;
 pub const TCS_HOLD: f64 = 0.98;
 /// durchdrehende Räder: verbleibender Seitenhalt
 pub const SPIN_LAT: f64 = 0.4;
+/// Rückwärtsgang: Höchsttempo (m/s) und wie lange die Bremse im Stand gehalten werden muss (s)
+pub const REV_MAX: f64 = 7.;
+pub const REV_HOLD: f64 = 0.3;
+/// Bremse: Wärmekapazität je kg Fahrzeugmasse (J/(kg·K)) – ein Stopp aus 100 km/h heizt um rund 120 K;
+/// Kühlung durch Stillstand bzw. Fahrtwind (1/s bzw. 1/m)
+pub const BRAKE_HEAT_CAP: f64 = 3.2;
+pub const BRAKE_COOL: f64 = 0.01;
+pub const BRAKE_COOL_V: f64 = 0.004;
+/// Bremsfading: Temperatur (K über Umgebung), ab der bzw. bis zu der die Wirkung sinkt; größter Verlust bei
+/// `fading` = 2 (Trommel)
+pub const FADE_FROM: f64 = 150.;
+pub const FADE_FULL: f64 = 450.;
+pub const FADE_MAX: f64 = 0.6;
+/// ESP: zugelassener Schwimmwinkel (rad) und Gierraten-Abweichung (rad/s) je Modus, Stellstärke (1/s)
+pub const ESP_BETA: [f64; 2] = [0.105, 0.23];
+pub const ESP_YAW_TOL: [f64; 2] = [0.1, 0.3];
+pub const ESP_GAIN: f64 = 6.;
+/// Eigenlenkgradient für die Soll-Gierrate (s²/m²)
+pub const ESP_K_US: f64 = 0.0015;
+/// Lenk-Assist: ab diesem Schwimmwinkel dämpft er die Gierrate zur Soll-Gierrate (1/s bei Stärke 1)
+pub const ASSIST_BETA: f64 = 0.05;
+pub const ASSIST_RATE: f64 = 2.;
+/// Hinterachslenkung: Anteil des Vorderradeinschlags, gegenläufig im Stand, gleichläufig über ~70 km/h
+pub const REAR_STEER_LOW: f64 = 0.25;
+pub const REAR_STEER_HIGH: f64 = 0.08;
+/// Fahrgäste stürzen ab dieser Verzögerung (in g); zurückgesetzt unter `PAX_RESET`
+pub const PAX_FALL: f64 = 0.3;
+pub const PAX_RESET: f64 = 0.2;
+/// Fahrbahnunebenheit: Höhe (m) bei `rough` = 1, Wellenlänge (m), Dämpfungsmaß der Federung
+pub const BUMP_H: f64 = 0.012;
+pub const BUMP_L: f64 = 0.35;
+pub const BUMP_ZETA: f64 = 0.3;
 
 /// Eingabe (Gas, Bremse 0…1; Lenkung −1 rechts … 1 links).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -40,6 +76,10 @@ pub struct Input {
     pub handbrake: bool,
     /// Fahrrad: Sprint statt Dauerleistung
     pub sprint: bool,
+    /// ESP-Modus des Fahrers (`None` = wie im Fahrzeug); `Some(Off)` schaltet auch die Traktionskontrolle ab
+    pub esp: Option<Esp>,
+    /// ABS abgeschaltet (Konsole)
+    pub no_abs: bool,
 }
 
 /// Untergrund an einer Achse.
@@ -49,12 +89,15 @@ pub struct Ground {
     /// Reifenfaktor für die Kategorie (trocken/nass/schnee/eis/lose)
     pub tire_factor: f64,
     pub rolling_extra: f64,
+    /// Unebenheit 0…1 (Kopfstein ~0,6): treibt die Federung, Radlast schwankt
+    pub rough: f64,
 }
 impl Ground {
     pub const DRY: Ground = Ground {
         mu_rel: 1.,
         tire_factor: 1.,
         rolling_extra: 0.,
+        rough: 0.,
     };
 }
 /// Untergrund je Achse (vorn, hinten).
@@ -103,6 +146,22 @@ pub struct State {
     pub alpha: [f64; 2],
     /// zurückgelegter Weg (m)
     pub dist: f64,
+    /// Rückwärtsgang eingelegt; Zeit, die die Bremse im Stand gehalten wird
+    pub reverse: bool,
+    pub rev_t: f64,
+    /// Bremsentemperatur (K über Umgebung)
+    pub brake_temp: f64,
+    /// ESP greift ein (vorige Unterschritte); Untersteuern 0…1 (Anzeige)
+    pub esp_active: bool,
+    pub understeer: f64,
+    /// Radeinschlag hinten (rad, Hinterachslenkung)
+    pub delta_r: f64,
+    /// Federweg je Achse (m, positiv = eingefedert) und Geschwindigkeit
+    pub susp: [f64; 2],
+    pub susp_v: [f64; 2],
+    /// Vollbremsung mit stehenden Fahrgästen: Zähler (je Bremsung einmal) und laufender Zustand
+    pub passenger_falls: u32,
+    pub hard_brake: bool,
 }
 impl State {
     pub fn speed(&self) -> f64 {
@@ -220,6 +279,10 @@ fn drive_force(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) -> 
             }
         }
     };
+    // Rückwärtsgang: Zugkraft nach hinten, Tempo begrenzt
+    if s.reverse {
+        return -f * ((REV_MAX - speed) / 0.5).clamp(0., 1.);
+    }
     // Begrenzer
     match v.limiter {
         Some(l) => f * ((l - speed) / 0.5).clamp(0., 1.),
@@ -252,7 +315,7 @@ pub fn mass_factor(v: &Vehicle, s: &State) -> f64 {
 /// Automatik: hochschalten nahe n_max bei Volllast, früher bei Teillast; runterschalten bei niedriger Drehzahl.
 fn shift(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, dt: f64) {
     let n_gears = v.gearbox.ratios.len();
-    if n_gears <= 1 || !matches!(v.engine.power, Power::Curve(_)) || v.gearbox.cvt {
+    if n_gears <= 1 || !matches!(v.engine.power, Power::Curve(_)) || v.gearbox.cvt || s.reverse {
         return;
     }
     if s.shift_t > 0. {
@@ -280,9 +343,79 @@ pub fn step(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt:
     let mut left = dt;
     while left > 1e-9 {
         let h = if s.speed() > FAST { STEP / 2. } else { STEP }.min(left);
-        substep(v, feel, s, inp, env, h);
+        let eff = select_direction(v, s, inp, h);
+        substep(v, feel, s, &eff, env, h);
         left -= h;
     }
+}
+
+/// Rückwärtsgang wie im Spiel üblich: Bremse im Stand halten legt ihn ein, dann treibt die Bremstaste rückwärts
+/// und das Gaspedal bremst; Gas im Stand legt wieder den Vorwärtsgang ein. Fahrräder schieben nicht rückwärts.
+pub fn select_direction(v: &Vehicle, s: &mut State, inp: &Input, dt: f64) -> Input {
+    if matches!(v.engine.power, Power::Muscle { .. }) {
+        return *inp;
+    }
+    if s.reverse {
+        if inp.throttle > 0.05 && s.vx > -0.4 {
+            s.reverse = false;
+            s.rev_t = 0.;
+        }
+    } else if s.vx.abs() < 0.4 && inp.brake > 0.3 && inp.throttle < 0.05 {
+        s.rev_t += dt;
+        if s.rev_t >= REV_HOLD {
+            s.reverse = true;
+            s.gear = 0;
+        }
+    } else {
+        s.rev_t = 0.;
+    }
+    if s.reverse {
+        Input {
+            throttle: inp.brake,
+            brake: inp.throttle,
+            ..*inp
+        }
+    } else {
+        *inp
+    }
+}
+
+/// Wirkung der Bremse bei Temperatur `temp` (1 = kalt).
+pub fn brake_fade(v: &Vehicle, temp: f64) -> f64 {
+    1. - FADE_MAX * (v.brake.fading / 2.).clamp(0., 1.) * smooth(FADE_FROM, FADE_FULL, temp)
+}
+
+/// ESP-Modus, der gilt: die Fahrereinstellung – außer das Fahrzeug hat gar kein ESP (Oldtimer, Drift-Aufbau);
+/// der Datensatz nennt die Grundeinstellung.
+pub fn esp_mode(v: &Vehicle, inp: &Input) -> Esp {
+    match inp.esp {
+        Some(e) if v.esp != Esp::Off => e,
+        _ => v.esp,
+    }
+}
+
+/// Soll-Gierrate aus Lenkung und Tempo (Einspurmodell mit leichtem Untersteuern), begrenzt durch die Haftung.
+pub fn yaw_reference(v: &Vehicle, vx: f64, delta: f64, delta_r: f64, mu: f64) -> f64 {
+    let l = v.wheelbase;
+    let r = vx * (delta.tan() - delta_r.tan()) / (l * (1. + ESP_K_US * vx * vx));
+    let cap = mu * G / vx.abs().max(1.);
+    r.clamp(-cap, cap)
+}
+
+/// Höhe der Fahrbahn (m) an Wegpunkt `x` (geglättetes Rauschen, deterministisch).
+fn road_height(x: f64, rough: f64) -> f64 {
+    if rough <= 0. {
+        return 0.;
+    }
+    let u = x / BUMP_L;
+    let i = u.floor();
+    let f = u - i;
+    let h = |n: f64| {
+        let z = (n * 127.1 + 311.7).sin() * 43758.5453;
+        (z - z.floor()) * 2. - 1.
+    };
+    let t = f * f * (3. - 2. * f);
+    (h(i) + (h(i + 1.) - h(i)) * t) * BUMP_H * rough
 }
 
 fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: f64) {
@@ -300,6 +433,17 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let step_max = rate * if back { 2. } else { 1. } * dt;
     s.delta += (target - s.delta).clamp(-step_max, step_max);
     let delta = s.delta;
+    // Hinterachslenkung: langsam gegenläufig (wendiger), schnell gleichläufig (stabiler)
+    s.delta_r = if v.steering.rear {
+        let k = REAR_STEER_LOW - (REAR_STEER_LOW + REAR_STEER_HIGH) * smooth(10., 19., speed);
+        -k * delta
+    } else {
+        0.
+    };
+    let delta_r = s.delta_r;
+    let esp = esp_mode(v, inp);
+    let tcs = v.tcs && inp.esp != Some(Esp::Off);
+    let abs = v.brake.abs && !inp.no_abs;
     // Bremsdruck mit Aufbauzeit
     let bt = v.brake.build.max(0.02);
     s.brake_p += (inp.brake.clamp(0., 1.) - s.brake_p).clamp(-dt / 0.05, dt / bt);
@@ -309,7 +453,25 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let fz_f0 = m * G * v.front + down * v.front;
     let fz_r0 = m * G * (1. - v.front) + down * (1. - v.front);
     let dlong = m * s.ax_f * h / l * tr;
-    let fz_axle = [(fz_f0 - dlong).max(0.), (fz_r0 + dlong).max(0.)];
+    let mut fz_axle = [(fz_f0 - dlong).max(0.), (fz_r0 + dlong).max(0.)];
+    // Federung je Achse über Fahrbahnunebenheiten: Feder-Dämpfer mit der Eigenfrequenz des Fahrwerks; die
+    // Federkraftschwankung ist die Radlastschwankung (hartes Fahrwerk auf Kopfstein = weniger Grip)
+    let w0 = 2. * std::f64::consts::PI * v.chassis.hz.max(0.3);
+    for (i, fz) in fz_axle.iter_mut().enumerate() {
+        let rough = env.axle[i].rough;
+        if rough <= 0. && s.susp[i] == 0. && s.susp_v[i] == 0. {
+            continue;
+        }
+        let x = s.dist - if i == 1 { l } else { 0. };
+        let y = road_height(x, rough);
+        let y1 = road_height(x + speed * dt, rough);
+        let yv = (y1 - y) / dt;
+        let acc = w0 * w0 * (y - s.susp[i]) + 2. * BUMP_ZETA * w0 * (yv - s.susp_v[i]);
+        s.susp_v[i] += acc * dt;
+        s.susp[i] += s.susp_v[i] * dt;
+        let m_ax = m * if i == 0 { v.front } else { 1. - v.front };
+        *fz = (*fz + m_ax * acc).max(0.);
+    }
     let dlat = if v.track > 0. {
         m * s.ay_f * h / v.track * tr
     } else {
@@ -383,7 +545,11 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         Drive::Rwd => [0., 1.],
         Drive::Awd => [v.awd_front, 1. - v.awd_front],
     };
-    let mut f_brake = s.brake_p * m * G * v.brake.gain * feel.brake();
+    // ESP nimmt Gas weg, solange es eingreift (voll fast ganz, Sport nur teilweise)
+    if s.esp_active && f_drive * dir > 0. {
+        f_drive *= if esp == Esp::Full { 0.1 } else { 0.35 };
+    }
+    let mut f_brake = s.brake_p * m * G * v.brake.gain * feel.brake() * brake_fade(v, s.brake_temp);
     if v.two_wheel {
         f_brake = f_brake.min(m * G * (1. - v.front) * l / h);
     }
@@ -391,7 +557,10 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     // Geschwindigkeit am Reifen (Fahrzeugsystem), Schräglauf
     let vy_ax = [s.vy + a * s.r, s.vy - b * s.r];
     let vxs = speed.max(0.5);
-    let alpha = [vy_ax[0].atan2(vxs) - delta * dir, vy_ax[1].atan2(vxs)];
+    let alpha = [
+        vy_ax[0].atan2(vxs) - delta * dir,
+        vy_ax[1].atan2(vxs) - delta_r * dir,
+    ];
     s.alpha = alpha;
     let (bb, cc) = v.tire.shape();
     let mf = |x: f64| (cc * (bb * x).atan()).sin();
@@ -426,7 +595,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         let mut lat_k = 1.;
         s.spin[i] = false;
         s.locked[i] = false;
-        if locked_hb || (!v.brake.abs && brake_i > c && !still && drive_i < brake_i) {
+        if locked_hb || (!abs && brake_i > c && !still && drive_i < brake_i) {
             // blockiert: Gleitreibung entgegen der Gleitrichtung des Reifens (im Reifensystem; vorn um den
             // Lenkwinkel gedreht), kein Seitenhalt – ein blockiertes Vorderrad lenkt nicht
             s.locked[i] = true;
@@ -445,7 +614,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
             s.slip[i] = demand / c * v.tire.peak_slip_ratio;
         } else if demand * dir > 0. || still {
             // Antrieb über der Haftung
-            if v.tcs {
+            if tcs {
                 s.tcs = true;
                 fx[i] = demand.signum() * c * TCS_HOLD;
                 s.slip[i] = v.tire.peak_slip_ratio * demand.signum();
@@ -459,7 +628,12 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
             // Bremsen über der Haftung: ABS hält knapp darunter; bei Lenkeinschlag gibt es Längskraft zugunsten
             // der Lenkbarkeit ab
             s.abs = true;
-            fx[i] = demand.signum() * c * (ABS_HOLD - ABS_STEER * inp.steer.abs());
+            let rear = if i == 1 {
+                ABS_REAR * (0.5 + inp.steer.abs())
+            } else {
+                0.
+            };
+            fx[i] = demand.signum() * c * (ABS_HOLD - ABS_STEER * inp.steer.abs() - rear);
             s.slip[i] = -v.tire.peak_slip_ratio;
         }
         let used = (fx[i] / c).clamp(-1., 1.);
@@ -475,11 +649,77 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         }
     }
     let (sd, cd) = delta.sin_cos();
-    let fxb = fx[0] * cd - fy[0] * sd + fx[1] - f_drag - f_roll;
-    let fyb = fx[0] * sd + fy[0] * cd + fy[1];
-    let mz = a * (fx[0] * sd + fy[0] * cd) - b * fy[1];
+    let (sr, cr_) = delta_r.sin_cos();
+    let mut fxb = fx[0] * cd - fy[0] * sd + fx[1] * cr_ - fy[1] * sr - f_drag - f_roll;
+    let fyb = fx[0] * sd + fy[0] * cd + fx[1] * sr + fy[1] * cr_;
+    let mut mz = a * (fx[0] * sd + fy[0] * cd) - b * (fx[1] * sr + fy[1] * cr_);
+    // Soll-Gierrate (ESP, Lenk-Assist, Untersteuer-Anzeige)
+    // (Querhaftung, die neben der aktuellen Längsbeschleunigung übrig bleibt – das misst ein echtes ESP über den
+    // Querbeschleunigungssensor)
+    let mu_now = v.tire.mu * env.axle[0].mu_rel * env.axle[0].tire_factor * feel.grip();
+    let long_used = (s.ax_f / (mu_now * v.tire.mu_long * G).max(0.1)).clamp(-1., 1.);
+    let mu_lat = mu_now * (1. - long_used * long_used).max(0.).sqrt().max(0.2);
+    let r_ref = yaw_reference(v, s.vx, delta, delta_r, mu_lat);
+    s.understeer = if speed > 5. && r_ref.abs() > 0.05 && s.r * r_ref > 0. {
+        ((r_ref.abs() - s.r.abs()) / r_ref.abs()).clamp(0., 1.)
+    } else {
+        0.
+    };
+    // ESP: weicht Gierrate oder Schwimmwinkel zu weit ab, bremst es einzelne Räder (Giermoment gegen die
+    // Abweichung, Verzögerung durch die einseitige Bremse) und nimmt Gas weg
+    s.esp_active = false;
+    // (ESP braucht das ABS-Steuergerät: ohne ABS kein ESP)
+    if esp != Esp::Off && abs && speed > 5. && v.track > 0. {
+        let k = if esp == Esp::Full { 0 } else { 1 };
+        let err = s.r - r_ref;
+        let beta = s.beta();
+        if err.abs() > ESP_YAW_TOL[k] || beta.abs() > ESP_BETA[k] {
+            let excess = err.signum() * (err.abs() - ESP_YAW_TOL[k] * 0.5).max(0.);
+            // zu großer Schwimmwinkel: Gierrate abbauen (Heck kommt), unabhängig von der Soll-Gierrate
+            let slide = (beta.abs() - ESP_BETA[k] * 0.7).max(0.) * s.r.signum();
+            let want = -(ESP_GAIN * excess + ESP_BETA_GAIN * slide) * iz;
+            let half = v.track / 2.;
+            let cap = (cap_long[0] + cap_long[1]) * 0.5 * half;
+            let m_esp = want.clamp(-cap, cap);
+            if m_esp.abs() > 1. {
+                mz += m_esp;
+                // einseitiges Bremsen verzögert zusätzlich – regelt das ABS schon an der Haftgrenze, entsteht das
+                // Moment stattdessen durch Lösen einer Seite (weniger Verzögerung)
+                let f_side = m_esp.abs() / half;
+                if s.abs {
+                    let braking = (fx[0] + fx[1]).abs();
+                    fxb += f_side.min(braking * 0.5) * dir;
+                } else {
+                    fxb -= f_side * dir;
+                }
+                s.esp_active = true;
+            }
+        }
+    }
+    // Lenk-Assist (Spielgefühl): wer nicht gegenlenkt, dem dämpft er das Ausbrechen leicht
+    if feel.steer_assist > 0. && speed > 5. && s.beta().abs() > ASSIST_BETA && inp.steer * s.r >= 0.
+    {
+        mz -= (s.r - r_ref) * iz * feel.steer_assist * ASSIST_RATE;
+    }
     // Integration (halbimplizit); die Drehträgheit steckt schon in der Antriebskraft
     let ax = fxb / m;
+    // Bremse heizt mit der umgesetzten Bremsleistung, Stillstand und Fahrtwind kühlen
+    if !still {
+        let used = (brake_ax[0] + brake_ax[1]).min(cap_long[0] + cap_long[1]);
+        s.brake_temp += used * speed / (m * BRAKE_HEAT_CAP) * dt;
+    }
+    s.brake_temp -= s.brake_temp * (BRAKE_COOL + BRAKE_COOL_V * speed) * dt;
+    // Linienbus: Vollbremsung mit stehenden Fahrgästen (ein Ereignis je Bremsung)
+    if v.flags.contains_key("fahrgaeste") {
+        if s.brake_p > 0.3 && -ax * dir > PAX_FALL * G {
+            if !s.hard_brake {
+                s.hard_brake = true;
+                s.passenger_falls += 1;
+            }
+        } else if -ax * dir < PAX_RESET * G {
+            s.hard_brake = false;
+        }
+    }
     let ay = fyb / m;
     let mut vx = s.vx + (ax + s.r * s.vy) * dt;
     let mut vy = s.vy + (ay - s.r * s.vx) * dt;
@@ -494,7 +734,9 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     // unter 2…5 m/s kinematisch: Gierrate aus Lenkung, kein Querschlupf
     let w = smooth(KIN[0], KIN[1], vx.abs());
     if w < 1. {
-        let r_kin = vx * delta.tan() / l;
+        // ein blockiertes Vorderrad lenkt auch hier nicht
+        let d_f = if s.locked[0] { 0. } else { delta };
+        let r_kin = vx * (d_f.tan() - delta_r.tan()) / l;
         r = r_kin + (r - r_kin) * w;
         vy *= w;
     }
@@ -534,17 +776,25 @@ mod tests {
         let mut s = State::default();
         run(v, &mut s, Input::default(), 5.);
         assert_eq!((s.x, s.y, s.vx, s.vy, s.r), (0., 0., 0., 0., 0.));
-        // Bremse im Stand: kein Rückwärtsrollen
-        run(
-            v,
-            &mut s,
-            Input {
-                brake: 1.,
-                ..Default::default()
-            },
-            2.,
-        );
+        // Bremse im Stand: kurz getippt kein Rückwärtsrollen …
+        let brake = Input {
+            brake: 1.,
+            ..Default::default()
+        };
+        run(v, &mut s, brake, REV_HOLD * 0.8);
         assert_eq!(s.vx, 0.);
+        assert!(!s.reverse);
+        // … gehalten legt sie den Rückwärtsgang ein, das Tempo ist begrenzt
+        run(v, &mut s, brake, 6.);
+        assert!(s.reverse);
+        assert!(s.vx < -REV_MAX * 0.9 && s.vx >= -REV_MAX - 0.1, "{}", s.vx);
+        // Gas bremst rückwärts, im Stand gilt wieder vorwärts
+        let gas = Input {
+            throttle: 1.,
+            ..Default::default()
+        };
+        run(v, &mut s, gas, 3.);
+        assert!(!s.reverse && s.vx > 0., "{}", s.vx);
     }
 
     #[test]
@@ -681,17 +931,26 @@ mod tests {
                 gear: 4,
                 ..Default::default()
             };
-            run(
-                v,
-                &mut s,
-                Input {
-                    brake: 1.,
-                    steer,
-                    ..Default::default()
-                },
-                8.,
-            );
-            (s.dist, s.y.abs())
+            // bis zum Stillstand (danach legte die gehaltene Bremse den Rückwärtsgang ein)
+            let inp = Input {
+                brake: 1.,
+                steer,
+                ..Default::default()
+            };
+            let feel = Feel::simulation();
+            // Kurswinkel (Bewegungsrichtung), sobald das Auto unter 5 m/s fällt: blockiert dreht sich der Aufbau
+            // womöglich, die Bahn aber nicht
+            let mut course = 0.;
+            for _ in 0..(8. * HZ) as usize {
+                step(v, &feel, &mut s, &inp, &Env::default(), STEP);
+                if s.speed() < 6. && course == 0. {
+                    course = (s.yaw + s.vy.atan2(s.vx)).abs();
+                }
+                if s.vx <= 0. {
+                    break;
+                }
+            }
+            (s.dist, course)
         };
         // geradeaus: ohne ABS 10 bis 20 % länger (Prompt)
         let (d_abs, _) = stop(&base, 0.);
@@ -700,13 +959,13 @@ mod tests {
             d_lock > d_abs * 1.1 && d_lock < d_abs * 1.2,
             "ABS {d_abs}, blockiert {d_lock}"
         );
-        // mit Lenkeinschlag: mit ABS weicht das Auto aus, blockiert schiebt es geradeaus
-        let (_, side_abs) = stop(&base, 0.5);
-        let (_, side_lock) = stop(&no_abs, 0.5);
-        // (der Versatz blockiert entsteht in der Aufbauzeit, bevor die Räder blockieren)
+        // mit Lenkeinschlag: mit ABS dreht das Auto in die Kurve, blockiert schiebt es geradeaus (gemessen an der
+        // Richtungsänderung bis zum Stillstand; der Rest blockiert entsteht in der Aufbauzeit)
+        let (_, yaw_abs) = stop(&base, 0.5);
+        let (_, yaw_lock) = stop(&no_abs, 0.5);
         assert!(
-            side_abs > 1. && side_abs > side_lock * 1.4,
-            "mit ABS lenkbar: {side_abs} gegen {side_lock}"
+            yaw_abs > 0.15 && yaw_abs > yaw_lock * 3.,
+            "mit ABS lenkbar: {yaw_abs} gegen {yaw_lock}"
         );
     }
 
@@ -730,5 +989,206 @@ mod tests {
         );
         inp.throttle = 0.;
         assert_eq!(drive_force(v, p, &inp, 30., STEP), 0.);
+    }
+
+    /// Vollbremsung aus `kmh`, Bremsweg; Bremstemperatur bleibt im Zustand.
+    fn brake_stop(v: &Vehicle, s: &mut State, kmh: f64) -> f64 {
+        let feel = Feel::simulation();
+        (s.vx, s.vy, s.r, s.reverse, s.rev_t) = (kmh / 3.6, 0., 0., false, 0.);
+        s.gear = v.gearbox.ratios.len() - 1;
+        let d0 = s.dist;
+        let inp = Input {
+            brake: 1.,
+            ..Default::default()
+        };
+        for _ in 0..(20. * HZ) as usize {
+            step(v, &feel, s, &inp, &Env::default(), STEP);
+            if s.vx <= 0. {
+                break;
+            }
+        }
+        s.dist - d0
+    }
+
+    #[test]
+    fn drum_brakes_fade_after_repeated_stops_ceramics_do_not() {
+        let db = db();
+        for (id, fades) in [("oldtimer_kaefer", true), ("turbo_s", false)] {
+            let v = db.get(id).unwrap();
+            let mut s = State::default();
+            let first = brake_stop(v, &mut s, 100.);
+            let mut last = first;
+            for _ in 0..3 {
+                // kurze Pause zwischen den Bremsungen: die Bremse kühlt kaum
+                run(v, &mut s, Input::default(), 2.);
+                last = brake_stop(v, &mut s, 100.);
+            }
+            assert!(s.brake_temp > FADE_FROM, "{id}: {}", s.brake_temp);
+            if fades {
+                assert!(last > first * 1.15, "{id}: {first} → {last}");
+            } else {
+                assert!(last < first * 1.02, "{id}: {first} → {last}");
+            }
+            // Fahrtwind kühlt
+            let hot = s.brake_temp;
+            s.vx = 25.;
+            run(
+                v,
+                &mut s,
+                Input {
+                    throttle: 0.3,
+                    ..Default::default()
+                },
+                20.,
+            );
+            assert!(s.brake_temp < hot * 0.5, "{id}: {hot} → {}", s.brake_temp);
+        }
+    }
+
+    #[test]
+    fn esp_modes_allow_more_slip_in_sport_and_none_when_off() {
+        // Heckantrieb, nasse Straße, Vollgas aus der Kurve: der größte Schwimmwinkel wächst von voll über Sport
+        // nach aus
+        let db = db();
+        let v = db.get("sportwagen_s").unwrap();
+        let wet = Env {
+            axle: [Ground {
+                mu_rel: 0.7,
+                ..Ground::DRY
+            }; 2],
+        };
+        let peak = |esp: Esp| {
+            let feel = Feel::simulation();
+            let mut s = State {
+                vx: 15.,
+                gear: 1,
+                ..Default::default()
+            };
+            let mut beta: f64 = 0.;
+            for k in 0..(4. * HZ) as usize {
+                let inp = Input {
+                    throttle: 1.,
+                    steer: if k < 60 { 0.8 } else { 0.4 },
+                    esp: Some(esp),
+                    ..Default::default()
+                };
+                step(v, &feel, &mut s, &inp, &wet, STEP);
+                beta = beta.max(s.beta().abs());
+            }
+            beta
+        };
+        let (full, sport, off) = (peak(Esp::Full), peak(Esp::Sport), peak(Esp::Off));
+        assert!(
+            full < sport && sport < off,
+            "voll {full} sport {sport} aus {off}"
+        );
+        assert!(full < 0.2, "voll {full}");
+    }
+
+    #[test]
+    fn rear_axle_steering_turns_tighter_slowly_and_calmer_fast() {
+        let db = db();
+        let base = db.get("turbo_s").unwrap().clone();
+        assert!(base.steering.rear);
+        let mut plain = base.clone();
+        plain.steering.rear = false;
+        // Wenden bei Schritttempo: kleinerer Kreis (größere Gierrate bei gleicher Lenkung)
+        let yaw = |v: &Vehicle, speed: f64, steer: f64| {
+            let mut s = State {
+                vx: speed,
+                ..Default::default()
+            };
+            run(
+                v,
+                &mut s,
+                Input {
+                    throttle: 0.15,
+                    steer,
+                    esp: Some(Esp::Off),
+                    ..Default::default()
+                },
+                1.5,
+            );
+            s.r.abs()
+        };
+        assert!(yaw(&base, 3., 1.) > yaw(&plain, 3., 1.) * 1.1);
+        // schnell: gleichläufig, die Gierantwort ist gedämpfter
+        assert!(yaw(&base, 35., 0.3) < yaw(&plain, 35., 0.3));
+    }
+
+    #[test]
+    fn cobbles_shake_the_suspension_and_cost_grip() {
+        let db = db();
+        let v = db.get("kompakt_benzin").unwrap();
+        let cob = Env {
+            axle: [Ground {
+                rough: 0.6,
+                ..Ground::DRY
+            }; 2],
+        };
+        let feel = Feel::simulation();
+        let mut s = State {
+            vx: 14.,
+            gear: 2,
+            ..Default::default()
+        };
+        let (mut lo, mut hi) = (f64::MAX, 0f64);
+        for _ in 0..(3. * HZ) as usize {
+            step(
+                v,
+                &feel,
+                &mut s,
+                &Input {
+                    throttle: 0.3,
+                    ..Default::default()
+                },
+                &cob,
+                STEP,
+            );
+            let f = s.fz[0] + s.fz[1];
+            (lo, hi) = (lo.min(f), hi.max(f));
+        }
+        let m = v.mass_empty;
+        // Radlast vorn schwankt spürbar (glatt: gar nicht)
+        assert!(hi - lo > m * G * v.front * 0.1, "{lo} … {hi}");
+        assert!(s.susp[0] != 0.);
+        // glatte Straße: Federung ruht
+        let mut s2 = State {
+            vx: 14.,
+            gear: 2,
+            ..Default::default()
+        };
+        run(v, &mut s2, Input::default(), 1.);
+        assert_eq!(s2.susp, [0.; 2]);
+    }
+
+    #[test]
+    fn full_stop_in_a_bus_throws_standing_passengers_once() {
+        let db = db();
+        let v = db.get("stadtbus").unwrap();
+        let mut s = State {
+            load: 1.,
+            ..Default::default()
+        };
+        // sanftes Bremsen: niemand stürzt
+        s.vx = 50. / 3.6;
+        run(
+            v,
+            &mut s,
+            Input {
+                brake: 0.3,
+                ..Default::default()
+            },
+            1.,
+        );
+        assert_eq!(s.passenger_falls, 0);
+        // Vollbremsung: genau ein Ereignis
+        brake_stop(v, &mut s, 50.);
+        assert_eq!(s.passenger_falls, 1);
+        // ein Pkw ohne Fahrgäste nie
+        let car = db.get("kompakt_benzin").unwrap();
+        let mut c = State::default();
+        brake_stop(car, &mut c, 100.);
+        assert_eq!(c.passenger_falls, 0);
     }
 }

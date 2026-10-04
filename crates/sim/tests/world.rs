@@ -245,11 +245,21 @@ fn player_car_accelerates_on_a_straight_lane() {
             ..idle()
         },
     );
+    // das Spielerauto fährt mit derselben Physik wie die Kalibrierung: nach 2,5 s so schnell wie deren Messfahrt
+    // (die startet mit gespanntem Lader und mit Simulations-Grip, daher ±15 %)
     let c = w.car(pc).unwrap();
+    let v = berlin_sim::vehdata::game_vehicle(c.model_name()).expect("Fahrzeugdaten");
+    let run25 = berlin_sim::calibrate::accel(v, &berlin_sim::vehdata::Feel::simulation());
+    let want = run25
+        .trace
+        .iter()
+        .find(|s| s.t >= 2.5)
+        .map(|s| s.kmh)
+        .unwrap();
+    let got = c.speed() * 0.36;
     assert!(
-        c.speed() * 0.36 > 50.,
-        "nach 2,5 s erst {:.0} km/h",
-        c.speed() * 0.36
+        got > 30. && (got - want).abs() < want * 0.15,
+        "nach 2,5 s {got:.0} km/h, Messfahrt {want:.0} km/h"
     );
     // Bremsen bringt es zum Stehen (gehalten setzt es danach zurück, wie in der JS-Fassung)
     let mut stopped = None;

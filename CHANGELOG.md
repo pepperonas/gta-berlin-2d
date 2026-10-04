@@ -8,6 +8,16 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 3: Das Spielerauto fährt jetzt mit dem neuen Physikkern und den
+  kalibrierten Fahrzeugdaten (alle vierrädrigen Modelle; Zweiräder folgen in Phase 5).
+  - Bremsen: Druckaufbau, Fading über die Bremsentemperatur (Trommeln merklich nach drei harten Bremsungen,
+    Keramik nie), ABS hält das Heck stabil (EBD).
+  - Rückwärtsgang: Bremse im Stand halten; Gas-/Bremsrampen auf der Tastatur.
+  - ESP in drei Stufen über die ESP-Taste (Sport → aus → voll; ohne ABS kein ESP).
+  - Lenkung: Hinterachslenkung (langsam gegenläufig, schnell gleichläufig) und ein Lenk-Assist.
+  - Fahrwerk: Kopfstein rüttelt über eine Feder-Dämpfer-Federung, Wanken und Nicken kommen aus den Fahrwerksdaten.
+  - Bus: Vollbremsung im Linienbus wirft stehende Fahrgäste um (Ereignis `PassengersFell`).
+  - Bild-Interpolation zwischen den 60-Hz-Schritten (Autos, Figuren, Kamera).
 - Native Rust-Portierung, Fahrphysik Phase 1 und 2 (noch nicht im Spiel aktiv): Fahrzeugdaten liegen als JSON in
   `data/vehicles/` (87 Fahrzeuge in 20 Klassen, 21 Reifen, 20 Untergründe, Motorkurven, Schema). Fünf Felder
   genügen für ein neues Fahrzeug, der Rest wird aus der Klasse abgeleitet. Neuer Physikkern `berlin_sim::vphys`

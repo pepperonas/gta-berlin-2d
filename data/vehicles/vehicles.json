@@ -3464,6 +3464,7 @@
   "ziel": {
    "vmax": 90.0
   },
-  "limiter": 90.0
+  "limiter": 90.0,
+  "fahrgaeste": true
  }
 ]

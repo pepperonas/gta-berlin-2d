@@ -85,7 +85,10 @@ pub struct Car {
     pub level: LevelState,
     pub level_init: bool,
     pub dyn_state: Option<DynState>,
+    /// Fahrphysik-Zustand (vphys, Spielerauto mit Fahrzeugdaten)
+    pub phys: Option<Box<crate::vphys::State>>,
     pub esp: bool,
+    pub esp_full: bool,
     pub abs: bool,
     pub traction: Traction,
     pub aqua: f64,
@@ -141,7 +144,9 @@ impl Car {
             level: LevelState::default(),
             level_init: false,
             dyn_state: None,
+            phys: None,
             esp: true,
+            esp_full: false,
             abs: true,
             traction: DRY,
             aqua: 0.,
@@ -227,6 +232,15 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     car.spin = 0.;
     let info = car.kind_info();
     // Der Spieler fährt mit echter Fahrdynamik; Verkehr, geparkte und geschobene Autos sowie Räder arcadig.
+    // Vierrädrige Fahrzeuge mit Datensatz fahren über den Kern `vphys`, Zweiräder bis Phase 5 über `dynamics`.
+    if car.driver == Some(Driver::Player)
+        && info.top.is_none()
+        && !car.wrecked
+        && let Some(v) = crate::vehdata::game_vehicle(car.model_name()).filter(|v| !v.two_wheel)
+    {
+        step_vphys(car, v, ctl, ground.unwrap_or(Ground::Road), dt);
+        return;
+    }
     if car.driver == Some(Driver::Player) && info.top.is_none() && !car.wrecked {
         let spec = spec_of(car.model_name());
         let mut body = Body {
@@ -317,6 +331,98 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     car.vy = vf * s + vr * c;
     car.x += car.vx * dt;
     car.y += car.vy * dt;
+    if car.aqua > 0. {
+        car.aqua = (car.aqua - dt).max(0.);
+    }
+}
+
+/// Spielerauto über den Fahrphysik-Kern. Das Spiel rechnet in Pixeln (10 px = 1 m) mit y nach unten und
+/// Winkeln im Uhrzeigersinn; `vphys` in Metern, y nach links, Gierwinkel gegen den Uhrzeigersinn. Der Kern
+/// rechnet jeden Schritt im Fahrzeugsystem ab dem aktuellen Ort; Lage und Geschwindigkeiten kommen jedes Mal aus
+/// dem Auto (Stöße und Teleports wirken so ohne Umweg).
+fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground: Ground, dt: f64) {
+    use crate::vehdata::Esp;
+    use crate::vphys::{Env, Ground as Road, Input, step};
+    const PX: f64 = 10.;
+    let feel = crate::vehdata::game_feel();
+    let surf = surface_of(ground);
+    let tr = car.traction;
+    let aq = car.aqua > 0.;
+    let (sa, ca) = car.angle.sin_cos();
+    let vf = car.vx * ca + car.vy * sa;
+    let vr = -car.vx * sa + car.vy * ca;
+    let s = car.phys.get_or_insert_with(Default::default);
+    (s.x, s.y, s.yaw) = (0., 0., 0.);
+    s.vx = vf / PX;
+    s.vy = -vr / PX;
+    s.r = -car.ang_vel;
+    // Untergrund (Phase 4 rechnet je Rad): Haftung aus Untergrund und Witterung, Kopfstein rüttelt
+    let base = Road {
+        mu_rel: surf.grip * tr.lat,
+        tire_factor: 1.,
+        rolling_extra: (surf.drag - 1.) * 0.02,
+        rough: if ground == Ground::Cobble { 0.6 } else { 0. },
+    };
+    let mut front = base;
+    if aq {
+        front.mu_rel *= Aqua::LAT;
+    }
+    let esp = match (car.esp, car.esp_full) {
+        (false, _) => Esp::Off,
+        (true, true) => Esp::Full,
+        (true, false) => Esp::Sport,
+    };
+    let inp = Input {
+        throttle: ctl.throttle,
+        brake: ctl.brake,
+        steer: -ctl.steer,
+        handbrake: ctl.handbrake,
+        sprint: false,
+        esp: Some(esp),
+        no_abs: !car.abs,
+    };
+    step(
+        v,
+        feel,
+        s,
+        &inp,
+        &Env {
+            axle: [front, base],
+        },
+        dt,
+    );
+    // zurück ins Spielsystem
+    let (dx, dy) = (s.x * PX, -s.y * PX);
+    car.x += dx * ca - dy * sa;
+    car.y += dx * sa + dy * ca;
+    car.angle -= s.yaw;
+    car.ang_vel = -s.r + if aq { car.aqua_yaw * dt * 2. } else { 0. };
+    let (sa, ca) = car.angle.sin_cos();
+    let (vf, vr) = (s.vx * PX, -s.vy * PX);
+    car.vx = vf * ca - vr * sa;
+    car.vy = vf * sa + vr * ca;
+    // Anzeige, Klang, Vibration (Felder wie bei `dynamics`)
+    let spin = |i: usize| if s.spin[i] { 1. } else { 0. };
+    let d = car.dyn_state.get_or_insert_with(DynState::default);
+    d.delta = -s.delta;
+    d.ax = s.ax_f;
+    d.ay = -s.ay_f;
+    d.alpha_f = -s.alpha[0];
+    d.alpha_r = -s.alpha[1];
+    d.spin_f = spin(0);
+    d.spin_r = spin(1);
+    d.lock_r = if s.locked[1] { 1. } else { 0. };
+    d.esp = if s.esp_active || s.tcs { 1. } else { 0. };
+    d.understeer = s.understeer;
+    let lat = vr.abs();
+    car.spin = d.spin_f.max(d.spin_r);
+    car.skid = if s.locked.iter().any(|&l| l) || s.abs {
+        (vf.abs() / 200.).min(1.)
+    } else if lat > 40. {
+        (lat / 200.).min(1.)
+    } else {
+        0.
+    };
     if car.aqua > 0. {
         car.aqua = (car.aqua - dt).max(0.);
     }

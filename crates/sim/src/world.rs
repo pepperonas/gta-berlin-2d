@@ -200,6 +200,8 @@ pub struct World {
     pub emergency: crate::services::Emergency,
     pub knocked: Knocked,
     pub esp: bool,
+    /// ESP voll statt sportlich (Fahrphysik `vphys`; aus = `esp` false)
+    pub esp_full: bool,
     pub abs: bool,
     pub notice: Option<Notice>,
     /// Name und Technik nach dem Einsteigen (Auto-ID, Sekunden)
@@ -336,6 +338,7 @@ impl World {
             emergency: crate::services::Emergency::new(0.5),
             knocked: Knocked::new(),
             esp: true,
+            esp_full: crate::vehdata::game_feel().esp_default == "voll",
             abs: true,
             notice: None,
             veh_info: None,
@@ -1601,6 +1604,7 @@ impl World {
         c.ai = None;
         c.controls = Default::default();
         c.dyn_state = None;
+        c.phys = None;
         let (x, y, kind, role) = (c.x, c.y, c.kind, c.role);
         if !c.kind_info().bike {
             self.veh_info = Some((id, 0.));
@@ -2070,6 +2074,7 @@ impl World {
             (c.x, c.y, c.angle, c.vx, c.vy, c.ang_vel) = (x, y, angle, 0., 0., 0.);
             c.level_init = false;
             c.dyn_state = None;
+            c.phys = None;
         }
         self.player.x = x;
         self.player.y = y;
@@ -2213,6 +2218,7 @@ impl World {
         let car = &mut self.cars[i];
         car.driver = None;
         car.dyn_state = None;
+        car.phys = None;
         car.controls = Default::default();
         car.controls.handbrake = car.speed() < 60.;
         self.player.in_car = None;
@@ -2561,10 +2567,15 @@ impl World {
         };
         let pc = self.player.in_car.and_then(|id| self.car_index(id));
         if let Some(i) = pc {
+            // ESP: Sport → aus → voll → Sport
             if input.esp_toggle && !self.cars[i].wrecked {
-                self.esp = !self.esp;
+                (self.esp, self.esp_full) = match (self.esp, self.esp_full) {
+                    (true, false) => (false, false),
+                    (false, _) => (true, true),
+                    (true, true) => (true, false),
+                };
                 self.notice = Some(Notice {
-                    text: format!("ESP {}", if self.esp { "AN" } else { "AUS" }),
+                    text: format!("ESP {}", esp_label(self.esp, self.esp_full)),
                     t: 1.6,
                 });
             }
@@ -2575,7 +2586,7 @@ impl World {
                     t: 1.6,
                 });
             }
-            let (esp, abs) = (self.esp, self.abs);
+            let (esp, esp_full, abs) = (self.esp, self.esp_full, self.abs);
             let c = &mut self.cars[i];
             if c.wrecked {
                 c.controls = Default::default();
@@ -2588,6 +2599,7 @@ impl World {
                 c.horn = input.horn;
             }
             c.esp = esp;
+            c.esp_full = esp_full;
             c.abs = abs;
             if c.horn && !c.horn_was {
                 self.events.push(Event::Horn {
@@ -2676,7 +2688,19 @@ impl World {
             let c = &self.cars[i];
             let ground = self.city.surface_at(c.x, c.y, Some(c.lvl()));
             let c = &mut self.cars[i];
+            let falls = c.phys.as_ref().map_or(0, |s| s.passenger_falls);
             step_car(c, dt, Some(ground));
+            if c.phys.as_ref().is_some_and(|s| s.passenger_falls > falls) {
+                self.events.push(Event::PassengersFell {
+                    x: c.x,
+                    y: c.y,
+                    car: c.id,
+                });
+                self.notice = Some(Notice {
+                    text: "Fahrgäste gestürzt!".into(),
+                    t: 1.6,
+                });
+            }
             collide_car_world(c, &mut self.city, &mut self.knocked, &mut self.events);
         }
         // Auto gegen Auto: nur Nachbarn, Paare in aufsteigender Folge
@@ -3309,4 +3333,13 @@ pub fn describe(w: &World) -> String {
         w.lanes.len(),
         w.mission.state
     )
+}
+
+/// Anzeige des ESP-Modus.
+pub fn esp_label(esp: bool, full: bool) -> &'static str {
+    match (esp, full) {
+        (false, _) => "AUS",
+        (true, true) => "VOLL",
+        (true, false) => "SPORT",
+    }
 }

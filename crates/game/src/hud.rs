@@ -336,10 +336,12 @@ pub fn draw(
             tags.push((
                 if regulating {
                     "ESP REGELT"
-                } else if w.esp {
-                    "ESP AN"
-                } else {
+                } else if !w.esp {
                     "ESP AUS"
+                } else if w.esp_full {
+                    "ESP VOLL"
+                } else {
+                    "ESP SPORT"
                 },
                 if regulating || !w.esp { warn } else { ok },
             ));

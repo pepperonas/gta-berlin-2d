@@ -58,6 +58,7 @@ impl Listener {
                 | Event::RideEnd { .. }
                 | Event::TurnAround { .. } => None,
                 Event::Carjack { x, y, .. } => Some((Sfx::Carjack, near(x, y))),
+                Event::PassengersFell { x, y, .. } => Some((Sfx::Hit, near(x, y))),
                 Event::BikeDown { x, y, .. } => Some((Sfx::Hit, near(x, y))),
                 Event::Bump { .. } => Some((Sfx::Hit, 1.)),
                 Event::Hit { x, y, .. } => Some((Sfx::Hit, near(x, y))),
