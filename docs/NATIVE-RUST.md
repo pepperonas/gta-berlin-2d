@@ -1016,5 +1016,28 @@ steigt aus, übernimmt eine Bahn am Führerstand, fährt an, bremst mit der Notb
 läuft auf dem Bahnsteig, steigt in einen haltenden Zug, steigt am nächsten Halt aus und kommt über die Treppe wieder
 hinauf. 142 Rust-Tests.
 
-Noch nicht portiert: Jogger und Hundehalter (die Passanten haben noch keine Arten), Bahnhofssymbole auf der
-Minikarte und die Bar-Belegung über HTTP (der native Stand liest nur eine Datei).
+Noch nicht portiert: Bahnhofssymbole auf der Minikarte und die Bar-Belegung über HTTP (der native Stand liest nur
+eine Datei). Jogger und Hundehalter folgen im nächsten Abschnitt.
+
+## Menschen-Typen, Jogger und Hundehalter (04.10.2026)
+
+`sim/figure.rs` portiert `figure.js` (Typen, Gewichte, Auswahl) und `walkerStyle` aus `life.js`,
+`game/figure.rs` einen vereinfachten Teil von `figureLook` und `drawDog`.
+- **Zwölf Typen:** Alltag, Büro, Tourist, Senior, Jugendliche, Kiez, Handwerk, Punk, Kopftuch, Kinderwagen, Jogger,
+  Gassi. Gewichtet nach Bezirk (neu: `City::bezirke`, `bezirk_at`), Uhrzeit, Wochentag und, bei Leuten des
+  Stadtlebens, ihrer Tätigkeit (kein Kinderwagen beim Musikmachen, Büroleute rauchen vor der Tür). Gewählt wird
+  über einen Hash der Nummer, ohne den Welt-Zufall. In der Simulation wirkt der Typ nur aufs Gehtempo
+  (Senioren 0,62-fach, Jogger 2,3-fach).
+- **Jogger und Hundehalter** würfelt der Welt-Zufall beim Erzeugen, wie in JS: Jogger morgens und abends, Hundehalter
+  tagsüber; nur mit Tagesrhythmus (Standardbevölkerung). Jogger tragen Sporttrikots und scheuchen Tauben auf.
+  Ein flüchtender Autofahrer ist Büro- oder Alltagsmensch.
+- **Darstellung von oben:** Oberteil je Typ, Haare (Glatze, graue Haare, Punk-Farben) oder Mütze, Hut, Helm,
+  Kopftuch, Rucksack und Beutel. Dazu Zubehör, das die Silhouette prägt: Kinderwagen vor der Person, Hund an der
+  Leine, der im Schritt trabt und mit dem Schwanz wedelt, Stock, Aktentasche, Einkaufstüte, Kamera, Handy, Flasche.
+  `--bildschirm leute` stellt je eine Person jeder Art in eine Reihe ([Bild](images/native/leute.png),
+  vergrößerter Ausschnitt). Dafür gibt es `World::foot_zoom` (`world.js w.footZoom`).
+
+**Validierung:** Unit-Tests für Gewichte (Ort, Zeit, Wochenende, Tätigkeit), deterministische Auswahl,
+Stil-Häufigkeiten je Uhrzeit und die Darstellung je Typ. Ein Integrationstest am Morgen prüft gemischte Typen,
+Jogger und Hundehalter, die Zuordnung Stil → Typ, das höhere Jogger-Tempo und dass ohne Tagesrhythmus kein Stil
+gewürfelt wird. 147 Rust-Tests.

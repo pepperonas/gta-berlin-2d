@@ -1777,3 +1777,46 @@ fn walkable_ubahn_station_at_kottbusser_tor() {
     let out = st2.exits[1].clone();
     assert!((w.player.x - out.x).hypot(w.player.y - out.y) < 1.);
 }
+
+#[test]
+fn pedestrian_kinds_joggers_and_dog_walkers() {
+    use berlin_sim::figure::{Kind, Style};
+    use std::collections::HashSet;
+    let mut w = world(91);
+    run(&mut w, 5, idle());
+    // Morgens: Jogger und Hundehalter unterwegs, dazu gemischte Arten nach Ort und Zeit
+    w.clock = 7. * 60. + 30.;
+    w.reset_population();
+    run(&mut w, 60, idle());
+    let walkers: Vec<_> = w.peds.iter().filter(|p| p.hang.is_none()).collect();
+    assert!(walkers.len() > 20, "Passanten: {}", walkers.len());
+    let kinds: HashSet<Kind> = w.peds.iter().map(|p| p.kind).collect();
+    assert!(kinds.len() >= 5, "Arten: {kinds:?}");
+    let jog = walkers.iter().filter(|p| p.style == Style::Jog).count();
+    let dog = walkers.iter().filter(|p| p.style == Style::Dog).count();
+    assert!(jog + dog > 0, "Jogger {jog}, Hundehalter {dog}");
+    for p in &walkers {
+        match p.style {
+            Style::Jog => assert_eq!(p.kind, Kind::Jogger),
+            Style::Dog => assert_eq!(p.kind, Kind::Dogwalker),
+            Style::Plain => assert!(!matches!(p.kind, Kind::Jogger | Kind::Dogwalker)),
+        }
+    }
+    // Jogger sind deutlich schneller als der Rest
+    let mean = |f: &dyn Fn(&&&berlin_sim::pedestrians::Ped) -> bool| {
+        let v: Vec<f64> = walkers.iter().filter(f).map(|p| p.speed).collect();
+        v.iter().sum::<f64>() / v.len().max(1) as f64
+    };
+    if jog > 0 {
+        let fast = mean(&|p| p.style == Style::Jog);
+        let rest = mean(&|p| p.style == Style::Plain);
+        assert!(fast > rest * 1.6, "Jogger {fast:.0} vs. {rest:.0}");
+    }
+    // Ohne Tagesrhythmus würfelt niemand einen Stil
+    let mut q = world(91);
+    q.day_rhythm = false;
+    q.clock = 7. * 60. + 30.;
+    q.reset_population();
+    run(&mut q, 30, idle());
+    assert!(q.peds.iter().all(|p| p.style == Style::Plain));
+}

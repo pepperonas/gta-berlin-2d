@@ -52,6 +52,7 @@ pub struct Play {
     pub demo_drive: bool,
     /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
     pub demo_station: Option<bool>,
+    pub people_show: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -254,6 +255,7 @@ impl Play {
             vehicle_show: false,
             demo_drive: false,
             demo_station: None,
+            people_show: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -1667,6 +1669,10 @@ impl Game for Play {
             self.vehicle_show = false;
             w2.vehicle_show();
         }
+        if self.people_show && !w2.loading {
+            self.people_show = false;
+            w2.people_show();
+        }
         if let Some(ride) = self.demo_station
             && !w2.loading
             && demo_station_step(w2, ride)
@@ -2135,30 +2141,7 @@ impl Game for Play {
                 });
                 continue;
             }
-            out.push(Body {
-                center: [x + 1.5, y + 2.],
-                half: [6., 6.],
-                angle: 0.,
-                shape: 1.,
-                depth: depth + 0.0003,
-                color: [0., 0., 0., 0.25],
-            });
-            out.push(Body {
-                center: [x, y],
-                half: [4.5, 6.5],
-                angle: a,
-                shape: 1.,
-                depth,
-                color: rgba(p.shirt, 1.),
-            });
-            out.push(Body {
-                center: [x, y],
-                half: [3., 3.],
-                angle: 0.,
-                shape: 1.,
-                depth: depth - 0.0002,
-                color: rgba(p.skin, 1.),
-            });
+            crate::figure::person_bodies(p, &crate::figure::look_of(p), depth, w.time, out);
             // Faustschlag eines Kämpfers
             if p.punch > 0. {
                 let r = 6. + 5. * (p.punch / 0.22) as f32;

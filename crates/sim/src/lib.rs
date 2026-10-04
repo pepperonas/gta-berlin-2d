@@ -14,6 +14,7 @@ pub mod daylight;
 pub mod dynamics;
 pub mod enginevoice;
 pub mod events;
+pub mod figure;
 pub mod fleet;
 pub mod footpath;
 pub mod lamps;

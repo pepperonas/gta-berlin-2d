@@ -1,6 +1,7 @@
 mod bigmap;
 mod console;
 mod effects;
+mod figure;
 mod hud;
 mod menu;
 mod play;
@@ -147,7 +148,7 @@ fn main() -> Result<()> {
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof oder tunnelfahrt",
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt oder leute",
                 )?;
                 ensure!(
                     [
@@ -159,10 +160,11 @@ fn main() -> Result<()> {
                         "konsole",
                         "zugfahrt",
                         "bahnhof",
-                        "tunnelfahrt"
+                        "tunnelfahrt",
+                        "leute"
                     ]
                     .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof oder tunnelfahrt"
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt oder leute"
                 );
                 screen = Some(v);
             }
@@ -288,6 +290,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("zugfahrt") => play.demo_drive = true,
         Some("bahnhof") => play.demo_station = Some(false),
         Some("tunnelfahrt") => play.demo_station = Some(true),
+        Some("leute") => play.people_show = true,
         Some("konsole") => {
             play.console.open(&play.places);
             play.console.set_text("tp kott", &play.places);

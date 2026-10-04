@@ -81,6 +81,9 @@ pub struct Ped {
     /// Platz des Stadtlebens (bleibt nach dem Aufscheuchen gesetzt, `world.rs` gibt ihn frei)
     pub hang: Option<crate::life::Hang>,
     pub hang_t: f64,
+    /// Menschen-Typ (`figure.rs`; wirkt aufs Gehtempo) und Spaziergänger-Variante
+    pub kind: crate::figure::Kind,
+    pub style: crate::figure::Style,
 }
 
 pub fn walkable(e: &Edge) -> bool {
@@ -232,6 +235,8 @@ pub fn create_ped(id: u32, city: &mut City, sw: &mut Sidewalks, spot: Spot, rng:
         reported: false,
         hang: None,
         hang_t: 0.,
+        kind: crate::figure::Kind::Everyday,
+        style: crate::figure::Style::Plain,
     }
 }
 

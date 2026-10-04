@@ -890,6 +890,8 @@ pub struct City {
     /// Kieze (Punkt + Name) und Ortsteile (Ringe) aus dem Index
     pub kieze: Vec<Named>,
     pub districts: Vec<Named>,
+    /// Bezirke (Ringe) aus dem Index
+    pub bezirke: Vec<Named>,
     /// Kanten, die seit dem letzten Abholen dazugekommen/weggefallen sind (Spurgraph)
     pub edge_events: Vec<EdgeEvent>,
     /// steigt mit jeder Änderung (Kachel ein-/ausgebaut)
@@ -1016,6 +1018,25 @@ impl City {
                 })
                 .collect(),
             districts: j["districts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|d| {
+                    let rings: Vec<Vec<Pt>> = d["r"]
+                        .as_array()?
+                        .iter()
+                        .filter_map(|r| undelta(r).ok())
+                        .collect();
+                    let b = bounds_of(rings.first()?);
+                    Some(Named {
+                        name: d["n"].as_str()?.to_owned(),
+                        x: b.x + b.w / 2.,
+                        y: b.y + b.h / 2.,
+                        rings,
+                    })
+                })
+                .collect(),
+            bezirke: j["bezirke"]
                 .as_array()
                 .into_iter()
                 .flatten()
@@ -1920,6 +1941,13 @@ impl City {
     /// Ortsteil an einer Stelle.
     pub fn district_at(&self, x: f64, y: f64) -> Option<&str> {
         self.districts
+            .iter()
+            .find(|d| point_in_rings(x, y, &d.rings))
+            .map(|d| d.name.as_str())
+    }
+    /// Bezirk an einer Stelle.
+    pub fn bezirk_at(&self, x: f64, y: f64) -> Option<&str> {
+        self.bezirke
             .iter()
             .find(|d| point_in_rings(x, y, &d.rings))
             .map(|d| d.name.as_str())

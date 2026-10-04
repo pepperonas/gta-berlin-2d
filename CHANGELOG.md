@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: zwölf Menschen-Typen nach Bezirk, Uhrzeit und Wochentag (Tempo und Aussehen), Jogger
+  und Hundehalter mit Hund an der Leine, Kinderwagen, Stock, Aktentasche und Kopfbedeckungen (`--bildschirm leute`).
 - Native Rust-Portierung, Nahverkehr C: begehbare U-Bahnhöfe aus dem Fahrplan (Eingänge an der Straße,
   Bahnsteig mit Treppen, Säulen, Abfahrtstafeln und Wartenden, Einsteigen am Bahnsteig, Aussteigen unter Tage am
   nächsten Bahnsteig) und die Tunnelansicht bei Fahrten unter Tage (`--bildschirm bahnhof|tunnelfahrt`).

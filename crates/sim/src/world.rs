@@ -2,7 +2,7 @@
 //! einem deterministischen Simulationsschritt. Eingaben kommen als abstrakter Zustand ([`Input`]), Ausgaben als
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
 //!
-//! Noch nicht portiert: Jogger und Hundehalter.
+//! Noch nicht portiert: Bahnhofssymbole auf der Minikarte.
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
 use crate::city::{City, Ground, Solid, point_along};
@@ -177,6 +177,8 @@ pub struct World {
     pub force_temp: Option<f64>,
     /// Tempo der Spieluhr (1 = normal, 0 = steht; Befehlszeile `tempo`)
     pub clock_rate: f64,
+    /// Kamerazoom zu Fuß (`world.js w.footZoom`)
+    pub foot_zoom: f64,
     /// unverwundbar (Befehlszeile `gott`)
     pub god: bool,
     /// Wetter folgt dem Tagesverlauf (sonst bleibt es klar und der Boden trocken)
@@ -292,6 +294,7 @@ impl World {
             force_weather: None,
             force_temp: None,
             clock_rate: 1.,
+            foot_zoom: FOOT_ZOOM,
             god: false,
             weather_cycle: true,
             seed,
@@ -538,6 +541,7 @@ impl World {
             let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
             (p.x, p.y, p.facing, p.state) = (s.x, s.y, s.face, PedState::Hang);
             p.dead_t = 0.;
+            self.assign_kind(&mut p, Some(s.act));
             self.hangers.insert(s.key.clone(), id);
             p.hang = Some(s);
             self.peds.push(p);
@@ -697,7 +701,10 @@ impl World {
             }
         }
         for p in &self.peds {
-            if p.state == PedState::Flee {
+            // Fliehende und Jogger scheuchen Tauben auf
+            if p.state == PedState::Flee
+                || (p.state == PedState::Walk && p.style == crate::figure::Style::Jog)
+            {
                 threats.push((p.x, p.y, 35.));
             }
         }
@@ -1145,6 +1152,44 @@ impl World {
         Some(id)
     }
 
+    /// Aufnahmen: je eine Person jeder Art steht in einer Reihe neben der Spielfigur, die Kamera geht nah heran.
+    pub fn people_show(&mut self) {
+        let (px, py) = (self.player.x, self.player.y);
+        let Some(sp) = pedestrians::nearest_spot(&mut self.city, &mut self.sidewalks, px, py, 400.)
+        else {
+            return;
+        };
+        self.peds.clear();
+        self.hangers.clear();
+        self.foot_zoom = 3.2;
+        let (ox, oy) = self.sidewalks.point(&mut self.city, sp.edge, sp.side, sp.s);
+        let (bx, by) = self
+            .sidewalks
+            .point(&mut self.city, sp.edge, sp.side, sp.s + 2.);
+        let l = (bx - ox).hypot(by - oy).max(1e-6);
+        let (ux, uy) = ((bx - ox) / l, (by - oy) / l);
+        for (i, kind) in crate::figure::ALL.into_iter().enumerate() {
+            let id = self.next_ped;
+            self.next_ped += 1;
+            let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
+            // geradlinig in Gehweg-Richtung, Blick quer dazu
+            let k = i as f64 - 5.5;
+            (p.x, p.y) = (ox + ux * k * 24., oy + uy * k * 24.);
+            p.facing = uy.atan2(ux) - std::f64::consts::FRAC_PI_2;
+            p.state = PedState::Idle;
+            p.t = 1e9;
+            p.kind = kind;
+            p.style = match kind {
+                crate::figure::Kind::Jogger => crate::figure::Style::Jog,
+                crate::figure::Kind::Dogwalker => crate::figure::Style::Dog,
+                _ => crate::figure::Style::Plain,
+            };
+            self.peds.push(p);
+        }
+        // Spielfigur ans Ende der Reihe, damit sie niemanden verdeckt
+        (self.player.x, self.player.y) = (ox - ux * 170., oy - uy * 170.);
+    }
+
     pub fn vehicle_show(&mut self) {
         let (px, py) = (self.player.x, self.player.y);
         let Some(hit) = self.lanes.nearest_lane(px, py, None, 400., false) else {
@@ -1212,8 +1257,36 @@ impl World {
         self.next_ped += 1;
         let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
         p.dead_t = 0.;
+        if self.day_rhythm {
+            // Jogger und Hundehalter je nach Tageszeit
+            p.style = crate::figure::walker_style(self.clock, &mut self.rng);
+            if p.style == crate::figure::Style::Jog {
+                p.shirt = crate::figure::JOG_SHIRTS[id as usize % 5];
+            }
+        }
+        self.assign_kind(&mut p, None);
         self.peds.push(p);
         Some(id)
+    }
+
+    /// Menschen-Typ (`figure.rs`): Jogger/Hundehalter aus ihrem Stil, sonst nach Ort, Uhrzeit, Wochentag (und
+    /// Tätigkeit) aus der Nummer, ohne den Welt-Zufall zu verbrauchen. Der Typ bestimmt das Gehtempo mit.
+    fn assign_kind(&self, p: &mut Ped, act: Option<crate::life::Act>) {
+        use crate::figure::{Ctx, Kind, Style, pick_kind};
+        p.kind = match p.style {
+            Style::Jog => Kind::Jogger,
+            Style::Dog => Kind::Dogwalker,
+            Style::Plain => pick_kind(
+                p.id,
+                &Ctx {
+                    minutes: self.clock,
+                    day: self.day,
+                    bezirk: self.city.bezirk_at(p.x, p.y),
+                    act,
+                },
+            ),
+        };
+        p.speed *= p.kind.speed();
     }
 
     fn manage_population(&mut self) {
@@ -2084,6 +2157,12 @@ impl World {
         (p.x, p.y) = (dx, dy);
         p.level.lvl = lvl;
         p.level_init = true;
+        // wer Auto fährt, schiebt keinen Kinderwagen
+        p.kind = if crate::math::hash01(f64::from(id) * 7.3 + 1.) < 0.3 {
+            crate::figure::Kind::Business
+        } else {
+            crate::figure::Kind::Everyday
+        };
         scare(&mut p, (fx, fy), secs);
         self.peds.push(p);
     }
@@ -2961,7 +3040,7 @@ impl World {
     }
 
     pub fn update_camera(&mut self, dt: f64) {
-        let (mut tx, mut ty, mut zoom) = (self.player.x, self.player.y, FOOT_ZOOM);
+        let (mut tx, mut ty, mut zoom) = (self.player.x, self.player.y, self.foot_zoom);
         if self.player.inside.is_some() {
             zoom = 1.1; // im U-Bahnhof: mehr vom Bahnsteig im Bild
         } else if let Some(r) = &self.player.ride {
@@ -2978,7 +3057,7 @@ impl World {
             ty = c.y + c.vy * 0.45;
             let k = c.kind_info();
             zoom = if k.bike {
-                FOOT_ZOOM * 0.8
+                self.foot_zoom * 0.8
             } else if k.moto {
                 1.45 - (c.speed() / 500.).clamp(0., 1.) * 0.45
             } else {
