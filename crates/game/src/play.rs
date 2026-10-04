@@ -2340,6 +2340,7 @@ impl Game for Play {
         self.fx.bodies(out);
         crate::weatherfx::ground_bodies(w, &self.trails, out);
         crate::weatherfx::bodies(w, out);
+        crate::weatherfx::spray_bodies(w, out);
     }
     /// Umriss der Spielfigur bzw. des eigenen Fahrzeugs, wo Dach, Baumkrone oder Viadukt sie verdecken
     /// (`occlusion.js` + `render.js drawCovered`). Etwas näher als die eigenen Teile, damit der Umriss nur unter
@@ -2458,6 +2459,7 @@ impl Game for Play {
             crate::underground::draw_station(&self.world, &st, camera, viewport, out);
         } else {
             crate::weatherfx::sky_overlay(&self.world, camera, viewport, out);
+            crate::weatherfx::storm_overlay(&self.world, camera, viewport, out);
             crate::weatherfx::overlay(&self.world, out);
             crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
             crate::underground::entrance_letters(&self.world, camera, viewport, out);

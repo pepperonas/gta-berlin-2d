@@ -1143,3 +1143,21 @@ Ampeln, Scheinwerfer, Leuchtreklame, Laternen. `lighting.wgsl bloom_fs` nimmt di
 `brightness(0,55) contrast(5)`, zeichnet sie mit 13 Abtastungen auf zwei Ringen weich und legt sie mit der Mischung
 „screen“ (Quelle·(1 − Ziel) + Ziel) über das Bild, Stärke max(0, Dunkelheit − 0,3)·0,32 wie in JS. Kein eigenes
 Ziel nötig: die Lichtkarte liegt ohnehin in halber Auflösung vor. Das Reklamebild oben zeigt den Bloom.
+
+## Regenwände, Sturmtrümmer, Gischt und Blitzstrahl (04.10.2026)
+
+Die restlichen Effekte aus `wetfx.js` (`drawRainLayers`, `drawStormDebris`, `drawSpray`, `drawLightning`), im Bildraum
+nach dem Licht gezeichnet (`weatherfx::storm_overlay`), damit Blitze nicht mit der Nacht abgedunkelt werden:
+- **Regenschleier:** kühles Grau über dem Bild, bei Starkregen dichter.
+- **Regenwände:** lange, weiche Bänder quer zum Wind, die bei Starkregen oder Sturm mit dem Wind durchs Bild
+  ziehen (Abstand 520 px, Tempo 140–460 px/s mal Böe). JS nimmt dafür ein gekacheltes Rauschmuster.
+- **Sturmtrümmer:** ab Sturmstärke 0,2 bis zu 60 Blätter (drei Herbsttöne) und Papierfetzen, die mit dem Wind
+  und den Böen übers Bild fegen und sich drehen; Lebensdauer und Bahn aus Hashes ([Bild](images/native/sturm.png)).
+- **Gischt** hinter schnellen Autos auf nasser Straße, **Schneestaub** auf Schnee (ab 120 px/s).
+- **Blitzstrahl** bei nahen Einschlägen: Zickzack aus 22 Stücken vom Himmel (2 400 px oberhalb) mit Ästen, in drei
+  Schichten (blauer Schein, heller Kern, weiß), dazu ein heller Fleck am Einschlag – zeitgleich mit Donner und
+  Himmelsblitz aus derselben reinen Einschlagsfunktion.
+
+**Validierung:** Unit-Tests für den Blitzpfad (Ende am Einschlag, Äste) und die Trümmer (nur im Sturm, ziehen mit
+dem Wind). Der Strahl wurde per Aufnahme mit vorgerückter Blitzzeit angesehen; in einer normalen Aufnahme fällt
+ein naher Einschlag selten ins Bild.

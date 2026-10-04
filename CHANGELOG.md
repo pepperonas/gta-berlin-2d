@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Regenschleier und Regenwände, fliegendes Laub und Papier im Sturm, Gischt hinter schnellen
+  Autos und der sichtbare Blitzstrahl.
 - Native Rust-Portierung: Bloom – nachts überstrahlen Ampeln, Scheinwerfer und Leuchtreklame.
 - Native Rust-Portierung: Rumpeln vorbeifahrender Bahnen (auch im Tunnel) und die gedämpfte Halle im U-Bahnhof.
 - Native Rust-Portierung: nachts Schaufensterlicht auf dem Gehweg und Leuchtreklame vor Kneipen, Clubs, Spätis,

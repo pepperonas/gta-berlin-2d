@@ -463,3 +463,266 @@ pub fn sky_overlay(
         }
     }
 }
+
+/// Linienzug in Welt-px
+type Line = Vec<(f64, f64)>;
+
+/// Blitzstrahl (`wetfx.js boltPath`): Zickzack vom Himmel (oberhalb im Bild) zum Einschlag, mit Ästen.
+pub fn bolt_path(x: f64, y: f64, seed: f64, height: f64) -> (Line, Vec<Line>) {
+    let (mut main, mut branches) = (Vec::new(), Vec::new());
+    let mut px = x + (hash01(seed * 3. + 1.) - 0.5) * 500.;
+    main.push((px, y - height));
+    let n = 22;
+    for k in 1..=n {
+        let kf = k as f64;
+        let u = kf / n as f64;
+        let tx = px + (x - px) / (n - k + 1) as f64;
+        let ty = y - height * (1. - u);
+        let j = (hash01(seed * 17. + kf) - 0.5) * 90. * (1. - u * 0.6);
+        let (nx, ny) = (tx + j, ty);
+        main.push((nx, ny));
+        if k > 3 && k < n - 2 && hash01(seed * 29. + kf) < 0.22 {
+            let mut b = vec![(nx, ny)];
+            let (mut bx, mut by) = (nx, ny);
+            let dir = if hash01(seed * 37. + kf) < 0.5 {
+                -1.
+            } else {
+                1.
+            };
+            let m = 4 + (hash01(seed * 41. + kf) * 5.) as usize;
+            for q in 1..=m {
+                let qf = q as f64;
+                bx += dir * (15. + hash01(seed * 43. + kf * 7. + qf) * 45.);
+                by += 30. + hash01(seed * 47. + kf + qf) * 50.;
+                b.push((bx, by));
+            }
+            branches.push(b);
+        }
+        px = nx;
+    }
+    if let Some(last) = main.last_mut() {
+        *last = (x, y);
+    }
+    (main, branches)
+}
+
+/// Sturmtrümmer (`wetfx.js stormDebris`): Laub und Papier, das mit dem Wind übers Bild fegt.
+pub fn storm_debris(
+    v: (f64, f64, f64, f64),
+    storm: f64,
+    wind: (f64, f64),
+    t: f64,
+    gust: f64,
+) -> Vec<(f64, f64, f64, bool, f64)> {
+    let mut out = Vec::new();
+    if storm < 0.2 {
+        return out;
+    }
+    let n = (60. * storm).round() as usize;
+    let wl = wind.0.hypot(wind.1).max(1e-9);
+    let (ux, uy) = (wind.0 / wl, wind.1 / wl);
+    for i in 0..n {
+        let fi = i as f64;
+        let life = 1.6 + h(&[fi, 51.]) * 1.4;
+        let ph = (t / life + h(&[fi, 52.])).rem_euclid(1.);
+        let cyc = (t / life + h(&[fi, 52.])).floor();
+        let sp = (380. + h(&[fi, 53.]) * 420.) * gust;
+        let bx = v.0 + h(&[fi, cyc, 54.]) * v.2;
+        let by = v.1 + h(&[fi, cyc, 55.]) * v.3;
+        let d = (ph - 0.5) * life * sp;
+        let wob = (t * 5. + fi).sin() * 10.;
+        out.push((
+            bx + ux * d - uy * wob,
+            by + uy * d + ux * wob,
+            t * (6. + h(&[fi, 56.]) * 8.) + fi,
+            h(&[fi, 57.]) < 0.8,
+            h(&[fi, 58.]),
+        ));
+    }
+    out
+}
+
+/// Regen und Sturm im Bildraum (nach dem Licht): grauer Regenschleier, Regenwände, die mit dem Wind durchs Bild
+/// ziehen, fliegendes Laub und Papier, Blitzstrahl mit Ästen und hellem Fleck am Einschlag (`wetfx.js
+/// drawRainLayers`, `drawStormDebris`, `drawLightning`).
+pub fn storm_overlay(
+    w: &World,
+    camera: &berlin_engine::camera::Camera,
+    viewport: glam::Vec2,
+    hud: &mut Hud,
+) {
+    use glam::Vec2;
+    let p = w.sky.p;
+    let t = w.time;
+    let s = hud.scale;
+    let to = |x: f64, y: f64| camera.world_to_screen(Vec2::new(x as f32, y as f32), 0., viewport);
+    // Bildschirm-Pixel je Welt-px
+    let k = (to(w.camera.x + 100., w.camera.y) - to(w.camera.x, w.camera.y)).length() / 100.;
+    let (hw, hh) = (
+        viewport.x as f64 / 2. / k.max(1e-3) as f64,
+        viewport.y as f64 / 2. / k.max(1e-3) as f64,
+    );
+    let view = (w.camera.x - hw, w.camera.y - hh, 2. * hw, 2. * hh);
+    let rain = p.rain.min(1.6);
+    let heavy = (rain - 1.).clamp(0., 1.);
+    let (wx, wy) = w.sky.wind;
+    let gust = berlin_sim::weather::gust_at(p.storm, t);
+    if rain >= 0.03 {
+        let a = 0.12 * rain.min(1.) + 0.14 * heavy;
+        hud.rect(0., 0., hud.width, 720., [0.275, 0.333, 0.412, a as f32], 0.);
+    }
+    if rain > 0.5 || p.storm > 0.2 {
+        // Regenwände: lange, weiche Bänder quer zum Wind, die mit ihm durchs Bild ziehen
+        let a = (0.1 * rain.min(1.) + 0.22 * heavy + 0.14 * p.storm).min(0.5) as f32;
+        let wl = wx.hypot(wy).max(1.);
+        let (ux, uy) = (wx / wl, wy / wl);
+        let sp = (140. + 320. * p.storm) * gust;
+        const GAP: f64 = 520.;
+        let off = (sp * t).rem_euclid(GAP);
+        let along = ux * w.camera.x + uy * w.camera.y;
+        let reach = hw.hypot(hh);
+        let n0 = ((along - reach - off) / GAP).floor() as i64;
+        let n1 = ((along + reach - off) / GAP).ceil() as i64;
+        let angle = (uy.atan2(ux) + std::f64::consts::FRAC_PI_2) as f32;
+        for n in n0..=n1 {
+            let d = n as f64 * GAP + off - along;
+            let jitter = (h(&[n as f64, 61.]) - 0.5) * GAP * 0.5;
+            let (x, y) = (
+                w.camera.x + ux * (d + jitter),
+                w.camera.y + uy * (d + jitter),
+            );
+            let c = to(x, y);
+            let thick = (60. + h(&[n as f64, 62.]) * 90.) as f32 * k;
+            let dens = 0.6 + 0.4 * h(&[n as f64, 63.]) as f32;
+            hud.blob_px(
+                c.x,
+                c.y,
+                reach as f32 * k * 1.2,
+                thick,
+                angle,
+                [0.62, 0.68, 0.76, a * dens],
+            );
+        }
+    }
+    // Sturmtrümmer
+    for (x, y, rot, leaf, c) in storm_debris(view, p.storm, (wx, wy), t, gust) {
+        let q = to(x, y);
+        if leaf {
+            let col = if c < 0.4 {
+                [0.541, 0.416, 0.173, 1.]
+            } else if c < 0.7 {
+                [0.627, 0.467, 0.165, 1.]
+            } else {
+                [0.42, 0.478, 0.173, 1.]
+            };
+            hud.ellipse_px(q.x, q.y, 3.2 * k, 1.6 * k, rot as f32, col);
+        } else {
+            hud.quad_px(
+                q.x,
+                q.y,
+                3. * k,
+                2. * k,
+                rot as f32,
+                [0.92, 0.91, 0.87, 0.9],
+                0.,
+            );
+        }
+    }
+    // Blitzstrahl: nahe Einschläge landen im Bild oder knapp daneben
+    if p.thunder > 0.02 {
+        use berlin_sim::weather::{STRIKE_SLOT, flash_at, strike_in_slot};
+        let i1 = (t / STRIKE_SLOT).floor() as i64;
+        for i in i1 - 1..=i1 {
+            let Some(st) = strike_in_slot(w.seed, i, p.thunder).filter(|st| st.near) else {
+                continue;
+            };
+            let a = (flash_at(t - st.t0) * 1.3).clamp(0., 1.) as f32;
+            if a < 0.02 {
+                continue;
+            }
+            let (x, y) = (w.camera.x + st.dx * 0.14, w.camera.y + st.dy * 0.08);
+            let (main, branches) = bolt_path(x, y, i as f64, 2400.);
+            let line = |hud: &mut Hud, pts: &[(f64, f64)], width: f32, color: [f32; 4]| {
+                for seg in pts.windows(2) {
+                    let (a, b) = (to(seg[0].0, seg[0].1), to(seg[1].0, seg[1].1));
+                    hud.line(a.x / s, a.y / s, b.x / s, b.y / s, width * k / s, color);
+                }
+            };
+            line(hud, &main, 44., [0.55, 0.63, 1., 0.3 * a]);
+            line(hud, &main, 12., [0.75, 0.8, 1., 0.6 * a]);
+            line(hud, &main, 4., [1., 1., 1., a]);
+            for b in &branches {
+                line(hud, b, 2., [0.9, 0.925, 1., 0.8 * a]);
+            }
+            let q = to(x, y);
+            hud.blob_px(q.x, q.y, 260. * k, 260. * k, 0., [0.92, 0.94, 1., 0.7 * a]);
+        }
+    }
+}
+
+/// Gischt hinter schnellen Autos auf nasser Straße bzw. Schneestaub auf Schnee (`wetfx.js drawSpray`).
+pub fn spray_bodies(w: &World, out: &mut Vec<Body>) {
+    let (wet, snow) = (w.weather.wet, w.weather.snow);
+    if wet <= 0.3 && snow <= 0.2 {
+        return;
+    }
+    let half = VIEW / w.camera.zoom.max(0.5);
+    for c in &w.cars {
+        if (c.x - w.camera.x).abs() > half || (c.y - w.camera.y).abs() > half || c.lvl() != 0 {
+            continue;
+        }
+        let sp = c.speed();
+        let k = ((sp - 120.) / 400.).clamp(0., 1.) * wet.max(snow);
+        if k < 0.03 {
+            continue;
+        }
+        let (ca, sa) = (c.angle.cos(), c.angle.sin());
+        let (bx, by) = (c.x - ca * (c.hw + 4.), c.y - sa * (c.hw + 4.));
+        let color = if snow > wet {
+            [0.94, 0.957, 0.98, (0.4 * k) as f32]
+        } else {
+            [0.784, 0.816, 0.855, (0.35 * k) as f32]
+        };
+        for i in 0..3 {
+            let d = 6. + i as f64 * 9.;
+            let r = (c.hh * (0.8 + i as f64 * 0.35)) as f32;
+            out.push(Body {
+                center: [(bx - ca * d) as f32, (by - sa * d) as f32],
+                half: [r * 0.9, r],
+                angle: c.angle as f32,
+                shape: 3.,
+                depth: 0.6195 - i as f32 * 0.00002,
+                color,
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod storm_tests {
+    use super::*;
+
+    #[test]
+    fn bolt_ends_at_the_strike_and_branches() {
+        let (main, _) = bolt_path(100., 200., 7., 2400.);
+        assert_eq!(main.len(), 23);
+        assert_eq!(*main.last().unwrap(), (100., 200.));
+        assert!((main[0].1 - (200. - 2400.)).abs() < 1e-9, "oben im Himmel");
+        let total: usize = (0..40)
+            .map(|s| bolt_path(0., 0., s as f64, 2400.).1.len())
+            .sum();
+        assert!(total > 20, "Äste: {total}");
+    }
+
+    #[test]
+    fn debris_only_in_a_storm_and_moves_with_the_wind() {
+        let v = (0., 0., 1000., 600.);
+        assert!(storm_debris(v, 0.1, (300., 0.), 1., 1.).is_empty());
+        let a = storm_debris(v, 1., (300., 0.), 1., 1.);
+        let b = storm_debris(v, 1., (300., 0.), 1.05, 1.);
+        assert_eq!(a.len(), 60);
+        // die meisten Blätter wandern in Windrichtung (gleicher Zyklus)
+        let moved = a.iter().zip(&b).filter(|(p, q)| q.0 > p.0).count();
+        assert!(moved > 40, "{moved}");
+    }
+}
