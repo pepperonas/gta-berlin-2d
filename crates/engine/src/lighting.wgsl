@@ -36,7 +36,7 @@ struct TreeShadowOut { @builtin(position) position: vec4<f32>, @location(0) uv: 
     let world = center + u * q.x * 2.3 * major + p * q.y * 2.3 * minor;
     out.position = project(vec3(world, 0.0), world, 0.5);
     let uv = vec2(0.5 / 64.0) + (q + 0.5) * (63.0 / 64.0);
-    out.uv = (vec2(cell % 4.0, floor(cell / 4.0)) + uv) / vec2(4.0, 2.0);
+    out.uv = (vec2(cell % 4.0, floor(cell / 4.0)) + uv) / vec2(4.0, 3.0);
     return out;
 }
 @fragment fn tree_shadow_fs(in: TreeShadowOut) -> @location(0) vec4<f32> {

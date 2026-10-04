@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Gebrauchsspuren – Ölband je Fahrstreifen, Kontaktschatten am Hausfuß, Schmutz am Boden,
+  Moos und Ruß auf Dächern, funkelnde Reflexe auf dem Wasser.
 - Native Rust-Portierung: jedes Fahrzeugmodell mit eigenem Bild aus einem beim Start gerasterten Atlas (Lack,
   Scheiben, Leuchten, Modellmerkmale), dazu Räder mit Lenkeinschlag, Blinker, Rückfahrlicht und Nicken/Wanken.
 - Native Rust-Portierung: Menschen mit Schuhen, Schultern, Armen mit Ellbogen und Händen, Ohren und Haaransatz;

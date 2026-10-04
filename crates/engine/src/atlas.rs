@@ -2,10 +2,10 @@
 use berlin_map_loader::citycodes::hash01;
 pub const CELL: u32 = 64;
 pub const WIDTH: u32 = CELL * 4;
-pub const HEIGHT: u32 = CELL * 2;
+pub const HEIGHT: u32 = CELL * 3;
 pub fn pixels() -> Vec<u8> {
     let mut out = vec![0; (WIDTH * HEIGHT * 4) as usize];
-    for cell in 0..8 {
+    for cell in 0..10 {
         for y in 0..CELL {
             for x in 0..CELL {
                 let u = (x as f32 + 0.5) / CELL as f32 * 2. - 1.;
@@ -64,6 +64,14 @@ pub fn pixels() -> Vec<u8> {
                         let edge = 0.65 + 0.19 * (a * 9.).cos().abs();
                         let shade = (0.53 + 0.32 * (1. - r) + 0.11 * noise).clamp(0., 1.);
                         ([shade; 3], ((edge - r) * 32.).clamp(0., 1.))
+                    }
+                    // weiches Band (Ölband in der Fahrstreifenmitte, Kontaktschatten am Hausfuß): quer
+                    // glockenförmig, längs mit weichen Enden, damit überlappende Stempel kaum Stufen bilden
+                    8 | 9 => {
+                        let across = (1. - v * v).max(0.).powi(2);
+                        let along = (1. - u.abs().powi(6)).max(0.);
+                        let peak = if cell == 8 { 0.13 } else { 0.32 };
+                        ([0.02, 0.02, 0.025], across * along * peak)
                     }
                     _ => (
                         [1.; 3],

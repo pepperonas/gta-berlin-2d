@@ -1210,3 +1210,16 @@ Fahrerhaus, Aufbau, Rippen, Leuchtstreifen und Dachaufbauten.
 - [Bild](images/native/fahrzeuge.png) (`--fahrzeugschau`, vergrößert). Unit-Tests für den Rasterer (genaue
   Abdeckung, Kreisfläche, keine Doppeldeckung von Strichen) und dafür, dass jedes Modell Lack und Details bekommt.
   Zweiräder sind unverändert.
+
+## Gebrauchsspuren und Wasserglitzern (04.10.2026)
+
+Port von `grime.js`:
+- **Ölband** in der Mitte jedes Fahrstreifens (Asphaltstraßen bis Klasse 8): weiche, überlappende Stempel aus der
+  neuen dritten Atlaszeile (Zelle 8), Fahrstreifen aus dem Querschnitt (Parken, Radweg und Gleisbett abgezogen).
+- **Kontaktschatten** am Fuß jeder Hauswand (Zelle 9): ein weiches Band mittig auf der Wandlinie – innen deckt das
+  Haus, außen bleibt der Schatten, unabhängig vom Umlaufsinn des Grundrisses.
+- **Schmutz und ausgeblichene Stellen** auf Asphalt, Pflaster, Gehweg und Schotter (`scene.wgsl`, zwei
+  gegeneinander gedrehte Rauschmaßstäbe in Weltkoordinaten, keine sichtbare Kachel), **Moos** auf Ziegel- und
+  Schieferdächern, **Ruß** auf Blech und Flachdach.
+- **Wasser:** wandernde, funkelnde Lichtreflexe (Zeilen gegeneinander versetzt, kein Raster)
+  ([Bild](images/native/wasser.png), Oberbaumbrücke; [Straße](images/native/gebrauchsspuren.png)).

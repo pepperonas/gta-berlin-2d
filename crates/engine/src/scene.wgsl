@@ -40,6 +40,17 @@ fn noise(p: vec2<f32>) -> f32 {
     let q = fract(p * vec2(0.1031, 0.11369));
     return fract((q.x + q.y) * (q.x * q.y * 97.31 + 19.19));
 }
+// weiches Wertrauschen 0…1 (bilinear zwischen Gitterpunkten)
+fn vnoise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = noise(i);
+    let b = noise(i + vec2(1.0, 0.0));
+    let c = noise(i + vec2(0.0, 1.0));
+    let d = noise(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
 fn linear_color(c: vec3<f32>) -> vec3<f32> {
     return select(c / 12.92, pow((c + vec3(0.055)) / 1.055, vec3(2.4)), c > vec3(0.04045));
 }
@@ -68,6 +79,34 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     if in.material == 8.0 { factor = mix(1.0, 0.90 + 0.1*sin(p.y*30.0), detail); }
     if in.material == 9.0 || in.material == 10.0 { factor = 0.97 + (n-0.5)*0.10*detail; }
     var color = in.color * factor;
+    // Gebrauchsspuren (grime.js): großräumig Schmutz in den Senken, ausgeblichene Kuppen – zwei gegeneinander
+    // gedrehte Maßstäbe, damit keine Kachel sichtbar wird
+    let wp = in.uv;
+    let rot = vec2(wp.x * 0.8 - wp.y * 0.6, wp.x * 0.6 + wp.y * 0.8);
+    let grime = vnoise(wp * 0.0042) * 0.6 + vnoise(rot * 0.013 + vec2(17.0, 3.0)) * 0.4;
+    if in.material == 1.0 || in.material == 2.0 || in.material == 3.0 || in.material == 10.0 {
+        let dirt = smoothstep(0.55, 0.85, grime) * 0.16;
+        let bleach = smoothstep(0.45, 0.2, grime) * 0.07;
+        color = mix(color, vec3(0.16, 0.14, 0.11), dirt);
+        color = mix(color, vec3(0.86, 0.84, 0.78), bleach);
+    }
+    // Dächer: Moos auf Ziegel und Schiefer, Ruß auf Blech und Flachdach
+    if in.material >= 6.0 && in.material <= 9.0 {
+        let n2 = vnoise(wp * 0.02 + in.center * 0.001);
+        let moss = smoothstep(0.62, 0.9, n2) * select(0.1, 0.22, in.material < 8.0);
+        color = mix(color, select(vec3(0.15, 0.15, 0.15), vec3(0.3, 0.36, 0.22), in.material < 8.0), moss);
+    }
+    // Wasser: Lichtreflexe, die mit der Zeit wandern und funkeln
+    if in.material == 5.0 {
+        let t = camera.sun.w * 3.0;
+        var q = p * vec2(0.9, 1.6) + vec2(t * 0.15, 0.0);
+        q.x += noise(vec2(floor(q.y), 7.0)) * 3.0; // Zeilen gegeneinander versetzt (kein Raster)
+        let cellw = floor(q);
+        let spark = noise(cellw + vec2(floor(t), 0.0));
+        let inner = 1.0 - length(fract(q) - 0.5) * 2.2;
+        let glint = select(0.0, clamp(inner, 0.0, 1.0), spark > 0.965) * detail;
+        color = color + vec3(0.55, 0.62, 0.66) * glint * 0.5;
+    }
     if in.material == 11.0 || in.material == 12.0 {
         let window = fract(p / vec2(2.5, 3.0));
         let glass = window.x > 0.35 && window.x < 0.72 && window.y > 0.28 && window.y < 0.80;
@@ -173,7 +212,7 @@ struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: v
     out.color = color;
     // Half-texel inset prevents sampling neighboring atlas cells.
     let uv = vec2(0.5/64.0) + (q+0.5) * (63.0/64.0);
-    out.uv = (vec2(cell % 4.0, floor(cell/4.0)) + uv) / vec2(4.0,2.0);
+    out.uv = (vec2(cell % 4.0, floor(cell/4.0)) + uv) / vec2(4.0,3.0);
     return out;
 }
 @fragment fn sprite_fs(in: SpriteOut) -> @location(0) vec4<f32> {

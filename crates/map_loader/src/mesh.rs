@@ -310,6 +310,17 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
             continue;
         }
         let n = Vec3::new(d.y / len, -d.x / len, 0.);
+        // Kontaktschatten am Fuß der Wand (grime.js drawContactShadows): weiches Band außen auf dem Boden
+        // mittig auf der Wandlinie: innen deckt das Haus, außen bleibt der Schatten (unabhängig vom Umlaufsinn)
+        let mid = (a + c) * 0.5;
+        mesh.sprites.push(Sprite {
+            point: [mid.x, mid.y, 0.],
+            size: [len + 1.2 * scale, 3.2 * scale],
+            angle: d.y.atan2(d.x),
+            color: [1.; 3],
+            cell: 9.,
+            depth: 0.84,
+        });
         let base = mesh.vertices.len() as u32;
         for (point, z, uv) in [
             (a, 0., [0., 0.]),
@@ -453,6 +464,34 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
                 });
             }
             s += 9. * scale;
+        }
+    }
+    // Ölband in der Mitte jedes Fahrstreifens (grime.js laneWear): weiche, überlappende Stempel
+    let lanes = (r.forward + r.backward) as usize;
+    if r.class <= 8 && lanes > 0 && r.surface == 0 {
+        let left = r.park_width[0] + r.cycle[0] + r.track[0];
+        let right = r.park_width[1] + r.cycle[1] + r.track[1];
+        let inner = r.width - left - right;
+        if inner > 2. * scale {
+            let step = 2.4 * scale;
+            for i in 0..lanes {
+                let off = -r.width / 2. + left + (i as f32 + 0.5) * inner / lanes as f32;
+                let mut s = margin * 0.6;
+                while s < length - margin * 0.6 {
+                    if let Some(p) = point_along_cum(&r.points, &cum, s) {
+                        let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * off;
+                        mesh.sprites.push(Sprite {
+                            point: [pos.x, pos.y, 0.],
+                            size: [step * 1.6, (inner / lanes as f32 * 0.45).min(1.4 * scale)],
+                            angle: p.direction.y.atan2(p.direction.x),
+                            color: [1.; 3],
+                            cell: 8.,
+                            depth: depth - 0.0006,
+                        });
+                    }
+                    s += step;
+                }
+            }
         }
     }
     // Deterministic road wear with the source module's spacing, dimensions and cap.
