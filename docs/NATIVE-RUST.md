@@ -1173,3 +1173,17 @@ Fahrgast und als Zugführer, geführte Bahnen, bediente Halte (erneutes Öffnen 
 `player`) und die Zähler je Waffe (flach als `w:<id>:<feld>` in `stats.json`). Ein Sprung ans Fahrtende ist keine
 Strecke. Die Schrift ist mit 11 Einheiten kleiner als im Browser, weil die Bitmapschrift breiter läuft
 ([Bild](images/native/menu-statistik.png)). Der Mitfahrtest am Alexanderplatz bucht dabei die Statistik mit.
+
+## Menschen mit Körperbau und Gangart (04.10.2026)
+
+Vereinfachter Port von `people.js drawPerson` und `gait.js`: Jede Person hat Schuhe und Hosenbeine, die im Schritt
+vor- und zurückgehen, einen Oberkörper mit Schultern (dreht beim Gehen leicht gegen die Hüfte), zweiteilige Arme
+mit Ellbogen und Händen, die gegengleich zu den Beinen schwingen, und einen Kopf mit Ohren, Gesicht, Haaransatz bzw.
+Kopfbedeckung. Zubehör sitzt in der Hand (Aktentasche, Tüte, Handy, Kamera, Flasche), mit dem Stock geht der Arm
+mit, am Kinderwagen liegen beide Hände am Griff, die Hundeleine führt von der Hand zum Hund, dessen Beine traben.
+Die Spielfigur wird genauso gezeichnet (orange Jacke, dunkle Jeans, weiße Turnschuhe).
+
+**Ohne eigenen Zustand:** JS führt je Person eine Animation mit. In Rust zeichnet das Spiel aus `&self`, darum hängt
+die Schrittphase an der zurückgelegten Strecke (Doppelschritt 28 px gehend, 52 px rennend – entspricht der Kadenz in
+`gait.js`), der Ausschlag am Bewegungszustand. Der Fuß hebt sich dadurch nie ab, wenn die Figur steht, und gleitet nie
+über den Boden. Unit-Test `pose_follows_distance_and_state`. [Bild](images/native/leute.png).

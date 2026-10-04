@@ -2262,7 +2262,13 @@ impl Game for Play {
                 });
                 continue;
             }
-            crate::figure::person_bodies(p, &crate::figure::look_of(p), depth, w.time, out);
+            crate::figure::person_bodies(
+                &crate::figure::Who::of(p),
+                &crate::figure::look_of(p),
+                depth,
+                w.time,
+                out,
+            );
             // Faustschlag eines Kämpfers
             if p.punch > 0. {
                 let r = 6. + 5. * (p.punch / 0.22) as f32;
@@ -2320,22 +2326,17 @@ impl Game for Play {
                 depth: depth + 0.0005,
                 color: [0.25, 0.85, 1., 0.9],
             });
-            out.push(Body {
-                center: [x, y],
-                half: [5., 7.],
-                angle: a,
-                shape: 1.,
-                depth,
-                color: rgba(0x2b2f3a, 1.),
-            });
-            out.push(Body {
-                center: [x, y],
-                half: [3.2, 3.2],
-                angle: 0.,
-                shape: 1.,
-                depth: depth - 0.0002,
-                color: rgba(0xe0ac69, 1.),
-            });
+            let pl = &w.player;
+            let who = crate::figure::Who {
+                x: pl.x,
+                y: pl.y,
+                facing: pl.angle,
+                step: pl.step,
+                amp: (pl.move_speed / 40.).clamp(0., 1.) as f32,
+                run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
+                skin: 0xf2d0b1,
+            };
+            crate::figure::person_bodies(&who, &crate::figure::player_look(), depth, w.time, out);
         }
         self.fx.bodies(out);
         crate::weatherfx::ground_bodies(w, &self.trails, out);

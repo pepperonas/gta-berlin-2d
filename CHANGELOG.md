@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Menschen mit Schuhen, Schultern, Armen mit Ellbogen und Händen, Ohren und Haaransatz;
+  Gangart aus der zurückgelegten Strecke.
 - Native Rust-Portierung: Statistik vollständig – Nahverkehr, zerstörte Autos und eine Waffentabelle mit Quote.
 - Native Rust-Portierung: verdeckte Autos und Passanten erscheinen als blasse Umrisse.
 - Native Rust-Portierung: Büros, Schulen und Hallen haben bei den erleuchteten Fenstern ihren eigenen Tagesgang.
