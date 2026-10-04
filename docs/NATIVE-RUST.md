@@ -1113,6 +1113,20 @@ vergrößert). Gegenprobe ohne Verdeckung: kein Umriss.
 Andere Autos, Passanten, Radfahrer/E-Roller und Bahnwagen erscheinen unter Verdeckendem als blasse Umrisse; die
 Umriss-Tiefe liegt jeweils knapp vor dem vordersten eigenen Teil, damit das Fahrzeug sich nicht selbst verdeckt.
 
+**Neugestaltung („X-Ray“, Nutzerwunsch: dezenter, professionell, trotzdem gut sichtbar):** Statt hellblauer Flächen
+und Rechtecke zeichnet ein eigener Fragment-Shader (`scene.wgsl silhouette_fs`) die verdeckte Form als feine helle
+Kontur (gut 1 Bildschirmpixel) genau am Rand, innen einen schmalen dunklen Saum, der die Linie auf hellen wie dunklen
+Dächern lesbar macht, und eine kaum getönte Fläche (10 %). Gemessen wird in Bildschirmpixeln (`fwidth`), die Linie
+bleibt bei jedem Zoom gleich fein.
+- **Echte Form:** Pkw und Nutzfahrzeuge bekommen den Umriss ihres Fahrzeugbilds aus dem Atlas (Abstand zum Rand über
+  Ringe von Stichproben, 1–4 px in acht Richtungen), samt Nick-/Wankversatz des eigenen Autos (`body_shift`, gemeinsam
+  mit der Karosserie). Zweiräder, Passanten und Radfahrer als Ellipse, Bahnwagen als Rechteck.
+- **Hierarchie:** eigene Figur bzw. eigenes Auto warmweiß und deutlich (`SIL_OWN`), alle anderen neutral und
+  zurückhaltend (`SIL_OTHER`, Stärke 0,32) – man findet sich sofort, die Straße wird nicht unruhig. Zu Fuß kommt ein
+  dünner Ortungsring dazu.
+- `--bildschirm verdeckt` stellt mit `--im-auto` jetzt auch das eigene Auto unter den Hausrand.
+[Bild](images/native/silhouette-neu.png): links die Figur, rechts das Auto unter einem Haus (vergrößert).
+
 ## Kirchenglocken (04.10.2026)
 
 Port von `ambience.js bellStrikes` und `audio.js bells`: Überschreitet die Spieluhr eine volle Stunde und steht

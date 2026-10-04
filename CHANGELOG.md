@@ -177,6 +177,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Native Rust-Portierung: Silhouetten verdeckter Figuren und Fahrzeuge neu gestaltet – feine warmweiße Kontur in der
+  echten Fahrzeugform mit dunklem Innensaum statt hellblauer Fläche; andere Verkehrsteilnehmer dezent grau.
 - Native Rust-Portierung: Durchdrehende oder blockierende Reifen ließen das eigene Auto hellblau aufleuchten – die
   Reifenwolken zählten als Verdeckung und lösten dessen Silhouette aus. Qualm, Gischt, Leuchtspuren und
   Mündungsfeuer haben jetzt einen eigenen Durchgang ohne Tiefenschreiben; Qualm ist weißgrau und wolkig statt

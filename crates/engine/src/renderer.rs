@@ -266,7 +266,7 @@ impl Renderer {
         let silhouette_pipeline = make_pipeline(
             "Berlin silhouettes",
             "body_vs",
-            "body_fs",
+            "silhouette_fs",
             size_of::<Body>() as u64,
             wgpu::VertexStepMode::Instance,
             &body_attrs,

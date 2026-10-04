@@ -281,6 +281,72 @@ fn vehicle(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> vec4<f32> {
     let rgb = (paint * b.a * (1.0 - d.a) + d.rgb * d.a) / max(a, 1e-4);
     return vec4(rgb, a * in.color.a);
 }
+// Deckung des Fahrzeugbilds (Lack und Details) an q ∈ [−1, 1]² – ohne Ableitungen, darf in Verzweigungen stehen.
+fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
+    if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return 0.0; }
+    let dims = vec2<f32>(textureDimensions(atlas));
+    let cell = vec2(256.0, 128.0);
+    let idx = u32(shape - 16.0 + 0.5);
+    let uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
+    let cb = idx * 2u;
+    let cd = cb + 1u;
+    let pb = (vec2(f32(cb % 8u), f32(cb / 8u)) + uv) * cell / dims;
+    let pd = (vec2(f32(cd % 8u), f32(cd / 8u)) + uv) * cell / dims;
+    let b = textureSampleLevel(atlas, atlas_sampler, pb, 0.0).a;
+    let d = textureSampleLevel(atlas, atlas_sampler, pd, 0.0).a;
+    return d + b * (1.0 - d);
+}
+// Silhouette verdeckter Figuren und Fahrzeuge („X-Ray“): feine helle Kontur genau am Rand der echten Form, innen
+// ein schmaler dunkler Saum (Kontrast auf hellen wie dunklen Dächern) und eine kaum getönte Fläche. in.color.rgb =
+// Linienfarbe, in.color.a = Stärke. Formen: Fahrzeugbild (≥ 16), Ellipse (1), Ortungsring (2, nur Linie), Rechteck.
+// Alles in Bildschirmpixeln gemessen, damit die Linie bei jedem Zoom gleich fein bleibt.
+@fragment fn silhouette_fs(in: BodyOut) -> @location(0) vec4<f32> {
+    let px = max(length(fwidth(in.local)) * 0.70710678, 1e-4); // Einheiten je Bildschirmpixel
+    let s = in.color.a;
+    if in.shape == 2.0 {
+        // Ortungsring um die Figur: nur eine feine Linie
+        let r = abs(length(in.local) - in.extent.x * 0.92) / px;
+        let a = s * 0.6 * (1.0 - smoothstep(0.5, 1.3, r));
+        if a < 0.004 { discard; }
+        return vec4(linear_color(in.color.rgb), a);
+    }
+    var d: f32; // Abstand zum Rand in Pixeln, innen negativ
+    if in.shape >= 16.0 {
+        let q = in.local / in.extent;
+        if sprite_cover(in.shape, q) < 0.5 { discard; }
+        // Abstand in Ringen zu 1–4 Pixeln, je acht Richtungen
+        var dmin = 4.5;
+        for (var r = 1; r <= 4; r++) {
+            for (var k = 0; k < 8; k++) {
+                let a = f32(k) * 0.78539816;
+                let o = vec2(cos(a), sin(a)) * f32(r) * px;
+                if sprite_cover(in.shape, (in.local + o) / in.extent) < 0.5 { dmin = min(dmin, f32(r)); }
+            }
+            if dmin < 4.5 { break; }
+        }
+        d = -dmin + 0.5;
+    } else if in.shape == 1.0 {
+        let k = length(in.local / in.extent);
+        d = (k - 1.0) * min(in.extent.x, in.extent.y) / px;
+    } else {
+        let e = abs(in.local) - in.extent;
+        d = max(e.x, e.y) / px;
+    }
+    if d > 0.75 { discard; }
+    let depth_in = -d;
+    let wl = 1.0 - smoothstep(1.2, 1.9, depth_in);                       // Kontur
+    let wb = (1.0 - wl) * (1.0 - smoothstep(2.9, 3.6, depth_in));       // dunkler Innensaum
+    let wf = max(1.0 - wl - wb, 0.0);                                    // Fläche
+    let dark = vec3(0.035, 0.04, 0.055);
+    let al = s * wl;
+    let ab = s * 0.42 * wb;
+    let af = s * 0.1 * wf;
+    var a = al + ab + af;
+    let rgb = (in.color.rgb * (al + af) + dark * ab) / max(a, 1e-4);
+    a *= 1.0 - smoothstep(-0.25, 0.75, d); // weicher Außenrand
+    if a < 0.004 { discard; }
+    return vec4(linear_color(rgb), a);
+}
 @fragment fn body_fs(in: BodyOut) -> @location(0) vec4<f32> {
     // Ableitungen vor jeder Verzweigung (einheitlicher Kontrollfluss)
     let gx = dpdx(in.local);

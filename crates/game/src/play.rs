@@ -1069,6 +1069,58 @@ pub fn combat_input(keys: &Keys, driving: bool) -> berlin_sim::combat::CombatInp
     }
 }
 
+/// Nicken und Wanken des gefahrenen Autos (vehicles.js bodyShift): Bremsen taucht vorn ein, Kurven drücken nach
+/// außen. Längs/quer in Welteinheiten; Karosserie und Silhouette nutzen denselben Wert.
+fn body_shift(c: &berlin_sim::car::Car) -> (f32, f32) {
+    let Some(d) = c
+        .dyn_state
+        .as_ref()
+        .filter(|_| !c.wrecked && c.role == berlin_sim::car::Role::Player)
+    else {
+        return (0., 0.);
+    };
+    let k = berlin_sim::carmodels::spec_of(c.model_name()).h * 0.35;
+    (
+        (-d.ax * k).clamp(-6., 6.) as f32,
+        (-d.ay * k).clamp(-6., 6.) as f32,
+    )
+}
+
+/// Silhouette eines Fahrzeugs (`scene.wgsl silhouette_fs`): Pkw und Nutzfahrzeuge in der Form ihres Fahrzeugbilds,
+/// Zweiräder als Ellipse. `color` = Linienfarbe, Alpha = Stärke.
+fn vehicle_silhouette(c: &berlin_sim::car::Car, depth: f32, color: [f32; 4]) -> Body {
+    let (x, y, a) = (c.x as f32, c.y as f32, c.angle as f32);
+    if c.kind_info().bike || c.kind_info().moto {
+        return Body {
+            center: [x, y],
+            half: [c.hw as f32, c.hh as f32 * 0.8],
+            angle: a,
+            shape: 1.,
+            depth,
+            color,
+        };
+    }
+    let (sx, sy) = body_shift(c);
+    let (fx, fy) = (a.cos(), a.sin());
+    let (rx, ry) = (-fy, fx);
+    Body {
+        center: [x + fx * sx + rx * sy, y + fy * sx + ry * sy],
+        half: [
+            c.hw as f32 + crate::carart::PAD,
+            c.hh as f32 + crate::carart::PAD,
+        ],
+        angle: a,
+        shape: 16. + crate::carart::model_index(c.model_name()) as f32,
+        depth,
+        color,
+    }
+}
+
+/// Silhouetten (Linienfarbe + Stärke): die eigene Figur bzw. das eigene Auto warmweiß und deutlich, alle anderen
+/// neutral und zurückhaltend – man soll sich selbst sofort finden, ohne dass die Straße voller Umrisse ist.
+pub const SIL_OWN: [f32; 4] = [1., 0.93, 0.8, 0.95];
+pub const SIL_OTHER: [f32; 4] = [0.9, 0.92, 0.95, 0.32];
+
 /// `--kampf-demo`: Pistole ziehen, auf den nächsten lebenden Passanten zielen und jeden zweiten Schritt abdrücken.
 fn demo_combat_input(w: &World, input: &mut Input) {
     let (x, y) = (w.player.x, w.player.y);
@@ -1114,6 +1166,13 @@ fn demo_cover(w: &mut World) {
             if w.city.in_building(tx, ty).is_none() && w.city.in_building(tx, ty - 10.).is_none() {
                 (w.player.x, w.player.y) = (tx, ty);
                 w.player.angle = -std::f64::consts::FRAC_PI_2;
+                // im Auto (`--im-auto`): das Auto quer unter den Hausrand, halb verdeckt
+                if let Some(id) = w.player.in_car
+                    && let Some(c) = w.cars.iter_mut().find(|c| c.id == id)
+                {
+                    (c.x, c.y, c.angle) = (tx, ty - 6., 0.);
+                    (c.vx, c.vy, c.ang_vel) = (0., 0., 0.);
+                }
                 w.camera.x = tx;
                 w.camera.y = ty;
                 return;
@@ -1907,7 +1966,8 @@ impl Game for Play {
                 (w2.camera.x, w2.camera.y) = (x, y);
             }
         }
-        if self.demo_covered && !w2.loading {
+        // nach `--im-auto` (Einsteigen weiter unten im selben Schritt): erst im Auto verdecken
+        if self.demo_covered && !w2.loading && !self.auto_enter {
             self.demo_covered = false;
             demo_cover(w2);
         }
@@ -2232,17 +2292,7 @@ impl Game for Play {
                     color: [0.067, 0.075, 0.09, 1.],
                 });
             }
-            // Nicken und Wanken des gefahrenen Autos (bodyShift): Bremsen taucht vorn ein, Kurven drücken nach außen
-            let (mut sx, mut sy) = (0f32, 0f32);
-            if let Some(d) = c
-                .dyn_state
-                .as_ref()
-                .filter(|_| !c.wrecked && c.role == berlin_sim::car::Role::Player)
-            {
-                let k = berlin_sim::carmodels::spec_of(model).h * 0.35;
-                sx = (-d.ax * k).clamp(-6., 6.) as f32;
-                sy = (-d.ay * k).clamp(-6., 6.) as f32;
-            }
+            let (sx, sy) = body_shift(c);
             out.push(Body {
                 center: [x + fx * sx + rx * sy, y + fy * sx + ry * sy],
                 half: [hw + crate::carart::PAD, hh + crate::carart::PAD],
@@ -2532,13 +2582,10 @@ impl Game for Play {
         if !matches!(self.screen, Screen::Playing | Screen::Paused) || w.player.inside.is_some() {
             return;
         }
-        let tint = [0.92, 0.97, 1., 0.5];
-        let rim = [0.25, 0.85, 1., 0.85];
-        // alle anderen: blasse Umrisse (render.js drawCovered), knapp vor ihren eigenen Teilen
+        // render.js drawCovered: alle Bewegten, knapp vor ihren eigenen Teilen (sie verdecken sich nicht selbst)
         let (cx, cy) = (w.camera.x, w.camera.y);
         let view = 2200. / w.camera.zoom.max(0.5);
         let near = |x: f64, y: f64| (x - cx).abs() < view && (y - cy).abs() < view * 0.7;
-        let pale = [0.85, 0.88, 0.92, 0.28];
         let own = w.player_car().map(|c| c.id);
         for c in w
             .cars
@@ -2546,16 +2593,9 @@ impl Game for Play {
             .filter(|c| near(c.x, c.y) && Some(c.id) != own)
         {
             let depth = if c.lvl() >= 1 { 0.547 } else { 0.617 };
-            out.push(Body {
-                center: [c.x as f32, c.y as f32],
-                half: [c.hw as f32, c.hh as f32],
-                angle: c.angle as f32,
-                shape: 0.,
-                depth,
-                color: pale,
-            });
+            out.push(vehicle_silhouette(c, depth, SIL_OTHER));
         }
-        // Radfahrer und Bahnwagen (render.js sammelt auch sie in `_covered`)
+        // Radfahrer und Bahnwagen
         for b in w.bikes.iter().filter(|b| near(b.x, b.y)) {
             let half = if b.kind == berlin_sim::bikes::Kind::Scooter {
                 6.
@@ -2566,9 +2606,9 @@ impl Game for Play {
                 center: [b.x as f32, b.y as f32],
                 half: [half, 3.5],
                 angle: b.angle as f32,
-                shape: 0.,
+                shape: 1.,
                 depth: if b.level.lvl >= 1 { 0.5506 } else { 0.6186 },
-                color: pale,
+                color: SIL_OTHER,
             });
         }
         for t in &self.trains {
@@ -2582,7 +2622,7 @@ impl Game for Play {
                     angle: c.angle as f32,
                     shape: 0.,
                     depth: if lvl >= 1 { 0.545 } else { 0.62 },
-                    color: pale,
+                    color: SIL_OTHER,
                 });
             }
         }
@@ -2600,22 +2640,12 @@ impl Game for Play {
                 angle: p.facing as f32,
                 shape: 1.,
                 depth,
-                color: pale,
+                color: SIL_OTHER,
             });
         }
         if let Some(c) = w.player_car() {
             let depth = if c.lvl() >= 1 { 0.547 } else { 0.617 };
-            let (hw, hh) = (c.hw as f32, c.hh as f32);
-            for (pad, color, d) in [(1.6, rim, 0.), (0., tint, -0.0001)] {
-                out.push(Body {
-                    center: [c.x as f32, c.y as f32],
-                    half: [hw + pad, hh + pad],
-                    angle: c.angle as f32,
-                    shape: 0.,
-                    depth: depth + d,
-                    color,
-                });
-            }
+            out.push(vehicle_silhouette(c, depth - 0.0001, SIL_OWN));
         } else if w.player.ride.is_none() && !w.player.combat.dead {
             let (x, y) = (w.player.x as f32, w.player.y as f32);
             let depth = if w.player.level.lvl >= 1 {
@@ -2623,21 +2653,22 @@ impl Game for Play {
             } else {
                 0.6162
             };
+            // Körper (Schultern quer zur Blickrichtung) und ein feiner Ortungsring
             out.push(Body {
                 center: [x, y],
-                half: [11., 11.],
-                angle: 0.,
-                shape: 2.,
-                depth,
-                color: rim,
-            });
-            out.push(Body {
-                center: [x, y],
-                half: [5.5, 7.5],
+                half: [5., 7.5],
                 angle: w.player.angle as f32,
                 shape: 1.,
                 depth: depth - 0.0001,
-                color: tint,
+                color: SIL_OWN,
+            });
+            out.push(Body {
+                center: [x, y],
+                half: [13., 13.],
+                angle: 0.,
+                shape: 2.,
+                depth,
+                color: SIL_OWN,
             });
         }
     }
