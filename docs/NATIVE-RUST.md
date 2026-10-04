@@ -1089,3 +1089,16 @@ nachts stärker, und ein dunkler Rand auf 17 % in den Ecken. [Bild](images/nativ
 Faktor 1 + a·(2c − 1), auf das hellste Glied normiert, weil das Bildziel nicht über 1 aufhellen kann. Die Vignette
 dunkelt ab, statt die fast schwarze Farbe einzumischen. Bloom fehlt noch (er braucht eine weichgezeichnete Kopie der
 Lichtkarte).
+
+## Silhouetten verdeckter Figuren (04.10.2026)
+
+Port des Gedankens von `occlusion.js` + `render.js drawCovered`: Steht die Spielfigur (oder das eigene Fahrzeug) unter
+einem Dach, einer Baumkrone oder einem Viadukt, erscheint sie als heller Umriss mit Ring. Umgesetzt über die Tiefe
+statt über Masken: `Game::silhouettes` liefert eigene Körper, die die Engine nach dem Licht mit `body_fs`, Tiefentest
+`Greater` und ohne Tiefenschreiben zeichnet – sie erscheinen also genau dort, wo etwas Näheres davor liegt. Die
+Silhouette liegt minimal vor den eigenen Teilen, damit sie über der frei sichtbaren Figur nicht doppelt erscheint.
+`--bildschirm verdeckt` stellt die Figur nördlich eines Hauses ab ([Bild](images/native/silhouette.png),
+vergrößert). Gegenprobe ohne Verdeckung: kein Umriss.
+
+**Abweichungen:** JS zeigt Silhouetten auch für Autos, Passanten, Räder und Straßenbahnwagen; hier nur für die
+Spielfigur und ihr Fahrzeug.

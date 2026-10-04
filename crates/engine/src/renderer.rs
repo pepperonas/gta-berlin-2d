@@ -36,6 +36,9 @@ pub(crate) struct Renderer {
     window_pipeline: wgpu::RenderPipeline,
     sprite_pipeline: wgpu::RenderPipeline,
     body_pipeline: wgpu::RenderPipeline,
+    silhouette_pipeline: wgpu::RenderPipeline,
+    silhouettes: Option<wgpu::Buffer>,
+    silhouette_count: u32,
     bodies: Option<wgpu::Buffer>,
     body_capacity: usize,
     body_count: u32,
@@ -172,7 +175,8 @@ impl Renderer {
                              step_mode,
                              attributes: &[wgpu::VertexAttribute],
                              blend,
-                             write: bool| {
+                             write: bool,
+                             compare: wgpu::CompareFunction| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&layout),
@@ -199,6 +203,7 @@ impl Renderer {
                 primitive: Default::default(),
                 depth_stencil: Some(wgpu::DepthStencilState {
                     depth_write_enabled: Some(write),
+                    depth_compare: Some(compare),
                     ..depth_state.clone()
                 }),
                 multisample: Default::default(),
@@ -215,6 +220,7 @@ impl Renderer {
             &attrs,
             None,
             true,
+            wgpu::CompareFunction::LessEqual,
         );
         // erleuchtete Fenster: dieselben Fassaden nach dem Licht, ohne Tiefe zu schreiben
         let window_pipeline = make_pipeline(
@@ -226,6 +232,7 @@ impl Renderer {
             &attrs,
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
+            wgpu::CompareFunction::LessEqual,
         );
         let sprite_pipeline = make_pipeline(
             "Berlin instanced atlas",
@@ -236,6 +243,7 @@ impl Renderer {
             &sprite_attrs,
             Some(wgpu::BlendState::ALPHA_BLENDING),
             true,
+            wgpu::CompareFunction::LessEqual,
         );
         let body_pipeline = make_pipeline(
             "Berlin instanced bodies",
@@ -246,6 +254,19 @@ impl Renderer {
             &body_attrs,
             Some(wgpu::BlendState::ALPHA_BLENDING),
             true,
+            wgpu::CompareFunction::LessEqual,
+        );
+        // Silhouetten: dieselben Körper, aber nur wo Näheres davor liegt (Tiefe größer als gespeichert)
+        let silhouette_pipeline = make_pipeline(
+            "Berlin silhouettes",
+            "body_vs",
+            "body_fs",
+            size_of::<Body>() as u64,
+            wgpu::VertexStepMode::Instance,
+            &body_attrs,
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::Greater,
         );
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera / sun"),
@@ -474,6 +495,9 @@ impl Renderer {
             window_pipeline,
             sprite_pipeline,
             body_pipeline,
+            silhouette_pipeline,
+            silhouettes: None,
+            silhouette_count: 0,
             bodies: None,
             body_capacity: 0,
             body_count: 0,
@@ -585,6 +609,26 @@ impl Renderer {
             }));
         }
         if let Some(buffer) = &self.bodies {
+            self.queue
+                .write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
+        }
+    }
+    /// Umrisse verdeckter Figuren (wenige; Puffer wächst bei Bedarf).
+    pub fn set_silhouettes(&mut self, bodies: &[Body]) {
+        self.silhouette_count = bodies.len() as u32;
+        if bodies.is_empty() {
+            return;
+        }
+        let need = std::mem::size_of_val(bodies) as u64;
+        if self.silhouettes.as_ref().is_none_or(|b| b.size() < need) {
+            self.silhouettes = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Silhouette instances"),
+                size: need.next_power_of_two().max(1024),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        if let Some(buffer) = &self.silhouettes {
             self.queue
                 .write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
         }
@@ -825,6 +869,15 @@ impl Renderer {
                     pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
                 }
             }
+        }
+        if let Some(buffer) = self
+            .silhouettes
+            .as_ref()
+            .filter(|_| self.silhouette_count > 0)
+        {
+            pass.set_pipeline(&self.silhouette_pipeline);
+            pass.set_vertex_buffer(0, buffer.slice(..));
+            pass.draw(0..6, 0..self.silhouette_count);
         }
         pass.set_pipeline(&self.light.grade);
         pass.draw(0..3, 0..1);

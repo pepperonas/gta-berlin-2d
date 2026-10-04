@@ -55,6 +55,7 @@ pub struct Play {
     /// Aufnahmen: `--bildschirm bahnhof` (hinunter in den nächsten U-Bahnhof), `tunnelfahrt` (dazu einsteigen)
     pub demo_station: Option<bool>,
     pub people_show: bool,
+    pub demo_covered: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -267,6 +268,7 @@ impl Play {
             demo_drive: false,
             demo_station: None,
             people_show: false,
+            demo_covered: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -966,6 +968,34 @@ fn demo_combat_input(w: &World, input: &mut Input) {
 
 /// Rad bzw. E-Roller von oben: zwei Räder, Rahmen bzw. Trittbrett mit Lenker, darauf der Fahrer im Trikot
 /// (beim Rad mit Tretbewegung). Liegende Räder kippen zur Seite, ohne Fahrer.
+/// Aufnahmen: Spielfigur direkt nördlich eines Hauses abstellen; Fassade und Dach ragen dort in der Schrägansicht über
+/// sie (Silhouette sichtbar). Gesucht wird im Raster um die Figur nach einem Hausrand, dessen Nordseite frei ist.
+fn demo_cover(w: &mut World) {
+    let (px, py) = (w.player.x, w.player.y);
+    for r in (40..600).step_by(20) {
+        for k in 0..24 {
+            let a = k as f64 / 24. * std::f64::consts::TAU;
+            let (x, y) = (px + a.cos() * r as f64, py + a.sin() * r as f64);
+            if w.city.in_building(x, y).is_none() {
+                continue;
+            }
+            // nach Norden bis zum Hausrand, dann ein Stück weiter
+            let mut ny = y;
+            while w.city.in_building(x, ny).is_some() && ny > y - 400. {
+                ny -= 2.;
+            }
+            let (tx, ty) = (x, ny - 14.);
+            if w.city.in_building(tx, ty).is_none() && w.city.in_building(tx, ty - 10.).is_none() {
+                (w.player.x, w.player.y) = (tx, ty);
+                w.player.angle = -std::f64::consts::FRAC_PI_2;
+                w.camera.x = tx;
+                w.camera.y = ty;
+                return;
+            }
+        }
+    }
+}
+
 /// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
 fn demo_station_step(w: &mut World, ride: bool) -> bool {
     if w.player.ride.is_some() {
@@ -1723,6 +1753,10 @@ impl Game for Play {
             self.vehicle_show = false;
             w2.vehicle_show();
         }
+        if self.demo_covered && !w2.loading {
+            self.demo_covered = false;
+            demo_cover(w2);
+        }
         if self.people_show && !w2.loading {
             self.people_show = false;
             w2.people_show();
@@ -2273,6 +2307,54 @@ impl Game for Play {
         self.fx.bodies(out);
         crate::weatherfx::ground_bodies(w, &self.trails, out);
         crate::weatherfx::bodies(w, out);
+    }
+    /// Umriss der Spielfigur bzw. des eigenen Fahrzeugs, wo Dach, Baumkrone oder Viadukt sie verdecken
+    /// (`occlusion.js` + `render.js drawCovered`). Etwas näher als die eigenen Teile, damit der Umriss nur unter
+    /// Verdeckendem erscheint.
+    fn silhouettes(&self, out: &mut Vec<Body>) {
+        let w = &self.world;
+        if !matches!(self.screen, Screen::Playing | Screen::Paused) || w.player.inside.is_some() {
+            return;
+        }
+        let tint = [0.92, 0.97, 1., 0.5];
+        let rim = [0.25, 0.85, 1., 0.85];
+        if let Some(c) = w.player_car() {
+            let depth = if c.lvl() >= 1 { 0.547 } else { 0.617 };
+            let (hw, hh) = (c.hw as f32, c.hh as f32);
+            for (pad, color, d) in [(1.6, rim, 0.), (0., tint, -0.0001)] {
+                out.push(Body {
+                    center: [c.x as f32, c.y as f32],
+                    half: [hw + pad, hh + pad],
+                    angle: c.angle as f32,
+                    shape: 0.,
+                    depth: depth + d,
+                    color,
+                });
+            }
+        } else if w.player.ride.is_none() && !w.player.combat.dead {
+            let (x, y) = (w.player.x as f32, w.player.y as f32);
+            let depth = if w.player.level.lvl >= 1 {
+                0.5475
+            } else {
+                0.6162
+            };
+            out.push(Body {
+                center: [x, y],
+                half: [11., 11.],
+                angle: 0.,
+                shape: 2.,
+                depth,
+                color: rim,
+            });
+            out.push(Body {
+                center: [x, y],
+                half: [5.5, 7.5],
+                angle: w.player.angle as f32,
+                shape: 1.,
+                depth: depth - 0.0001,
+                color: tint,
+            });
+        }
     }
     fn take_overview(&mut self) -> Option<berlin_map_loader::overview::OverlayMesh> {
         self.bigmap.mesh.take()

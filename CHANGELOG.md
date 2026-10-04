@@ -8,6 +8,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung: Silhouette der Spielfigur bzw. des eigenen Fahrzeugs unter Dächern, Baumkronen und
+  Viadukten (`--bildschirm verdeckt`).
 - Native Rust-Portierung: Farbabstimmung (warm in der Dämmerung, kühl in der Nacht) und Vignette.
 - Native Rust-Portierung: erleuchtete Fenster am Abend, in der Nacht und bei trübem Wetter (Wohnungen, Lichtfarben,
   Fernsehflackern, Vorhänge), im eigenen Durchgang nach dem Licht.

@@ -154,7 +154,7 @@ fn main() -> Result<()> {
             "--fahrzeugschau" => vehicle_show = true,
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt oder leute",
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute oder verdeckt",
                 )?;
                 ensure!(
                     [
@@ -167,10 +167,11 @@ fn main() -> Result<()> {
                         "zugfahrt",
                         "bahnhof",
                         "tunnelfahrt",
-                        "leute"
+                        "leute",
+                        "verdeckt"
                     ]
                     .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt oder leute"
+                    "--bildschirm erwartet pause, steuerung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute oder verdeckt"
                 );
                 screen = Some(v);
             }
@@ -297,6 +298,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("bahnhof") => play.demo_station = Some(false),
         Some("tunnelfahrt") => play.demo_station = Some(true),
         Some("leute") => play.people_show = true,
+        Some("verdeckt") => play.demo_covered = true,
         Some("konsole") => {
             play.console.open(&play.places);
             play.console.set_text("tp kott", &play.places);

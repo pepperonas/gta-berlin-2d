@@ -15,7 +15,7 @@ file, atomic write), `world.rs`. Positions are f64. Integration tests on real ti
 (pure, tested), `map_loader` emits per-building `ShadowVertex` wall quads, `engine/lightpass.rs` + `lighting.wgsl`
 render a shadow mask (vertex extrusion along the sun, tree crowns from the atlas) and a half-res lightmap, then
 apply both with a fullscreen triangle at depth 0.5 (ground/cars behind, roofs/crowns in front get ambient only).
-Lit windows: `scene.wgsl window_fs`, a second pass over the tile meshes after the light composites (depth LessEqual, no write; `params.z` = windows lit, `sun.w` = clock minutes). Never name a WGSL identifier `half` (Naga passes it to Metal, where it is a type). Phase 5 audio: pure mixing
+Lit windows: `scene.wgsl window_fs`, a second pass over the tile meshes after the light composites (depth LessEqual, no write; `params.z` = windows lit, `sun.w` = clock minutes). Silhouettes: `Game::silhouettes` bodies drawn with depth `Greater`, no write, after the light. Grade + vignette: `lighting.wgsl grade_fs` (multiply). Never name a WGSL identifier `half` (Naga passes it to Metal, where it is a type). Phase 5 audio: pure mixing
 rules in `sim/{enginevoice,soundscape,ambience}.rs`; `crates/audio` (`berlin-audio`) has Web-Audio-like DSP
 (`dsp.rs`), the synth graph of `audio.js` (`synth.rs`, driven by a per-step `Frame`), cpal output and WAV writer
 (`output.rs`); `game/sound.rs` builds frames. `cargo run --release -- --audio-wav x.wav` renders a measured test

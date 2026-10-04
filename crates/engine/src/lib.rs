@@ -122,6 +122,8 @@ pub trait Game {
     /// Kameraziel (Kartenpixel) und Zoom.
     fn camera(&self) -> (Vec2, f32);
     fn bodies(&self, out: &mut Vec<Body>);
+    /// Umrisse, die nur dort erscheinen, wo etwas Näheres davor liegt (Spielfigur unter Dach oder Baumkrone).
+    fn silhouettes(&self, _out: &mut Vec<Body>) {}
     /// Zeile für den Fenstertitel.
     fn status(&self) -> String;
     /// Ist die Spielwelt geladen (für Smoke-Tests)?
@@ -432,6 +434,9 @@ impl ApplicationHandler for App {
                     self.bodies.clear();
                     game.bodies(&mut self.bodies);
                     renderer.set_bodies(&self.bodies);
+                    self.bodies.clear();
+                    game.silhouettes(&mut self.bodies);
+                    renderer.set_silhouettes(&self.bodies);
                     renderer.set_lighting(game.lighting().unwrap_or(self.lighting));
                     self.lights.clear();
                     game.lights(&mut self.lights);
