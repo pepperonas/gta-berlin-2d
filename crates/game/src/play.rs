@@ -17,6 +17,8 @@ pub struct Play {
     storage: Option<FileStorage>,
     saved_for: u32,
     lamps: LampCache,
+    audio: Option<berlin_audio::output::Audio>,
+    listener: crate::sound::Listener,
 }
 
 /// Licht der Engine aus dem Tageslicht der Spieluhr.
@@ -34,7 +36,7 @@ pub fn lighting_at(minutes: f64) -> Lighting {
 }
 
 impl Play {
-    pub fn new(root: &Path, seed: u32, save: Option<FileStorage>) -> Result<Self> {
+    pub fn new(root: &Path, seed: u32, save: Option<FileStorage>, sound: bool) -> Result<Self> {
         let city = City::open(root, Box::new(ThreadedSource::new(root)?))?;
         let mut world = World::new(
             city,
@@ -53,6 +55,21 @@ impl Play {
             storage: save,
             saved_for: 0,
             lamps: LampCache::default(),
+            audio: if sound {
+                match berlin_audio::output::Audio::start() {
+                    Ok(a) => {
+                        eprintln!("Ton: {} ({} Hz)", a.device, a.sample_rate);
+                        Some(a)
+                    }
+                    Err(e) => {
+                        eprintln!("Ton aus: {e:#}");
+                        None
+                    }
+                }
+            } else {
+                None
+            },
+            listener: Default::default(),
         })
     }
     pub fn set_storage(&mut self, st: FileStorage) {
@@ -130,6 +147,15 @@ impl Game for Play {
         if keys.pressed.contains(&KeyCode::F5) {
             self.save();
         }
+        if keys.pressed.contains(&KeyCode::KeyM)
+            && let Some(a) = &self.audio
+        {
+            let muted = a.toggle_mute();
+            self.world.notice = Some(berlin_sim::world::Notice {
+                text: (if muted { "Ton aus" } else { "Ton an" }).into(),
+                t: 1.5,
+            });
+        }
         let w2 = &mut self.world;
         if keys.pressed.contains(&KeyCode::KeyT) {
             w2.clock = (w2.clock + 60.) % 1440.;
@@ -147,6 +173,10 @@ impl Game for Play {
         }
         let input = input_from(keys, w2.player.in_car.is_some());
         w2.update(&input, dt);
+        if let Some(audio) = &self.audio {
+            let frame = self.listener.frame(&mut self.world, dt);
+            audio.apply(&frame);
+        }
         // nach einem erledigten Auftrag automatisch speichern (wie die JS-Fassung)
         if self.world.mission.state == State::Success
             && self.saved_for != self.world.completed as u32

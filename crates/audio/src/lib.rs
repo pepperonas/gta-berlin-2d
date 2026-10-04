@@ -1,0 +1,4 @@
+//! Synthetisierter Klang (Phase 5 der nativen Portierung, Port von `audio.js`).
+pub mod dsp;
+pub mod output;
+pub mod synth;

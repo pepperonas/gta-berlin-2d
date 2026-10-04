@@ -1,4 +1,5 @@
 mod play;
+mod sound;
 use anyhow::{Context, Result, ensure};
 use berlin_engine::Options;
 use berlin_map_loader::{
@@ -24,6 +25,9 @@ fn main() -> Result<()> {
     let mut check_sim: Option<f64> = None;
     let mut save_path = None;
     let mut clock: Option<f64> = None;
+    let mut sound = true;
+    let mut audio_wav: Option<std::path::PathBuf> = None;
+    let mut audio_secs = 20.;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fps" => options.fps = args.next().context("Wert für --fps fehlt")?.parse()?,
@@ -79,6 +83,17 @@ fn main() -> Result<()> {
                 options.capture = Some(args.next().context("PNG-Pfad fehlt")?.into());
             }
             "--check-map" => check_map = true,
+            "--stumm" | "--mute" => sound = false,
+            "--audio-wav" => {
+                audio_wav = Some(args.next().context("Pfad für --audio-wav fehlt")?.into())
+            }
+            "--audio-seconds" => {
+                audio_secs = args.next().context("Sekunden fehlen")?.parse()?;
+                ensure!(
+                    audio_secs > 0. && audio_secs <= 600.,
+                    "--audio-seconds: 0 < s ≤ 600"
+                );
+            }
             "--free" => free = true,
             "--new" => new_game = true,
             "--seed" => seed = args.next().context("Wert für --seed fehlt")?.parse()?,
@@ -100,8 +115,8 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN]\n\
-Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--audio-wav DATEI [--audio-seconds N]]\n\
+Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · M: Ton an/aus · F5: speichern · Mausrad: Zoom · Esc: Ende\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
                 );
                 return Ok(());
@@ -139,6 +154,9 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         );
         return Ok(());
     }
+    if let Some(path) = audio_wav {
+        return render_audio(&options.data_root, seed, audio_secs, &path);
+    }
     if let Some(secs) = check_sim {
         return check_simulation(&options.data_root, seed, secs);
     }
@@ -174,11 +192,11 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         });
     let play = if new_game {
         // neues Spiel: vorhandenen Stand nicht laden, aber beim Speichern überschreiben
-        let mut p = play::Play::new(&options.data_root, seed, None)?;
+        let mut p = play::Play::new(&options.data_root, seed, None, sound)?;
         p.set_storage(storage);
         p
     } else {
-        play::Play::new(&options.data_root, seed, Some(storage))?
+        play::Play::new(&options.data_root, seed, Some(storage), sound)?
     };
     let mut play = play;
     if let Some(c) = clock {
@@ -230,6 +248,108 @@ fn check_simulation(root: &std::path::Path, seed: u32, secs: f64) -> Result<()> 
         load.as_secs_f64(),
         describe(&w),
         npc.count()
+    );
+    Ok(())
+}
+
+/// Eine Fahrt ohne Fenster simulieren und den Klang als WAV schreiben (zum Prüfen ohne Lautsprecher):
+/// einsteigen, beschleunigen, bremsen, mit Einschlag weiterfahren.
+fn render_audio(
+    root: &std::path::Path,
+    seed: u32,
+    secs: f64,
+    path: &std::path::Path,
+) -> Result<()> {
+    use berlin_audio::synth::Synth;
+    use berlin_sim::city::{City, DiskSource};
+    use berlin_sim::world::{DT, Input, World};
+    const SR: u32 = 48000;
+    let city = City::open(root, Box::new(DiskSource::new(root)))?;
+    let mut w = World::new(
+        city,
+        seed,
+        berlin_sim::world::TRAFFIC_CARS,
+        berlin_sim::world::TRAFFIC_PEDS,
+    );
+    let pc = w.player_car_id.context("Kein Spielerauto")?;
+    // Messfahrt auf der ersten langen geraden Spur nahe dem Späti (der Parkplatz ist zum Beschleunigen zu eng)
+    let (px, py) = (w.player.x, w.player.y);
+    let lane = w
+        .lanes
+        .lanes
+        .values()
+        .filter(|l| {
+            (l.pts[1].0 - l.pts[0].0).hypot(l.pts[1].1 - l.pts[0].1) > 500.
+                && (l.pts[0].0 - px).hypot(l.pts[0].1 - py) < 3000.
+        })
+        .min_by_key(|l| l.id)
+        .context("Keine gerade Spur")?
+        .clone();
+    let (a, b) = (lane.pts[0], lane.pts[1]);
+    if let Some(c) = w.cars.iter_mut().find(|c| c.id == pc) {
+        (c.x, c.y, c.angle) = (a.0, a.1, (b.1 - a.1).atan2(b.0 - a.0));
+    }
+    w.cars
+        .retain(|c| c.id == pc || (c.x - a.0).hypot(c.y - a.1) > 300.);
+    (w.player.x, w.player.y) = (a.0, a.1);
+    let mut synth = Synth::new(SR as f32);
+    let mut listener = sound::Listener::default();
+    let mut out = Vec::with_capacity((secs * SR as f64) as usize * 2);
+    let steps = (secs / DT) as usize;
+    let mut chunk = vec![0f32; 0];
+    let mut acc = 0f64;
+    for k in 0..steps {
+        let t = k as f64 * DT;
+        let input = match t {
+            t if t < 1. => Input {
+                enter_exit: k == 30,
+                ..Default::default()
+            },
+            t if t < 7. => Input {
+                throttle: 1.,
+                ..Default::default()
+            },
+            t if t < 9. => Input {
+                brake: 1.,
+                ..Default::default()
+            },
+            _ => Input {
+                throttle: 0.5,
+                ..Default::default()
+            },
+        };
+        if k % 60 == 0 {
+            let e = listener.engine();
+            eprintln!(
+                "{t:4.1} s · {:3.0} km/h · {:4.0} U/min · Gang {} · Zündton {:3.0} Hz",
+                w.car(pc).map(|c| c.speed() * 0.36).unwrap_or(0.),
+                e.rpm,
+                e.gear,
+                e.fire
+            );
+        }
+        w.update(&input, DT);
+        let frame = listener.frame(&mut w, DT);
+        synth.apply(&frame);
+        acc += DT * SR as f64;
+        let n = acc.floor() as usize;
+        acc -= n as f64;
+        chunk.resize(n * 2, 0.);
+        synth.render(&mut chunk);
+        out.extend_from_slice(&chunk);
+    }
+    berlin_audio::output::write_wav(path, &out, SR)?;
+    let rms = (out.iter().map(|v| v * v).sum::<f32>() / out.len().max(1) as f32).sqrt();
+    let peak = out.iter().fold(0f32, |m, v| m.max(v.abs()));
+    let kmh = w.car(pc).map(|c| c.speed() * 0.36).unwrap_or(0.);
+    println!(
+        "Klang: {} ({:.1} s, {} Hz) · RMS {:.3} · Spitze {:.2} · Ende {:.0} km/h",
+        path.display(),
+        out.len() as f64 / 2. / SR as f64,
+        SR,
+        rms,
+        peak,
+        kmh
     );
     Ok(())
 }

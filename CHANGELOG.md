@@ -26,6 +26,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   `lamps.js`, Hausschatten per Wand-Extrusion im Vertex-Shader und Baumkronenschatten in einer Schattenmaske,
   Lichtkarte mit Laternen, Scheinwerferkegeln, Rück-/Bremslichtern und Ampeln; Dächer bekommen nur das
   Umgebungslicht. `--uhr HH:MM` und Taste T (+1 Stunde).
+- Native Rust-Portierung, Phase 5: synthetisierter Klang im neuen Crate `berlin-audio` (DSP-Bausteine nach
+  Web-Audio-Vorbild, Synthesizer, Ausgabe über `cpal`): Motoren mit Wellentabellen aus dem Zylinderspektrum,
+  Schalten, Turbo, Reifen, Quietschen, Fahrtwind, vier Fremdfahrzeuge mit Panorama und Doppler, Stadt, Vögel,
+  Wasser, Dämpfung im Auto, Ereignisklänge und Schritte. Mischregeln (`enginevoice`, `soundscape`, `ambience`)
+  rein und getestet in `berlin-sim`. Taste M, `--stumm`, `--audio-wav` für eine gemessene Offline-Fahrt.
 
 - Filmische Stadtgrafik mit einer gemeinsamen Material-/Lichtpalette, feineren Boden- und Fassadentexturen,
   detaillierteren Baumkronen, animierten Wasserreflexen, nassen Lichtspiegelungen und dezentem Nacht-Bloom.

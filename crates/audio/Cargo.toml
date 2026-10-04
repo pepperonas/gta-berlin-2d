@@ -1,0 +1,10 @@
+[package]
+name = "berlin-audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+berlin-sim = { path = "../sim" }
+cpal = "0.18"

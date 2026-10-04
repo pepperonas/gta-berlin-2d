@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-## Native migration (phase 4)
+## Native migration (phase 5)
 
 The Rust 2024 workspace is now the native migration target. `cargo run` starts
 the playable `crates/game` (`--free` = old map viewer); `crates/engine` owns winit/wgpu, camera and pacing
@@ -16,7 +16,11 @@ stations, life spots, emergency services, HUD text, audio. Phase 4 lighting: `si
 (pure, tested), `map_loader` emits per-building `ShadowVertex` wall quads, `engine/lightpass.rs` + `lighting.wgsl`
 render a shadow mask (vertex extrusion along the sun, tree crowns from the atlas) and a half-res lightmap, then
 apply both with a fullscreen triangle at depth 0.5 (ground/cars behind, roofs/crowns in front get ambient only).
-Never name a WGSL identifier `half` (Naga passes it to Metal, where it is a type);
+Never name a WGSL identifier `half` (Naga passes it to Metal, where it is a type). Phase 5 audio: pure mixing
+rules in `sim/{enginevoice,soundscape,ambience}.rs`; `crates/audio` (`berlin-audio`) has Web-Audio-like DSP
+(`dsp.rs`), the synth graph of `audio.js` (`synth.rs`, driven by a per-step `Frame`), cpal output and WAV writer
+(`output.rs`); `game/sound.rs` builds frames. `cargo run --release -- --audio-wav x.wav` renders a measured test
+drive offline;
 `crates/map_loader` decodes v3 tiles, geometry/projection/codes, roof styles and
 colors, and tessellates meshes on a dedicated streaming thread. It owns shared
 features by global IDs and releases far tiles (maximum 64 resident). The engine
