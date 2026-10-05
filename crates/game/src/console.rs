@@ -301,12 +301,14 @@ pub enum Action {
     Bars(Option<String>),
 }
 
-/// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`); gehören dem Spiel, nicht der Welt.
+/// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`); gehören dem Spiel, nicht der Welt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Debug {
     pub fps: bool,
     pub levels: bool,
     pub silhouettes: bool,
+    /// Fahrphysik-Anzeige mit Live-Reglern (wie F3 im Entwickler-Build)
+    pub physics: bool,
 }
 impl Default for Debug {
     fn default() -> Self {
@@ -314,6 +316,7 @@ impl Default for Debug {
             fps: false,
             levels: false,
             silhouettes: true,
+            physics: false,
         }
     }
 }
@@ -561,6 +564,13 @@ pub const COMMANDS: &[Command] = &[
         help: "eigenes Auto reparieren",
         cheat: true,
         args: &[],
+    },
+    Command {
+        name: "physik",
+        aliases: &["fahrphysik", "physikanzeige", "physdebug", "f3"],
+        help: "Fahrphysik-Anzeige mit Live-Reglern an/aus (Bild auf/ab, Komma/Punkt, F6)",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
     },
     Command {
         name: "fps",
@@ -1262,6 +1272,16 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             ctx.actions.push(Action::Stats);
             ok("Statistik")
         }
+        "physik" => match on_off(a0, ctx.debug.physics) {
+            Some(on) => {
+                ctx.debug.physics = on;
+                ok(format!(
+                    "Fahrphysik-Anzeige {}",
+                    if on { "an" } else { "aus" }
+                ))
+            }
+            None => err("physik an|aus"),
+        },
         "fps" => match on_off(a0, ctx.debug.fps) {
             Some(on) => {
                 ctx.debug.fps = on;
@@ -2022,6 +2042,15 @@ mod tests {
             )
         );
         assert_eq!(dbg("fps vielleicht", d0), (false, d0));
+        assert!(!d0.physics, "Fahrphysik-Anzeige startet aus");
+        let ph = Debug {
+            physics: true,
+            ..d0
+        };
+        assert_eq!(dbg("physik", d0), (true, ph), "ohne Wert umschalten");
+        assert_eq!(dbg("physik", ph), (true, d0));
+        assert_eq!(dbg("fahrphysik an", d0), (true, ph), "Alias");
+        assert_eq!(dbg("physik aus", ph), (true, d0));
         // Konsole: Enter übernimmt erst den Vorschlag, das zweite führt aus
         let mut con = Console::default();
         con.open(&places);

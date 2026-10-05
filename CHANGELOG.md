@@ -244,6 +244,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Fahrphysik-Anzeige auch über die Befehlszeile (Enter): `physik` schaltet sie um, `physik an` / `physik aus`
+  setzen sie (Kurzformen `fahrphysik`, `f3`). Das geht in jedem Build, F3 bleibt dem Entwickler-Build vorbehalten.
+
 - Titelbild (native Fassung): unten links steht jetzt „Entwickelt von Martin Pfeffer · celox.io ·
   github.com/pepperonas“; der GitHub-Teil ist ein Link (Zeiger darauf hebt ihn gelb hervor, Klick öffnet das Profil
   im Browser). Die OpenStreetMap-Quellenangabe steht weiter auf der großen Karte und unter „Über das Spiel“.

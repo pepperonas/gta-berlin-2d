@@ -783,10 +783,14 @@ impl Play {
             world: &mut self.world,
             places: &self.places,
             actions: Vec::new(),
-            debug: self.debug,
+            debug: crate::console::Debug {
+                physics: self.physdebug.open,
+                ..self.debug
+            },
         };
         let r = crate::console::execute(line, &mut ctx);
         self.debug = ctx.debug;
+        self.physdebug.open = ctx.debug.physics;
         let actions = std::mem::take(&mut ctx.actions);
         let now = self.world.time;
         self.console_actions(actions, now);

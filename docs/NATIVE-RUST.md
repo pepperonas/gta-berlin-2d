@@ -1730,7 +1730,8 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
   `--physik-anzeige`): Messwerte je Rad (Last, Schlupf, Haftung, Untergrund), Schwimmwinkel, Gierrate, Assistenten,
   Drift; Bild auf/ab wählt einen Regler, Komma/Punkt verstellt ihn (alle `feel.json`-Werte und die wichtigsten
   Fahrzeugdaten, live über `vehdata::set_game_feel` bzw. `Car::tuned` – die Daten selbst bleiben unverändert),
-  F6 gibt die Abweichungen als JSON in der Konsole aus. Alle Tasten sind belegbar (`DebugToggle` …).
+  F6 gibt die Abweichungen als JSON in der Konsole aus. Alle Tasten sind belegbar (`DebugToggle` …). In jedem
+  Build schaltet der Konsolenbefehl `physik [an|aus]` sie (`console::Debug.physics` ↔ `PhysDebug.open`).
 - **KI-Verkehr:** das Arcade-Modell der KI liest Höchsttempo, Zugkraft, Leistung, Bremse und Seitenführung aus den
   Fahrzeugdaten (`car::Limits`); das Kurventempo folgt der Krümmung des Weges (`CORNER_G` 0,45 g), lange Fahrzeuge
   holen vor dem Abbiegen aus (`LONG_VEHICLE`, `SWING_MAX`). **Physik-LOD:** KI im Umkreis von `AI_FULL_RADIUS`
