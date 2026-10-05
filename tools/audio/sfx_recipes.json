@@ -32,6 +32,22 @@
       "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
       "lizenz": "CC BY 3.0",
       "urheber": "congusbongus, nach „Water Footsteps“ von EminYILDIRIM (freesound.org/s/608663) und „footstep-concrete.wav“ von swuing (freesound.org/s/38873)"
+    },
+    "kenney_interface": {
+      "titel": "Kenney – Interface Sounds",
+      "url": "https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip",
+      "seite": "https://kenney.nl/assets/interface-sounds",
+      "sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "kenney_jingles": {
+      "titel": "Kenney – Music Jingles",
+      "url": "https://kenney.nl/media/pages/assets/music-jingles/f37e530b9e-1677590399/kenney_music-jingles.zip",
+      "seite": "https://kenney.nl/assets/music-jingles",
+      "sha256": "b729ba57959bd58793d2c5cafa348aaf2655d354f3da35ec4729e03ec77197b8",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
     }
   },
   "klaenge": {
@@ -111,8 +127,23 @@
       "zweck": "Nachladen beginnt: Magazin raus",
       "quelle": "kenney_rpg",
       "varianten": [
-        [{"datei": "*/metalClick.ogg", "at": 0}],
-        [{"datei": "*/metalClick.ogg", "at": 0}, {"datei": "*/beltHandle1.ogg", "at": 0.06, "db": -8}]
+        [
+          {
+            "datei": "*/metalClick.ogg",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "datei": "*/metalClick.ogg",
+            "at": 0
+          },
+          {
+            "datei": "*/beltHandle1.ogg",
+            "at": 0.06,
+            "db": -8
+          }
+        ]
       ],
       "laenge_s": 0.4,
       "fade_s": 0.08,
@@ -121,7 +152,14 @@
     "reloaded": {
       "zweck": "Nachladen fertig: Magazin rastet ein",
       "quelle": "kenney_rpg",
-      "varianten": [[{"datei": "*/metalLatch.ogg", "at": 0}]],
+      "varianten": [
+        [
+          {
+            "datei": "*/metalLatch.ogg",
+            "at": 0
+          }
+        ]
+      ],
       "laenge_s": 0.2,
       "fade_s": 0.05,
       "hochpass_hz": 150
@@ -129,10 +167,77 @@
     "weapon_switch": {
       "zweck": "Waffe wechseln (Holster, Gürtel)",
       "quelle": "kenney_rpg",
-      "dateien": ["*/beltHandle1.ogg", "*/clothBelt2.ogg", "*/handleSmallLeather.ogg"],
+      "dateien": [
+        "*/beltHandle1.ogg",
+        "*/clothBelt2.ogg",
+        "*/handleSmallLeather.ogg"
+      ],
       "laenge_s": 0.35,
       "fade_s": 0.1,
       "hochpass_hz": 150
+    },
+    "ui": {
+      "zweck": "Menü: Auswahl, Bestätigen",
+      "quelle": "kenney_interface",
+      "dateien": [
+        "*/click_002.ogg",
+        "*/click_003.ogg",
+        "*/select_001.ogg"
+      ],
+      "laenge_s": 0.08,
+      "fade_s": 0.02,
+      "hochpass_hz": 100
+    },
+    "tick": {
+      "zweck": "Countdown-Tick",
+      "quelle": "kenney_interface",
+      "dateien": [
+        "*/tick_002.ogg"
+      ],
+      "laenge_s": 0.05,
+      "fade_s": 0.01,
+      "hochpass_hz": 100
+    },
+    "pickup": {
+      "zweck": "Einsammeln, Trinkgeld, Wiederbelebung",
+      "quelle": "kenney_jingles",
+      "dateien": [
+        "*/jingles_SAX08.ogg"
+      ],
+      "laenge_s": 0.6,
+      "fade_s": 0.15
+    },
+    "mission_start": {
+      "zweck": "Auftrag beginnt",
+      "quelle": "kenney_jingles",
+      "dateien": [
+        "*/jingles_SAX04.ogg",
+        "*/jingles_SAX06.ogg"
+      ],
+      "laenge_s": 0.8,
+      "fade_s": 0.2
+    },
+    "mission_success": {
+      "zweck": "Auftrag geschafft",
+      "quelle": "kenney_jingles",
+      "dateien": [
+        "*/jingles_SAX15.ogg",
+        "*/jingles_SAX10.ogg",
+        "*/jingles_SAX16.ogg"
+      ],
+      "laenge_s": 1.2,
+      "fade_s": 0.3
+    },
+    "mission_fail": {
+      "zweck": "Auftrag gescheitert, K. o.",
+      "quelle": "kenney_jingles",
+      "dateien": [
+        "*/jingles_SAX07.ogg",
+        "*/jingles_SAX05.ogg",
+        "*/jingles_SAX03.ogg"
+      ],
+      "laenge_s": 2.0,
+      "fade_s": 0.3
     }
   }
 }

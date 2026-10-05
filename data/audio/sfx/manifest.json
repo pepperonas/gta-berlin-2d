@@ -24,6 +24,39 @@
       ],
       "quelle": "kenney_impact"
     },
+    "mission_fail": {
+      "zweck": "Auftrag gescheitert, K. o.",
+      "dateien": [
+        "mission_fail_1.wav",
+        "mission_fail_2.wav",
+        "mission_fail_3.wav"
+      ],
+      "quelle": "kenney_jingles"
+    },
+    "mission_start": {
+      "zweck": "Auftrag beginnt",
+      "dateien": [
+        "mission_start_1.wav",
+        "mission_start_2.wav"
+      ],
+      "quelle": "kenney_jingles"
+    },
+    "mission_success": {
+      "zweck": "Auftrag geschafft",
+      "dateien": [
+        "mission_success_1.wav",
+        "mission_success_2.wav",
+        "mission_success_3.wav"
+      ],
+      "quelle": "kenney_jingles"
+    },
+    "pickup": {
+      "zweck": "Einsammeln, Trinkgeld, Wiederbelebung",
+      "dateien": [
+        "pickup_1.wav"
+      ],
+      "quelle": "kenney_jingles"
+    },
     "punch": {
       "zweck": "Treffer mit Faust oder Schläger, eigene Treffer",
       "dateien": [
@@ -119,6 +152,22 @@
       ],
       "quelle": "kenney_impact"
     },
+    "tick": {
+      "zweck": "Countdown-Tick",
+      "dateien": [
+        "tick_1.wav"
+      ],
+      "quelle": "kenney_interface"
+    },
+    "ui": {
+      "zweck": "Menü: Auswahl, Bestätigen",
+      "dateien": [
+        "ui_1.wav",
+        "ui_2.wav",
+        "ui_3.wav"
+      ],
+      "quelle": "kenney_interface"
+    },
     "weapon_switch": {
       "zweck": "Waffe wechseln (Holster, Gürtel)",
       "dateien": [
@@ -153,6 +202,18 @@
       "seite": "https://opengameart.org/content/footsteps-on-different-surfaces",
       "lizenz": "CC BY 3.0",
       "urheber": "congusbongus, nach „Water Footsteps“ von EminYILDIRIM (freesound.org/s/608663) und „footstep-concrete.wav“ von swuing (freesound.org/s/38873)"
+    },
+    "kenney_interface": {
+      "titel": "Kenney – Interface Sounds",
+      "seite": "https://kenney.nl/assets/interface-sounds",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "kenney_jingles": {
+      "titel": "Kenney – Music Jingles",
+      "seite": "https://kenney.nl/assets/music-jingles",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
     }
   }
 }

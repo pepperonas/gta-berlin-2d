@@ -275,3 +275,14 @@ Synthese-Arm setzen, Zielwert in den Pegel-Test aufnehmen.
 | Ausholen | „Swishes Sound Pack“ von artisticdude | CC0 |
 | Faustschlag / Treffer, Blech, Einschlag, Aufprall | Kenney „Impact Sounds“ (impactPunch_medium, impactMetal_heavy, impactMining, impactSoft_heavy) | CC0 |
 | Nachladen, eingerastet, Waffenwechsel | Kenney „RPG Audio“ (metalClick, metalLatch, beltHandle, clothBelt, handleSmallLeather) | CC0 |
+
+### Phase 6: Menü und Aufträge (vorgezogen)
+
+| Klang | Quelle | Lizenz |
+|---|---|---|
+| Menü-Klick, Countdown-Tick | Kenney „Interface Sounds“ (click_002/003, select_001, tick_002) | CC0 |
+| Missionsstart, -erfolg, -fehlschlag, Einsammeln | Kenney „Music Jingles“, Saxofon-Reihe | CC0 |
+
+Die Jingles sind nach Tonhöhenverlauf und Tongeschlecht ausgewählt (pyin + Chroma-Abgleich mit Dur/Moll-Profilen):
+Erfolg = aufsteigend in Dur (SAX15/10/16), Fehlschlag = absteigend in Moll (SAX07/05/03), Start = kurz
+aufsteigend in Moll (SAX04/06), Einsammeln = kurz aufsteigend in Dur (SAX08). Keine Tonhöhenstreuung bei Jingles.

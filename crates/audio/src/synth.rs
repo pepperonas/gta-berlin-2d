@@ -29,7 +29,8 @@ pub const GUN_CHOKE_TC: f32 = 0.03;
 pub const GUN_CHOKE_AGE: f64 = 0.03;
 /// Klang-Samples (tools/audio/build_sfx.py): Name, Pegel, Tonhöhenstreuung (±), Entfernungs-Tiefpass.
 /// Pegel eingemessen auf Zielwerte (Test `sfx_samples_match_the_synth_loudness`): Schritte so laut wie der frühere
-/// harte Synthese-Schritt (Gras leiser – die Synthese war dort fast unhörbar), alles andere 20 % über der Synthese.
+/// harte Synthese-Schritt (Gras leiser – die Synthese war dort fast unhörbar), alles andere 20 % über der Synthese; der
+/// Fehlschlag-Jingle so laut wie der Erfolg (die Synthese war dort leiser).
 #[derive(Debug, Clone, Copy)]
 pub struct SfxSpec {
     pub name: &'static str,
@@ -57,6 +58,12 @@ pub const HIT: SfxSpec = spec("hit", 0.217, 0.06, true);
 pub const RELOAD: SfxSpec = spec("reload", 0.205, 0.03, false);
 pub const RELOADED: SfxSpec = spec("reloaded", 0.135, 0.03, false);
 pub const WEAPON_SWITCH: SfxSpec = spec("weapon_switch", 0.154, 0.05, false);
+pub const UI: SfxSpec = spec("ui", 0.41, 0.02, false);
+pub const TICK: SfxSpec = spec("tick", 0.386, 0., false);
+pub const PICKUP: SfxSpec = spec("pickup", 0.123, 0., false);
+pub const MISSION_START: SfxSpec = spec("mission_start", 0.132, 0., false);
+pub const MISSION_SUCCESS: SfxSpec = spec("mission_success", 0.155, 0., false);
+pub const MISSION_FAIL: SfxSpec = spec("mission_fail", 0.108, 0., false);
 /// Choke-Gruppe für Samples ohne Choke
 const NO_CHOKE: u8 = u8::MAX;
 const BLOCK: usize = 32;
@@ -1190,6 +1197,7 @@ impl Synth {
                 self.burst(0.08, 1500., 0.25, Bandpass, 0.7, 0., 0., M);
                 self.tone(120., 0.08, Sine, 0.2, 0.05, 0., 0., M);
             }
+            Sfx::Ui if self.sample(UI, 1., M) => {}
             Sfx::Ui => self.tone(880., 0.09, Triangle, 0.12, 0., 0., 0., M),
             // Waffen (audio.js): Knall aus gefiltertem Rauschen plus tiefer Schlag
             // Waffen: echte Aufnahmen (Free Firearm Sound Library, CC0) – Variante und Tonhöhe gestreut, ferne
@@ -1295,17 +1303,21 @@ impl Synth {
             Sfx::Reloaded => self.tone(1800., 0.04, Sine, 0.07, 0., 0., 0., M),
             Sfx::WeaponSwitch if self.sample(WEAPON_SWITCH, 1., M) => {}
             Sfx::WeaponSwitch => self.tone(1100., 0.04, Triangle, 0.07, 0., 0., 0., M),
+            Sfx::Tick if self.sample(TICK, 1., M) => {}
             Sfx::Tick => self.tone(1200., 0.05, Square, 0.06, 0., 0., 0., M),
+            Sfx::Pickup if self.sample(PICKUP, 1., M) => {}
             Sfx::Pickup => {
                 for (i, f) in [523., 659., 784.].into_iter().enumerate() {
                     self.tone(f, 0.18, Triangle, 0.14, i as f32 * 0.09, 0., 0., M);
                 }
             }
+            Sfx::MissionStart if self.sample(MISSION_START, 1., M) => {}
             Sfx::MissionStart => {
                 for (i, f) in [392., 523.].into_iter().enumerate() {
                     self.tone(f, 0.2, Triangle, 0.14, i as f32 * 0.12, 0., 0., M);
                 }
             }
+            Sfx::MissionSuccess if self.sample(MISSION_SUCCESS, 1., M) => {}
             Sfx::MissionSuccess => {
                 for (i, f) in [523., 659., 784., 1047., 784., 1047.]
                     .into_iter()
@@ -1314,6 +1326,7 @@ impl Synth {
                     self.tone(f, 0.22, Square, 0.09, i as f32 * 0.11, 0., 0., M);
                 }
             }
+            Sfx::MissionFail if self.sample(MISSION_FAIL, 1., M) => {}
             Sfx::MissionFail => {
                 for (i, f) in [392., 330., 262., 196.].into_iter().enumerate() {
                     self.tone(f, 0.3, Saw, 0.08, i as f32 * 0.18, 0., 0., M);
@@ -1664,6 +1677,12 @@ mod tests {
             (Sfx::Reload, "reload", 0.01),
             (Sfx::Reloaded, "reloaded", 0.011),
             (Sfx::WeaponSwitch, "weapon_switch", 0.009),
+            (Sfx::Ui, "ui", 0.0193),
+            (Sfx::Tick, "tick", 0.0139),
+            (Sfx::Pickup, "pickup", 0.0289),
+            (Sfx::MissionStart, "mission_start", 0.03),
+            (Sfx::MissionSuccess, "mission_success", 0.035),
+            (Sfx::MissionFail, "mission_fail", 0.03),
         ];
         let mut bad = Vec::new();
         for (sfx, name, target) in cases {

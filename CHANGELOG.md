@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Menü, Countdown und Aufträge klingen nach echten Instrumenten statt Rechteckwellen – Klicks und
+  Ticks aus Kenneys „Interface Sounds“, Saxofon-Jingles für Auftragsbeginn, Erfolg, Fehlschlag und Einsammeln
+  (Kenney „Music Jingles“, CC0).
+
 - Native Fassung: Schritte, Nahkampf und Waffenhandhabung klingen nach echten Aufnahmen (CC0/CC BY: Kenney,
   OpenGameArt) statt nach Synthese – Schritte auf Pflaster, Gras, Schnee und nasser Straße, Ausholen, Faustschlag,
   Schlag auf Blech, Kugeleinschlag, Aufprall, Nachladen und Waffenwechsel, je mit mehreren Varianten und leicht
