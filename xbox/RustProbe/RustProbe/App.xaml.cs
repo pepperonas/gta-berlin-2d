@@ -10,6 +10,10 @@ namespace RustProbe
         public App()
         {
             InitializeComponent();
+            // Absturz der Hülle selbst (vor oder neben der Probe) nach LocalState\shell-error.txt
+            UnhandledException += (s, e) => System.IO.File.WriteAllText(
+                System.IO.Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "shell-error.txt"),
+                e.Exception.ToString());
             RequiresPointerMode = ApplicationRequiresPointerMode.WhenRequested;
         }
 

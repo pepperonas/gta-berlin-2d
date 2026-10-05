@@ -22,7 +22,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   DX12-Adapter da ist und ob die Oberfläche entsteht, und misst danach eine dem Spiel nachgebildete Last (8 Schichten in
   2560 × 1440, mit/ohne 4× MSAA). Dieselbe Last läuft auf dem Mac (`cargo run --release -p berlin-probe --example mac`;
   M1 Pro 4,5–5,3 ms) – das Verhältnis überträgt die Spielmessungen auf die Konsole. Bauen in der Windows-VM:
-  `xbox\RustProbe\build-probe.ps1`, Anleitung in `xbox/RustProbe/README.md`. Noch nicht auf Windows gebaut.
+  `xbox\RustProbe\build-probe.ps1`, Anleitung in `xbox/RustProbe/README.md`. In der Windows-VM gebaut und gestartet,
+  noch nicht auf der Xbox.
 - Grafik-Überarbeitung, Phase 4 (native Fassung): **Dächer und Fassaden aus Texturen** (CC0, ambientCG) –
   Ziegel, Schiefer, Blech, Kiesdach; Putz, Klinker und Beton (Plattenbau mit Plattenfugen). Welche Fassade ein Haus
   bekommt, folgt dem Wandmaterial aus OSM bzw. dem Fassadenstil. **Fenster** haben Rahmen, steinerne Fensterbank,
@@ -425,6 +426,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Xbox-Machbarkeitsprobe: Die UWP-Hülle fragte das `SwapChainPanel` mit der WinUI-3-GUID von `ISwapChainPanelNative`
+  (`63aad0b8-…`) ab, die ein UWP-Panel mit `E_NOINTERFACE` ablehnt. Jetzt nimmt sie die UWP-GUID (`F92F19D2-…`). In der
+  Windows-VM (ARM64, Release-Build) läuft die Kette damit durch: DLLs geladen, Oberfläche angelegt, Last läuft (WARP).
+  Die Probe schreibt vor jedem heiklen Schritt einen Zwischenstand nach `probe-status.txt`, die Hülle ihre eigenen
+  Meldungen nach `shell-status.txt` und unbehandelte Ausnahmen nach `shell-error.txt`.
 - Native Fassung: Über Zäune springen klappt jetzt auch im Gehtempo und mit der Maussteuerung. Der Absprung trägt die
   Figur mit Schwung weiter (vorher landete sie im Gehtempo mitten im Zaun und wurde zurückgeschoben – 1 von 85
   Zäunen); bei Klicksteuerung springt die Leertaste Richtung Klickziel, danach läuft die Figur weiter.

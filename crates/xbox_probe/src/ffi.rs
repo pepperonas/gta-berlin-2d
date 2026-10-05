@@ -42,6 +42,16 @@ fn report(state: &State) -> String {
     }
 }
 
+/// Zwischenstand vor einem heiklen Aufruf: stürzt der Prozess darin ab, zeigt `probe-status.txt` die Stelle.
+fn checkpoint(dir: &Option<PathBuf>, steps: &[String], next: &str) {
+    if let Some(dir) = dir {
+        let _ = std::fs::write(
+            dir.join("probe-status.txt"),
+            format!("{}\nnächster Schritt: {next}", steps.join("\n")),
+        );
+    }
+}
+
 fn write_status(state: &State) {
     if let Some(dir) = &state.dir {
         let _ = std::fs::write(dir.join("probe-status.txt"), report(state));
@@ -75,8 +85,10 @@ pub unsafe extern "C" fn probe_start(
         format!("Fenster {width}×{height}"),
     ];
     for name in ["d3d12.dll", "dxgi.dll", "d3dcompiler_47.dll", "dcomp.dll"] {
+        checkpoint(&dir, &steps, &format!("DLL {name} laden"));
         steps.push(dll(name));
     }
+    checkpoint(&dir, &steps, "wgpu-Instanz (DX12) anlegen");
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::DX12,
         backend_options: wgpu::BackendOptions {
@@ -89,6 +101,7 @@ pub unsafe extern "C" fn probe_start(
         },
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
+    checkpoint(&dir, &steps, "DX12-Adapter aufzählen");
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::DX12));
     if adapters.is_empty() {
         steps.push("DX12-Adapter: KEINER".into());
@@ -100,11 +113,13 @@ pub unsafe extern "C" fn probe_start(
     let result = if panel.is_null() {
         Err(anyhow::anyhow!("kein SwapChainPanel übergeben"))
     } else {
+        checkpoint(&dir, &steps, "Oberfläche am SwapChainPanel anlegen");
         match unsafe {
             instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::SwapChainPanel(panel))
         } {
             Ok(surface) => {
                 steps.push("Oberfläche am SwapChainPanel: angelegt".into());
+                checkpoint(&dir, &steps, "Adapter, Gerät und Last aufbauen (Probe::new)");
                 Probe::new(&instance, surface, width, height, steps.clone())
             }
             Err(e) => Err(anyhow::anyhow!("Oberfläche: {e}")),
