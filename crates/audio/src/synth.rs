@@ -663,8 +663,10 @@ impl Synth {
         set(&mut e.squeal.gain, 0.05 * tv(|x| x.skid), 0.04);
         set(&mut e.sqg, 0.035 * tv(|x| x.skid), 0.04);
         if tv(|x| x.skid) > 0. {
-            set(&mut e.sq[0].freq, 960. - tv(|x| x.roll) * 180., 0.1);
-            set(&mut e.sq[1].freq, 1010. - tv(|x| x.roll) * 180., 0.1);
+            // im Drift sinkt das Quietschen mit dem Winkel zum Heulen
+            let drop = tv(|x| x.angle) * 300.;
+            set(&mut e.sq[0].freq, 960. - tv(|x| x.roll) * 180. - drop, 0.1);
+            set(&mut e.sq[1].freq, 1010. - tv(|x| x.roll) * 180. - drop, 0.1);
         }
         let r = if in_car { veh.rain.min(1.6) } else { 0. };
         set(

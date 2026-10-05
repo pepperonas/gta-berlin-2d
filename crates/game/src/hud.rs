@@ -221,6 +221,37 @@ pub fn draw(
                 false,
             );
         }
+        // Drift-Wertung oben mittig: laufend mit Multiplikator, danach kurz das Ergebnis
+        if let Some(d) = c.phys.as_ref().map(|s| &s.drift) {
+            let (cx, y) = (h.width / 2., 104.);
+            let sc = &d.score;
+            if d.phase == berlin_sim::drift::Phase::Drift {
+                let mult = if sc.mult > 1 {
+                    format!(" ×{}", sc.mult)
+                } else {
+                    String::new()
+                };
+                h.text(
+                    &format!("DRIFT {:.0}{mult}", sc.current),
+                    cx,
+                    y,
+                    22.,
+                    YELLOW,
+                    Align::Center,
+                    true,
+                );
+            } else if sc.last > 0. && d.since_end() < 2. {
+                h.text(
+                    &format!("+{:.0}", sc.last),
+                    cx,
+                    y,
+                    22.,
+                    [0.55, 0.9, 0.5, 1.],
+                    Align::Center,
+                    true,
+                );
+            }
+        }
         h.ellipse(cx, cy, rad * 1.3, rad * 1.3, [0., 0., 0., 0.32]);
         let (a0, span) = (PI * 0.75, PI * 1.5);
         let kmh = (c.speed() * 0.36).round();

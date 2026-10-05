@@ -92,6 +92,8 @@ pub struct DynState {
     pub lean: f64,
     pub drift_t: f64,
     pub drift_dir: f64,
+    /// Arcade-Drift: Driftwinkel (rad, Betrag; 0 außerhalb eines Drifts)
+    pub drift_angle: f64,
     pub handbrake_was: bool,
 }
 /// Bewegungszustand in px und rad.

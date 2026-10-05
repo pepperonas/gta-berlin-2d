@@ -1149,6 +1149,33 @@ impl World {
     /// Aufnahmen (`--fahrzeugschau`): je ein Fahrzeug jeder Art auf der nächsten Fahrspur hintereinander, stehend,
     /// Paketwagen mit Warnblinker, Müllauto bei der Arbeit, Einsatzfahrzeuge mit Blaulicht.
     /// Fahrzeug neben der Figur abstellen (Befehlszeile `auto`): Art aus `carmodels::KINDS`, optional ein Pkw-Modell.
+    /// Vorführung (`--drift-demo`): das Spielerauto mittig auf die nächste Spur stellen, in Spurrichtung mit
+    /// `speed` px/s anschieben und andere Autos im Umkreis entfernen. Liefert, ob es geklappt hat.
+    pub fn demo_launch(&mut self, speed: f64) -> bool {
+        let Some(i) = self.player.in_car.and_then(|id| self.car_index(id)) else {
+            return false;
+        };
+        let (x, y, a) = (self.cars[i].x, self.cars[i].y, self.cars[i].angle);
+        let Some(hit) = self.lanes.nearest_lane(x, y, Some(a), 300., false) else {
+            return false;
+        };
+        let Some(l) = self.lanes.lane(hit.lane) else {
+            return false;
+        };
+        let (p, q) = (l.pts[hit.i], l.pts[(hit.i + 1).min(l.pts.len() - 1)]);
+        let ang = (q.1 - p.1).atan2(q.0 - p.0);
+        let id = self.cars[i].id;
+        let c = &mut self.cars[i];
+        (c.x, c.y, c.angle) = (hit.x, hit.y, ang);
+        (c.vx, c.vy) = (ang.cos() * speed, ang.sin() * speed);
+        if let Some(s) = c.phys.as_mut() {
+            s.yaw = -ang;
+        }
+        self.cars
+            .retain(|c| c.id == id || (c.x - hit.x).hypot(c.y - hit.y) > 700.);
+        true
+    }
+
     /// Fahrzeug aus den Fahrzeugdaten (z. B. `sattelzug_40t`) neben der Spielfigur abstellen: Art nach Klasse,
     /// Maße aus den Daten (beim Gespann nur das Zugfahrzeug; der Anhänger hängt am Gelenk).
     pub fn spawn_data_vehicle(&mut self, id: &str) -> Option<u32> {
@@ -2893,6 +2920,8 @@ impl World {
             update_service(&mut self.cars[i], ctx.lanes, ctx.city, ctx.rng, dt);
             drive_ai(&mut self.cars[i], &mut ctx, dt);
         }
+        // Tempo des Spielerautos vor den Zusammenstößen (Drift-Wertung)
+        let mut pre_hit: Option<(u32, f64, f64)> = None;
         for i in 0..self.cars.len() {
             let c = &mut self.cars[i];
             if c.driver.is_none() && !c.wrecked && Some(i) != pc {
@@ -3010,6 +3039,9 @@ impl World {
                 });
             }
             let c = &mut self.cars[i];
+            if c.driver == Some(crate::car::Driver::Player) {
+                pre_hit = Some((c.id, c.vx, c.vy));
+            }
             collide_car_world(c, &mut self.city, &mut self.knocked, &mut self.events);
         }
         // Auto gegen Auto: nur Nachbarn, Paare in aufsteigender Folge
@@ -3035,6 +3067,21 @@ impl World {
             }
         }
         if let Some(i) = self.player.in_car.and_then(|id| self.car_index(id)) {
+            // ein Zusammenstoß verwirft den laufenden Drift (Wertung) – auch ein streifender ohne Schaden, sobald er
+            // spürbar Tempo kostet
+            let id = self.cars[i].id;
+            let jolt = pre_hit.filter(|p| p.0 == id).is_some_and(|(_, vx, vy)| {
+                (self.cars[i].vx - vx).hypot(self.cars[i].vy - vy) > DRIFT_JOLT
+            });
+            if (jolt
+                || self
+                    .events
+                    .iter()
+                    .any(|e| matches!(e, Event::Crash { car, .. } if *car == id)))
+                && let Some(s) = self.cars[i].phys.as_mut()
+            {
+                s.drift.crash();
+            }
             let c = &self.cars[i];
             (self.player.x, self.player.y, self.player.angle) = (c.x, c.y, c.angle);
         }
@@ -3414,8 +3461,18 @@ impl World {
                 1. - (c.speed() / 330.).clamp(0., 1.) * 0.28
             };
         }
-        self.camera.x = damp(self.camera.x, tx, 5., dt);
-        self.camera.y = damp(self.camera.y, ty, 5., dt);
+        // im Drift zieht die Kamera leicht nach
+        let follow = if self
+            .player_car()
+            .and_then(|c| c.phys.as_ref())
+            .is_some_and(|s| s.drift.active())
+        {
+            3.2
+        } else {
+            5.
+        };
+        self.camera.x = damp(self.camera.x, tx, follow, dt);
+        self.camera.y = damp(self.camera.y, ty, follow, dt);
         self.camera.zoom = damp(self.camera.zoom, zoom, 2., dt);
     }
 
@@ -3665,6 +3722,9 @@ pub fn groove_risk(heading: f64, track: f64, wet: f64) -> f64 {
         0.
     }
 }
+
+/// Geschwindigkeitsänderung durch einen Zusammenstoß (px/s), ab der ein laufender Drift verworfen wird
+pub const DRIFT_JOLT: f64 = 50.;
 
 /// Fahrzeugart im Spiel für einen Datensatz (Größe, Stimme, Spurwahl der Art).
 pub fn data_kind(v: &crate::vehdata::Vehicle) -> &'static str {

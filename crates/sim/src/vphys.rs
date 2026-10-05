@@ -244,6 +244,9 @@ pub struct State {
     /// vom Anhänger positiv); Sattelzug eingeknickt
     pub art: f64,
     pub jackknifed: bool,
+    /// Arcade-Drift-Schicht (Phase 7) und der tatsächlich gefahrene Lenkwinkel vorn (mit Gegenlenken, rad)
+    pub drift: crate::drift::Drift,
+    pub delta_eff: f64,
     /// Zweirad: Schräglage (rad, positiv = nach links), Nickwinkel (rad, Wheelie positiv, Stoppie negativ),
     /// gestürzt (Ursache), Erschöpfung vom Sprinten (0 frisch … 1 leer), Schiene schon geprüft
     pub lean: f64,
@@ -565,7 +568,53 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let back = target.abs() < s.delta.abs() && target.signum() == s.delta.signum() || target == 0.;
     let step_max = rate * if back { 2. } else { 1. } * dt;
     s.delta += (target - s.delta).clamp(-step_max, step_max);
-    let delta = s.delta;
+    // Drift-Schicht: Zustand weiterschalten (Reserve und Querbeschleunigung aus dem vorigen Schritt)
+    let esp_pre = esp_mode(v, inp);
+    let dout = if feel.drift_layer && !v.two_wheel && esp_pre != Esp::Full && s.vx > 0. {
+        let rear_g = env.axle(1, Ground::grip);
+        let ctx = crate::drift::Ctx {
+            speed,
+            beta: s.beta(),
+            r: s.r,
+            // (bei Schritttempo überschätzt die Kraftbilanz, beim Rutschen v·r – wie beim Kippen)
+            ay: s.ay_f.signum() * s.ay_f.abs().min(s.ay_c.abs()),
+            throttle: inp.throttle,
+            brake: inp.brake,
+            steer: inp.steer,
+            handbrake: inp.handbrake,
+            drive: match v.drive {
+                Drive::Fwd => crate::drift::Drive::Front,
+                Drive::Rwd => crate::drift::Drive::Rear,
+                Drive::Awd => crate::drift::Drive::All,
+            },
+            // Reserve = die Hinterräder drehen durch; eine eingreifende Antriebsschlupfregelung nimmt sie weg
+            reserve: s.spin[1],
+            loose: rear_g < 0.85 || env.axle(1, |g| g.water_mm) > 0.5,
+            ice: rear_g < 0.4,
+            ability: v.drift.ability,
+            max_angle: v.drift.max_angle,
+            rear_grip: v.drift.rear_grip,
+            level: feel.drift_assist,
+        };
+        s.drift.update(&ctx, dt)
+    } else {
+        s.drift.off();
+        crate::drift::Out {
+            rear_grip: 1.,
+            ..Default::default()
+        }
+    };
+    // Gegenlenken: die Vorderräder stellen sich in Fahrtrichtung (Schräglauf vorn null), die Spielerlenkung
+    // krümmt die Bahn obendrauf
+    let delta = if dout.countersteer > 0. {
+        let (a0, _) = v.axle_distances();
+        let along = (s.vy + a0 * s.r).atan2(speed.max(0.5));
+        let lock = v.steering.delta_max * 1.2;
+        (s.delta + along * dout.countersteer).clamp(-lock, lock)
+    } else {
+        s.delta
+    };
+    s.delta_eff = delta;
     // Hinterachslenkung: langsam gegenläufig (wendiger), schnell gleichläufig (stabiler)
     s.delta_r = if v.steering.rear {
         let k = REAR_STEER_LOW - (REAR_STEER_LOW + REAR_STEER_HIGH) * smooth(10., 19., speed);
@@ -575,7 +624,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     };
     let delta_r = s.delta_r;
     let esp = esp_mode(v, inp);
-    let tcs = v.tcs && inp.esp != Some(Esp::Off);
+    let tcs = v.tcs && inp.esp != Some(Esp::Off) && !dout.aids_off;
     let abs = v.brake.abs && !inp.no_abs;
     // Bremsdruck mit Aufbauzeit
     let bt = v.brake.build.max(0.02);
@@ -660,6 +709,8 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         cap_lat[i] = cap_w[i * 2] + cap_w[i * 2 + 1];
     }
     let cap_long = [cap_lat[0] * v.tire.mu_long, cap_lat[1] * v.tire.mu_long];
+    // Drift: nur die Seitenhaftung hinten sinkt, Antrieb und Bremse behalten ihre Haftung
+    cap_lat[1] *= dout.rear_grip;
     // Antrieb, Schalten
     shift(v, s, inp, speed, dt);
     let mut f_drive = drive_force(v, s, inp, speed, dt);
@@ -853,7 +904,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let (sd, cd) = delta.sin_cos();
     let (sr, cr_) = delta_r.sin_cos();
     let mut fxb = fx[0] * cd - fy[0] * sd + fx[1] * cr_ - fy[1] * sr - f_drag - f_roll;
-    let fyb = fx[0] * sd + fy[0] * cd + fx[1] * sr + fy[1] * cr_;
+    let mut fyb = fx[0] * sd + fy[0] * cd + fx[1] * sr + fy[1] * cr_;
     let mut mz = a * (fx[0] * sd + fy[0] * cd) - b * (fx[1] * sr + fy[1] * cr_) + mz_split;
     // Soll-Gierrate (ESP, Lenk-Assist, Untersteuer-Anzeige)
     // (Querhaftung, die neben der aktuellen Längsbeschleunigung übrig bleibt – das misst ein echtes ESP über den
@@ -871,7 +922,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     // Abweichung, Verzögerung durch die einseitige Bremse) und nimmt Gas weg
     s.esp_active = false;
     // (ESP braucht das ABS-Steuergerät: ohne ABS kein ESP)
-    if esp != Esp::Off && abs && speed > 5. && v.track > 0. {
+    if esp != Esp::Off && abs && speed > 5. && v.track > 0. && !dout.aids_off {
         let k = if esp == Esp::Full { 0 } else { 1 };
         let err = s.r - r_ref;
         let beta = s.beta();
@@ -927,8 +978,23 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
             mz += (b + hc.e) * f * s.art.sin();
         }
     }
+    // Drift-Assist: Giermoment zum Zielwinkel; Tempoverlust auf 0,03–0,08 g begrenzt (nicht beim Bremsen)
+    mz += dout.yaw_acc * iz;
+    if dout.max_loss > 0. && inp.brake < 0.1 {
+        let (sb, cb) = s.vy.atan2(s.vx.max(0.5)).sin_cos();
+        let a_v = (fxb * cb + fyb * sb) / m;
+        if a_v < -dout.max_loss {
+            let f = (-dout.max_loss - a_v) * m;
+            fxb += f * cb;
+            fyb += f * sb;
+        }
+    }
     // Lenk-Assist (Spielgefühl): wer nicht gegenlenkt, dem dämpft er das Ausbrechen leicht
-    if feel.steer_assist > 0. && speed > 5. && s.beta().abs() > ASSIST_BETA && inp.steer * s.r >= 0.
+    if feel.steer_assist > 0.
+        && !dout.aids_off
+        && speed > 5.
+        && s.beta().abs() > ASSIST_BETA
+        && inp.steer * s.r >= 0.
     {
         mz -= (s.r - r_ref) * iz * feel.steer_assist * ASSIST_RATE;
     }
@@ -1762,5 +1828,78 @@ mod tests {
             4.,
         );
         assert!(s.rolled, "tip {}", s.tip);
+    }
+
+    fn drift_run(v: &Vehicle, feel: &Feel, secs_hold: f64) -> (State, f64, f64) {
+        // 60 km/h, kurz Handbremse mit Lenkung, dann Halbgas mit leichtem Lenken
+        let mut s = State {
+            vx: 60. / 3.6,
+            gear: 2,
+            ..Default::default()
+        };
+        let mut peak: f64 = 0.;
+        let tug = Input {
+            handbrake: true,
+            steer: 0.7,
+            throttle: 0.3,
+            esp: Some(Esp::Sport),
+            ..Default::default()
+        };
+        for _ in 0..(0.3 * HZ) as usize {
+            step(v, feel, &mut s, &tug, &Env::default(), STEP);
+        }
+        let hold = Input {
+            throttle: 0.6,
+            steer: 0.25,
+            esp: Some(Esp::Sport),
+            ..Default::default()
+        };
+        let mut in_drift = 0.;
+        for _ in 0..(secs_hold * HZ) as usize {
+            step(v, feel, &mut s, &hold, &Env::default(), STEP);
+            peak = peak.max(s.beta().abs());
+            if s.drift.phase == crate::drift::Phase::Drift {
+                in_drift += STEP;
+            }
+        }
+        (s, peak, in_drift)
+    }
+
+    #[test]
+    fn handbrake_starts_a_held_drift_with_the_assist() {
+        let db = db();
+        let v = db.get("muscle_modern").unwrap();
+        let feel = Feel::game();
+        let (s, peak, held) = drift_run(v, &feel, 3.);
+        assert!(
+            held > 2.,
+            "Drift gehalten {held} s, Spitze {:.0}°",
+            peak.to_degrees()
+        );
+        assert!(
+            peak < 80f64.to_radians(),
+            "kein Dreher: {:.0}°",
+            peak.to_degrees()
+        );
+        assert_ne!(s.drift.phase, crate::drift::Phase::Spin);
+        // Tempo bleibt weitgehend erhalten (Arcade)
+        let kmh = s.vx.hypot(s.vy) * 3.6;
+        assert!(kmh > 35., "{kmh} km/h");
+        assert!(s.drift.score.current > 0. || s.drift.score.total > 0.);
+    }
+
+    #[test]
+    fn the_drift_layer_stays_out_of_trucks_esp_full_and_calibration() {
+        let db = db();
+        let feel = Feel::game();
+        let truck = db.get("lkw_75t").unwrap();
+        let (s, ..) = drift_run(truck, &feel, 1.);
+        assert_eq!(s.drift.score.total + s.drift.score.current, 0.);
+        assert_eq!(s.drift.phase, crate::drift::Phase::Grip);
+        // Kalibrierung: Schicht aus
+        let v = db.get("muscle_modern").unwrap();
+        let (s, ..) = drift_run(v, &Feel::simulation(), 1.);
+        assert_eq!(s.drift.phase, crate::drift::Phase::Grip);
+        assert!(s.drift.trigger.is_none());
     }
 }

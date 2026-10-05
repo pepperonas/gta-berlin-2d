@@ -2338,3 +2338,88 @@ fn every_data_vehicle_maps_to_a_game_kind() {
         assert_eq!(berlin_sim::carmodels::kind(k).name, k, "{}", v.id);
     }
 }
+
+/// Fahrphysik Phase 7: Handbremse leitet auf der echten Karte einen Drift ein, ein Aufprall verwirft ihn.
+#[test]
+fn handbrake_drift_on_the_map_and_a_crash_voids_it() {
+    let mut w = world(8);
+    w.peds.clear();
+    w.ped_target = 0;
+    w.car_target = 0;
+    let id = w.spawn_data_vehicle("muscle_modern").expect("Platz");
+    let c = w.car(id).unwrap();
+    (w.player.x, w.player.y) = (c.x - c.angle.sin() * 25., c.y + c.angle.cos() * 25.);
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert_eq!(w.player.in_car, Some(id));
+    assert!(w.demo_launch(170.));
+    let phase = |w: &berlin_sim::world::World| {
+        w.car(id)
+            .and_then(|c| c.phys.as_ref())
+            .map(|s| s.drift.phase)
+    };
+    run(
+        &mut w,
+        18,
+        Input {
+            handbrake: true,
+            steer: 0.7,
+            throttle: 0.3,
+            ..idle()
+        },
+    );
+    let mut drifted = false;
+    for _ in 0..60 {
+        run(
+            &mut w,
+            1,
+            Input {
+                throttle: 0.6,
+                steer: 0.25,
+                ..idle()
+            },
+        );
+        if phase(&w) == Some(berlin_sim::drift::Phase::Drift) {
+            drifted = true;
+            break;
+        }
+    }
+    assert!(drifted, "Drift eingeleitet: {:?}", phase(&w));
+    run(
+        &mut w,
+        20,
+        Input {
+            throttle: 0.6,
+            steer: 0.25,
+            ..idle()
+        },
+    );
+    let s = w.car(id).unwrap().phys.as_ref().unwrap();
+    assert!(s.drift.score.current > 0., "Punkte laufen");
+    // Lkw direkt in die Bahn: der Aufprall verwirft den laufenden Drift
+    let c = w.car(id).unwrap();
+    let sp = c.speed();
+    let (ux, uy) = (c.vx / sp, c.vy / sp);
+    let (x, y, lvl) = (c.x + ux * 60., c.y + uy * 60., c.level);
+    let mut t = berlin_sim::car::Car::new(9100, x, y, uy.atan2(ux) + 1.5, 0, Role::Parked, "truck");
+    t.level = lvl;
+    w.cars.push(t);
+    run(
+        &mut w,
+        40,
+        Input {
+            throttle: 0.6,
+            steer: 0.25,
+            ..idle()
+        },
+    );
+    let s = w.car(id).unwrap().phys.as_ref().unwrap();
+    assert!(s.drift.score.crashed, "Aufprall erkannt");
+    assert_eq!(s.drift.score.total, 0., "nichts verbucht");
+}

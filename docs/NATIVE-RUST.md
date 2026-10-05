@@ -1686,3 +1686,24 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
 - **Grenzen:** KI-Gespanne fahren mit geradem Anhänger (KI bleibt beim Arcade-Modell), der Anhänger hat noch keine
   eigene Kollision, und die Zugmaschine nutzt das Lkw-Bild (kein eigenes Sattelzugmaschinen-Bild).
 
+## Fahrphysik Phase 7: Arcade-Drift (05.10.2026)
+
+- **`sim/drift.rs`** (rein): Zustände `Grip → Entry → Drift → Exit`, dazu `Spin`. Einleitung: Handbremse
+  > 0,12 s ab 25 km/h mit Lenkung · Power-Over (Hinterachse angetrieben, Gas > 80 %, > 0,5 g, ab 25 km/h, Reserve =
+  Hinterräder drehen wirklich durch – eine eingreifende Antriebsschlupfregelung zählt nicht, also praktisch ESP
+  aus) · Lastwechsel (Seitenwechsel der Lenkung binnen 0,3 s ab 50 km/h, Gas weg und wieder drauf) · Bremsdrift
+  (Bremse und Lenkung je > 50 %, ab 40 km/h). Schwellen × `1,6 − 0,8·faehigkeit`, nass/lose × 0,7. Im Drift:
+  Seitenhaftung hinten → `drift.grip_hinten`, Zielwinkel `15° + Gas·(max_winkel − 15°)`, Assist = PD auf
+  Schwimmwinkel (`KP` 30, `KD` 9) × Stufe (0 / 0,55 / 1) × Fähigkeit, Schnee/Eis sanfter mit mehr Winkel;
+  Gegenlenken stellt die Vorderräder in Fahrtrichtung, die Spielerlenkung kommt obendrauf. Ausleitung < 6° für
+  0,2 s oder < 15 km/h, Haftung über 0,25 s zurück; Dreher ab `max_winkel` + 25° (Stufe 2: 100°). Wertung
+  Winkel(°)·Tempo·dt, Kette (≤ 1,5 s Grip dazwischen) bis ×5, `crash()` verwirft.
+- **vphys:** `State.drift` + `delta_eff` (gefahrener Lenkwinkel); ESP, Antriebsschlupfregelung und Lenk-Assist
+  halten sich im Drift heraus, ESP „voll“ lässt keinen Drift zu; der Tempoverlust im Drift ist auf 0,03–0,08 g
+  begrenzt (nicht beim Bremsen). `Feel.drift_layer` (aus in `Feel::simulation` – die Kalibrierung misst ohne).
+  Querbeschleunigung für die Einleitung wie beim Kippen das Minimum aus Kraftbilanz und v·r.
+- **Spiel:** Aufprall = `Crash`-Ereignis oder Tempoänderung > `DRIFT_JOLT` (50 px/s) durch die Kollisionen →
+  `drift.crash()`; `DynState.drift_angle` → Spuren/Qualm ab 20° (`car.skid`), `Tires.angle` senkt das
+  Quietschen um bis zu 300 Hz; Kamera folgt im Drift weicher (3,2 statt 5). HUD: Wertung oben mittig.
+  `--drift-demo` stellt das Spielerauto auf die nächste freie Spur (`World::demo_launch`) und fährt einen Drift.
+

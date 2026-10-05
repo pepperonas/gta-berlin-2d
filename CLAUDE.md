@@ -50,6 +50,8 @@ data record uses vphys (`car::vphys_vehicle` maps bicycle/escooter kinds), `dyna
 Phase 6: masses from data in `collide_cars` (`Car::mass`), rollover via `vphys::tip_limit` (min of force and v·r),
 rigs via `Vehicle.hitch` + `State.art` (`car::trailer_pose` draws the trailer); data-only vehicles spawn with
 `World::spawn_data_vehicle` / console `auto <id>`.
+Phase 7: arcade drift layer `sim/drift.rs` (pure state machine, `vphys::State.drift`), off in `Feel::simulation`
+so calibration stays pure; a collision voids the running drift (`World` checks `Crash` events and `DRIFT_JOLT`).
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

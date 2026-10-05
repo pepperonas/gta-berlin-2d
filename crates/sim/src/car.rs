@@ -487,7 +487,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     // Anzeige, Klang, Vibration (Felder wie bei `dynamics`)
     let spin = |i: usize| if s.spin[i] { 1. } else { 0. };
     let d = car.dyn_state.get_or_insert_with(DynState::default);
-    d.delta = -s.delta;
+    d.delta = -s.delta_eff;
     d.ax = s.ax_f;
     d.ay = -s.ay_f;
     d.alpha_f = -s.alpha[0];
@@ -510,6 +510,16 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     } else {
         0.
     };
+    // Drift: Spuren proportional zum Winkel, Qualm ab etwa 20°
+    let angle = if s.drift.active() { s.beta().abs() } else { 0. };
+    if let Some(d) = car.dyn_state.as_mut() {
+        d.drift_angle = angle;
+    }
+    if angle > 20f64.to_radians() {
+        car.skid = car
+            .skid
+            .max((0.25 + (angle.to_degrees() - 20.) / 40. * 0.5).min(1.));
+    }
     if car.aqua > 0. {
         car.aqua = (car.aqua - dt).max(0.);
     }

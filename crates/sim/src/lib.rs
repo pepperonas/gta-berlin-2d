@@ -12,6 +12,7 @@ pub mod city;
 pub mod collision;
 pub mod combat;
 pub mod daylight;
+pub mod drift;
 pub mod dynamics;
 pub mod enginevoice;
 pub mod events;

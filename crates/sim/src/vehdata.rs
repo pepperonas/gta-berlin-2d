@@ -69,6 +69,8 @@ pub struct Feel {
     pub brake_global: f64,
     pub steer_assist: f64,
     pub drift_assist: u8,
+    /// Arcade-Drift-Schicht aktiv (im Spiel; die Kalibrierung misst ohne)
+    pub drift_layer: bool,
     pub esp_default: String,
     pub aquaplaning: f64,
     pub ice_grip_min: f64,
@@ -85,6 +87,7 @@ impl Feel {
             grip_global: 1.,
             brake_global: 1.,
             steer_assist: 0.,
+            drift_layer: false,
             ..Self::game()
         }
     }
@@ -100,7 +103,8 @@ impl Feel {
             grip_global: f("grip_global", 1.),
             brake_global: f("bremse_global", 1.),
             steer_assist: f("lenk_assist", 0.5),
-            drift_assist: f("drift_assist_stufe", 2.) as u8,
+            drift_assist: f("drift_assist_stufe", 2.).clamp(0., 2.) as u8,
+            drift_layer: true,
             esp_default: j["esp_spieler_default"].as_str().unwrap_or("sport").into(),
             aquaplaning: f("aquaplaning_staerke", 0.8),
             ice_grip_min: f("eis_grip_minimum", 0.06),

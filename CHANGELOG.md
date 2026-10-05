@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 7: Arcade-Drift. Ein kurzer Zug an der Handbremse mit Lenkung leitet
+  einen Drift ein (ebenso Lastwechsel, Anbremsen mit Einlenken und – mit ESP aus – Gas in der Kurve). Im Drift
+  bestimmt das Gas den Winkel, die Lenkung die Linie; ein Gyro-Assist hält den Winkel und lenkt selbst gegen.
+  Gas weg leitet aus. Drifts kosten wenig Tempo, hinterlassen Spuren und ab etwa 20° Qualm, das Quietschen
+  sinkt mit dem Winkel, die Kamera zieht leicht nach. Wertung oben mittig („DRIFT 374“, Kette ×2 …); ein Aufprall
+  verwirft den laufenden Drift. Lkw, Busse und Zweiräder driften nicht, Frontantrieb nur kurz per Handbremse.
 - Native Rust-Portierung, Fahrphysik Phase 6: schwere Fahrzeuge.
   - Massen im Zusammenstoß kommen aus den Fahrzeugdaten: ein voller Müllwagen schiebt einen Kleinwagen weg und
     verliert dabei kaum Tempo. Lkw und Busse fahren mit zufälliger, je Fahrzeug fester Beladung.

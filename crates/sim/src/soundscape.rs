@@ -719,6 +719,8 @@ pub struct Tires {
     pub slide: f64,
     pub wind: f64,
     pub splash: f64,
+    /// Driftwinkel 0…1 (0 = kein Drift, 1 = 60° und mehr): Tonhöhe des Quietschens
+    pub angle: f64,
 }
 pub fn tire_state(ground: Ground, wet: f64, snow: f64, car: &Car) -> Tires {
     let v = car.speed();
@@ -756,6 +758,10 @@ pub fn tire_state(ground: Ground, wet: f64, snow: f64, car: &Car) -> Tires {
         slide: skid * (1. - grip),
         wind: vn * vn,
         splash: if car.aqua > 0. { 1. } else { 0. },
+        angle: car
+            .dyn_state
+            .as_ref()
+            .map_or(0., |d| clamp01(d.drift_angle.to_degrees() / 60.)),
     }
 }
 

@@ -68,6 +68,8 @@ pub struct Play {
     pub demo_combat: bool,
     /// `--drift-demo`: im eigenen Auto Vollgas mit Handbremse und Lenkung (Reifenqualm, Bremsspuren prüfen)
     pub demo_drift: bool,
+    demo_drift_started: bool,
+    demo_drift_t: f64,
     /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
     pub vehicle_show: bool,
     /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
@@ -426,6 +428,8 @@ impl Play {
             interp: Default::default(),
             demo_combat: false,
             demo_drift: false,
+            demo_drift_started: false,
+            demo_drift_t: 0.,
             vehicle_show: false,
             demo_drive: false,
             demo_station: None,
@@ -2227,13 +2231,29 @@ impl Game for Play {
             }
         }
         if self.demo_drift && !w2.loading && w2.player.in_car.is_some() {
-            // erst Anlauf, dann im Wechsel Handbremse mit Lenkung (Heck bricht aus) und Vollgas (Räder drehen durch)
+            // Anlauf geschenkt (55 km/h in Fahrtrichtung), kurz Handbremse mit Lenkung (leitet den Drift ein), dann
+            // Halbgas mit leichtem Lenken – den Winkel hält die Drift-Schicht
             let t = w2.time;
-            input.throttle = 1.;
-            if t > 1.6 {
-                input.steer = if t % 2.4 < 1.2 { 0.8 } else { -0.8 };
-                input.handbrake = t % 1.2 < 0.35;
+            if !self.demo_drift_started && w2.demo_launch(170.) {
+                self.demo_drift_started = true;
+                self.demo_drift_t = t;
             }
+            let t = t - self.demo_drift_t;
+            input.steer = if t < 0.8 {
+                0.
+            } else if t < 1.1 {
+                0.7
+            } else {
+                0.25
+            };
+            input.handbrake = (0.8..1.1).contains(&t);
+            input.throttle = if t < 0.8 {
+                1.
+            } else if t < 1.1 {
+                0.3
+            } else {
+                0.65
+            };
         }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
