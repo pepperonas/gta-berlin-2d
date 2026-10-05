@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 5 (native Fassung): **Fahrzeuge glänzen**. Der Fahrzeugatlas ist doppelt so fein (Zellen
+  512 × 256), die Lackzelle trägt in den bisher freien Kanälen eine Glanzmaske (Lack, Glas, Chrom). Der Sonnenglanz
+  wandert mit Fahrzeugwinkel und Sonnenstand über die gewölbte Karosserie, dazu ein Himmelsreflex aus dem
+  Umgebungslicht; nachts und im Nebel verschwindet der Sonnenglanz. Motorräder: Tank, Verkleidung, Chrom und Helm
+  glänzen genauso (statt des fest gemalten Lichtflecks).
 - Xbox-Machbarkeitsprobe: `crates/xbox_probe` (Rust-DLL `berlin_probe`, wgpu-DX12 in ein XAML-`SwapChainPanel`) und die
   UWP-Hülle `xbox/RustProbe` (C#). Die Probe meldet Schritt für Schritt, ob die System-DLLs im Sandkasten laden, welcher
   DX12-Adapter da ist und ob die Oberfläche entsteht, und misst danach eine dem Spiel nachgebildete Last (8 Schichten in

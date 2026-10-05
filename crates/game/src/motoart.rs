@@ -134,7 +134,6 @@ fn bike_parts(st: Style, paint: [f32; 4], braking: bool) -> Vec<Part> {
     } else {
         [0.62, 0.08, 0.07, 1.]
     };
-    let hi = shade(paint, 1.35);
     let mut p = Vec::new();
     let steer = |mut q: Part| {
         q.steer = true;
@@ -145,18 +144,17 @@ fn bike_parts(st: Style, paint: [f32; 4], braking: bool) -> Vec<Part> {
             p.push(part(-0.72, 0., 0.3, 0.31, 0.085, 0., tire));
             p.push(steer(part(0.72, 0., 0.3, 0.3, 0.055, 0., tire)));
             p.push(part(-0.78, 0., 0.5, 0.14, 0.07, 1., dark));
-            p.push(steer(part(0.72, 0., 0.55, 0.16, 0.065, 1., paint)));
+            p.push(steer(part(0.72, 0., 0.55, 0.16, 0.065, 6., paint)));
             p.push(part(-0.42, 0., 0.35, 0.3, 0.05, 0., metal));
             p.push(part(0.03, 0., 0.42, 0.26, 0.16, 0., dark));
-            p.push(part(-0.6, 0.11, 0.55, 0.15, 0.05, 1., chrome));
-            p.push(part(0.12, 0., 0.5, 0.4, 0.2, 1., paint));
-            p.push(part(0.15, 0., 0.86, 0.25, 0.16, 1., paint));
-            p.push(part(0.18, -0.04, 0.9, 0.12, 0.06, 1., hi));
+            p.push(part(-0.6, 0.11, 0.55, 0.15, 0.05, 7., chrome));
+            p.push(part(0.12, 0., 0.5, 0.4, 0.2, 6., paint));
+            p.push(part(0.15, 0., 0.86, 0.25, 0.16, 6., paint));
             p.push(part(-0.27, 0., 0.82, 0.2, 0.12, 0., seat));
-            p.push(part(-0.56, 0., 0.86, 0.2, 0.08, 1., paint));
+            p.push(part(-0.56, 0., 0.86, 0.2, 0.08, 6., paint));
             p.push(part(-0.74, 0., 0.86, 0.03, 0.05, 0., tail));
-            p.push(part(0.44, 0., 0.95, 0.17, 0.19, 1., paint));
-            p.push(part(0.4, 0., 1.05, 0.1, 0.12, 1., rgba(GLASS, 0.8)));
+            p.push(part(0.44, 0., 0.95, 0.17, 0.19, 6., paint));
+            p.push(part(0.4, 0., 1.05, 0.1, 0.12, 6., rgba(GLASS, 0.8)));
             for s in [-0.07, 0.07] {
                 p.push(part(0.58, s, 0.8, 0.03, 0.035, 1., lamp));
             }
@@ -173,14 +171,13 @@ fn bike_parts(st: Style, paint: [f32; 4], braking: bool) -> Vec<Part> {
             p.push(part(-0.42, 0., 0.35, 0.3, 0.05, 0., metal));
             p.push(part(0.04, 0., 0.45, 0.25, 0.17, 0., metal));
             p.push(part(-0.08, 0.13, 0.3, 0.06, 0.08, 1., dark));
-            p.push(part(-0.48, 0.15, 0.5, 0.22, 0.05, 1., chrome));
+            p.push(part(-0.48, 0.15, 0.5, 0.22, 0.05, 7., chrome));
             for s in [-0.08, 0.08] {
                 p.push(steer(part(0.58, s, 0.7, 0.12, 0.02, 0., chrome)));
             }
-            p.push(part(0.16, 0., 0.9, 0.26, 0.18, 1., paint));
-            p.push(part(0.19, -0.05, 0.95, 0.12, 0.07, 1., hi));
+            p.push(part(0.16, 0., 0.9, 0.26, 0.18, 6., paint));
             p.push(part(-0.28, 0., 0.82, 0.22, 0.12, 0., seat));
-            p.push(part(-0.58, 0., 0.85, 0.16, 0.07, 1., paint));
+            p.push(part(-0.58, 0., 0.85, 0.16, 0.07, 6., paint));
             p.push(part(-0.73, 0., 0.85, 0.03, 0.05, 0., tail));
             p.push(steer(part(0.53, 0., 1.0, 0.09, 0.09, 1., dark)));
             p.push(steer(part(0.55, 0., 1.02, 0.06, 0.07, 1., lamp)));
@@ -192,36 +189,35 @@ fn bike_parts(st: Style, paint: [f32; 4], braking: bool) -> Vec<Part> {
         Style::Cruiser => {
             p.push(part(-0.72, 0., 0.32, 0.32, 0.11, 0., tire));
             p.push(steer(part(0.74, 0., 0.32, 0.32, 0.055, 0., tire)));
-            p.push(steer(part(0.74, 0., 0.5, 0.2, 0.08, 1., paint)));
+            p.push(steer(part(0.74, 0., 0.5, 0.2, 0.08, 6., paint)));
             for s in [-0.3, 0.3] {
                 p.push(part(0.15, s, 0.3, 0.12, 0.05, 0., dark));
             }
-            p.push(part(0.02, 0., 0.48, 0.2, 0.2, 1., chrome));
+            p.push(part(0.02, 0., 0.48, 0.2, 0.2, 7., chrome));
             for s in [0.14, 0.2] {
                 p.push(part(-0.42, s, 0.4, 0.38, 0.03, 0., chrome));
             }
-            p.push(part(-0.62, 0., 0.65, 0.24, 0.13, 1., paint));
+            p.push(part(-0.62, 0., 0.65, 0.24, 0.13, 6., paint));
             p.push(part(-0.74, 0., 0.68, 0.03, 0.05, 0., tail));
-            p.push(part(0.24, 0., 0.85, 0.3, 0.17, 1., paint));
-            p.push(part(0.27, -0.05, 0.9, 0.14, 0.06, 1., hi));
+            p.push(part(0.24, 0., 0.85, 0.3, 0.17, 6., paint));
             p.push(part(-0.2, 0., 0.7, 0.24, 0.17, 0., rgba(0x3a2a20, 1.)));
-            p.push(steer(part(0.55, 0., 1.0, 0.1, 0.1, 1., chrome)));
+            p.push(steer(part(0.55, 0., 1.0, 0.1, 0.1, 7., chrome)));
             p.push(steer(part(0.57, 0., 1.02, 0.07, 0.07, 1., lamp)));
             p.push(steer(part(0.4, 0., 1.1, 0.03, 0.46, 0., chrome)));
             for s in [-0.4, 0.4] {
-                p.push(steer(part(0.42, s, 1.2, 0.04, 0.05, 1., chrome)));
+                p.push(steer(part(0.42, s, 1.2, 0.04, 0.05, 7., chrome)));
             }
         }
         Style::Scooter => {
             p.push(part(-0.6, 0., 0.18, 0.18, 0.06, 0., tire));
             p.push(steer(part(0.62, 0., 0.18, 0.18, 0.055, 0., tire)));
-            p.push(part(-0.55, 0.12, 0.3, 0.12, 0.04, 1., chrome));
+            p.push(part(-0.55, 0.12, 0.3, 0.12, 0.04, 7., chrome));
             p.push(part(0.13, 0., 0.3, 0.22, 0.16, 0., rgba(0x3b3e45, 1.)));
-            p.push(part(-0.3, 0., 0.6, 0.45, 0.22, 1., paint));
+            p.push(part(-0.3, 0., 0.6, 0.45, 0.22, 6., paint));
             p.push(part(-0.26, 0., 0.8, 0.3, 0.13, 0., seat));
             p.push(part(-0.74, 0., 0.65, 0.03, 0.06, 0., tail));
-            p.push(part(0.38, 0., 0.7, 0.1, 0.2, 1., paint));
-            p.push(steer(part(0.5, 0., 1.0, 0.08, 0.25, 1., paint)));
+            p.push(part(0.38, 0., 0.7, 0.1, 0.2, 6., paint));
+            p.push(steer(part(0.5, 0., 1.0, 0.08, 0.25, 6., paint)));
             p.push(steer(part(0.57, 0., 1.02, 0.03, 0.06, 0., lamp)));
             for s in [-0.27, 0.27] {
                 p.push(steer(part(0.5, s, 1.1, 0.035, 0.045, 1., dark)));
@@ -371,12 +367,12 @@ pub fn bodies(p: &Pose, st: Style, out: &mut Vec<Body>) {
     }
     push(
         out,
-        &part(s.helm, 0., 1.5, 0.14, 0.13, 1., rgba(p.helmet, 1.)),
+        &part(s.helm, 0., 1.5, 0.14, 0.13, 6., rgba(p.helmet, 1.)),
         hang * 1.2,
     );
     push(
         out,
-        &part(s.helm + 0.08, 0., 1.52, 0.05, 0.1, 1., rgba(VISOR, 0.95)),
+        &part(s.helm + 0.08, 0., 1.52, 0.05, 0.1, 6., rgba(VISOR, 0.95)),
         hang * 1.2,
     );
 }

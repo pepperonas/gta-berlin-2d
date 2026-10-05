@@ -1996,3 +1996,29 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
 - **Schaufenster** leuchten nachts warm (`window_fs`, Material 21, ab Dunkelheit 0,15).
 - **Kosten (GPU-Median, 2560 × 1440):** +0,2 bis +1,0 ms gegenüber Phase 3 (Boulevard 6,2–6,5 ms, Häuserblock 5,9–6,4 ms).
 
+
+## Grafik HD/Pixel: Phase 5 – Fahrzeuge (05.10.2026)
+
+- **Atlas 512 × 256 je Zelle** (vorher 256 × 128), 8 Zellen je Zeile, 44 Modelle → 4096 × 2816 px, mit vier Mip-Stufen
+  rund 61 MB. Raster in **einer** Quelle: `engine/vehatlas.rs` (`CELL_W`/`CELL_H`/`COLS`, Materialklassen), `carart.rs`
+  übernimmt die Konstanten, der Shader bekommt `VEH_COLS`/`VEH_ASPECT` vorangestellt und rechnet die Zellgröße aus der
+  Atlasbreite (`veh_uv`, gemeinsam für `vehicle` und `sprite_cover`). Abweichung vom Plan: kein Uniform (`padding2.y`
+  bleibt frei) – ein halb aufgelöster Atlas für die Qualitätsstufe „Niedrig“ braucht so keine zweite Zahl.
+  Test: keine festen Zellmaße im Shader; Deckung jedes Modells bei 256 × 128 und 512 × 256 gleich (±1 %), die Silhouette
+  und damit die Kollisionsform ändern sich nicht.
+- **Glanzmaske (Entscheidung 6):** Lackzelle R = Schattierung, G = Glanz, B = Material (0 Lack, ½ Glas, 1 Chrom).
+  `Art::lack` schreibt Lackglanz 0,7, `Art::material` setzt Glas (Front-, Heck-, Seitenscheiben, Glasdach, Scheiben der
+  Sonderfahrzeuge über `glass_bx`) und Chrom (Stoßstangen, Griffe) in die Lackzelle unter der Detailebene. Lack glänzt,
+  wo er sichtbar ist; Glas und Chrom glänzen in der Detailebene. Test `gloss_mask_marks_paint_glass_and_chrome`.
+- **Shader `body_gloss`:** Neigung der Karosserie aus der Lage im Bild (`car_slope`: flache Mitte, Ränder fallen ab,
+  quer stärker als längs), mit dem Fahrzeugwinkel (`BodyOut.rot`) in Weltrichtung gedreht; Blinn-Glanz zur Sonne
+  (Schärfe nach Glanzstärke, Glas schärfer, Chrom heller), Himmelsreflex aus dem Umgebungslicht mit Fresnel nach der
+  Neigung. Sonnenglanz × Sonnenhöhe × (1 − Dunkelheit) × Nebel. Additiv im linearen Raum vor der Licht-Komposition –
+  Schatten und Lichtkarte dämpfen ihn wie den Lack.
+- **Motorräder (`motoart.rs`):** neue Formen 6/7 = Ellipse mit Glanz (Lack bzw. Chrom), Wölbung zur Kante; Tank,
+  Verkleidung, Heck, Scheibe, Helm und Visier nutzen 6, Chromteile 7. Der fest gemalte helle Fleck (`hi`) entfällt –
+  er widersprach dem wandernden Sonnenglanz.
+- **Offen:** Reflex der Lichtkarte nachts (Laternen im Lack) – braucht die Lichtkarte im Szenendurchgang, gehört zu
+  Phase 7 (Licht und Post).
+- **Kosten:** Autoszene +0,15 ms GPU-Median gegenüber Phase 4 (4,85 ms). Gemessen mit 60 Bildern, während parallel eine
+  Windows-VM lief – nur als Anhaltspunkt.

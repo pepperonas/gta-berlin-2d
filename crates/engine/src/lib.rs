@@ -10,6 +10,7 @@ pub use materials::MANIFEST as MATERIAL_MANIFEST;
 pub mod pad;
 mod renderer;
 mod scenepass;
+pub mod vehatlas;
 use anyhow::Result;
 use berlin_map_loader::{
     format::Index,

@@ -445,11 +445,15 @@ struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: v
 }
 // Bewegte Objekte (Autos, Personen, Marker): instanzierte Rechtecke/Kreise mit weicher Kante (SDF).
 // shape 0 = abgerundetes Rechteck, 1 = Ellipse, 2 = Ring, 3 = weicher Fleck (Deckkraft fällt zum Rand auf 0),
-// 4/5 = Rechteck/Ellipse mit harter Kante (Bodenschichten: kein halbdeckender Rand, der schon Tiefe schreibt).
+// 4/5 = Rechteck/Ellipse mit harter Kante (Bodenschichten: kein halbdeckender Rand, der schon Tiefe schreibt),
+// 6/7 = Ellipse mit Glanz, Lack bzw. Chrom (Motorradtank, Verkleidung, Helm, Chromteile: gewölbt, Sonnenglanz und
+// Himmel wandern mit dem Winkel).
 struct BodyOut {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>, @location(1) local: vec2<f32>,
     @location(2) extent: vec2<f32>, @location(3) @interpolate(flat) shape: f32,
+    // Drehung des Körpers (cos, sin): Glanz in Weltrichtung
+    @location(4) @interpolate(flat) rot: vec2<f32>,
 };
 @vertex fn body_vs(
     @builtin(vertex_index) index: u32,
@@ -464,48 +468,80 @@ struct BodyOut {
     let world = center + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
     var out: BodyOut;
     out.position = project(vec3(world, 0.0), world, depth);
-    out.color = color; out.local = local; out.extent = extent; out.shape = shape;
+    out.color = color; out.local = local; out.extent = extent; out.shape = shape; out.rot = vec2(c, s);
     return out;
 }
-// Fahrzeugbild aus dem Atlas (shape ≥ 16, Modell = shape − 16): zwei Zellen nebeneinander (Lack, Details), 8 je
-// Zeile, je 256 × 128 px. Der Lack trägt die Schattierung s als (s+1)/2; die Farbe des Autos (in.color) wird wie
-// assets.js shade aufgehellt bzw. abgedunkelt, die Details liegen darüber.
-fn vehicle(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> vec4<f32> {
-    let q = in.local / in.extent;
-    if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return vec4(0.0); }
+// Zellen eines Fahrzeugs im Atlas (shape ≥ 16, Modell = shape − 16): Lack und Details nebeneinander, VEH_COLS je
+// Zeile; die Zellgröße folgt aus der Atlasbreite (vehatlas.rs). xy = Lack, zw = Details, q ∈ [−1, 1]².
+fn veh_uv(shape: f32, q: vec2<f32>) -> vec4<f32> {
     let dims = vec2<f32>(textureDimensions(atlas));
-    let cell = vec2(256.0, 128.0);
-    let idx = u32(in.shape - 16.0 + 0.5);
+    let cw = dims.x / VEH_COLS;
+    let cell = vec2(cw, cw / VEH_ASPECT);
+    let cb = floor(shape - 16.0 + 0.5) * 2.0;
+    let cd = cb + 1.0;
     let uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
-    let cb = idx * 2u;
-    let cd = cb + 1u;
-    let pb = (vec2(f32(cb % 8u), f32(cb / 8u)) + uv) * cell / dims;
-    let pd = (vec2(f32(cd % 8u), f32(cd / 8u)) + uv) * cell / dims;
-    let k = 0.5 * cell / dims;
+    let pb = (vec2(cb % VEH_COLS, floor(cb / VEH_COLS)) + uv) * cell / dims;
+    let pd = (vec2(cd % VEH_COLS, floor(cd / VEH_COLS)) + uv) * cell / dims;
+    return vec4(pb, pd);
+}
+// Fahrzeugbild: der Lack trägt die Schattierung s als (s+1)/2; die Farbe des Autos (in.color) wird wie assets.js
+// shade aufgehellt bzw. abgedunkelt, die Details liegen darüber. Ergebnis: Farbe (sRGB) + Deckkraft, dazu in `gloss`
+// Glanzstärke (x), Material (y) und den Anteil der Fläche, der glänzt (z).
+struct Vehicle { color: vec4<f32>, gloss: vec3<f32> };
+fn vehicle(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> Vehicle {
+    var v: Vehicle;
+    let q = in.local / in.extent;
+    if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return v; }
+    let dims = vec2<f32>(textureDimensions(atlas));
+    let p = veh_uv(in.shape, q);
+    let k = 0.5 * vec2(dims.x / VEH_COLS) * vec2(1.0, 1.0 / VEH_ASPECT) / dims;
     let dx = gx / in.extent * k;
     let dy = gy / in.extent * k;
-    let b = textureSampleGrad(atlas, atlas_sampler, pb, dx, dy);
-    let d = textureSampleGrad(atlas, atlas_sampler, pd, dx, dy);
+    let b = textureSampleGrad(atlas, atlas_sampler, p.xy, dx, dy);
+    let d = textureSampleGrad(atlas, atlas_sampler, p.zw, dx, dy);
     let s = b.r * 2.0 - 1.0;
     let c = in.color.rgb;
     let paint = select(c * (1.0 + s), c + (vec3(1.0) - c) * s, s >= 0.0);
     let a = d.a + b.a * (1.0 - d.a);
     let rgb = (paint * b.a * (1.0 - d.a) + d.rgb * d.a) / max(a, 1e-4);
-    return vec4(rgb, a * in.color.a);
+    v.color = vec4(rgb, a * in.color.a);
+    // Lack glänzt, wo er sichtbar ist; Glas und Chrom liegen in der Detailebene und glänzen dort
+    let shiny_detail = smoothstep(0.2, 0.4, b.b);
+    let share = mix(b.a * (1.0 - d.a), d.a, shiny_detail) / max(a, 1e-4);
+    v.gloss = vec3(b.g, b.b, share);
+    return v;
+}
+// Glanz (linear, additiv) eines Körpers: Sonnenglanz und Himmelsreflex. nl = Neigung der Oberfläche im Körpersystem
+// (0 = flach, Rand wölbt sich nach außen), rot = Drehung, g = (Glanz, Material, Anteil). Nachts und im Nebel fällt
+// der Sonnenglanz weg; den Himmel liefert das Umgebungslicht.
+fn body_gloss(nl: vec2<f32>, rot: vec2<f32>, g: vec3<f32>) -> vec3<f32> {
+    let w = vec2(nl.x * rot.x - nl.y * rot.y, nl.x * rot.y + nl.y * rot.x);
+    let n = normalize(vec3(w, 1.0));
+    let sun = normalize(camera.sun.xyz);
+    let h = normalize(sun + vec3(0.0, 0.0, 1.0));
+    let glass = 1.0 - abs(g.y - VEH_MAT_GLASS) * 4.0;
+    let chrome = smoothstep(0.75, 0.95, g.y);
+    let sharp = mix(28.0, 180.0, g.x) * (1.0 + clamp(glass, 0.0, 1.0));
+    let sun_vis = clamp(camera.sun.z * 3.0, 0.0, 1.0) * (1.0 - camera.ambient.w)
+        * (1.0 - 0.6 * min(camera.fog / 1.4, 1.0));
+    let spec = pow(max(dot(n, h), 0.0), sharp) * sun_vis * mix(0.9, 1.6, chrome);
+    // Himmel: Umgebungslicht, zur Sonne hin heller; Fresnel nach der Neigung (von oben gesehen kaum, am Rand mehr)
+    let sky = linear_color(camera.ambient.rgb) * (0.75 + 0.5 * max(dot(n.xy, sun.xy), 0.0));
+    let f = mix(0.04, 0.6, chrome) + (1.0 - mix(0.04, 0.6, chrome)) * pow(1.0 - n.z, 5.0);
+    let env = sky * f * mix(0.5, 1.0, max(clamp(glass, 0.0, 1.0), chrome));
+    let sun_col = mix(vec3(1.0, 0.86, 0.66), vec3(1.0, 0.98, 0.94), clamp(camera.sun.z * 2.0, 0.0, 1.0));
+    return min((sun_col * spec + env) * g.x * g.z, vec3(1.5));
+}
+// Wölbung einer Karosserie: flache Mitte (Dach, Haube), die Ränder fallen nach außen ab – längs weniger als quer.
+fn car_slope(q: vec2<f32>) -> vec2<f32> {
+    return vec2(sign(q.x) * smoothstep(0.62, 1.0, abs(q.x)) * 0.55, sign(q.y) * smoothstep(0.3, 1.0, abs(q.y)) * 0.9);
 }
 // Deckung des Fahrzeugbilds (Lack und Details) an q ∈ [−1, 1]² – ohne Ableitungen, darf in Verzweigungen stehen.
 fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return 0.0; }
-    let dims = vec2<f32>(textureDimensions(atlas));
-    let cell = vec2(256.0, 128.0);
-    let idx = u32(shape - 16.0 + 0.5);
-    let uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
-    let cb = idx * 2u;
-    let cd = cb + 1u;
-    let pb = (vec2(f32(cb % 8u), f32(cb / 8u)) + uv) * cell / dims;
-    let pd = (vec2(f32(cd % 8u), f32(cd / 8u)) + uv) * cell / dims;
-    let b = textureSampleLevel(atlas, atlas_sampler, pb, 0.0).a;
-    let d = textureSampleLevel(atlas, atlas_sampler, pd, 0.0).a;
+    let p = veh_uv(shape, q);
+    let b = textureSampleLevel(atlas, atlas_sampler, p.xy, 0.0).a;
+    let d = textureSampleLevel(atlas, atlas_sampler, p.zw, 0.0).a;
     return d + b * (1.0 - d);
 }
 // Silhouette verdeckter Figuren und Fahrzeuge („X-Ray“): feine helle Kontur genau am Rand der echten Form, innen
@@ -565,8 +601,9 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     let gy = dpdy(in.local);
     if in.shape >= 16.0 {
         let v = vehicle(in, gx, gy);
-        if v.a < 0.03 { discard; }
-        return vec4(linear_color(v.rgb), v.a);
+        if v.color.a < 0.03 { discard; }
+        let shine = body_gloss(car_slope(in.local / in.extent), in.rot, v.gloss);
+        return vec4(linear_color(v.color.rgb) + shine, v.color.a);
     }
     var d: f32;
     if in.shape == 3.0 {
@@ -583,7 +620,7 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
         if !inside || in.color.a < 0.004 { discard; }
         return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), in.color.a);
     }
-    if in.shape == 1.0 {
+    if in.shape == 1.0 || in.shape == 6.0 || in.shape == 7.0 {
         let q = in.local / in.extent;
         d = (length(q) - 1.0) * min(in.extent.x, in.extent.y);
     } else if in.shape == 2.0 {
@@ -597,5 +634,12 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     let aa = max(fwidth(d), 0.0001);
     let alpha = clamp(0.5 - d / aa, 0.0, 1.0) * in.color.a;
     if alpha < 0.01 { discard; }
-    return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), alpha);
+    var rgb = linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0)));
+    if in.shape == 6.0 || in.shape == 7.0 {
+        // gewölbte Kuppe: Neigung wächst zum Rand
+        let q = in.local / in.extent;
+        let chrome = select(0.0, 1.0, in.shape == 7.0);
+        rgb += body_gloss(q * 0.8, in.rot, vec3(0.8, chrome, 1.0));
+    }
+    return vec4(rgb, alpha);
 }

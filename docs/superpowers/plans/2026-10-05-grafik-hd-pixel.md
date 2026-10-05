@@ -119,7 +119,13 @@ Ursprünglicher Entwurf:
 - Dachmaterialien 6–9 als Texturen (aus Phase 2), Moos/Ruß bleibt; Fassaden 11/12 Putz/Klinker, Rahmen, Simse;
   **ein** Fensterraster (Rust-Konstante → WGSL), Test Gleichheit `fs`/`window_fs`; Material 13 aufwerten.
 
-## Phase 5 – Fahrzeuge (≈ 1,5 Tage)
+## Phase 5 – Fahrzeuge ✅ (05.10.2026)
+
+Umgesetzt: Atlas 512 × 256, Raster aus `engine/vehatlas.rs` (WGSL-Konstanten, Zellgröße aus der Atlasbreite statt
+Uniform); Glanzmaske G/B in der Lackzelle; `body_gloss` mit Sonnenglanz und Himmelsreflex nach Fahrzeugwinkel;
+Motorräder mit Glanzformen 6/7. Lichtkarten-Reflex nachts → Phase 7.
+
+Ursprünglicher Entwurf:
 
 - Zellen 512 × 256, Zellgröße/Raster als Uniform in `vehicle()`/`sprite_cover()` (Silhouetten-Test: gleiche Deckung
   wie vorher); Glanzmaske in G/B der Lack-Zelle (Spec, Entscheidung 6); Sonnenglanz + Umgebungsreflex mit dem

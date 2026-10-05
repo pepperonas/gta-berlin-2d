@@ -1532,5 +1532,54 @@
     }
    }
   }
+ },
+ "05-fahrzeuge": {
+  "hd": {
+   "autos": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.214,
+      "p95_ms": 1.399
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 4.847,
+      "p95_ms": 5.928
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "boulevard": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.156,
+      "p95_ms": 6.235
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 5.595,
+      "p95_ms": 7.79
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "regennacht": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.165,
+      "p95_ms": 2.506
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 5.204,
+      "p95_ms": 7.426
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   }
+  }
  }
 }

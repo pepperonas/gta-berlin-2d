@@ -5,10 +5,11 @@
 //! Gummi, Chrom) und liegt darüber. Lack, der später gemalt wird, deckt die Details darunter ab.
 use crate::raster::{Canvas, Path, Pt};
 
-/// Zelle im Atlas (Pixel) und Raster: 8 Zellen nebeneinander.
-pub const CELL_W: usize = 256;
-pub const CELL_H: usize = 128;
-pub const COLS: usize = 8;
+pub use berlin_engine::vehatlas::{CELL_H, CELL_W, COLS, MAT_CHROME, MAT_GLASS};
+/// Glanzstärke je Material (G der Lackzelle, `vehatlas`)
+pub const GLOSS_PAINT: f32 = 0.7;
+pub const GLOSS_GLASS: f32 = 1.0;
+pub const GLOSS_CHROME: f32 = 0.9;
 /// Rand um das Fahrzeug (Einheiten), damit Spiegel und Reserverad Platz haben
 pub const PAD: f32 = 4.;
 
@@ -65,12 +66,26 @@ pub struct Art {
 }
 impl Art {
     pub fn new(l: f32, w: f32) -> Self {
+        Self::sized(l, w, CELL_W, CELL_H)
+    }
+    /// Zellgröße frei (Test: gleiche Deckung bei jeder Auflösung)
+    pub fn sized(l: f32, w: f32, px_w: usize, px_h: usize) -> Self {
         let (cw, ch) = (l + 2. * PAD, w + 2. * PAD);
-        let scale = (CELL_W as f32 / cw, CELL_H as f32 / ch);
+        let scale = (px_w as f32 / cw, px_h as f32 / ch);
         let origin = (cw / 2., ch / 2.);
         Self {
-            body: Canvas::new(CELL_W, CELL_H, scale, origin),
-            detail: Canvas::new(CELL_W, CELL_H, scale, origin),
+            body: Canvas::new(px_w, px_h, scale, origin),
+            detail: Canvas::new(px_w, px_h, scale, origin),
+        }
+    }
+    /// Material der Detailebene (Glas, Chrom) in die Lackzelle darunter schreiben: G = Glanz, B = Klasse. Die
+    /// Kanäle sind vormultipliziert wie der Rest; wo kein Lack liegt, bleibt nichts übrig (dort glänzt nichts).
+    fn material(&mut self, path: &Path, gloss: f32, class: f32) {
+        for (k, c) in self.body.coverage(path) {
+            let d = &mut self.body.px[k];
+            let a = d[3];
+            d[1] += (gloss * a - d[1]) * c;
+            d[2] += (class * a - d[2]) * c;
         }
     }
     /// Lack mit Schattierung s (Funktion des Ortes); verdeckt Details darunter.
@@ -85,8 +100,9 @@ impl Art {
             let v = ((s(self.body.to_model(x, y)) + 1.) / 2.).clamp(0., 1.);
             let al = c * a;
             let d = &mut self.body.px[k];
-            for x in &mut d[..3] {
-                *x = v * al + *x * (1. - al);
+            // R = Schattierung, G = Glanz, B = Material (Lack = 0)
+            for (x, t) in d[..3].iter_mut().zip([v, GLOSS_PAINT, 0.]) {
+                *x = t * al + *x * (1. - al);
             }
             d[3] = al + d[3] * (1. - al);
         }
@@ -106,6 +122,13 @@ impl Art {
     fn bx(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, c: [f32; 4]) {
         if w > 0. && h > 0. {
             self.fix(&Path::rrect(x, y, w, h, r), c);
+        }
+    }
+    /// Scheibe als Kasten: Detailfarbe und Glas in der Glanzmaske
+    fn glass_bx(&mut self, x: f32, y: f32, w: f32, h: f32, c: [f32; 4]) {
+        if w > 0. && h > 0. {
+            self.fix(&Path::rrect(x, y, w, h, 0.), c);
+            self.material(&Path::rrect(x, y, w, h, 0.), GLOSS_GLASS, MAT_GLASS);
         }
     }
     #[allow(clippy::too_many_arguments)]
@@ -261,7 +284,7 @@ pub fn paint_special(a: &mut Art, model: &str, l: f32, w: f32) {
     };
     let cabin = |a: &mut Art, xs: f32, len: f32| {
         boxf(a, xs, len, None, 3.5);
-        a.bx(xs + len - 5., y0 + 2.4, 3.2, w - 4.8, 0., glass);
+        a.glass_bx(xs + len - 5., y0 + 2.4, 3.2, w - 4.8, glass);
         a.lack(&Path::rrect(xs + 2., y0 + 3., len - 8., w - 6., 0.), |_| {
             0.12
         });
@@ -276,7 +299,7 @@ pub fn paint_special(a: &mut Art, model: &str, l: f32, w: f32) {
         "delivery" => {
             let cab = 12.;
             boxf(a, x0, l, None, 3.);
-            a.bx(l / 2. - 5., y0 + 2.4, 3., w - 4.8, 0., glass);
+            a.glass_bx(l / 2. - 5., y0 + 2.4, 3., w - 4.8, glass);
             a.lack(
                 &Path::rrect(x0 + 1.5, y0 + 1.8, l - cab - 3., w - 3.6, 1.5),
                 |_| 0.1,
@@ -324,7 +347,7 @@ pub fn paint_special(a: &mut Art, model: &str, l: f32, w: f32) {
         }
         "bus" => {
             boxf(a, x0, l, None, 4.);
-            a.bx(l / 2. - 4., y0 + 2., 3., w - 4., 0., glass);
+            a.glass_bx(l / 2. - 4., y0 + 2., 3., w - 4., glass);
             a.bx(x0 + 4., y0 + 0.8, l - 12., 2., 0., hex(0x2b2f36));
             a.bx(x0 + 4., y0 + w - 2.8, l - 12., 2., 0., hex(0x2b2f36));
             a.lack(&Path::rrect(x0 + 3., y0 + 3.5, l - 10., w - 7., 2.), |_| {
@@ -359,12 +382,11 @@ pub fn paint_special(a: &mut Art, model: &str, l: f32, w: f32) {
         // Fahrerhaus: Seitenscheiben, Spiegel, Wischer, Scheibenreflex
         let cx = l / 2. - 9.;
         for side in [-1f32, 1.] {
-            a.bx(
+            a.glass_bx(
                 cx,
                 if side < 0. { y0 + 1.4 } else { -y0 - 3.1 },
                 4.,
                 1.7,
-                0.,
                 hex(0x172b37),
             );
             a.bx(
@@ -874,6 +896,7 @@ pub fn paint_car(a: &mut Art, model: &str, l: f32, w: f32, axles: (f32, f32)) {
     let window = |a: &mut Art, pts: &[Pt]| {
         let path = Path::poly(pts);
         a.fix_fn(&path, &gl);
+        a.material(&path, GLOSS_GLASS, MAT_GLASS);
         let refl = Path::poly(&[
             (rw0 - 4., -w),
             (rw0 + 1.5, -w),
@@ -946,6 +969,7 @@ pub fn paint_car(a: &mut Art, model: &str, l: f32, w: f32, axles: (f32, f32)) {
         let roof = Path::rrect(rr, -top, rf - rr, 2. * top, (top * 0.25).min(2.));
         if p.glass_roof {
             a.fix_fn(&roof, &gl);
+            a.material(&roof, GLOSS_GLASS, MAT_GLASS);
             a.line(
                 &[((rr + rf) / 2., -top), ((rr + rf) / 2., top)],
                 hex(0x0f1517),
@@ -1098,6 +1122,7 @@ pub fn paint_car(a: &mut Art, model: &str, l: f32, w: f32, axles: (f32, f32)) {
                 let g = Path::rrect(x, y - 0.25, 1.5, 0.5, 0.2);
                 if p.chrome {
                     a.fix(&g, hex(0xc9cdcc));
+                    a.material(&g, GLOSS_CHROME, MAT_CHROME);
                 } else {
                     a.lack(&g, |_| 0.35);
                 }
@@ -1186,6 +1211,18 @@ pub fn paint_car(a: &mut Art, model: &str, l: f32, w: f32, axles: (f32, f32)) {
         0.4,
         bumper,
     );
+    if p.chrome {
+        for (x, y) in [
+            (front - 0.9, half(front - 1.) * 0.7),
+            (rear, half(rear + 1.) * 0.74),
+        ] {
+            a.material(
+                &Path::rrect(x, -y, 0.9, 2. * y, 0.4),
+                GLOSS_CHROME,
+                MAT_CHROME,
+            );
+        }
+    }
     for x in [rear + 0.15, front - 0.75] {
         a.bx(x, -1.3, 0.6, 2.6, 0.1, hex(0xe2e5e0));
         a.bx(x, -1.3, 0.6, 0.45, 0., hex(0x2f5790));
@@ -1482,6 +1519,72 @@ mod tests {
             assert!(alpha(i * 2 + 1) > 800, "{}: Details", m.0);
         }
         assert!(h > 0);
+    }
+
+    /// Silhouette bleibt: dieselben Modelle bei alter (256 × 128) und neuer Zellgröße decken denselben Anteil der
+    /// Zelle (der Umriss kommt aus Modelleinheiten, nicht aus Pixeln) – die Kollisionsform ändert sich nicht.
+    #[test]
+    fn coverage_does_not_depend_on_cell_size() {
+        let share = |m: &str, l: f32, wd: f32, cw: usize, ch: usize| {
+            let mut a = Art::sized(l, wd, cw, ch);
+            if SPECIAL.contains(&m) {
+                paint_special(&mut a, m, l, wd);
+            } else {
+                paint_car(&mut a, m, l, wd, axles(m, l));
+            }
+            let n = a
+                .body
+                .px
+                .iter()
+                .zip(&a.detail.px)
+                .filter(|(b, d)| d[3] + b[3] * (1. - d[3]) > 0.5)
+                .count();
+            n as f32 / (cw * ch) as f32
+        };
+        for (m, l, wd) in models() {
+            let (old, new) = (share(m, l, wd, 256, 128), share(m, l, wd, CELL_W, CELL_H));
+            assert!((old - new).abs() < 0.01, "{m}: {old:.4} → {new:.4}");
+        }
+    }
+
+    /// Glanzmaske: Lack glänzt überall, wo Lack liegt; Scheiben sind Glas, Chromstoßstangen Chrom; ohne Lack nichts.
+    #[test]
+    fn gloss_mask_marks_paint_glass_and_chrome() {
+        let (px, w, _) = atlas();
+        let at = |cell: usize, x: usize, y: usize| {
+            let (cx, cy) = ((cell % COLS) * CELL_W, (cell / COLS) * CELL_H);
+            let i = ((cy + y) * w as usize + cx + x) * 4;
+            [px[i], px[i + 1], px[i + 2], px[i + 3]]
+        };
+        let class = |m: &str| {
+            let i = model_index(m) * 2;
+            let (mut paint, mut glass, mut chrome) = (0, 0, 0);
+            for y in 0..CELL_H {
+                for x in 0..CELL_W {
+                    let b = at(i, x, y);
+                    if b[3] < 250 {
+                        continue;
+                    }
+                    match b[2] {
+                        0 => {
+                            let g = b[1] as f32 / 255.;
+                            assert!((g - GLOSS_PAINT).abs() < 0.02, "{m}: Lackglanz {g}");
+                            paint += 1
+                        }
+                        100..=160 => glass += 1,
+                        220.. => chrome += 1,
+                        _ => {}
+                    }
+                }
+            }
+            (paint, glass, chrome)
+        };
+        let (p, g, _) = class("limousine");
+        assert!(p > 20_000 && g > 5_000, "Limousine: Lack {p}, Glas {g}");
+        let (_, _, c) = class("oldtimer");
+        assert!(c > 200, "Oldtimer ohne Chrom: {c}");
+        let (_, g, _) = class("bus");
+        assert!(g > 500, "Bus ohne Scheiben: {g}");
     }
 
     #[test]
