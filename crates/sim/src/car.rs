@@ -125,6 +125,22 @@ impl Car {
         kind_name: &str,
     ) -> Self {
         let k = kind(kind_name);
+        // Pkw: Maße des Modells (das Modell folgt aus Nummer und Rolle), sonst die der Fahrzeugart
+        let (hw, hh, color) = if k.name == "car" {
+            let m = crate::carmodels::car_model(id, k.name, role == Role::Player, None);
+            let (hw, hh) = crate::carmodels::body_dims(m)
+                .map_or((k.l / 2., k.w / 2.), |(l, w)| (l * 5., w * 5.));
+            // Lack aus Modell und Nummer (realistische Verteilung); das Spielerauto behält seine Farbe
+            let color = if role == Role::Player {
+                color
+            } else {
+                let r = ((id as f64 * 0.618_033_988_75 + 0.137).fract() * 977.).fract();
+                crate::carmodels::paint_for(m, r)
+            };
+            (hw, hh, color)
+        } else {
+            (k.l / 2., k.w / 2., color)
+        };
         Self {
             id,
             x,
@@ -135,8 +151,8 @@ impl Car {
             ang_vel: 0.,
             kind: k.name,
             model: None,
-            hw: k.l / 2.,
-            hh: k.w / 2.,
+            hw,
+            hh,
             health: HEALTH,
             wrecked: false,
             wreck_t: 0.,
@@ -222,6 +238,15 @@ impl Car {
         }
     }
     /// Modell (Fahrverhalten, Name): fest, nach Art oder aus der Nummer.
+    /// Festes Modell setzen; ein Pkw übernimmt dessen Maße (Bild und Kollision).
+    pub fn set_model(&mut self, m: &'static str) {
+        self.model = Some(m);
+        if self.kind == "car"
+            && let Some((l, w)) = crate::carmodels::body_dims(m)
+        {
+            (self.hw, self.hh) = (l * 5., w * 5.);
+        }
+    }
     pub fn model_name(&self) -> &'static str {
         car_model(self.id, self.kind, self.role == Role::Player, self.model)
     }
@@ -897,12 +922,15 @@ mod tests {
         // gleiches Modell = gleiche Masse
         let mut a = car();
         let mut b = Car::new(2, 40., 0., 0., 0, Role::Traffic, "car");
-        a.model = Some("kompakt");
-        b.model = Some("kompakt");
+        a.set_model("kompakt");
+        b.set_model("kompakt");
+        // Kompakter: 4,28 m lang → 2 px Überlappung bei 40 px Abstand, je 1 px auseinander
+        assert!((a.hw - 21.4).abs() < 1e-9 && a.hw == b.hw && a.hh == b.hh);
+        b.x = 2. * a.hw - 2.;
         a.vx = 200.;
         let mut ev = Vec::new();
         collide_cars(&mut a, &mut b, &mut ev);
-        assert!((a.x + 1.).abs() < 1e-9 && (b.x - 41.).abs() < 1e-9);
+        assert!((a.x + 1.).abs() < 1e-9 && (b.x - (2. * a.hw - 1.)).abs() < 1e-9);
         assert!((a.vx + b.vx - 200.).abs() < 1e-9, "Impuls bleibt erhalten");
         assert!(b.vx > 0. && a.vx < 200.);
     }

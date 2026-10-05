@@ -759,10 +759,67 @@ const fn k(name: &'static str, l: f64, w: f64, power: f64, colors: &'static [u32
         colors,
     }
 }
+/// Lackfarben im Verkehr, gewichtet wie in deutschen Neuzulassungen (grob: Grau ~30 %, Schwarz ~22 %, Weiß ~18 %,
+/// Blau ~10 %, Rot ~6 %, Silber ~5 %, Rest Grün/Braun/Beige/Gelb/Orange) – je Eintrag ein Zwanzigstel.
 pub const CAR_COLORS: &[u32] = &[
-    0xc0392b, 0x2e86de, 0xf1c40f, 0x27ae60, 0xecf0f1, 0x8e44ad, 0x34495e, 0xe67e22, 0x16a085,
-    0x7f8c8d,
+    0x5d6166, 0x4a4e54, 0x7b8086, 0x3b3e43, 0x8a8f94, 0x6b6f73, // Grau, Anthrazit
+    0x1d1e21, 0x26282c, 0x1a1c1f, 0x2e2f33, // Schwarz
+    0xe8e9ea, 0xf1efe8, 0xdcdedf, // Weiß, Perlweiß
+    0x1f3a63, 0x3a6aa3, // Dunkel-, Mittelblau
+    0x9b1c22, // Dunkelrot
+    0xb9bec3, // Silber
+    0x2f4a3a, // Dunkelgrün
+    0x8d7b62, // Beige/Champagner
+    0xd8a21e, // Gelb (selten)
 ];
+/// Kräftige Farben für Sportwagen, Coupés und Kleinwagen (dort häufiger bunt)
+pub const SPORT_COLORS: &[u32] = &[
+    0xb3191f, 0xd8641e, 0xe0b31f, 0x1d5fa8, 0x2a7a4b, 0x1d1e21, 0xe8e9ea, 0x5d6166, 0x7a1f6e,
+    0x3b8fb5,
+];
+/// Länge und Breite der Karosserie eines Pkw-Modells (m) für Bild und Kollision: aus den Fahrzeugdaten, wo ein Modell
+/// dort nur die Klassenmaße erbt und das Vorbild deutlich anders ist, aus dieser Tabelle; die Breite höchstens 2,0 m
+/// (Fahrstreifen), mindestens 1,5 m. Die Fahrphysik rechnet weiter mit ihren eigenen Daten.
+pub fn body_dims(model: &str) -> Option<(f64, f64)> {
+    let fixed = match model {
+        "niva" => Some((3.74, 1.68)),
+        "zweitakter" => Some((3.56, 1.51)),
+        "roadster" => Some((3.92, 1.73)),
+        "kleinbus" => Some((4.28, 1.72)),
+        "leichtbau" => Some((3.80, 1.72)),
+        "oldtimer" => Some((4.30, 1.62)),
+        "hochdach" => Some((4.50, 1.84)),
+        "defender" => Some((4.60, 1.83)),
+        "gklasse" => Some((4.66, 1.88)),
+        _ => None,
+    };
+    let (l, w) =
+        fixed.or_else(|| crate::vehdata::game_vehicle(model).map(|v| (v.length, v.width)))?;
+    Some((l, w.clamp(1.5, 2.0)))
+}
+/// Farbe eines Pkw aus einer Zufallszahl 0…1: sportliche und kleine Modelle öfter bunt.
+pub fn paint_for(model: &str, r: f64) -> u32 {
+    let sporty = matches!(
+        model,
+        "sportwagen"
+            | "supersport"
+            | "leichtbau"
+            | "heckcoupe"
+            | "gtcoupe"
+            | "roadster"
+            | "leichtcoupe"
+            | "coupe"
+            | "musclecar"
+            | "rallye"
+            | "hothatch"
+            | "elektrosport"
+            | "kleinwagen"
+            | "zweitakter"
+            | "kleinbus"
+    );
+    let pal = if sporty { SPORT_COLORS } else { CAR_COLORS };
+    pal[((r * pal.len() as f64) as usize).min(pal.len() - 1)]
+}
 pub const KINDS: &[Kind] = &[
     k("car", 42., 20., 1., CAR_COLORS),
     k(
@@ -799,8 +856,8 @@ pub const KINDS: &[Kind] = &[
         moto: true,
         ..k(
             "motorcycle",
-            22.,
-            8.,
+            26.,
+            11.,
             1.15,
             &[0xb3261e, 0x1d1f24, 0xe8e6e1, 0x2d5da8, 0xf0a202],
         )
@@ -809,8 +866,8 @@ pub const KINDS: &[Kind] = &[
         moto: true,
         ..k(
             "scooter",
-            18.,
-            7.,
+            22.,
+            9.5,
             0.6,
             &[0x8fc1b5, 0xe9e4d6, 0xc0392b, 0x3d3f45, 0xf2c14e],
         )
@@ -957,5 +1014,74 @@ mod tests {
             .filter(|&i| car_model(i, "car", false, None) == "kleinwagen")
             .count();
         assert!((1800..2600).contains(&n), "{n}");
+    }
+}
+
+#[cfg(test)]
+mod body_tests {
+    use super::*;
+
+    /// Pkw-Maße für Bild und Kollision: aus den Daten bzw. der Korrekturtabelle, Breite 1,5…2,0 m, deutliche
+    /// Längenunterschiede; das Auto übernimmt sie beim Erzeugen und beim Setzen eines Modells.
+    #[test]
+    fn cars_take_their_model_dimensions() {
+        let dims: Vec<(f64, f64)> = CAR_MODELS
+            .iter()
+            .map(|(m, _)| body_dims(m).expect(m))
+            .collect();
+        assert!(dims.iter().all(|&(_, w)| (1.5..=2.0).contains(&w)));
+        let (lmin, lmax) = dims
+            .iter()
+            .fold((9f64, 0f64), |a, d| (a.0.min(d.0), a.1.max(d.0)));
+        assert!(lmin < 3.8 && lmax > 5.1, "{lmin}…{lmax}");
+        assert_eq!(
+            body_dims("zweitakter"),
+            Some((3.56, 1.51)),
+            "Korrekturtabelle"
+        );
+        let mut c = crate::car::Car::new(7, 0., 0., 0., 0, crate::car::Role::Traffic, "car");
+        let (l, w) = body_dims(c.model_name()).unwrap();
+        assert!((c.hw - l * 5.).abs() < 1e-9 && (c.hh - w * 5.).abs() < 1e-9);
+        c.set_model("transporter");
+        assert!((c.hw - 26.).abs() < 1e-9);
+        // Nutzfahrzeuge behalten die Maße ihrer Art
+        let t = crate::car::Car::new(8, 0., 0., 0., 0, crate::car::Role::Traffic, "truck");
+        assert_eq!((t.hw, t.hh), (38., 12.));
+    }
+
+    /// Lack im Verkehr: überwiegend unbunt (Grau, Schwarz, Weiß, Silber) wie im echten Straßenbild; Sportwagen
+    /// öfter bunt.
+    #[test]
+    fn paint_is_mostly_neutral() {
+        let neutral = |c: u32| {
+            let (r, g, b) = (
+                (c >> 16 & 255) as i32,
+                (c >> 8 & 255) as i32,
+                (c & 255) as i32,
+            );
+            (r - g).abs().max((g - b).abs()).max((r - b).abs()) < 24
+        };
+        let share = |m: &str| {
+            let n = (0..1000)
+                .filter(|i| neutral(paint_for(m, (*i as f64 + 0.5) / 1000.)))
+                .count();
+            n as f64 / 1000.
+        };
+        assert!(share("limousine") >= 0.65, "{}", share("limousine"));
+        assert!(share("sportwagen") < 0.5, "{}", share("sportwagen"));
+        let cols: std::collections::HashSet<u32> = (0..200)
+            .map(|id| {
+                crate::car::Car::new(id, 0., 0., 0., 0, crate::car::Role::Traffic, "car").color
+            })
+            .collect();
+        assert!(cols.len() >= 12, "Vielfalt: {}", cols.len());
+    }
+
+    /// Motorrad und Roller sind gegenüber dem Maßstab etwas größer (Lesbarkeit neben den Autos).
+    #[test]
+    fn two_wheelers_are_readable() {
+        let m = kind("motorcycle");
+        assert!(m.l >= 26. && m.w >= 11.);
+        assert!(kind("scooter").l > 20.);
     }
 }

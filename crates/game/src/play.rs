@@ -98,6 +98,9 @@ pub struct Play {
     pub sign_lab: bool,
     /// Musterseite der Motorräder neben der Kamera (`--bildschirm motorraeder`)
     pub moto_lab: bool,
+    /// Musterseite aller Pkw-Modelle und Nutzfahrzeuge als echte, abgestellte Autos (`--bildschirm autos`);
+    /// `Some(true)` = schon abgestellt
+    pub car_lab: Option<bool>,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -470,6 +473,7 @@ impl Play {
             demo_neon: false,
             sign_lab: false,
             moto_lab: false,
+            car_lab: None,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -1437,6 +1441,88 @@ fn demo_cover(w: &mut World) {
 }
 
 /// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
+/// Musterseite der Autos: alle Pkw-Modelle (Spalten nach Atlasreihenfolge) und die Nutzfahrzeuge in Reihen um die
+/// Figur, als abgestellte Autos ohne Fahrer; der übrige Verkehr in der Nähe wird entfernt.
+fn car_lab_park(w: &mut berlin_sim::world::World) {
+    use berlin_sim::car::{Car, Role};
+    // freie Fläche (kein Haus, kein Hindernis) von 560 × 330 px in der Nähe suchen und die Figur dorthin stellen
+    let (sx, sy) = (w.player.x, w.player.y);
+    let lvl = w.player.level.lvl;
+    let mut spot = (sx, sy);
+    'search: for ring in 0..24 {
+        let r = ring as f64 * 120.;
+        let n = (ring * 8).max(1);
+        for k in 0..n {
+            let a = k as f64 / n as f64 * std::f64::consts::TAU;
+            let (cx, cy) = (sx + a.cos() * r, sy + a.sin() * r);
+            let mut free = true;
+            'cells: for gx in -14..=14 {
+                for gy in -8..=8 {
+                    if !berlin_sim::footpath::foot_free(
+                        w,
+                        cx + gx as f64 * 20.,
+                        cy + gy as f64 * 20.,
+                        lvl,
+                    ) {
+                        free = false;
+                        break 'cells;
+                    }
+                }
+            }
+            if free {
+                spot = (cx, cy);
+                break 'search;
+            }
+        }
+    }
+    (w.player.x, w.player.y) = spot;
+    let (px, py) = spot;
+    w.cars.retain(|c| (c.x - px).hypot(c.y - py) > 900.);
+    w.peds.retain(|p| (p.x - px).hypot(p.y - py) > 600.);
+    let models: Vec<&'static str> = berlin_sim::carmodels::CAR_MODELS
+        .iter()
+        .map(|(m, _)| *m)
+        .collect();
+    let cols = 8;
+    for (i, m) in models.iter().enumerate() {
+        let (r, c) = (i / cols, i % cols);
+        let (x, y) = (px + (c as f64 - 3.5) * 62., py - 130. + r as f64 * 30.);
+        let id = 900_000 + i as u32;
+        let mut car = Car::new(id, x, y, 0., 0, Role::Parked, "car");
+        car.set_model(m);
+        car.controls.handbrake = true;
+        w.cars.push(car);
+    }
+    for (i, k) in [
+        "truck",
+        "delivery",
+        "garbage",
+        "police",
+        "ambulance",
+        "bus",
+        "motorcycle",
+        "scooter",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let ki = berlin_sim::carmodels::kind(k);
+        // Zweiräder neben den letzten Pkw der Reihe (zum Größenvergleich)
+        let (x, y) = if i < 6 {
+            (px - 260. + i as f64 * 104., py + 115.)
+        } else {
+            (px + 60. + (i - 6) as f64 * 40., py + 45.)
+        };
+        let mut car = Car::new(900_100 + i as u32, x, y, 0., ki.colors[0], Role::Parked, k);
+        car.controls.handbrake = true;
+        if ki.moto {
+            // mit Fahrer, wie im Verkehr (ohne KI: es steht trotzdem)
+            car.driver = Some(berlin_sim::car::Driver::Npc);
+        }
+        w.cars.push(car);
+    }
+}
+
 /// Musterseite: jede Bauart (Spalten) aufrecht und eingelenkt, nach rechts in Schräglage, im Wheelie und gestürzt
 /// (Zeilen), um (cx, cy) herum.
 fn moto_lab_bodies(cx: f32, cy: f32, out: &mut Vec<Body>) {
@@ -2483,6 +2569,11 @@ impl Game for Play {
                 0.65
             };
         }
+        if self.car_lab == Some(false) && !w2.loading {
+            self.car_lab = Some(true);
+            car_lab_park(w2);
+            self.zoom_user = 0.9;
+        }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
             // nah heran, damit Mündungsfeuer, Hülsen und Einschläge im Bild zu erkennen sind
@@ -2909,19 +3000,23 @@ impl Game for Play {
                 }
             }
             let model = crate::carart::sprite_model(model);
-            let blen = crate::carart::body_length(model, 2. * hw);
-            let inset = crate::carart::shape(model).inset;
-            let (wx, wy) = ((hw - 8.).min(blen / 2. - 6.), hh - inset - 1.2);
+            // Räder: Pkw an Radstand und Spur aus den Fahrzeugdaten, Nutzfahrzeuge wie bisher
+            let (fa, ra, wy, tl, tw) = if crate::carart::SPECIAL.contains(&model) {
+                let wx = hw - 8.;
+                (wx, 1. - wx, hh - 1.2, 4.2, 2.05)
+            } else {
+                crate::carart::wheels(model, hw, hh)
+            };
             let (rx, ry) = (-fy, fx);
             for (along, side, front) in [
-                (wx, -wy, true),
-                (wx, wy, true),
-                (1. - wx, -wy, false),
-                (1. - wx, wy, false),
+                (fa, -wy, true),
+                (fa, wy, true),
+                (ra, -wy, false),
+                (ra, wy, false),
             ] {
                 out.push(Body {
                     center: [x + fx * along + rx * side, y + fy * along + ry * side],
-                    half: [4.2, 2.05],
+                    half: [tl, tw],
                     angle: a + if front { steer } else { 0. },
                     shape: 0.,
                     depth: depth + 0.0002,
@@ -3848,7 +3943,11 @@ mod tests {
                 );
             }
         }
-        assert_eq!(p.world.player.in_car, Some(pc), "per Maus nicht ausgestiegen");
+        assert_eq!(
+            p.world.player.in_car,
+            Some(pc),
+            "per Maus nicht ausgestiegen"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]

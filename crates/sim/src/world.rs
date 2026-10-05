@@ -1232,8 +1232,9 @@ impl World {
         let (sx, sy, angle) = self.open_spot(x, y, Some((cid, hw, hh)))?;
         let color = CAR_COLORS[(cid as usize) % CAR_COLORS.len()];
         let mut c = Car::new(cid, sx, sy, angle, color, Role::Parked, kind);
-        c.model = Some(v.id.as_str());
         (c.hw, c.hh) = (hw, hh);
+        // Pkw: Maße für Bild und Kollision wie im Verkehr (body_dims), sonst aus den Daten
+        c.set_model(v.id.as_str());
         c.level.lvl = self.player.level.lvl;
         self.cars.push(c);
         Some(cid)
@@ -1247,7 +1248,9 @@ impl World {
         let (sx, sy, angle) = self.open_spot(x, y, Some((id, k.l / 2., k.w / 2.)))?;
         let color = CAR_COLORS[(id as usize) % CAR_COLORS.len()];
         let mut c = Car::new(id, sx, sy, angle, color, Role::Parked, k.name);
-        c.model = model;
+        if let Some(m) = model {
+            c.set_model(m);
+        }
         c.level.lvl = self.player.level.lvl;
         self.cars.push(c);
         Some(id)

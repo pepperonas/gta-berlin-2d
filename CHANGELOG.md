@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Fahrzeuge unterscheiden sich deutlich: jedes Pkw-Modell hat eine eigene Karosserieform (Schrägheck, Stufenheck,
+  Kombi, SUV, Kastenform, Coupé, Mittelmotor, Roadster, Van, Pickup, Oldtimer) mit eigener Haube, Glasfläche,
+  Dachform, Scheinwerfern, Rückleuchten und Details (Dachreling, Glas- und Schiebedach, Rennstreifen, Heckflügel,
+  Reserverad, Chrom, Ladefläche). Länge und Breite kommen aus den Fahrzeugdaten (3,6–5,0 m × 1,5–2,0 m) und gelten
+  für Bild **und** Kollision; Räder sitzen an Radstand und Spurweite des Modells. Lackfarben folgen der realen
+  Verteilung (überwiegend Grau, Schwarz, Weiß, Silber; Sportwagen bunter). Motorrad und Roller sind länger und
+  breiter gezeichnet. Prüfbild: `--bildschirm autos` stellt alle Modelle nebeneinander.
 - Per Maus wird weder ein- noch ausgestiegen – ein Klick auf ein Auto oder Rad läuft nur hin und stellt die Figur
   daneben, Ein- und Aussteigen nur per Taste (F/Y); der Doppelklick zum Einsteigen ist entfallen. Ein Test drückt im
   Auto alle Maustasten (einzeln, zusammen, getippt, gehalten). Im Browser meldet das getippte Waffenrad kein

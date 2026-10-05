@@ -13,10 +13,12 @@ impl Path {
     pub fn new() -> Self {
         Self::default()
     }
+    #[allow(dead_code)] // Pfadaufbau für freie Umrisse (die Fahrzeugbilder nutzen derzeit Polygone)
     pub fn move_to(&mut self, p: Pt) -> &mut Self {
         self.rings.push(vec![p]);
         self
     }
+    #[allow(dead_code)] // Pfadaufbau für freie Umrisse (die Fahrzeugbilder nutzen derzeit Polygone)
     pub fn line_to(&mut self, p: Pt) -> &mut Self {
         if self.rings.is_empty() {
             self.rings.push(Vec::new());
@@ -25,6 +27,7 @@ impl Path {
         self
     }
     /// Kubische Bézierkurve vom letzten Punkt (in 12 Stücke zerlegt).
+    #[allow(dead_code)] // Pfadaufbau für freie Umrisse (die Fahrzeugbilder nutzen derzeit Polygone)
     pub fn cubic_to(&mut self, c1: Pt, c2: Pt, p: Pt) -> &mut Self {
         let p0 = *self.rings.last().and_then(|r| r.last()).unwrap_or(&p);
         for i in 1..=12 {

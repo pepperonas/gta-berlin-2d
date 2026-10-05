@@ -52,6 +52,9 @@ pub struct Pose {
     pub depth: f32,
 }
 
+/// Querstreckung der Zweiräder gegenüber der Länge (Lesbarkeit neben den Autos, s. `bodies`)
+pub const WIDE: f32 = 1.25;
+
 fn rgba(c: u32, a: f32) -> [f32; 4] {
     [
         ((c >> 16) & 255) as f32 / 255.,
@@ -273,6 +276,9 @@ fn stance(st: Style) -> Stance {
 pub fn bodies(p: &Pose, st: Style, out: &mut Vec<Body>) {
     // Meter → px: die Teile sind für ein 2,1 m langes Fahrzeug beschrieben
     let ppm = p.hw / 1.05;
+    // quer etwas kräftiger als längs: neben 1,7–1,9 m breiten Autos wirkte das maßstäbliche Motorrad (0,8 m) wie ein
+    // Strich; Lenker, Tank, Verkleidung und Fahrer bekommen mehr Breite
+    let ppw = ppm * WIDE;
     let (fx, fy) = (p.angle.cos(), p.angle.sin());
     let (rx, ry) = (-fy, fx);
     let lean = if p.lying {
@@ -293,14 +299,17 @@ pub fn bodies(p: &Pose, st: Style, out: &mut Vec<Body>) {
         // seitliche Wanderung gedämpft (LEAN_SHIFT): in reiner Draufsicht läge der Helm in 45° einen Meter neben der
         // Radspur und der Fahrer wirkte vom Motorrad abgerissen
         let s = s * cl + h * sl * LEAN_SHIFT;
-        [p.x + (fx * a + rx * s) * ppm, p.y + (fy * a + ry * s) * ppm]
+        [
+            p.x + fx * a * ppm + rx * s * ppw,
+            p.y + fy * a * ppm + ry * s * ppw,
+        ]
     };
     let paint = rgba(p.paint, 1.);
     let push = |out: &mut Vec<Body>, q: &Part, extra_s: f32| {
         let ang = p.angle + if q.steer { p.steer } else { 0. };
         out.push(Body {
             center: place(q.a, q.s + extra_s, q.h),
-            half: [q.hl * cp.max(0.5) * ppm, q.hs * narrow * ppm],
+            half: [q.hl * cp.max(0.5) * ppm, q.hs * narrow * ppw],
             angle: ang,
             shape: q.shape,
             depth: p.depth - q.h * 0.0003,
@@ -312,7 +321,7 @@ pub fn bodies(p: &Pose, st: Style, out: &mut Vec<Body>) {
         center: [p.x + 1.5, p.y + 2.],
         half: [
             p.hw * 1.02,
-            0.32 * ppm + if p.lying { 0.6 * ppm } else { 0. },
+            0.32 * ppw + if p.lying { 0.6 * ppm } else { 0. },
         ],
         angle: p.angle,
         shape: 3.,
@@ -353,7 +362,7 @@ pub fn bodies(p: &Pose, st: Style, out: &mut Vec<Body>) {
         let (dx, dy) = (a1[0] - a0[0], a1[1] - a0[1]);
         out.push(Body {
             center: [(a0[0] + a1[0]) / 2., (a0[1] + a1[1]) / 2.],
-            half: [(dx.hypot(dy) / 2.).max(0.5), 0.055 * ppm],
+            half: [(dx.hypot(dy) / 2.).max(0.5), 0.055 * ppw],
             angle: dy.atan2(dx),
             shape: 0.,
             depth: p.depth - 1.2 * 0.0003,

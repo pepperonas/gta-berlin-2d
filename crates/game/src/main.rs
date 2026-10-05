@@ -202,7 +202,7 @@ fn main() -> Result<()> {
             }
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, ueber, lizenzen oder changelog",
+                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, autos, ueber, lizenzen oder changelog",
                 )?;
                 ensure!(
                     [
@@ -221,12 +221,13 @@ fn main() -> Result<()> {
                         "reklame",
                         "schilder",
                         "motorraeder",
+                        "autos",
                         "ueber",
                         "lizenzen",
                         "changelog"
                     ]
                     .contains(&v.as_str()),
-                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, ueber, lizenzen oder changelog"
+                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, autos, ueber, lizenzen oder changelog"
                 );
                 screen = Some(v);
             }
@@ -378,6 +379,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("reklame") => play.demo_neon = true,
         Some("schilder") => play.sign_lab = true,
         Some("motorraeder") => play.moto_lab = true,
+        Some("autos") => play.car_lab = Some(false),
         Some("konsole") => {
             play.console.open(&play.places);
             play.console.set_text("tp kott", &play.places);
@@ -532,7 +534,7 @@ fn render_audio(
         (c.x, c.y, c.angle) = (a.0, a.1, (b.1 - a.1).atan2(b.0 - a.0));
         // anderes Fahrzeug (Datensatz), z. B. ein Sportwagen mit Motor aus Aufnahmen
         if let Some(v) = vehicle.and_then(berlin_sim::vehdata::game_vehicle) {
-            c.model = Some(v.id.as_str());
+            c.set_model(v.id.as_str());
         }
     }
     w.cars

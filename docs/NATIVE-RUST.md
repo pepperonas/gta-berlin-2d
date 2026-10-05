@@ -1819,3 +1819,31 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
   das Durchdrehen); der Sattelzug kippt in Szene 7 nur ohne RSC; Szene 3 (Kleinwagen 25 km/h) steht im
   Widerspruch zu den Leistungsdaten – gemessen 36 km/h, die Daten haben Vorrang; Superbike 0–100 weicht wegen
   der Wheelie-Kontrolle ab (in `bekannte_abweichungen.json`).
+
+## Fahrzeugbilder und -größen (05.10.2026)
+
+Vorher waren alle Pkw 4,2 × 2,0 m groß und teilten einen Umriss; sie unterschieden sich nur in Farbe und
+Kleinigkeiten. Jetzt:
+
+- **Größe:** `carmodels::body_dims(model)` liefert Länge × Breite aus den Fahrzeugdaten (`data/vehicles/`), mit einer
+  kleinen Korrekturtabelle für Modelle ohne passende Daten (z. B. Niva, Trabant-artiger Zweitakter, Roadster). Die
+  Breite ist auf 1,5–2,0 m begrenzt, damit die Autos auf die Fahrspuren passen. Bild und Kollision sind dieselbe Box
+  (`Car::set_model` setzt beides; `spawn_vehicle`, `spawn_data_vehicle` und `--im-auto` nutzen es).
+- **Form:** `carart::proportions(model)` ordnet jedem Modell eine `Form` und Proportionen zu (Haube, Frontscheibe,
+  Dach, Heckscheibe als Längsanteile; Breite der Glasfläche und des Dachs; Eckenradien, Verjüngung, Radhäuser,
+  Scheinwerferart, Türen, Ausstattung). `paint_car` zeichnet daraus Umriss, Lackschattierung, Glas mit Spiegelung,
+  Säulen, Dach, Spiegel, Wischer, Türfugen, Stoßfänger, Kennzeichen, Auspuff sowie Front- und Heckleuchten.
+- **Räder:** `carart::axles` legt die Achsen nach dem Radstand der Daten (höchstens 72 % der Länge) und einem
+  formabhängigen Überhang; `carart::wheels` liefert Achslagen, Spurweite und Reifengröße. Die Räder bleiben immer
+  innerhalb der Karosserie.
+- **Lack:** `carmodels::paint_for(model, r)` wählt deterministisch aus der ID (kein Zug aus dem Welt-Zufall, der
+  Verkehr bleibt bitgleich): Alltagsautos zu rund 70 % neutral (Grau, Schwarz, Weiß, Silber), Sport- und Kleinwagen
+  aus einer bunteren Palette.
+- **Zweiräder:** Motorrad 2,6 × 1,1 m (vorher 2,2 × 0,8), Roller 2,2 × 0,95 m; `motoart::WIDE` (1,25) zeichnet die
+  Teile quer breiter. Ein Motorrad bleibt bewusst deutlich kleiner als ein Auto – so wie in echt.
+- **Prüfen:** `--bildschirm autos` parkt alle Modelle, Sonderfahrzeuge und Zweiräder auf einer freien Fläche neben dem
+  Spieler. Der ignorierte Test `dump_atlas` schreibt den Atlas als PPM (`GTA_ATLAS_DUMP=pfad.ppm`). Tests:
+  `body_forms_differ_visibly` (Formpaare unterscheiden sich in mehr als 6 % der Pixel, Taxi und Limousine nicht),
+  `sizes_vary_and_wheels_sit_inside`, `cars_take_their_model_dimensions`, `paint_is_mostly_neutral`,
+  `two_wheelers_are_readable`.
+- Nur die native Fassung; die Browser-Fassung zeichnet weiter wie bisher.
