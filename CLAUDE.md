@@ -49,6 +49,9 @@ Phase 4: per-wheel grip — `sim/surface.rs` (pure mix of `surfaces.json` ids) +
 rails, puddles, curbs, winter tyres) → `car.env` → `vphys::Env.wheel` [FL, FR, RL, RR].
 Phase 5: two-wheelers run `sim/twowheel.rs` (lean model, falls → `World::throw_rider`); every player vehicle with a
 data record uses vphys (`car::vphys_vehicle` maps bicycle/escooter kinds), `dynamics.rs` is only a fallback.
+Two-wheel steer = share of `twowheel::kappa_max` (low speed: bar angle `DELTA_LOW`, at speed: lean up to
+`LEAN_SKILL` × dry grip) — AI converts curvature with the same function; motorcycles are drawn by `game/motoart.rs`
+(parts per `Style`, lean shift `LEAN_SHIFT`), bicycles still by the old branch in `play.rs`.
 Phase 6: masses from data in `collide_cars` (`Car::mass`), rollover via `vphys::tip_limit` (min of force and v·r),
 rigs via `Vehicle.hitch` + `State.art` (`car::trailer_pose` draws the trailer); data-only vehicles spawn with
 `World::spawn_data_vehicle` / console `auto <id>`.

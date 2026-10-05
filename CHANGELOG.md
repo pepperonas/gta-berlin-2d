@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Motorräder sehen aus wie Motorräder und fahren sich wie welche. Gezeichnet aus Teilen statt als
+  Rechteck – Reifen, lenkendes Vorderrad, Tank, Sitzbank, Heck mit Bremslicht, Lenker mit Spiegeln, je Bauart
+  Verkleidung (Superbike), Rundscheinwerfer (Naked), Chrom und Trittbretter (Cruiser) oder Roller-Karosserie – mit
+  Fahrer, der sich mit in die Kurve legt. Fahren: langsam wendet man jetzt auf 2–3 m (vorher über 30 m), mit Tempo
+  gibt der Lenkausschlag die Schräglage vor, und voller Einschlag wirft auf trockener Straße nicht mehr ab; Nässe,
+  Kopfstein und Bremsen in voller Schräglage bleiben gefährlich. `--bildschirm motorraeder` zeigt alle Bauarten.
+
 - Native Fassung: Springen mit der Leertaste (Controller L3) – zu Fuß über Zäune, Gleisseiten, Poller und Kisten;
   Hauswände, Mauern, Hecken, Bäume, Kaikanten und Brückengeländer bleiben Hindernisse. Getroffene Passanten zeigen
   einen Lebensbalken über dem Kopf. Schaden hängt von der Trefferzone ab (Kopf ×2,2, Rumpf ×1, Arme/Beine ×0,55;

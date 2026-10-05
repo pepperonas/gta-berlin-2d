@@ -1,10 +1,13 @@
 //! Zweiräder (Fahrphysik Phase 5): eigenes Modell ohne Reifen-Schräglauf. Fahrrad, E-Scooter, Roller und
 //! Motorrad fahren kinematisch – die Bahn folgt der Schräglage:
 //!
-//! - Lenkung gibt eine Wunschkrümmung κ vor, daraus die Wunsch-Schräglage φ = atan(v²·κ/g), begrenzt durch
-//!   `max_schraeglage` (Bodenfreiheit). Die Schräglage folgt mit begrenzter Rate (Einlenken braucht bei Tempo Zeit,
-//!   wie Gegenlenken in echt); gefahren wird die Krümmung der tatsächlichen Schräglage g·tan(φ)/v². Langsam (unter
-//!   4 m/s, Füße am Boden) fährt das Rad direkt der Lenkung nach.
+//! - Lenkung fordert einen Anteil der höchstmöglichen Krümmung (`kappa_max`): langsam begrenzt der Lenkeinschlag
+//!   (`DELTA_LOW`, Wenden mit 2–3 m Radius), schnell die Schräglage, die der Fahrer nutzt (`LEAN_SKILL` der
+//!   trockenen Haftgrenze, höchstens `max_schraeglage`). Daraus die Wunsch-Schräglage φ = atan(v²·κ/g); sie folgt mit
+//!   begrenzter Rate (Einlenken braucht bei Tempo Zeit, wie Gegenlenken in echt); gefahren wird die Krümmung der
+//!   tatsächlichen Schräglage g·tan(φ)/v². Langsam (unter 3–6 m/s, Füße am Boden) fährt das Rad der Lenkung nach.
+//!   Voller Einschlag allein wirft auf trockenem Asphalt nicht ab – wohl aber auf Nässe, Kopfstein oder Schiene
+//!   (dort trägt die Haftung die Schräglage nicht) und Bremsen/Gas in voller Schräglage (Reibungskreis).
 //! - Haftgrenze: braucht die Schräglage mehr als atan(μ) (neben der Längskraft, Reibungskreis) → Lowsider.
 //! - Wheelie, wenn die Beschleunigung g·l_h/h überschreitet (l_h = Schwerpunkt bis Hinterachse), Stoppie beim
 //!   Bremsen über g·l_v/h. Wheelie-Control hält beides an der Grenze, aber spielbar (kurze Wheelies beim
@@ -19,7 +22,7 @@
 use crate::vehdata::{Feel, G, Power, RHO, Vehicle};
 use crate::vphys::{
     AQUA_REST, Env, HZ, Input, State, aquaplaning_grip, aquaplaning_speed, drive_force,
-    mass_factor, shift, smooth, steer_limit,
+    mass_factor, shift, smooth,
 };
 
 /// Warum ein Zweirad gestürzt ist.
@@ -48,6 +51,13 @@ impl Fall {
     }
 }
 
+/// Lenkeinschlag (rad), den der Fahrer langsam nutzt (Wenden)
+pub const DELTA_LOW: f64 = 0.6;
+/// Anteil der Haftgrenze, den der Fahrer an Schräglage höchstens nutzt
+pub const LEAN_SKILL: f64 = 0.92;
+/// Lenkrate (rad/s) im Stand; sie fällt mit dem Tempo (m/s)
+pub const BAR_RATE: f64 = 3.;
+pub const BAR_RATE_V: f64 = 8.;
 /// Schräglagenrate (rad/s) langsam bzw. ihre Abnahme mit dem Tempo (m/s)
 pub const LEAN_RATE: f64 = 1.6;
 pub const LEAN_RATE_V: f64 = 25.;
@@ -100,6 +110,15 @@ pub fn step(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt:
 fn hash01(x: f64) -> f64 {
     let z = (x * 12.9898 + 78.233).sin() * 43758.5453;
     z - z.floor()
+}
+
+/// Höchste Krümmung (1/m), die der Fahrer bei `speed` (m/s) und Haftung `mu` fährt: langsam der Lenkeinschlag,
+/// schnell die genutzte Schräglage. Der Lenkbefehl (−1…1) ist ein Anteil davon – auch für die KI.
+pub fn kappa_max(v: &Vehicle, speed: f64, mu: f64) -> f64 {
+    let lean_cap = v.max_lean.min(lean_limit(mu, 0.) * LEAN_SKILL);
+    let k_low = DELTA_LOW.tan() / v.wheelbase;
+    let k_lean = G * lean_cap.tan() / (speed * speed).max(1e-6);
+    k_low.min(k_lean)
 }
 
 /// Größte Schräglage, die die Haftung trägt (rad), bei Längsbeschleunigung `ax` (m/s²).
@@ -291,10 +310,11 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         s.vx = 0.;
     }
     let speed = s.vx;
-    // Lenkung → Wunschkrümmung → Wunsch-Schräglage, Rate begrenzt
-    let lim = steer_limit(v, speed);
-    let delta_cmd = inp.steer.clamp(-1., 1.) * lim;
-    let rate = v.steering.delta_max / 0.25 * v.steering.rate_factor / (1. + speed / 30.);
+    // Lenkung → Wunschkrümmung (Anteil der höchstmöglichen) → Lenkwinkel (Rate begrenzt) → Wunsch-Schräglage
+    // bemessen am trockenen Nenngrip: Nässe, Kopfstein oder Schiene muss der Fahrer selbst berücksichtigen
+    let kappa_target = inp.steer.clamp(-1., 1.) * kappa_max(v, speed, v.tire.mu * feel.grip());
+    let delta_cmd = (l * kappa_target).atan();
+    let rate = BAR_RATE / (1. + speed / BAR_RATE_V);
     s.delta += (delta_cmd - s.delta).clamp(-rate * dt, rate * dt);
     let kappa_cmd = s.delta.tan() / l;
     let lean_want = (speed * speed * kappa_cmd / G)
@@ -364,6 +384,67 @@ mod tests {
                 break;
             }
         }
+    }
+
+    /// Mit festem Tempo `kmh` und vollem Einschlag `secs` fahren: (Radius m, Schräglage rad, Sturz).
+    fn full_lock(v: &Vehicle, env: &Env, kmh: f64, secs: f64) -> (f64, f64, Option<Fall>) {
+        let feel = Feel::simulation();
+        let mut s = State {
+            vx: kmh / 3.6,
+            gear: 2,
+            ..Default::default()
+        };
+        let inp = Input {
+            steer: 1.,
+            ..Default::default()
+        };
+        for _ in 0..(secs * HZ) as usize {
+            s.vx = kmh / 3.6;
+            vstep(v, &feel, &mut s, &inp, env, 1. / HZ);
+            if s.fallen.is_some() {
+                break;
+            }
+        }
+        (s.vx / s.r.abs().max(1e-9), s.lean, s.fallen)
+    }
+
+    #[test]
+    fn motorcycles_turn_like_motorcycles() {
+        let db = db();
+        let dry = Env::default();
+        for id in ["roller_45", "motorrad_naked", "superbike", "cruiser"] {
+            let v = db.get(id).unwrap();
+            // Wenden im Schritttempo: Lenker eingeschlagen, Radius wie in echt 2–3 m
+            let (r, _, f) = full_lock(v, &dry, 5., 2.);
+            assert!(
+                f.is_none() && (1.5..=3.).contains(&r),
+                "{id}: Wenderadius {r:.1} m"
+            );
+            // trocken und mit Tempo: voller Einschlag nutzt die Haftung, wirft aber nicht ab; der Radius folgt
+            // der Schräglage (R = v²/(g·tan φ))
+            for kmh in [30., 60., 100.] {
+                let (r, lean, f) = full_lock(v, &dry, kmh, 3.);
+                assert!(f.is_none(), "{id} bei {kmh} km/h: {f:?}");
+                let ideal = (kmh / 3.6f64).powi(2) / (G * lean.abs().tan());
+                assert!(
+                    (r / ideal - 1.).abs() < 0.08,
+                    "{id} {kmh}: R {r:.1} vs {ideal:.1}"
+                );
+                assert!(lean.abs() <= v.max_lean + 1e-6);
+            }
+        }
+        // die Schräglage bestimmt die Kurve: das Superbike (49°) fährt bei 60 km/h deutlich enger als der
+        // Cruiser, der mit den Trittbrettern bei 30° aufsetzt
+        let (r_sb, _, _) = full_lock(db.get("superbike").unwrap(), &dry, 60., 3.);
+        let (r_cr, _, _) = full_lock(db.get("cruiser").unwrap(), &dry, 60., 3.);
+        assert!(
+            r_cr > r_sb * 1.6,
+            "Superbike {r_sb:.0} m, Cruiser {r_cr:.0} m"
+        );
+        assert!(
+            (20. ..=35.).contains(&r_sb),
+            "Superbike bei 60 km/h: {r_sb:.0} m"
+        );
     }
 
     #[test]

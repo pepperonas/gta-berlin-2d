@@ -1688,6 +1688,28 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
   vorher nur 44,5 km/h). 183 von 207 Zielwerten.
 - Darstellung: in Schräglage schmaler und zur Kurveninnenseite verschoben (Fahrer weiter als Rahmen), im Wheelie
   kürzer. `dynamics.rs` ist nur noch Rückfall für Modelle ohne Datensatz.
+- **Nachtrag Motorräder (05.10.2026):**
+  - **Lenkung:** Der Lenkbefehl ist jetzt ein Anteil der höchstmöglichen Krümmung (`twowheel::kappa_max`): langsam
+    begrenzt der Lenkeinschlag (`DELTA_LOW` 0,6 rad), schnell die Schräglage, die der Fahrer nutzt (`LEAN_SKILL`
+    92 % der **trockenen** Haftgrenze, höchstens `max_schraeglage`); Lenkrate `BAR_RATE/(1+v/8)`. Vorher bremste
+    die Pkw-Lenkbegrenzung (`steer_limit`) Motorräder schon bei Schritttempo auf ~32 m Wenderadius, und das
+    Superbike rutschte bei vollem Einschlag immer weg (Schräglage bis zur Bodenfreiheit 58° über die Haftgrenze).
+    Gemessen jetzt (voller Einschlag, festes Tempo): 5 km/h 2,0–2,4 m · 30 km/h 6–12 m · 60 km/h 25–49 m ·
+    100 km/h 68–136 m (Superbike 49°, Cruiser 30° wegen der Trittbretter); trocken kein Sturz, auf nassem
+    Kopfstein oder in Schräglage hart bremsen/beschleunigen weiter schon. Die KI im Physik-Umkreis rechnet ihre
+    Wunschkrümmung über dieselbe Funktion in den Lenkbefehl um. Test `motorcycles_turn_like_motorcycles`.
+  - **Optik** (`game/motoart.rs`): Motorräder sind kein Rechteck mehr, sondern aus Teilen gezeichnet – Reifen
+    (das Vorderrad lenkt sichtbar ein), Kotflügel, Schwinge, Motor, Auspuff, Tank mit Glanz, Sitzbank, Heck mit
+    Rücklicht (heller beim Bremsen), Lenker mit Spiegeln; je Bauart (`style_of`): Verkleidung mit Scheibe und
+    Doppelscheinwerfer (Superbike), Rundscheinwerfer und Gabel (Naked), Chrom, Doppelauspuff, Trittbretter und
+    breiter Lenker (Cruiser), Karosserie, Trittbrett und Beinschild (Roller). Fahrer mit Knien am Tank (das innere
+    in Schräglage heraus), Armen zu den Griffen, Helm mit Visier; Haltung je Bauart (Superbike geduckt und innen
+    heraushängend, Cruiser aufrecht zurückgelehnt); Jacke und Helm aus der Fahrzeug-id. Schräglage: jedes Teil
+    wandert nach seiner Höhe zur Kurveninnenseite (zu 65 %, `LEAN_SHIFT` – reine Draufsicht ließe den Fahrer
+    abgerissen wirken), Wheelie/Stoppie verkürzt um den jeweiligen Aufstandspunkt. KI-Motorräder ohne Fahrphysik
+    legen sich nach ihrer Gierrate in die Kurve. Fahrräder behalten die bisherige Zeichnung.
+    `--bildschirm motorraeder` zeigt alle Bauarten (doppelt vergrößert) aufrecht, in Schräglage, im Wheelie und
+    gestürzt ([Bild](images/native/motorraeder.png)).
 
 ## Fahrphysik Phase 6: schwere Fahrzeuge (05.10.2026)
 

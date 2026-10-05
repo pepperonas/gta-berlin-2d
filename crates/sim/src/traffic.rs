@@ -996,9 +996,15 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
     {
         let look_m = dx.hypot(dy).max(20.) / 10.;
         let kappa = 2. * diff.sin() / look_m;
-        let delta = (v.wheelbase * kappa).atan();
-        let lim = crate::vphys::steer_limit(v, vf.abs() / 10.).max(1e-3);
-        car.controls.steer = (delta / lim).clamp(-1., 1.);
+        car.controls.steer = if v.two_wheel {
+            // Zweirad: der Lenkbefehl ist ein Anteil der höchstmöglichen Krümmung (twowheel::kappa_max)
+            let k_max = crate::twowheel::kappa_max(v, vf.abs() / 10., v.tire.mu).max(1e-4);
+            (kappa / k_max).clamp(-1., 1.)
+        } else {
+            let delta = (v.wheelbase * kappa).atan();
+            let lim = crate::vphys::steer_limit(v, vf.abs() / 10.).max(1e-3);
+            (delta / lim).clamp(-1., 1.)
+        };
     }
     if diff.abs() > 0.6 {
         target = target.min(55. * tr.lat);

@@ -96,6 +96,8 @@ pub struct Play {
     pub demo_neon: bool,
     /// Musterseite aller Schild-Bauarten, tags und nachts (`--bildschirm schilder`)
     pub sign_lab: bool,
+    /// Musterseite der Motorräder neben der Kamera (`--bildschirm motorraeder`)
+    pub moto_lab: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -468,6 +470,7 @@ impl Play {
             demo_covered: false,
             demo_neon: false,
             sign_lab: false,
+            moto_lab: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -1436,6 +1439,51 @@ fn demo_cover(w: &mut World) {
 }
 
 /// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
+/// Musterseite: jede Bauart (Spalten) aufrecht und eingelenkt, nach rechts in Schräglage, im Wheelie und gestürzt
+/// (Zeilen), um (cx, cy) herum.
+fn moto_lab_bodies(cx: f32, cy: f32, out: &mut Vec<Body>) {
+    // vergrößert, damit die Teile im Bild zu erkennen sind
+    const LAB_SCALE: f32 = 2.;
+    use crate::motoart::{Pose, Style, bodies};
+    let styles = [
+        (Style::Sport, 0xc8102e, 10.35),
+        (Style::Naked, 0x1d4ed8, 10.5),
+        (Style::Cruiser, 0x15171b, 12.),
+        (Style::Scooter, 0x2fa84f, 9.),
+    ];
+    let rows: [(f32, f32, f32, bool, bool); 4] = [
+        (0., 0., 0.35, false, false),
+        (0.75, 0., 0.1, false, true),
+        (0., 0.35, 0., false, false),
+        (0.6, 0., 0., true, false),
+    ];
+    for (i, &(st, paint, hw)) in styles.iter().enumerate() {
+        for (j, &(lean, pitch, steer, lying, braking)) in rows.iter().enumerate() {
+            let (jacket, helmet) = crate::motoart::rider_colors(i as u32 * 7 + j as u32);
+            bodies(
+                &Pose {
+                    x: cx + (i as f32 - 1.5) * 40. * LAB_SCALE,
+                    y: cy + (j as f32 - 1.5) * 26. * LAB_SCALE,
+                    angle: 0.,
+                    hw: hw * LAB_SCALE,
+                    lean,
+                    pitch,
+                    steer,
+                    lying,
+                    braking,
+                    rider: !lying,
+                    paint,
+                    jacket,
+                    helmet,
+                    depth: 0.5,
+                },
+                st,
+                out,
+            );
+        }
+    }
+}
+
 /// Sprung: die Figur (und die Waffe in der Hand) kommt der Kamera näher und wird größer, ihr Schatten (der erste
 /// Körper der Figur) bleibt am Boden, rückt ab und wird blasser.
 fn lift_bodies(
@@ -2718,16 +2766,54 @@ impl Game for Play {
             let (x, y, a) = (c.x as f32, c.y as f32, c.angle as f32);
             let (hw, hh) = (c.hw as f32, c.hh as f32);
             let (fx, fy) = (a.cos(), a.sin());
-            // Schatten, Karosserie, Dach, Frontscheibe
-            out.push(Body {
-                center: [x + 2., y + 3.],
-                half: [hw + 1., hh + 1.],
-                angle: a,
-                shape: 0.,
-                depth: depth + 0.0004,
-                color: [0., 0., 0., 0.28],
-            });
-            if c.kind_info().bike || c.kind_info().moto {
+            // Schatten, Karosserie, Dach, Frontscheibe (Motorräder werfen ihren eigenen, schmalen Schatten)
+            if !c.kind_info().moto {
+                out.push(Body {
+                    center: [x + 2., y + 3.],
+                    half: [hw + 1., hh + 1.],
+                    angle: a,
+                    shape: 0.,
+                    depth: depth + 0.0004,
+                    color: [0., 0., 0., 0.28],
+                });
+            }
+            if c.kind_info().moto {
+                // Motorrad/Roller aus Teilen (motoart.rs): Schräglage, Wheelie/Stoppie und Sturz aus der Fahrphysik;
+                // Verkehr ohne Fahrphysik legt sich nach seiner Gierrate in die Kurve (φ = atan(v·ω/g))
+                let (mut lean, pitch, lying) = two_wheel_pose(c);
+                if c.dyn_state.is_none() && c.driver.is_some() {
+                    lean = ((c.speed() / 10. * c.ang_vel / berlin_sim::vehdata::G).atan() as f32)
+                        .clamp(-0.8, 0.8);
+                }
+                let steer = c
+                    .phys
+                    .as_ref()
+                    .map(|s| -s.delta)
+                    .unwrap_or(c.controls.steer * 0.3) as f32;
+                let (jacket, helmet) = crate::motoart::rider_colors(c.id);
+                crate::motoart::bodies(
+                    &crate::motoart::Pose {
+                        x,
+                        y,
+                        angle: a,
+                        hw,
+                        lean,
+                        pitch,
+                        steer,
+                        lying,
+                        braking: c.controls.brake > 0.1 && c.speed() > 2.,
+                        rider: c.driver.is_some() && !c.wrecked,
+                        paint: if c.wrecked { 0x3b332d } else { c.color },
+                        jacket,
+                        helmet,
+                        depth,
+                    },
+                    crate::motoart::style_of(c.model_name()),
+                    out,
+                );
+                continue;
+            }
+            if c.kind_info().bike {
                 // Schräglage, Wheelie/Stoppie und Sturz aus der Fahrphysik: von oben wird das Rad in Schräglage
                 // schmaler und wandert zur Kurveninnenseite (der Fahrer weiter als der Rahmen), im Wheelie wirkt es
                 // kürzer; gestürzt liegt es flach
@@ -3121,6 +3207,9 @@ impl Game for Play {
             if lift > 0. {
                 lift_bodies(out, weapon0..weapon1, fig0, (x, y), lift);
             }
+        }
+        if self.moto_lab {
+            moto_lab_bodies(self.world.camera.x as f32, self.world.camera.y as f32, out);
         }
         crate::streetfurn::lamp_bodies(&self.street_lamps, self.lamps_lit, out);
         crate::streetfurn::sign_bodies(&self.street_signs, out);
