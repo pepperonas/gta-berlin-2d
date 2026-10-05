@@ -293,3 +293,26 @@ Synthese-Arm setzen, Zielwert in den Pegel-Test aufnehmen.
 Die Jingles sind nach Tonhöhenverlauf und Tongeschlecht ausgewählt (pyin + Chroma-Abgleich mit Dur/Moll-Profilen):
 Erfolg = aufsteigend in Dur (SAX15/10/16), Fehlschlag = absteigend in Moll (SAX07/05/03), Start = kurz
 aufsteigend in Moll (SAX04/06), Einsammeln = kurz aufsteigend in Dur (SAX08). Keine Tonhöhenstreuung bei Jingles.
+
+### Phase 2: Fahrzeuge (Freesound, alle CC0)
+
+| Klang | Freesound-Quelle |
+|---|---|
+| Unfall schwer (Stärke ≥ 0,45) / leicht | craigsmith „S38-24 Big heavy car crash“, „S37-14 Two cars crash foley“ / qubodup „Clank Car Crash Collision“, Logicogonist „car crash long 1“ |
+| Hupe | yfjesse „Car Horn“, maciejadach „horn.wav“, DuranBurrus „Car Horn.wav“ |
+| Autotür | Frederik_Sunne „Car door close“, Crimsonblaze „Car Door Shutting“, djfigs1 „Car Door Open & Close“ (nur das Zuschlagen) |
+| Poller umgefahren | yfjesse „Rest Stop Metal Pole“, Anthousai „hit - metallic - basketball hoop pipe 01“ |
+| Spritzwasser | ahill86 „PuddleSplash“ (drei Spritzer), AardsReal „Water Splash“, gis_sweden „Small Splash“ |
+| Fahrer herausziehen | avainquin „Skin contact grab“ + Autotür |
+| Martinshorn (Schleife) | TitanKaempfer „Martinshorn (Siren) 2“ |
+
+**Martinshorn:** Die Aufnahme wurde per pyin vermessen: exakt 464 und 619 Hz (Quarte, wie das deutsche
+Martinshorn), Wechsel alle 0,8 s, keine Tonhöhendrift (stehend aufgenommen, kein Doppler). Die Schleife umfasst vier
+Perioden; ihre Länge (6,400 s) ist per Kreuzkorrelation gefunden (Korrelation ≈ 1,0) – mit der geschätzten Periode
+sackte der Pegel an der Naht um ein Viertel ab. Wiedergabe als `LoopLayer` im Umgebungskanal (gedämpft im Auto),
+Pegel `SIREN_LEVEL` × `Mix::siren`; der Wechsel hoch/tief steckt in der Aufnahme, `Mix::siren_high` wird dann nicht
+gebraucht. Test `siren_plays_the_recorded_horn`.
+
+**Build:** `schleife_blende_s` macht aus einem Ausschnitt eine nahtlose Schleife (der Überhang wird mit
+gleichleistungs-Blende in den Anfang gemischt), `ausrichten: false` lässt Ausschnitte an ihrer absoluten Zeit.
+Freesound drosselt Downloads (HTTP 429); `freesound.py` wartet dann und versucht es erneut.

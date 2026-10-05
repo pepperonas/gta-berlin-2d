@@ -30,7 +30,8 @@ pub const GUN_CHOKE_AGE: f64 = 0.03;
 /// Klang-Samples (tools/audio/build_sfx.py): Name, Pegel, Tonhöhenstreuung (±), Entfernungs-Tiefpass.
 /// Pegel eingemessen auf Zielwerte (Test `sfx_samples_match_the_synth_loudness`): Schritte so laut wie der frühere
 /// harte Synthese-Schritt (Gras leiser – die Synthese war dort fast unhörbar), alles andere 20 % über der Synthese; der
-/// Fehlschlag-Jingle so laut wie der Erfolg (die Synthese war dort leiser).
+/// Fehlschlag-Jingle so laut wie der Erfolg (die Synthese war dort leiser); Hupe und Autodiebstahl lauter (der
+/// Synthese-Klang war dünn).
 #[derive(Debug, Clone, Copy)]
 pub struct SfxSpec {
     pub name: &'static str,
@@ -64,6 +65,17 @@ pub const PICKUP: SfxSpec = spec("pickup", 0.123, 0., false);
 pub const MISSION_START: SfxSpec = spec("mission_start", 0.132, 0., false);
 pub const MISSION_SUCCESS: SfxSpec = spec("mission_success", 0.155, 0., false);
 pub const MISSION_FAIL: SfxSpec = spec("mission_fail", 0.108, 0., false);
+pub const CRASH_HEAVY: SfxSpec = spec("crash_heavy", 0.538, 0.06, true);
+pub const CRASH_LIGHT: SfxSpec = spec("crash_light", 0.783, 0.08, true);
+/// ab dieser Stärke (`Sfx::Crash`) spielt der schwere Unfall
+pub const CRASH_HEAVY_AT: f32 = 0.45;
+pub const HORN: SfxSpec = spec("horn", 0.168, 0.02, true);
+pub const DOOR: SfxSpec = spec("door", 0.229, 0.05, true);
+pub const KNOCK: SfxSpec = spec("knock", 0.408, 0.08, true);
+pub const SPLASH: SfxSpec = spec("splash", 0.351, 0.1, true);
+pub const CARJACK: SfxSpec = spec("carjack", 0.113, 0.04, true);
+/// Martinshorn-Schleife: Pegel bei voller Nähe (`Mix::siren` = 1)
+pub const SIREN_LEVEL: f32 = 0.217;
 /// Choke-Gruppe für Samples ohne Choke
 const NO_CHOKE: u8 = u8::MAX;
 const BLOCK: usize = 32;
@@ -279,6 +291,30 @@ struct SamplePlay {
     dest: Dest,
 }
 
+/// Endlos laufende Aufnahme (Martinshorn, später Umgebung): nahtlos gebaute Schleife, geglätteter Pegel.
+struct LoopLayer {
+    buf: Arc<[f32]>,
+    pos: f64,
+    gain: Smooth,
+}
+impl LoopLayer {
+    fn new(name: &str) -> Option<Self> {
+        sfx_bank(name).first().map(|b| Self {
+            buf: b.clone(),
+            pos: 0.,
+            gain: Smooth::new(0.),
+        })
+    }
+    fn next(&mut self, sr: f32) -> f32 {
+        let n = self.buf.len();
+        let i = self.pos as usize % n;
+        let t = (self.pos - self.pos.floor()) as f32;
+        let x = self.buf[i] * (1. - t) + self.buf[(i + 1) % n] * t;
+        self.pos = (self.pos + 48000. / sr as f64) % n as f64;
+        x * self.gain.tick()
+    }
+}
+
 struct EngineVoice {
     bus: Smooth,
     o1: Osc,
@@ -352,6 +388,8 @@ struct Ambience {
     /// Martinshorn (Dreieck, tief/hoch im Wechsel)
     siren: Osc,
     siren_g: Smooth,
+    /// Martinshorn aus der Aufnahme (statt `siren`, wenn Samples an sind)
+    siren_loop: Option<LoopLayer>,
     next_chirp: f64,
     drops: f64,
     last: f64,
@@ -483,6 +521,7 @@ impl Synth {
             rumble: l(Lowpass, 90., 0.7),
             siren: Osc::new(Wave::Triangle, 440.),
             siren_g: Smooth::new(0.),
+            siren_loop: LoopLayer::new("siren"),
             next_chirp: 0.,
             drops: 0.,
             last: 0.,
@@ -901,7 +940,20 @@ impl Synth {
             .gain
             .set(0.03 * (m.wind * (m.gust - 0.35).max(0.)) as f32, 0.4, sr);
         a.whistle.freq.set(700. + m.gust as f32 * 900., 0.6, sr);
-        a.siren_g.set(0.07 * m.siren as f32, 0.15, sr);
+        let looped = self.use_samples && a.siren_loop.is_some();
+        a.siren_g
+            .set(if looped { 0. } else { 0.07 * m.siren as f32 }, 0.15, sr);
+        if let Some(l) = &mut a.siren_loop {
+            l.gain.set(
+                if looped {
+                    SIREN_LEVEL * m.siren as f32
+                } else {
+                    0.
+                },
+                0.15,
+                sr,
+            );
+        }
         if m.siren > 0. {
             a.siren
                 .freq
@@ -1149,6 +1201,16 @@ impl Synth {
         use FilterType::*;
         use Wave::*;
         match s {
+            Sfx::Crash(k)
+                if self.sample(
+                    if k >= CRASH_HEAVY_AT {
+                        CRASH_HEAVY
+                    } else {
+                        CRASH_LIGHT
+                    },
+                    k,
+                    M,
+                ) => {}
             Sfx::Crash(k) => {
                 self.burst(
                     0.35 + k * 0.3,
@@ -1182,17 +1244,20 @@ impl Synth {
                 self.burst(0.12, 400., 0.3, Lowpass, 0.7, 0., 0., M);
                 self.tone(160., 0.12, Sine, 0.2, 0., -80., 0., M);
             }
+            Sfx::Horn(k) if self.sample(HORN, k, M) => {}
             Sfx::Horn(k) => {
                 for f in [415., 523.] {
                     self.tone(f, 0.45, Saw, 0.06 * k, 0., 0., 1800., M);
                 }
             }
+            Sfx::Knock(k) if self.sample(KNOCK, k, M) => {}
             Sfx::Knock(k) => {
                 self.burst(0.1, 900., 0.25 * k, Lowpass, 0.7, 0., 0., M);
                 for (f, g) in [(520., 0.06), (1340., 0.04), (2150., 0.03), (3470., 0.02)] {
                     self.tone(f, 0.6, Sine, g * k, 0., 0., 0., M);
                 }
             }
+            Sfx::Door if self.sample(DOOR, 1., M) => {}
             Sfx::Door => {
                 self.burst(0.08, 1500., 0.25, Bandpass, 0.7, 0., 0., M);
                 self.tone(120., 0.08, Sine, 0.2, 0.05, 0., 0., M);
@@ -1290,6 +1355,7 @@ impl Synth {
                     self.tone(2350., 0.35, Sine, 0.04 * k, at, 0., 0., M);
                 }
             }
+            Sfx::Splash(k) if self.sample(SPLASH, k, M) => {}
             Sfx::Splash(k) => {
                 self.burst(0.35, 700., 0.3 * k, Lowpass, 0.7, 0., 0., M);
                 self.burst(0.18, 2200., 0.12 * k, Bandpass, 0.7, 0., 0., M);
@@ -1332,6 +1398,7 @@ impl Synth {
                     self.tone(f, 0.3, Saw, 0.08, i as f32 * 0.18, 0., 0., M);
                 }
             }
+            Sfx::Carjack if self.sample(CARJACK, 1., M) => {}
             Sfx::Carjack => self.tone(700., 0.3, Saw, 0.05, 0., 400., 0., M),
             Sfx::Thunder(loud, near) => {
                 let dur = if near { 5.5 } else { 7. + self.rng.unit() * 3. };
@@ -1499,7 +1566,8 @@ impl Synth {
                 + a.wind.next(sr, block)
                 + a.whistle.next(sr, block)
                 + a.rumble.next(sr, block)
-                + a.siren.next(sr, 0.) * a.siren_g.tick();
+                + a.siren.next(sr, 0.) * a.siren_g.tick()
+                + a.siren_loop.as_mut().map_or(0., |l| l.next(sr));
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
             or += amb * c;
@@ -1677,6 +1745,13 @@ mod tests {
             (Sfx::Reload, "reload", 0.01),
             (Sfx::Reloaded, "reloaded", 0.011),
             (Sfx::WeaponSwitch, "weapon_switch", 0.009),
+            (Sfx::Crash(1.), "crash_heavy", 0.1018),
+            (Sfx::Crash(0.3), "crash_light", 0.0342),
+            (Sfx::Horn(1.), "horn", 0.03),
+            (Sfx::Door, "door", 0.0376),
+            (Sfx::Knock(1.), "knock", 0.0307),
+            (Sfx::Splash(1.), "splash", 0.0192),
+            (Sfx::Carjack, "carjack", 0.02),
             (Sfx::Ui, "ui", 0.0193),
             (Sfx::Tick, "tick", 0.0139),
             (Sfx::Pickup, "pickup", 0.0289),
@@ -1902,5 +1977,39 @@ mod tests {
             car_hi < open_hi * 0.5,
             "Höhen im Auto gedämpft: {car_hi} gegen {open_hi}"
         );
+    }
+
+    /// Das Martinshorn kommt aus der Aufnahme: hörbar mit den echten Tönen 464/619 Hz, etwa so laut wie die
+    /// frühere Synthese, still ohne Einsatzwagen.
+    #[test]
+    fn siren_plays_the_recorded_horn() {
+        let level = |samples: bool, siren: f64| {
+            let mut s = Synth::new(SR);
+            s.use_samples = samples;
+            s.apply(&Frame {
+                ambience: Mix {
+                    siren,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            render(&mut s, 0.5);
+            let x = channel(&render(&mut s, 3.2), 0);
+            (
+                rms(&x),
+                goertzel(&x, 464.) + goertzel(&x, 619.),
+                goertzel(&x, 540.),
+            )
+        };
+        let (syn, _, _) = level(false, 1.);
+        let (smp, tones, between) = level(true, 1.);
+        let (quiet, _, _) = level(true, 0.);
+        println!("Martinshorn: Synthese {syn:.4}, Aufnahme {smp:.4}");
+        assert!(tones > between * 4., "Töne 464/619 Hz fehlen");
+        assert!(
+            (0.9..=1.6).contains(&(smp / syn)),
+            "Pegel {smp} gegen {syn}"
+        );
+        assert!(quiet < 1e-4, "ohne Einsatzwagen still: {quiet}");
     }
 }

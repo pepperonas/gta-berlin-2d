@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Fahrzeuggeräusche aus echten Aufnahmen (Freesound, CC0) – schwere und leichte Unfälle, Hupen,
+  Autotüren, umgefahrene Poller, Spritzwasser, der Griff beim Autodiebstahl und ein echtes deutsches Martinshorn
+  (464/619 Hz, als nahtlose Schleife) statt der Synthese.
+
 - Native Fassung: Menü, Countdown und Aufträge klingen nach echten Instrumenten statt Rechteckwellen – Klicks und
   Ticks aus Kenneys „Interface Sounds“, Saxofon-Jingles für Auftragsbeginn, Erfolg, Fehlschlag und Einsammeln
   (Kenney „Music Jingles“, CC0).

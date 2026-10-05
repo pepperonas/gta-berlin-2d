@@ -97,11 +97,13 @@ def find(z, pattern: str) -> list[str]:
     return sorted(names)
 
 
-def load(z, name: str) -> np.ndarray:
+def load(z, name: str, align: bool = True) -> np.ndarray:
     y, sr = sf.read(io.BytesIO(z.read(name)), dtype="float64", always_2d=True)
     m = y.mean(axis=1)
     if sr != SR:
         m = librosa.resample(m, orig_sr=sr, target_sr=SR, res_type="soxr_hq")
+    if not align:
+        return m
     # am Einsatz ausrichten
     pk = np.abs(m).max()
     on = int(np.argmax(np.abs(m) > pk * 0.1))
@@ -116,13 +118,17 @@ def variants(rec: dict, z) -> list[list[dict]]:
 
 
 def render(rec: dict, layers: list[dict], z) -> np.ndarray:
+    loop = rec.get("schleife_blende_s")
     n = int(rec["laenge_s"] * SR)
+    # Schleife: über das Ende hinaus mitrendern, der Überhang wird in den Anfang geblendet
+    blend = int(loop * SR) if loop else 0
+    n_out, n = n, n + blend
     x = np.zeros(n)
     for lay in layers:
         zz = archive(lay["quelle"], QUELLEN[lay["quelle"]]) if "quelle" in lay else z
         name = find(zz, lay["datei"])[0]
         z_lay = zz
-        y = load(z_lay, name) * 10 ** (lay.get("db", 0) / 20)
+        y = load(z_lay, name, rec.get("ausrichten", True)) * 10 ** (lay.get("db", 0) / 20)
         if lay.get("von_s") is not None:
             # Ausschnitt aus einer langen Aufnahme (ab Einsatz gezählt)
             y = y[int(lay["von_s"] * SR) : int(lay.get("bis_s", 1e9) * SR)]
@@ -136,8 +142,15 @@ def render(rec: dict, layers: list[dict], z) -> np.ndarray:
     if rec.get("tiefpass_hz"):
         b, a = signal.butter(2, rec["tiefpass_hz"] / (SR / 2), "low")
         x = signal.lfilter(b, a, x)
-    fade = int(rec.get("fade_s", 0.05) * SR)
-    x[-fade:] *= np.linspace(1, 0, fade) ** 2
+    if loop:
+        # gleichleistungs-Blende: Ende läuft nahtlos in den Anfang über
+        t = np.linspace(0, np.pi / 2, blend)
+        head = x[:blend] * np.sin(t) + x[n_out : n_out + blend] * np.cos(t)
+        x = x[:n_out].copy()
+        x[:blend] = head
+    else:
+        fade = int(rec.get("fade_s", 0.05) * SR)
+        x[-fade:] *= np.linspace(1, 0, fade) ** 2
     x *= 10 ** (rec.get("spitze_db", -1.0) / 20) / max(np.abs(x).max(), 1e-9)
     return x
 

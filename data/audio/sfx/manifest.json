@@ -2,6 +2,51 @@
   "_hinweis": "Erzeugt von tools/audio/build_sfx.py aus tools/audio/sfx_recipes.json – nicht von Hand ändern.",
   "samplerate": 48000,
   "klaenge": {
+    "carjack": {
+      "zweck": "Fahrer herausziehen",
+      "dateien": [
+        "carjack_1.wav"
+      ],
+      "quelle": "fs_812359",
+      "weitere_quellen": [
+        "fs_437039"
+      ]
+    },
+    "crash_heavy": {
+      "zweck": "schwerer Unfall",
+      "dateien": [
+        "crash_heavy_1.wav",
+        "crash_heavy_2.wav"
+      ],
+      "quelle": "fs_675902",
+      "weitere_quellen": [
+        "fs_675466"
+      ]
+    },
+    "crash_light": {
+      "zweck": "leichter Rempler, Blech",
+      "dateien": [
+        "crash_light_1.wav",
+        "crash_light_2.wav"
+      ],
+      "quelle": "fs_151624",
+      "weitere_quellen": [
+        "fs_807437"
+      ]
+    },
+    "door": {
+      "zweck": "Autotür (ein- und aussteigen)",
+      "dateien": [
+        "door_1.wav",
+        "door_2.wav",
+        "door_3.wav"
+      ],
+      "quelle": "fs_437039",
+      "weitere_quellen": [
+        "fs_784747",
+        "fs_831891"
+      ]
+    },
     "hit": {
       "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
       "dateien": [
@@ -13,6 +58,19 @@
       ],
       "quelle": "kenney_impact"
     },
+    "horn": {
+      "zweck": "Hupe",
+      "dateien": [
+        "horn_1.wav",
+        "horn_2.wav",
+        "horn_3.wav"
+      ],
+      "quelle": "fs_734253",
+      "weitere_quellen": [
+        "fs_547667",
+        "fs_571322"
+      ]
+    },
     "impact": {
       "zweck": "Kugeleinschlag in Wand und Boden",
       "dateien": [
@@ -23,6 +81,17 @@
         "impact_5.wav"
       ],
       "quelle": "kenney_impact"
+    },
+    "knock": {
+      "zweck": "Poller oder Pfosten umgefahren",
+      "dateien": [
+        "knock_1.wav",
+        "knock_2.wav"
+      ],
+      "quelle": "fs_734237",
+      "weitere_quellen": [
+        "fs_406490"
+      ]
     },
     "mission_fail": {
       "zweck": "Auftrag gescheitert, K. o.",
@@ -82,6 +151,28 @@
         "reloaded_1.wav"
       ],
       "quelle": "kenney_rpg"
+    },
+    "siren": {
+      "zweck": "Martinshorn (Schleife, vier Perioden à 1,6 s, 464/619 Hz; Länge per Kreuzkorrelation)",
+      "dateien": [
+        "siren_1.wav"
+      ],
+      "quelle": "fs_811916"
+    },
+    "splash": {
+      "zweck": "Spritzwasser (Aquaplaning, Pfütze)",
+      "dateien": [
+        "splash_1.wav",
+        "splash_2.wav",
+        "splash_3.wav",
+        "splash_4.wav",
+        "splash_5.wav"
+      ],
+      "quelle": "fs_207139",
+      "weitere_quellen": [
+        "fs_425140",
+        "fs_829676"
+      ]
     },
     "step_grass": {
       "zweck": "Schritt auf Gras und Erde",
@@ -214,6 +305,108 @@
       "seite": "https://kenney.nl/assets/music-jingles",
       "lizenz": "CC0 1.0",
       "urheber": "Kenney (www.kenney.nl)"
+    },
+    "fs_675902": {
+      "titel": "S38-24 Big heavy car crash.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/675902/",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_675466": {
+      "titel": "S37-14 Two cars crash foley; good metallic bump.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/675466/",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_151624": {
+      "titel": "Clank Car Crash Collision",
+      "seite": "https://freesound.org/people/qubodup/sounds/151624/",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_807437": {
+      "titel": "car crash long 1",
+      "seite": "https://freesound.org/people/Logicogonist/sounds/807437/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Logicogonist"
+    },
+    "fs_734253": {
+      "titel": "Car Horn",
+      "seite": "https://freesound.org/people/yfjesse/sounds/734253/",
+      "lizenz": "CC0 1.0",
+      "urheber": "yfjesse"
+    },
+    "fs_571322": {
+      "titel": "horn.wav",
+      "seite": "https://freesound.org/people/maciejadach/sounds/571322/",
+      "lizenz": "CC0 1.0",
+      "urheber": "maciejadach"
+    },
+    "fs_547667": {
+      "titel": "Car Horn.wav",
+      "seite": "https://freesound.org/people/DuranBurrus/sounds/547667/",
+      "lizenz": "CC0 1.0",
+      "urheber": "DuranBurrus"
+    },
+    "fs_437039": {
+      "titel": "Car door close",
+      "seite": "https://freesound.org/people/Frederik_Sunne/sounds/437039/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Frederik_Sunne"
+    },
+    "fs_831891": {
+      "titel": "Car Door Shutting",
+      "seite": "https://freesound.org/people/Crimsonblaze/sounds/831891/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Crimsonblaze"
+    },
+    "fs_784747": {
+      "titel": "Car Door Open & Close",
+      "seite": "https://freesound.org/people/djfigs1/sounds/784747/",
+      "lizenz": "CC0 1.0",
+      "urheber": "djfigs1"
+    },
+    "fs_734237": {
+      "titel": "Rest Stop Metal Pole",
+      "seite": "https://freesound.org/people/yfjesse/sounds/734237/",
+      "lizenz": "CC0 1.0",
+      "urheber": "yfjesse"
+    },
+    "fs_406490": {
+      "titel": "hit - metallic - basketball hoop pipe 01.wav",
+      "seite": "https://freesound.org/people/Anthousai/sounds/406490/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Anthousai"
+    },
+    "fs_207139": {
+      "titel": "PuddleSplash.wav",
+      "seite": "https://freesound.org/people/ahill86/sounds/207139/",
+      "lizenz": "CC0 1.0",
+      "urheber": "ahill86"
+    },
+    "fs_829676": {
+      "titel": "Water Splash",
+      "seite": "https://freesound.org/people/AardsReal/sounds/829676/",
+      "lizenz": "CC0 1.0",
+      "urheber": "AardsReal"
+    },
+    "fs_425140": {
+      "titel": "Small Splash (field recording walk with daughter - rec 3).wav",
+      "seite": "https://freesound.org/people/gis_sweden/sounds/425140/",
+      "lizenz": "CC0 1.0",
+      "urheber": "gis_sweden"
+    },
+    "fs_812359": {
+      "titel": "Skin contact grab",
+      "seite": "https://freesound.org/people/avainquin/sounds/812359/",
+      "lizenz": "CC0 1.0",
+      "urheber": "avainquin"
+    },
+    "fs_811916": {
+      "titel": "Martinshorn (Siren) 2",
+      "seite": "https://freesound.org/people/TitanKaempfer/sounds/811916/",
+      "lizenz": "CC0 1.0",
+      "urheber": "TitanKaempfer"
     }
   }
 }

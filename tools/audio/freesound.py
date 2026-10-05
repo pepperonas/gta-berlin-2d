@@ -14,6 +14,7 @@ Nach der Anmeldung kommen access_token/refresh_token dazu (OAuth2, für Original
 import json
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -83,11 +84,21 @@ def info(sid: int) -> dict:
 
 
 def download(sid: int) -> bytes:
-    req = urllib.request.Request(
-        f"{API}/sounds/{sid}/download/",
-        headers={"Authorization": f"Bearer {token()}", "User-Agent": "gta-berlin-build"},
-    )
-    return urllib.request.urlopen(req).read()
+    """Originaldatei; bei Drosselung (HTTP 429) mit wachsender Pause erneut versuchen."""
+    for attempt in range(8):
+        req = urllib.request.Request(
+            f"{API}/sounds/{sid}/download/",
+            headers={"Authorization": f"Bearer {token()}", "User-Agent": "gta-berlin-build"},
+        )
+        try:
+            return urllib.request.urlopen(req).read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+            wait = float(e.headers.get("Retry-After") or 0) or 10 * 2**attempt
+            print(f"Freesound drosselt, warte {wait:.0f} s", file=sys.stderr)
+            time.sleep(min(wait, 600))
+    sys.exit(f"Download von {sid} scheitert dauerhaft (429)")
 
 
 def search(q: str, cc0: bool, max_dur: float | None) -> None:

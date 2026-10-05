@@ -48,6 +48,142 @@
       "sha256": "b729ba57959bd58793d2c5cafa348aaf2655d354f3da35ec4729e03ec77197b8",
       "lizenz": "CC0 1.0",
       "urheber": "Kenney (www.kenney.nl)"
+    },
+    "fs_675902": {
+      "freesound": 675902,
+      "titel": "S38-24 Big heavy car crash.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/675902/",
+      "sha256": "1befb095a25b666f8a904b79a472cbd7f81757da60eb52d26dece3d4fbcfd120",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_675466": {
+      "freesound": 675466,
+      "titel": "S37-14 Two cars crash foley; good metallic bump.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/675466/",
+      "sha256": "9de575f9685722940894547a16eef28fedf2b7502d2c9bf7d529cb52903e2e59",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_151624": {
+      "freesound": 151624,
+      "titel": "Clank Car Crash Collision",
+      "seite": "https://freesound.org/people/qubodup/sounds/151624/",
+      "sha256": "1d3ace16de575862a6b7973f24c522b37c8bc534360b8ab801ac1cf42104c75f",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_807437": {
+      "freesound": 807437,
+      "titel": "car crash long 1",
+      "seite": "https://freesound.org/people/Logicogonist/sounds/807437/",
+      "sha256": "eb18f9c0a27f4b2e6d54386affbe122cf74d91a69078bf5c6000fc420476f555",
+      "lizenz": "CC0 1.0",
+      "urheber": "Logicogonist"
+    },
+    "fs_734253": {
+      "freesound": 734253,
+      "titel": "Car Horn",
+      "seite": "https://freesound.org/people/yfjesse/sounds/734253/",
+      "sha256": "189aea079aa5972180b0c3484105877cbbc8a1ed04e80d51896e98173436b947",
+      "lizenz": "CC0 1.0",
+      "urheber": "yfjesse"
+    },
+    "fs_571322": {
+      "freesound": 571322,
+      "titel": "horn.wav",
+      "seite": "https://freesound.org/people/maciejadach/sounds/571322/",
+      "sha256": "81aba557895dbb46d3d638f1867d0e954a678f34701b0faa7c610c035bb4c3f7",
+      "lizenz": "CC0 1.0",
+      "urheber": "maciejadach"
+    },
+    "fs_547667": {
+      "freesound": 547667,
+      "titel": "Car Horn.wav",
+      "seite": "https://freesound.org/people/DuranBurrus/sounds/547667/",
+      "sha256": "66bba5c2d12249f81f9564c6456b82e782d7599a4efbf8f8c2a123c405b48a8f",
+      "lizenz": "CC0 1.0",
+      "urheber": "DuranBurrus"
+    },
+    "fs_437039": {
+      "freesound": 437039,
+      "titel": "Car door close",
+      "seite": "https://freesound.org/people/Frederik_Sunne/sounds/437039/",
+      "sha256": "f94a64d884128488dba63b7c4c9d843ec44e44799db948af1528f67677dfc420",
+      "lizenz": "CC0 1.0",
+      "urheber": "Frederik_Sunne"
+    },
+    "fs_831891": {
+      "freesound": 831891,
+      "titel": "Car Door Shutting",
+      "seite": "https://freesound.org/people/Crimsonblaze/sounds/831891/",
+      "sha256": "20576077d91217b42153bee4d84a1eea5f6d04cc2322c94be1edf00b9fe4ac0d",
+      "lizenz": "CC0 1.0",
+      "urheber": "Crimsonblaze"
+    },
+    "fs_784747": {
+      "freesound": 784747,
+      "titel": "Car Door Open & Close",
+      "seite": "https://freesound.org/people/djfigs1/sounds/784747/",
+      "sha256": "673c24d82fea6f621284a573f77bf3f38a90af370600da58e36456ea4a67974d",
+      "lizenz": "CC0 1.0",
+      "urheber": "djfigs1"
+    },
+    "fs_734237": {
+      "freesound": 734237,
+      "titel": "Rest Stop Metal Pole",
+      "seite": "https://freesound.org/people/yfjesse/sounds/734237/",
+      "sha256": "b02f23b2710871dd451bc3ad3b648309233b03e04ac7ce4f238f2f8cacfb6418",
+      "lizenz": "CC0 1.0",
+      "urheber": "yfjesse"
+    },
+    "fs_406490": {
+      "freesound": 406490,
+      "titel": "hit - metallic - basketball hoop pipe 01.wav",
+      "seite": "https://freesound.org/people/Anthousai/sounds/406490/",
+      "sha256": "0922be32f768b9e35490792561f2236bb0ff4be5486859560b2bed0428a9caf1",
+      "lizenz": "CC0 1.0",
+      "urheber": "Anthousai"
+    },
+    "fs_207139": {
+      "freesound": 207139,
+      "titel": "PuddleSplash.wav",
+      "seite": "https://freesound.org/people/ahill86/sounds/207139/",
+      "sha256": "51271a24a6145e842c2c77c766aaf5e297d8e656a72c6086fca1b16dbecbe2f4",
+      "lizenz": "CC0 1.0",
+      "urheber": "ahill86"
+    },
+    "fs_829676": {
+      "freesound": 829676,
+      "titel": "Water Splash",
+      "seite": "https://freesound.org/people/AardsReal/sounds/829676/",
+      "sha256": "0cdc74765ff39a809554606f593b444f1d36eed78939fa4b88206252e6bb3240",
+      "lizenz": "CC0 1.0",
+      "urheber": "AardsReal"
+    },
+    "fs_425140": {
+      "freesound": 425140,
+      "titel": "Small Splash (field recording walk with daughter - rec 3).wav",
+      "seite": "https://freesound.org/people/gis_sweden/sounds/425140/",
+      "sha256": "f3087ad9e679ae5e84dec3029909dfb7a6082c11be865022cf163cde9ffa8633",
+      "lizenz": "CC0 1.0",
+      "urheber": "gis_sweden"
+    },
+    "fs_812359": {
+      "freesound": 812359,
+      "titel": "Skin contact grab",
+      "seite": "https://freesound.org/people/avainquin/sounds/812359/",
+      "sha256": "069b821a9db769fe129cc119ee41d2370a38f6bfc73c291ca5886a850dc02ea7",
+      "lizenz": "CC0 1.0",
+      "urheber": "avainquin"
+    },
+    "fs_811916": {
+      "freesound": 811916,
+      "titel": "Martinshorn (Siren) 2",
+      "seite": "https://freesound.org/people/TitanKaempfer/sounds/811916/",
+      "sha256": "6ce4220bb81847bbb6e106d3c59ad7640e5bf0df3e885cc0508e3dd01a3e8349",
+      "lizenz": "CC0 1.0",
+      "urheber": "TitanKaempfer"
     }
   },
   "klaenge": {
@@ -238,6 +374,229 @@
       ],
       "laenge_s": 2.0,
       "fade_s": 0.3
+    },
+    "crash_heavy": {
+      "zweck": "schwerer Unfall",
+      "quelle": "fs_675902",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_675902",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_675466",
+            "datei": "*",
+            "at": 0,
+            "bis_s": 1.9
+          }
+        ]
+      ],
+      "laenge_s": 2.2,
+      "fade_s": 0.6,
+      "hochpass_hz": 30
+    },
+    "crash_light": {
+      "zweck": "leichter Rempler, Blech",
+      "quelle": "fs_151624",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_151624",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_807437",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 0.9,
+      "fade_s": 0.3,
+      "hochpass_hz": 40
+    },
+    "horn": {
+      "zweck": "Hupe",
+      "quelle": "fs_734253",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_734253",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_571322",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_547667",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 0.6,
+      "fade_s": 0.12,
+      "hochpass_hz": 80
+    },
+    "door": {
+      "zweck": "Autotür (ein- und aussteigen)",
+      "quelle": "fs_437039",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_437039",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_831891",
+            "datei": "*",
+            "at": 0,
+            "bis_s": 0.45
+          }
+        ],
+        [
+          {
+            "quelle": "fs_784747",
+            "datei": "*",
+            "at": 0,
+            "von_s": 1.55,
+            "bis_s": 2.0
+          }
+        ]
+      ],
+      "laenge_s": 0.45,
+      "fade_s": 0.12,
+      "hochpass_hz": 50
+    },
+    "knock": {
+      "zweck": "Poller oder Pfosten umgefahren",
+      "quelle": "fs_734237",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_734237",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_406490",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 0.8,
+      "fade_s": 0.4,
+      "hochpass_hz": 60
+    },
+    "splash": {
+      "zweck": "Spritzwasser (Aquaplaning, Pfütze)",
+      "quelle": "fs_207139",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_207139",
+            "datei": "*",
+            "at": 0,
+            "bis_s": 0.6
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207139",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.64,
+            "bis_s": 1.3
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207139",
+            "datei": "*",
+            "at": 0,
+            "von_s": 2.62,
+            "bis_s": 3.3
+          }
+        ],
+        [
+          {
+            "quelle": "fs_829676",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_425140",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 0.6,
+      "fade_s": 0.2,
+      "hochpass_hz": 80
+    },
+    "carjack": {
+      "zweck": "Fahrer herausziehen",
+      "quelle": "fs_812359",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_812359",
+            "datei": "*",
+            "at": 0,
+            "bis_s": 1.0
+          },
+          {
+            "quelle": "fs_437039",
+            "datei": "*",
+            "at": 0.35,
+            "db": -3
+          }
+        ]
+      ],
+      "laenge_s": 1.0,
+      "fade_s": 0.2,
+      "hochpass_hz": 60
+    },
+    "siren": {
+      "zweck": "Martinshorn (Schleife, vier Perioden à 1,6 s, 464/619 Hz; Länge per Kreuzkorrelation)",
+      "quelle": "fs_811916",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_811916",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.82
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6.4,
+      "schleife_blende_s": 0.04,
+      "hochpass_hz": 120
     }
   }
 }

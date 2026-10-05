@@ -1,13 +1,13 @@
 {
   "version": "0.46.0",
   "loc": {
-    "rust": 65200,
+    "rust": 65300,
     "wgsl": 562,
     "js": 26440,
     "csharp": 145
   },
   "tests": {
-    "rust": 336,
+    "rust": 337,
     "js": 476
   },
   "edition": "2024",
