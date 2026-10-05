@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Reifen und Fahrtwind aus echten Aufnahmen – Abrollen auf Asphalt, Kopfsteinpflaster,
+  Schotter/Gras (vorher stumm), nasse Straße, Schnee, Rutschen, Reifenquietschen (im Drift tiefer), Fahrtwind und
+  Regen aufs Autodach; Tempo der Schleifen folgt der Geschwindigkeit (Freesound, CC0/CC BY).
+
 - Native Fassung: Fahrzeuggeräusche aus echten Aufnahmen (Freesound, CC0) – schwere und leichte Unfälle, Hupen,
   Autotüren, umgefahrene Poller, Spritzwasser, der Griff beim Autodiebstahl und ein echtes deutsches Martinshorn
   (464/619 Hz, als nahtlose Schleife) statt der Synthese.

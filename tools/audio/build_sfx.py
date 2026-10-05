@@ -17,7 +17,9 @@ import fnmatch
 import hashlib
 import io
 import json
+import subprocess
 import sys
+import tempfile
 import urllib.request
 import zipfile  # noqa: F401  (Archive)
 from pathlib import Path
@@ -98,7 +100,21 @@ def find(z, pattern: str) -> list[str]:
 
 
 def load(z, name: str, align: bool = True) -> np.ndarray:
-    y, sr = sf.read(io.BytesIO(z.read(name)), dtype="float64", always_2d=True)
+    data = z.read(name)
+    try:
+        y, sr = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
+    except sf.LibsndfileError:
+        # m4a/mp3 u. ä.: über ffmpeg nach WAV dekodieren – aus einer Datei, denn m4a braucht Sprünge
+        # (über eine Pipe kam bei m4a still ein leeres Ergebnis heraus)
+        with tempfile.NamedTemporaryFile(suffix=Path(name).suffix or ".bin") as tmp:
+            tmp.write(data)
+            tmp.flush()
+            wav = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", tmp.name, "-f", "wav", "-acodec", "pcm_f32le", "pipe:1"],
+                capture_output=True,
+                check=True,
+            ).stdout
+        y, sr = sf.read(io.BytesIO(wav), dtype="float64", always_2d=True)
     m = y.mean(axis=1)
     if sr != SR:
         m = librosa.resample(m, orig_sr=sr, target_sr=SR, res_type="soxr_hq")
@@ -151,6 +167,8 @@ def render(rec: dict, layers: list[dict], z) -> np.ndarray:
     else:
         fade = int(rec.get("fade_s", 0.05) * SR)
         x[-fade:] *= np.linspace(1, 0, fade) ** 2
+    if np.sqrt((x**2).mean()) < 1e-4:
+        sys.exit("Ergebnis ist stumm – Ausschnitt oder Dekodierung prüfen")
     x *= 10 ** (rec.get("spitze_db", -1.0) / 20) / max(np.abs(x).max(), 1e-9)
     return x
 

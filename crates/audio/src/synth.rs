@@ -74,6 +74,16 @@ pub const DOOR: SfxSpec = spec("door", 0.229, 0.05, true);
 pub const KNOCK: SfxSpec = spec("knock", 0.408, 0.08, true);
 pub const SPLASH: SfxSpec = spec("splash", 0.351, 0.1, true);
 pub const CARJACK: SfxSpec = spec("carjack", 0.113, 0.04, true);
+/// Reifen- und Wind-Schleifen: Pegel bei voller Steuergröße (Test `tire_loops_match_the_synth_layers`)
+pub const LOOP_ROLL: f32 = 0.0474;
+pub const LOOP_COBBLE: f32 = 0.0362;
+pub const LOOP_GRAVEL: f32 = 0.0851;
+pub const LOOP_WET: f32 = 0.543;
+pub const LOOP_SLIDE: f32 = 0.149;
+pub const LOOP_SNOW: f32 = 0.63;
+pub const LOOP_SQUEAL: f32 = 0.144;
+pub const LOOP_WIND: f32 = 0.0624;
+pub const LOOP_ROOF: f32 = 0.159;
 /// Martinshorn-Schleife: Pegel bei voller Nähe (`Mix::siren` = 1)
 pub const SIREN_LEVEL: f32 = 0.217;
 /// Choke-Gruppe für Samples ohne Choke
@@ -296,6 +306,8 @@ struct LoopLayer {
     buf: Arc<[f32]>,
     pos: f64,
     gain: Smooth,
+    /// Abspieltempo (1 = Originaltonhöhe)
+    rate: Smooth,
 }
 impl LoopLayer {
     fn new(name: &str) -> Option<Self> {
@@ -303,15 +315,74 @@ impl LoopLayer {
             buf: b.clone(),
             pos: 0.,
             gain: Smooth::new(0.),
+            rate: Smooth::new(1.),
         })
     }
+    /// Startpunkt versetzen, damit zwei Ebenen aus derselben Aufnahme nicht gleichlaufen.
+    fn offset(mut self, frac: f64) -> Self {
+        self.pos = frac * self.buf.len() as f64;
+        self
+    }
+    fn set(&mut self, gain: f32, rate: f32, t: f32, sr: f32) {
+        self.gain.set(gain, t, sr);
+        self.rate.set(rate, t, sr);
+    }
     fn next(&mut self, sr: f32) -> f32 {
+        // still: nichts rechnen (die Schleife pausiert, bis sie wieder gebraucht wird)
+        if self.gain.target == 0. && self.gain.value.abs() < 1e-5 {
+            self.gain.value = 0.;
+            return 0.;
+        }
         let n = self.buf.len();
         let i = self.pos as usize % n;
         let t = (self.pos - self.pos.floor()) as f32;
         let x = self.buf[i] * (1. - t) + self.buf[(i + 1) % n] * t;
-        self.pos = (self.pos + 48000. / sr as f64) % n as f64;
+        self.pos = (self.pos + self.rate.tick() as f64 * 48000. / sr as f64) % n as f64;
         x * self.gain.tick()
+    }
+}
+
+/// Reifen, Fahrtwind und Regen aufs Dach aus Aufnahmen (ersetzen die Rausch-Ebenen der Synthese).
+struct TireLoops {
+    roll: LoopLayer,
+    cobble: LoopLayer,
+    gravel: LoopLayer,
+    wet: LoopLayer,
+    slide: LoopLayer,
+    snow: LoopLayer,
+    squeal: LoopLayer,
+    wind: LoopLayer,
+    roof: LoopLayer,
+}
+impl TireLoops {
+    fn new() -> Option<Self> {
+        Some(Self {
+            roll: LoopLayer::new("tire_roll")?,
+            cobble: LoopLayer::new("tire_cobble")?,
+            gravel: LoopLayer::new("tire_gravel")?,
+            wet: LoopLayer::new("tire_wet")?,
+            slide: LoopLayer::new("tire_wet")?.offset(0.5),
+            snow: LoopLayer::new("tire_snow")?,
+            squeal: LoopLayer::new("tire_squeal")?,
+            wind: LoopLayer::new("drive_wind")?,
+            roof: LoopLayer::new("rain_roof")?,
+        })
+    }
+    fn next(&mut self, sr: f32) -> f32 {
+        [
+            &mut self.roll,
+            &mut self.cobble,
+            &mut self.gravel,
+            &mut self.wet,
+            &mut self.slide,
+            &mut self.snow,
+            &mut self.squeal,
+            &mut self.wind,
+            &mut self.roof,
+        ]
+        .into_iter()
+        .map(|l| l.next(sr))
+        .sum()
     }
 }
 
@@ -429,6 +500,8 @@ pub struct Synth {
     reference: Option<(Arc<[f32]>, f64)>,
     /// laufende Aufnahmen (Schüsse, Klang-Samples)
     plays: Vec<SamplePlay>,
+    /// Reifen, Fahrtwind, Regen aufs Dach aus Aufnahmen
+    tire_loops: Option<TireLoops>,
     /// Klang-Samples statt Synthese (`GTA_SFX_SAMPLES=0` = aus)
     pub use_samples: bool,
 }
@@ -565,6 +638,7 @@ impl Synth {
             engine_ch: Smooth::new(1.),
             reference: None,
             plays: Vec::new(),
+            tire_loops: TireLoops::new(),
             use_samples: sfx_samples_on(),
         }
     }
@@ -801,6 +875,61 @@ impl Synth {
             0.4,
         );
         set(&mut e.roof_low.gain, 0.06 * (r - 0.3).max(0.), 0.4);
+        // Aufnahmen statt Rauschen: dieselben Steuergrößen, Tempo folgt der Geschwindigkeit
+        if let (true, Some(t)) = (self.use_samples, self.tire_loops.as_mut()) {
+            for l in [
+                &mut e.roll,
+                &mut e.cobble,
+                &mut e.wet,
+                &mut e.snow,
+                &mut e.slide,
+                &mut e.wind,
+                &mut e.squeal,
+                &mut e.roof,
+                &mut e.roof_low,
+            ] {
+                l.gain.set(0., 0.05, sr);
+            }
+            e.sqg.set(0., 0.05, sr);
+            let roll = tv(|x| x.roll);
+            let speed_rate = 0.75 + 0.5 * roll;
+            t.roll.set(LOOP_ROLL * roll, speed_rate, 0.1, sr);
+            t.cobble
+                .set(LOOP_COBBLE * tv(|x| x.cobble), speed_rate, 0.08, sr);
+            t.gravel
+                .set(LOOP_GRAVEL * tv(|x| x.offroad), speed_rate, 0.08, sr);
+            t.wet.set(LOOP_WET * tv(|x| x.wet), speed_rate, 0.1, sr);
+            t.slide.set(LOOP_SLIDE * tv(|x| x.slide), 1.1, 0.05, sr);
+            t.snow.set(LOOP_SNOW * tv(|x| x.snow), speed_rate, 0.08, sr);
+            // Quietschen: im Drift tiefer (wie die Synthese: −300 Hz bei vollem Winkel ≈ −30 %)
+            t.squeal.set(
+                LOOP_SQUEAL * tv(|x| x.skid),
+                1. - 0.15 * roll - 0.3 * tv(|x| x.angle),
+                0.04,
+                sr,
+            );
+            t.wind.set(
+                LOOP_WIND * tv(|x| x.wind),
+                0.8 + 0.4 * tv(|x| x.wind),
+                0.2,
+                sr,
+            );
+            t.roof.set(LOOP_ROOF * (r / 1.6).min(1.), 1., 0.4, sr);
+        } else if let Some(t) = self.tire_loops.as_mut() {
+            for l in [
+                &mut t.roll,
+                &mut t.cobble,
+                &mut t.gravel,
+                &mut t.wet,
+                &mut t.slide,
+                &mut t.snow,
+                &mut t.squeal,
+                &mut t.wind,
+                &mut t.roof,
+            ] {
+                l.gain.set(0., 0.05, sr);
+            }
+        }
     }
 
     /// Motoren aus Aufnahmen: feste Zuordnung Fahrzeug → Stimme (wie bei den Synthese-Stimmen).
@@ -1516,6 +1645,9 @@ impl Synth {
             ] {
                 eng += l.next(sr, block);
             }
+            if let Some(t) = &mut self.tire_loops {
+                eng += t.next(sr);
+            }
             let vib = e.vib.next(sr, 0.) * 25.;
             eng += (e.sq[0].next(sr, vib) + e.sq[1].next(sr, vib)) * e.sqg.tick();
             eng *= e.bus.tick();
@@ -2011,5 +2143,70 @@ mod tests {
             "Pegel {smp} gegen {syn}"
         );
         assert!(quiet < 1e-4, "ohne Einsatzwagen still: {quiet}");
+    }
+
+    /// Reifen, Fahrtwind und Regen aufs Dach aus Aufnahmen: je Ebene etwa so laut wie die Rausch-Ebene der
+    /// Synthese (Zielfaktor je Ebene), still ohne Steuergröße.
+    #[test]
+    fn tire_loops_match_the_synth_layers() {
+        let level = |samples: bool, t: Tires, rain: f32| {
+            let mut s = Synth::new(SR);
+            s.use_samples = samples;
+            s.apply(&Frame {
+                vehicle: Vehicle {
+                    active: true,
+                    in_car: rain > 0.,
+                    engine: None,
+                    tires: Some(t),
+                    rain,
+                },
+                ..Default::default()
+            });
+            render(&mut s, 0.6);
+            rms(&channel(&render(&mut s, 2.), 0))
+        };
+        let base = Tires::default();
+        // (Name, Steuergrößen, Regen im Auto, Faktor gegen die Synthese)
+        let cases = [
+            ("roll", Tires { roll: 1., ..base }, 0., 1.2),
+            ("cobble", Tires { cobble: 1., ..base }, 0., 1.2),
+            (
+                "gravel",
+                Tires {
+                    offroad: 1.,
+                    ..base
+                },
+                0.,
+                0.0,
+            ),
+            ("wet", Tires { wet: 1., ..base }, 0., 1.2),
+            ("slide", Tires { slide: 1., ..base }, 0., 1.2),
+            ("snow", Tires { snow: 1., ..base }, 0., 1.2),
+            (
+                "squeal",
+                Tires {
+                    roll: 0.5,
+                    skid: 1.,
+                    ..base
+                },
+                0.,
+                1.2,
+            ),
+            ("wind", Tires { wind: 1., ..base }, 0., 1.2),
+            ("roof", base, 1.6, 1.2),
+        ];
+        let mut bad = Vec::new();
+        for (name, t, rain, factor) in cases {
+            let (syn_l, smp_l) = (level(false, t, rain), level(true, t, rain));
+            // Schotter hatte keine Synthese-Ebene (die Simulation lieferte sie, gespielt wurde sie nie): festes
+            // Ziel etwas über dem Abrollen auf Asphalt
+            let target = if factor == 0. { 0.004 } else { syn_l * factor };
+            println!("TIRE {name:7} synth {syn_l:.4} sample {smp_l:.4} ziel {target:.4}");
+            if target > 0. && !(0.8..=1.25).contains(&(smp_l / target)) {
+                bad.push(format!("{name}: {smp_l:.4} statt {target:.4}"));
+            }
+        }
+        assert!(level(true, base, 0.) < 1e-5, "still ohne Reifen");
+        assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
     }
 }

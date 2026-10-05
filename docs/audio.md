@@ -316,3 +316,26 @@ gebraucht. Test `siren_plays_the_recorded_horn`.
 **Build:** `schleife_blende_s` macht aus einem Ausschnitt eine nahtlose Schleife (der Überhang wird mit
 gleichleistungs-Blende in den Anfang gemischt), `ausrichten: false` lässt Ausschnitte an ihrer absoluten Zeit.
 Freesound drosselt Downloads (HTTP 429); `freesound.py` wartet dann und versucht es erneut.
+
+### Phase 3: Reifen, Fahrtwind, Regen aufs Dach (Schleifen)
+
+| Ebene (`Tires`) | Freesound-Quelle | Lizenz |
+|---|---|---|
+| Abrollen auf Asphalt (`roll`) | Soundholder „audi a4 b8 20tdi tyres asphalt medium speed mono“ | CC BY 3.0 |
+| Kopfstein (`cobble`) | Gustavus „Car on a street with uneven cobblestones-1“ | CC BY 4.0 |
+| Schotter, Gras, Erde (`offroad`, **neu hörbar** – die Synthese hatte keine Ebene dafür) | TRP „car tire on gravel rear cu“ | CC0 |
+| Nässe (`wet`), Rutschen bei wenig Grip (`slide`, gleiche Aufnahme versetzt) | Zabuhailo „RainAndTireNoise“ | CC BY 4.0 |
+| Schnee und Eis (`snow`) | dunebuggy „tires_snow_ice_slow“ | CC0 |
+| Quietschen (`skid`) | johnnydekk „screeching tyres / tires“, tonale Strecke um 1,2 kHz | CC0 |
+| Fahrtwind (`wind`) | klankbeeld „storm wind room-tone“ | CC BY 4.0 |
+| Regen aufs Dach (im Auto) | Nox_Sound „Ambiance_Rain_Inside_Car_Roof_Loop_Stereo“ | CC0 |
+
+**Auswahl:** je Aufnahme das stetigste 6-s-Stück (kleinste Pegelschwankung in 0,25-s-Fenstern, 0,3–2,5 dB);
+beim Quietschen die längste tonale Strecke (pyin, Flachheit ≈ 0). Schleifen mit 0,3 s (Quietschen 0,15 s)
+Überblendung. **Laufzeit:** `TireLoops` aus `LoopLayer`s mit geglättetem Pegel und Tempo; Tempo 0,75–1,25 mit der
+Geschwindigkeit, Quietschen im Drift bis 30 % tiefer (wie die Synthese), stille Ebenen rechnen nicht. Pegel
+`LOOP_*` gegen die Rausch-Ebenen der Synthese (Faktor 1,2), Schotter fest knapp über dem Abrollen
+(Test `tire_loops_match_the_synth_layers`).
+
+**Falle:** m4a lässt sich nicht über eine Pipe dekodieren (ffmpeg braucht Sprünge) – das ergab still eine leere
+Kopfstein-Schleife. Das Build-Skript dekodiert jetzt über eine Zwischendatei und bricht bei stummen Ergebnissen ab.

@@ -47,6 +47,13 @@
         "fs_831891"
       ]
     },
+    "drive_wind": {
+      "zweck": "Fahrtwind (Schleife)",
+      "dateien": [
+        "drive_wind_1.wav"
+      ],
+      "quelle": "fs_709572"
+    },
     "hit": {
       "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
       "dateien": [
@@ -136,6 +143,13 @@
         "punch_5.wav"
       ],
       "quelle": "kenney_impact"
+    },
+    "rain_roof": {
+      "zweck": "Regen aufs Autodach, innen (Schleife)",
+      "dateien": [
+        "rain_roof_1.wav"
+      ],
+      "quelle": "fs_535869"
     },
     "reload": {
       "zweck": "Nachladen beginnt: Magazin raus",
@@ -249,6 +263,48 @@
         "tick_1.wav"
       ],
       "quelle": "kenney_interface"
+    },
+    "tire_cobble": {
+      "zweck": "Reifen auf Kopfsteinpflaster (Schleife)",
+      "dateien": [
+        "tire_cobble_1.wav"
+      ],
+      "quelle": "fs_849489"
+    },
+    "tire_gravel": {
+      "zweck": "Reifen auf Schotter, Gras, Erde (Schleife)",
+      "dateien": [
+        "tire_gravel_1.wav"
+      ],
+      "quelle": "fs_577504"
+    },
+    "tire_roll": {
+      "zweck": "Reifen auf Asphalt (Schleife)",
+      "dateien": [
+        "tire_roll_1.wav"
+      ],
+      "quelle": "fs_425398"
+    },
+    "tire_snow": {
+      "zweck": "Reifen auf Schnee und Eis (Schleife)",
+      "dateien": [
+        "tire_snow_1.wav"
+      ],
+      "quelle": "fs_71099"
+    },
+    "tire_squeal": {
+      "zweck": "Reifenquietschen (Schleife, um 1,2 kHz)",
+      "dateien": [
+        "tire_squeal_1.wav"
+      ],
+      "quelle": "fs_614627"
+    },
+    "tire_wet": {
+      "zweck": "Reifen auf nasser Straße, Rutschen (Schleife)",
+      "dateien": [
+        "tire_wet_1.wav"
+      ],
+      "quelle": "fs_464988"
     },
     "ui": {
       "zweck": "Menü: Auswahl, Bestätigen",
@@ -407,6 +463,54 @@
       "seite": "https://freesound.org/people/TitanKaempfer/sounds/811916/",
       "lizenz": "CC0 1.0",
       "urheber": "TitanKaempfer"
+    },
+    "fs_425398": {
+      "titel": "audi a4 b8 20tdi tyres asphalt medium speed mono.wav",
+      "seite": "https://freesound.org/people/Soundholder/sounds/425398/",
+      "lizenz": "CC BY 3.0",
+      "urheber": "Soundholder"
+    },
+    "fs_849489": {
+      "titel": "Car on a street with uneven cobblestones-1",
+      "seite": "https://freesound.org/people/Gustavus/sounds/849489/",
+      "lizenz": "CC BY 4.0",
+      "urheber": "Gustavus"
+    },
+    "fs_577504": {
+      "titel": "car tire on gravel rear cu blyth 21 6 12.flac",
+      "seite": "https://freesound.org/people/TRP/sounds/577504/",
+      "lizenz": "CC0 1.0",
+      "urheber": "TRP"
+    },
+    "fs_464988": {
+      "titel": "RainAndTireNoise.flac",
+      "seite": "https://freesound.org/people/Zabuhailo/sounds/464988/",
+      "lizenz": "CC BY 4.0",
+      "urheber": "Zabuhailo"
+    },
+    "fs_71099": {
+      "titel": "tires_snow_ice_slow.wav",
+      "seite": "https://freesound.org/people/dunebuggy/sounds/71099/",
+      "lizenz": "CC0 1.0",
+      "urheber": "dunebuggy"
+    },
+    "fs_614627": {
+      "titel": "screeching tyres / tires",
+      "seite": "https://freesound.org/people/johnnydekk/sounds/614627/",
+      "lizenz": "CC0 1.0",
+      "urheber": "johnnydekk"
+    },
+    "fs_709572": {
+      "titel": "storm wind room-tone 4.16PM 231102_0633",
+      "seite": "https://freesound.org/people/klankbeeld/sounds/709572/",
+      "lizenz": "CC BY 4.0",
+      "urheber": "klankbeeld"
+    },
+    "fs_535869": {
+      "titel": "Ambiance_Rain_Inside_Car_Roof_Loop_Stereo.wav",
+      "seite": "https://freesound.org/people/Nox_Sound/sounds/535869/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Nox_Sound"
     }
   }
 }

@@ -184,6 +184,70 @@
       "sha256": "6ce4220bb81847bbb6e106d3c59ad7640e5bf0df3e885cc0508e3dd01a3e8349",
       "lizenz": "CC0 1.0",
       "urheber": "TitanKaempfer"
+    },
+    "fs_425398": {
+      "freesound": 425398,
+      "titel": "audi a4 b8 20tdi tyres asphalt medium speed mono.wav",
+      "seite": "https://freesound.org/people/Soundholder/sounds/425398/",
+      "sha256": "5dff3a5c0aad5f1923e74666ea481548fe2974b0e30772058ac6c421d68b52a5",
+      "lizenz": "CC BY 3.0",
+      "urheber": "Soundholder"
+    },
+    "fs_849489": {
+      "freesound": 849489,
+      "titel": "Car on a street with uneven cobblestones-1",
+      "seite": "https://freesound.org/people/Gustavus/sounds/849489/",
+      "sha256": "d003a88c9312ad0eeac796b6e3e359935118abcd82268ff04e8f5c7d0092100f",
+      "lizenz": "CC BY 4.0",
+      "urheber": "Gustavus"
+    },
+    "fs_577504": {
+      "freesound": 577504,
+      "titel": "car tire on gravel rear cu blyth 21 6 12.flac",
+      "seite": "https://freesound.org/people/TRP/sounds/577504/",
+      "sha256": "6eb45fef6509a114383f586266000d1515111e298078c407794ed4cacef5b11e",
+      "lizenz": "CC0 1.0",
+      "urheber": "TRP"
+    },
+    "fs_464988": {
+      "freesound": 464988,
+      "titel": "RainAndTireNoise.flac",
+      "seite": "https://freesound.org/people/Zabuhailo/sounds/464988/",
+      "sha256": "abb59617eb016c4451172bff64fd5fa56351f8f5d8a8e545adda26001726cc02",
+      "lizenz": "CC BY 4.0",
+      "urheber": "Zabuhailo"
+    },
+    "fs_71099": {
+      "freesound": 71099,
+      "titel": "tires_snow_ice_slow.wav",
+      "seite": "https://freesound.org/people/dunebuggy/sounds/71099/",
+      "sha256": "f4c586e7d7a0b256f69b15159cc577208b964b9cad54c411299d1b3c5872aad0",
+      "lizenz": "CC0 1.0",
+      "urheber": "dunebuggy"
+    },
+    "fs_614627": {
+      "freesound": 614627,
+      "titel": "screeching tyres / tires",
+      "seite": "https://freesound.org/people/johnnydekk/sounds/614627/",
+      "sha256": "8e7a3d854b52bc2e06b2f4c5a1250730ce3c2bffc648a5a8de4541c3076eded6",
+      "lizenz": "CC0 1.0",
+      "urheber": "johnnydekk"
+    },
+    "fs_709572": {
+      "freesound": 709572,
+      "titel": "storm wind room-tone 4.16PM 231102_0633",
+      "seite": "https://freesound.org/people/klankbeeld/sounds/709572/",
+      "sha256": "73305510aed2781c877d37207720f11f7d1317fd04e846c394fdae69cc6e64ec",
+      "lizenz": "CC BY 4.0",
+      "urheber": "klankbeeld"
+    },
+    "fs_535869": {
+      "freesound": 535869,
+      "titel": "Ambiance_Rain_Inside_Car_Roof_Loop_Stereo.wav",
+      "seite": "https://freesound.org/people/Nox_Sound/sounds/535869/",
+      "sha256": "05b9e1dac97508ff4858301dc877a83b1b3c9ed4e0942535247c9aefb570d459",
+      "lizenz": "CC0 1.0",
+      "urheber": "Nox_Sound"
     }
   },
   "klaenge": {
@@ -597,6 +661,150 @@
       "laenge_s": 6.4,
       "schleife_blende_s": 0.04,
       "hochpass_hz": 120
+    },
+    "tire_roll": {
+      "zweck": "Reifen auf Asphalt (Schleife)",
+      "quelle": "fs_425398",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_425398",
+            "datei": "*",
+            "at": 0,
+            "von_s": 14.25
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 40
+    },
+    "tire_cobble": {
+      "zweck": "Reifen auf Kopfsteinpflaster (Schleife)",
+      "quelle": "fs_849489",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_849489",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 40
+    },
+    "tire_gravel": {
+      "zweck": "Reifen auf Schotter, Gras, Erde (Schleife)",
+      "quelle": "fs_577504",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_577504",
+            "datei": "*",
+            "at": 0,
+            "von_s": 29.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 40
+    },
+    "tire_wet": {
+      "zweck": "Reifen auf nasser Straße, Rutschen (Schleife)",
+      "quelle": "fs_464988",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_464988",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.5
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 80
+    },
+    "tire_snow": {
+      "zweck": "Reifen auf Schnee und Eis (Schleife)",
+      "quelle": "fs_71099",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_71099",
+            "datei": "*",
+            "at": 0,
+            "von_s": 1.25
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 60
+    },
+    "tire_squeal": {
+      "zweck": "Reifenquietschen (Schleife, um 1,2 kHz)",
+      "quelle": "fs_614627",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_614627",
+            "datei": "*",
+            "at": 0,
+            "von_s": 33.7
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 1.25,
+      "schleife_blende_s": 0.15,
+      "hochpass_hz": 200
+    },
+    "drive_wind": {
+      "zweck": "Fahrtwind (Schleife)",
+      "quelle": "fs_709572",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_709572",
+            "datei": "*",
+            "at": 0,
+            "von_s": 30.5
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 60
+    },
+    "rain_roof": {
+      "zweck": "Regen aufs Autodach, innen (Schleife)",
+      "quelle": "fs_535869",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_535869",
+            "datei": "*",
+            "at": 0,
+            "von_s": 13.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 6,
+      "schleife_blende_s": 0.3,
+      "hochpass_hz": 60
     }
   }
 }
