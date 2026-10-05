@@ -2349,7 +2349,7 @@ mod tests {
             let mut out = Vec::new();
             for i in 0..110 {
                 s.apply(&Frame {
-                    ambience: m.clone(),
+                    ambience: m,
                     ..Default::default()
                 });
                 let x = channel(&render(&mut s, 0.05), 0);
@@ -2381,14 +2381,14 @@ mod tests {
         ];
         let mut bad = Vec::new();
         for (name, m) in cases {
-            let (syn, smp) = (level(false, m.clone()), level(true, m));
+            let (syn, smp) = (level(false, m), level(true, m));
             let target = syn * 1.2;
             println!("AMB {name:10} synth {syn:.4} sample {smp:.4} ziel {target:.4}");
             if !(0.8..=1.25).contains(&(smp / target)) {
                 bad.push(format!("{name}: {smp:.4} statt {target:.4}"));
             }
         }
-        assert!(level(true, z.clone()) < 1e-5, "still ohne Umgebung");
+        assert!(level(true, z) < 1e-5, "still ohne Umgebung");
         // Donner: Effektivwert über 6 s
         for near in [true, false] {
             let th = |samples: bool| {
