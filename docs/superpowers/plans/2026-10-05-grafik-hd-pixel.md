@@ -162,7 +162,13 @@ Ursprünglicher Entwurf:
 - Linde, Platane, Kastanie, Kiefer als 256-px-Zellen, Licht-/Schattenseite zur Sonne. Figuren: nur **Vorschlag** mit
   Aufwand für einen Figuren-Atlas (nicht umsetzen ohne Freigabe).
 
-## Phase 7 – Licht und Post (≈ 1,5 Tage)
+## Phase 7 – Licht und Post ✅ (05.10.2026)
+
+Umgesetzt: AgX im Post (Belichtung abgeglichen, Sättigung 1,2), HDR-Bloom ½/¼ ab Mittel, Lichtkarte ab Mittel bis 1,8,
+gefilterte Schattenkante, alles über `post_level`. Budget wegen laufender VM nicht belastbar gemessen (s.
+NATIVE-RUST.md); Lichtkarten-Reflex im Lack zurückgestellt.
+
+Ursprünglicher Entwurf:
 
 - Tonemapping (Vorschlag AgX) im Post-Pass, Grade neu abgestimmt; Bloom aus der HDR-Szene (Downsample-Kette ½/¼);
   Schattenmaske gefiltert; nasse Straßen über Roughness; alles hinter Qualitätsstufen; Niederschlag-Kosten prüfen.

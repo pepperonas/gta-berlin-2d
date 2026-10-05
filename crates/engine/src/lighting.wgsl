@@ -106,12 +106,24 @@ fn full_tri(i: u32, depth: f32) -> FullOut {
     return full_tri(i, 0.9999);
 }
 @fragment fn shadow_composite_fs(in: FullOut) -> @location(0) vec4<f32> {
-    let m = textureSample(atlas, atlas_sampler, in.uv).r;
+    var m = textureSample(atlas, atlas_sampler, in.uv).r;
+    if camera.padding2.y >= 1.0 {
+        // weiche Schattenkante: 8 Abtastungen auf einem Ring (Mittel: 1,2 px, Hoch: 2 px Halbschatten)
+        let px = select(1.2, 2.0, camera.padding2.y >= 2.0) / camera.viewport;
+        var sum = m * 0.2;
+        for (var i = 0; i < 8; i++) {
+            let a = f32(i) * 0.7853982 + 0.39;
+            sum += textureSample(atlas, atlas_sampler, in.uv + vec2(cos(a), sin(a)) * px).r * 0.1;
+        }
+        m = sum;
+    }
     // lighting.js: SHADOW_ALPHA 0,34 × Sonnenstärke, Farbe leicht bläulich (#162b3e)
     return vec4(linear_color(vec3(0.086, 0.169, 0.243)), m * 0.34 * camera.shadow.w);
 }
 @fragment fn light_composite_fs(in: FullOut) -> @location(0) vec4<f32> {
-    return vec4(min(textureSample(atlas, atlas_sampler, in.uv).rgb, vec3(1.0)), 1.0);
+    // ab Qualität Mittel darf Laternenlicht über 1 gehen (HDR): das Tonemapping fängt es ab, der Bloom nimmt es auf
+    let cap = select(1.0, 1.8, camera.padding2.y >= 1.0);
+    return vec4(min(textureSample(atlas, atlas_sampler, in.uv).rgb, vec3(cap)), 1.0);
 }
 @fragment fn ambient_composite_fs(in: FullOut) -> @location(0) vec4<f32> {
     return vec4(linear_color(camera.ambient.rgb), 1.0);
@@ -141,16 +153,100 @@ fn grade_factor(uv: vec2<f32>) -> vec3<f32> {
     return pow(f, vec3(2.2)) * (1.0 - v);
 }
 
-// Nachbearbeitung: Szenenbild (linear, Rgba16Float, aufgelöst) ins Ausgabebild. Ein Bildpunkt je Bildpunkt
-// (gleiche Größe), daher textureLoad statt Filtern. Phase 1 der Grafik-Überarbeitung: nur Farbabstimmung und
-// Klemmen auf 0…1 – bildgleich zum früheren Zeichnen direkt ins sRGB-Ziel.
 // Vorschau im Fenster bei fester Zeichengröße (`--fenster`): das abseits gezeichnete Bild, verkleinert.
 @fragment fn preview_fs(in: FullOut) -> @location(0) vec4<f32> {
     return vec4(textureSample(atlas, atlas_sampler, in.uv).rgb, 1.0);
 }
+
+// --- Nachbearbeitung (Grafik-Überarbeitung Phase 7) ------------------------------------------------------------
+// Bloom aus dem HDR-Szenenbild: helle Stellen über einer Schwelle (nachts niedriger) werden auf ½ und ¼ verkleinert,
+// zurück auf ½ addiert und im Post dazugemischt. Qualität (camera.padding2.y): 0 = Niedrig/Pixel (alter
+// Lichtkarten-Bloom im Szenendurchgang, kein Tonemapping-Bloom), 1 = Mittel (nur ½), 2 = Hoch (½ + ¼).
+@group(3) @binding(0) var bloom_tex: texture_2d<f32>;
+@group(3) @binding(1) var bloom_samp: sampler;
+fn bloom_threshold() -> f32 {
+    return mix(1.05, 0.55, clamp(camera.ambient.w * 1.4, 0.0, 1.0));
+}
+// 13 Abtastungen (Jimenez, „Next Generation Post Processing“): Mitte, vier innere und acht äußere Punkte, gewichtet
+// – verkleinert ohne Flimmern. `dims` = Größe des Quellbilds.
+fn tap(uv: vec2<f32>, o: vec2<f32>, t: vec2<f32>) -> vec3<f32> {
+    return textureSampleLevel(atlas, atlas_sampler, uv + o * t, 0.0).rgb;
+}
+fn down13(uv: vec2<f32>, dims: vec2<f32>) -> vec3<f32> {
+    let t = 1.0 / dims;
+    let corners = tap(uv, vec2(-2.0, 2.0), t) + tap(uv, vec2(2.0, 2.0), t) + tap(uv, vec2(-2.0, -2.0), t)
+        + tap(uv, vec2(2.0, -2.0), t);
+    let edges = tap(uv, vec2(0.0, 2.0), t) + tap(uv, vec2(-2.0, 0.0), t) + tap(uv, vec2(2.0, 0.0), t)
+        + tap(uv, vec2(0.0, -2.0), t);
+    let inner = tap(uv, vec2(-1.0, 1.0), t) + tap(uv, vec2(1.0, 1.0), t) + tap(uv, vec2(-1.0, -1.0), t)
+        + tap(uv, vec2(1.0, -1.0), t);
+    return tap(uv, vec2(0.0), t) * 0.125 + corners * 0.03125 + edges * 0.0625 + inner * 0.125;
+}
+@fragment fn bloom_prefilter_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let dims = vec2<f32>(textureDimensions(atlas));
+    let c = down13(in.uv, dims);
+    let l = max(c.r, max(c.g, c.b));
+    let th = bloom_threshold();
+    // weiches Knie: knapp unter der Schwelle schon ein wenig
+    let knee = th * 0.5;
+    let soft = clamp(l - th + knee, 0.0, 2.0 * knee);
+    let w = max(soft * soft / (4.0 * knee + 1e-4), l - th) / max(l, 1e-4);
+    return vec4(min(c * w, vec3(8.0)), 1.0);
+}
+@fragment fn bloom_down_fs(in: FullOut) -> @location(0) vec4<f32> {
+    return vec4(down13(in.uv, vec2<f32>(textureDimensions(atlas))), 1.0);
+}
+// Zelt (3 × 3) aus der kleineren Stufe, additiv auf die größere
+@fragment fn bloom_up_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let t = 1.0 / vec2<f32>(textureDimensions(atlas));
+    var c = vec3(0.0);
+    for (var y = -1; y <= 1; y++) {
+        for (var x = -1; x <= 1; x++) {
+            let w = (2.0 - abs(f32(x))) * (2.0 - abs(f32(y))) / 16.0;
+            c += textureSampleLevel(atlas, atlas_sampler, in.uv + vec2(f32(x), f32(y)) * t, 0.0).rgb * w;
+        }
+    }
+    return vec4(c, 1.0);
+}
+const AGX_POWER: f32 = 1.35;
+const AGX_SAT: f32 = 1.2;
+// Belichtung vor AgX: so gewählt, dass Mitteltöne etwa so hell bleiben wie vor dem Tonemapping (Abgleich über
+// 0,03…0,9 linear)
+const AGX_EXPOSURE: f32 = 1.8;
+// AgX (Troy Sobotka; Annäherung von Benjamin Wrensch), Look nach „punchy“ (Sättigung zurückgenommen): lineares Rec.709 → lineares Ausgabebild.
+fn agx(c: vec3<f32>) -> vec3<f32> {
+    let m = mat3x3<f32>(
+        vec3(0.842479062253094, 0.0423282422610123, 0.0423756549057051),
+        vec3(0.0784335999999992, 0.878468636469772, 0.0784336),
+        vec3(0.0792237451477643, 0.0791661274605434, 0.879142973793104));
+    let mi = mat3x3<f32>(
+        vec3(1.19687900512017, -0.0528968517574562, -0.0529716355144438),
+        vec3(-0.0980208811401368, 1.15190312990417, -0.0980434501171241),
+        vec3(-0.0990297440797205, -0.0989611768448433, 1.15107367264116));
+    let lo = -12.47393;
+    let hi = 4.026069;
+    var v = m * max(c, vec3(1e-10));
+    v = (clamp(log2(v), vec3(lo), vec3(hi)) - lo) / (hi - lo);
+    let x2 = v * v;
+    let x4 = x2 * x2;
+    v = 15.5 * x4 * x2 - 40.14 * x4 * v + 31.96 * x4 - 6.868 * x2 * v + 0.4298 * x2 + 0.1191 * v - 0.00232;
+    // Look: Potenz 1,35, Sättigung 1,2
+    v = pow(max(v, vec3(0.0)), vec3(AGX_POWER));
+    let luma = dot(v, vec3(0.2126, 0.7152, 0.0722));
+    v = luma + AGX_SAT * (v - luma);
+    v = mi * v;
+    return pow(max(v, vec3(0.0)), vec3(2.2));
+}
+// Szenenbild (linear, HDR) ins Ausgabebild: Bloom dazu, Farbabstimmung und Vignette, Belichtung, AgX. Ein
+// Bildpunkt je Bildpunkt (gleiche Größe), daher textureLoad.
 @fragment fn post_fs(in: FullOut) -> @location(0) vec4<f32> {
-    let c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
-    return vec4(clamp(c * grade_factor(in.uv), vec3(0.0), vec3(1.0)), 1.0);
+    var c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
+    if camera.padding2.y >= 1.0 {
+        let strength = 0.1 + 0.8 * clamp(camera.ambient.w, 0.0, 1.0);
+        c += textureSample(bloom_tex, bloom_samp, in.uv).rgb * strength;
+    }
+    c *= grade_factor(in.uv);
+    return vec4(agx(c * AGX_EXPOSURE), 1.0);
 }
 
 // Bloom (lighting.js drawBloom): helle Stellen der Lichtkarte überstrahlen. Quelle wie brightness(0,55) contrast(5),

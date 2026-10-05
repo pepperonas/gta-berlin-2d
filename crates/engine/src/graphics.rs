@@ -81,6 +81,18 @@ impl GraphicsSettings {
     }
 }
 
+impl GraphicsSettings {
+    /// Stufe der Nachbearbeitung für den Shader (`camera.padding2.y`): 0 = ohne HDR-Bloom und weiche Schatten
+    /// (Niedrig, Pixel), 1 = Bloom ½ und Schattenkante 1,2 px (Mittel), 2 = Bloom ½ + ¼ und 2 px (Hoch).
+    pub fn post_level(self) -> u32 {
+        match (self.mode, self.quality) {
+            (GraphicsMode::Pixel, _) | (_, Quality::Niedrig) => 0,
+            (_, Quality::Mittel) => 1,
+            (_, Quality::Hoch) => 2,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +105,11 @@ mod tests {
         assert_eq!(q(GraphicsMode::Hd, Quality::Mittel), 4);
         assert_eq!(q(GraphicsMode::Hd, Quality::Niedrig), 1);
         assert_eq!(q(GraphicsMode::Pixel, Quality::Hoch), 1);
+        let l = |mode, quality| GraphicsSettings { mode, quality }.post_level();
+        assert_eq!(l(GraphicsMode::Hd, Quality::Hoch), 2);
+        assert_eq!(l(GraphicsMode::Hd, Quality::Mittel), 1);
+        assert_eq!(l(GraphicsMode::Hd, Quality::Niedrig), 0);
+        assert_eq!(l(GraphicsMode::Pixel, Quality::Hoch), 0);
     }
     #[test]
     fn names_round_trip() {

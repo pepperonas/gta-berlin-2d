@@ -2037,3 +2037,28 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
 - **Hinweis zur Testszene „park“ (Tiergarten):** dort stehen in den Daten keine Bäume (Baumkataster = Straßenbäume) –
   auch die Ausgangsaufnahme zeigt keine. Bäume prüft die Szene „boulevard“.
 - **Figuren:** nur Vorschlag (drei Varianten mit Aufwand) im Plan unter Phase 6.
+
+## Grafik HD/Pixel: Phase 7 – Licht und Nachbearbeitung (05.10.2026)
+
+- **Stufe der Nachbearbeitung** `GraphicsSettings::post_level` → `camera.padding2.y`: 0 = Niedrig und Pixel, 1 = Mittel,
+  2 = Hoch. Danach richten sich Bloom, Schattenfilter und die HDR-Grenze der Lichtkarte.
+- **Tonemapping:** `post_fs` → `agx` (Sobotka, Annäherung Wrensch), Look Potenz 1,35, Sättigung 1,2, Belichtung 1,8.
+  Die Belichtung ist rechnerisch gegen das bisherige Bild abgeglichen (Mittelgrau bleibt etwa gleich hell); mit der
+  „punchy“-Sättigung 1,4 wurden Ziegeldächer orange, deshalb 1,2. Reihenfolge: Szene + Bloom → Farbabstimmung
+  (`grade_factor`) → Belichtung → AgX.
+- **Bloom (ab Mittel):** eigene Ziele ½ und ¼ (`SceneTargets.half/quarter`, `scenepass::Bloom`): Vorfilter mit
+  weichem Knie (Schwelle 1,05 am Tag, 0,55 nachts), 13 Abtastungen je Verkleinerung (Jimenez), Zelt-Vergrößerung
+  additiv zurück auf ½ (nur Hoch), im Post mit 0,1 + 0,8·Dunkelheit dazu. Der Post-Layout nutzt Gruppe 3 für das
+  Bloom-Bild (Gruppe 2 bleibt den Bodenmaterialien). Niedrig behält den alten Lichtkarten-Bloom im Szenendurchgang.
+- **HDR-Licht:** `light_composite_fs` begrenzt die Lichtkarte ab Mittel auf 1,8 statt 1,0 – Laternenkegel werden
+  heller als Weiß, AgX fängt sie ab, der Bloom greift sie auf.
+- **Schatten:** `shadow_composite_fs` mittelt ab Mittel 8 Abtastungen auf einem Ring (1,2 px bzw. 2 px bei Hoch).
+- **Nasse Straßen** über die Rauheit gibt es seit Phase 2 (`lit`, `camera.padding2.x`); hier unverändert.
+- **Offen:** Reflex der Lichtkarte im Autolack (aus Phase 5) – braucht die Lichtkarte im Body-Durchgang; zurückgestellt.
+- **Kosten:** abwechselnd gemessen (Boulevard 19:30, 2560 × 1440, je dreimal): Hoch 6,65 / Mittel 6,73 /
+  Niedrig 6,52 ms (Bestwerte) – die Stufen unterscheiden sich um höchstens 0,3 ms. **Die Absolutwerte sind gestört:**
+  während der Messung lief die Windows-VM (Parallels); in Phase 6 lag Hoch ohne VM bei 5,6 ms. Das Budget (Hoch < 8 ms,
+  Mittel < 5 ms) muss ohne VM neu gemessen werden. Regen: Regennacht ≈ +0,5 ms gegenüber der klaren Spree-Nacht.
+- **Xbox:** Der Mac-Kachel-GPU kostet 4× MSAA fast nichts, einer Immediate-Mode-GPU wie der Series S kostet es
+  Bandbreite. Für die Konsole ist „Mittel ohne MSAA“ (Bloom ½, weiche Schatten) die naheliegende Stufe – erst
+  festlegen, wenn die Probe Zahlen liefert.

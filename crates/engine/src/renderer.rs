@@ -43,6 +43,7 @@ pub(crate) struct Renderer {
     map_pipeline: wgpu::RenderPipeline,
     /// Nachbearbeitung: Szenenbild → Ausgabebild (Farbabstimmung, Vignette)
     post_pipeline: wgpu::RenderPipeline,
+    bloom: scenepass::Bloom,
     /// Tiefe des HUD-Durchgangs (Minikarte), eine Abtastung
     hud_depth: wgpu::TextureView,
     silhouettes: Option<wgpu::Buffer>,
@@ -436,8 +437,23 @@ impl Renderer {
             true,
             wgpu::CompareFunction::LessEqual,
         );
+        // Nachbearbeitung: Szenenbild in Gruppe 1, Bloom ½ in Gruppe 3 (Gruppe 2 = Bodenmaterialien bleibt frei)
+        let post_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Nachbearbeitung mit Bloom"),
+            bind_group_layouts: &[
+                Some(&camera_layout),
+                Some(&atlas_layout),
+                None,
+                Some(&atlas_layout),
+            ],
+            immediate_size: 0,
+        });
+        let bloom = scenepass::Bloom::new(&cx);
         let post_pipeline = scenepass::pipeline(
-            &cx,
+            &lightpass::Ctx {
+                layout: &post_layout,
+                ..cx
+            },
             "Nachbearbeitung",
             "full_vs",
             "post_fs",
@@ -488,6 +504,7 @@ impl Renderer {
             graphics,
             map_pipeline,
             post_pipeline,
+            bloom,
             hud_depth,
             silhouettes: None,
             silhouette_count: 0,
@@ -951,7 +968,7 @@ impl Renderer {
             pass.draw(0..3, 0..1);
             pass.set_pipeline(&self.pipes.comp.ambient);
             pass.draw(0..3, 0..1);
-            if self.lighting.dark > 0.3 {
+            if self.lighting.dark > 0.3 && self.graphics.post_level() == 0 {
                 pass.set_pipeline(&self.pipes.comp.bloom);
                 pass.draw(0..3, 0..1);
             }
@@ -985,6 +1002,48 @@ impl Renderer {
             pass.draw(0..6, 0..self.effect_count);
         }
         drop(pass);
+        // 3b) Bloom aus dem HDR-Bild (ab Mittel): Schwelle → ½, bei Hoch zusätzlich ½ → ¼ → zurück auf ½
+        let level = self.graphics.post_level();
+        if level >= 1 {
+            let mut step = |label, view: &wgpu::TextureView, src: &wgpu::BindGroup, pipe, load| {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_bind_group(1, src, &[]);
+                pass.set_pipeline(pipe);
+                pass.draw(0..3, 0..1);
+            };
+            let clear = wgpu::LoadOp::Clear(wgpu::Color::BLACK);
+            let t = &self.targets;
+            step(
+                "Bloom Schwelle",
+                &t.half,
+                &t.post,
+                &self.bloom.prefilter,
+                clear,
+            );
+            if level >= 2 {
+                step("Bloom ¼", &t.quarter, &t.half_bind, &self.bloom.down, clear);
+                step(
+                    "Bloom ¼ → ½",
+                    &t.half,
+                    &t.quarter_bind,
+                    &self.bloom.up,
+                    wgpu::LoadOp::Load,
+                );
+            }
+        }
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Nachbearbeitung und HUD"),
@@ -1011,6 +1070,7 @@ impl Renderer {
         // 4a) Szenenbild ins Ausgabebild (Farbabstimmung, Vignette)
         pass.set_bind_group(0, &self.bind, &[]);
         pass.set_bind_group(1, &self.targets.post, &[]);
+        pass.set_bind_group(3, &self.targets.half_bind, &[]);
         pass.set_pipeline(&self.post_pipeline);
         pass.draw(0..3, 0..1);
         let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
@@ -1194,6 +1254,8 @@ impl Renderer {
         uniform[3] = l.fog;
         // freier Platz hinter dem Bildausschnitt: Nässe der Straßen (Glanz der Bodenmaterialien)
         uniform[6] = l.wet;
+        // dahinter: Stufe der Nachbearbeitung (HDR-Bloom, weiche Schatten), GraphicsSettings::post_level
+        uniform[7] = self.graphics.post_level() as f32;
         uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
         uniform.extend([self.scale, 0., l.windows, l.warmth]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);

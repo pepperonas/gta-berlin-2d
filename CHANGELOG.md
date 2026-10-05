@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 7 (native Fassung): **Licht und Nachbearbeitung**. Tonemapping nach AgX (Belichtung
+  so gewählt, dass Mitteltöne bleiben; Spitzlichter laufen weich aus statt hart abzuschneiden), **Bloom aus dem
+  HDR-Bild** (Schwelle → ½ → ¼, nachts stärker – Fenster, Laternen und Scheinwerfer glühen), Laternenlicht darf über
+  Weiß hinaus, **weiche Schattenkanten**. Alles hängt an der Qualitätsstufe: Hoch = Bloom ½ + ¼ und 2 px Halbschatten,
+  Mittel = Bloom ½ und 1,2 px, Niedrig = ohne (alter Lichtkarten-Bloom).
 - Grafik-Überarbeitung, Phase 6 (native Fassung): **Baumkronen nach Gattung** – Linde (dicht, rund, kleine Ballen),
   Platane (breit, große Ballen, Lücken), Kastanie (schwere runde Ballen) und Kiefer (offene Nadelbüschel) mit eigener
   Krone und eigenem Grün; übrige Laub- und Nadelbäume mit neu gezeichneter allgemeiner Krone. Die Kronen werden von

@@ -55,7 +55,7 @@ const MAX: wgpu::BlendState = wgpu::BlendState {
         operation: wgpu::BlendOperation::Max,
     },
 };
-const ADD: wgpu::BlendState = wgpu::BlendState {
+pub(crate) const ADD: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
         dst_factor: wgpu::BlendFactor::One,

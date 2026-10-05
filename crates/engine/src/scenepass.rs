@@ -201,13 +201,40 @@ impl ScenePipes {
     }
 }
 
+/// Bloom aus dem HDR-Szenenbild (Phase 7): Vorfilter (Schwelle) aufs halbe, Verkleinern aufs Viertel, Vergrößern
+/// zurück (additiv). Ohne Tiefe, eine Abtastung – unabhängig von der Kantenglättung.
+pub(crate) struct Bloom {
+    pub prefilter: wgpu::RenderPipeline,
+    pub down: wgpu::RenderPipeline,
+    pub up: wgpu::RenderPipeline,
+}
+impl Bloom {
+    pub fn new(cx: &lightpass::Ctx) -> Self {
+        let p =
+            |label, fs, blend| cx.pipeline(label, "full_vs", fs, &[], SCENE_FORMAT, blend, None, 1);
+        Self {
+            prefilter: p(
+                "Bloom Schwelle ½",
+                "bloom_prefilter_fs",
+                wgpu::BlendState::REPLACE,
+            ),
+            down: p("Bloom ¼", "bloom_down_fs", wgpu::BlendState::REPLACE),
+            up: p("Bloom ¼ → ½", "bloom_up_fs", lightpass::ADD),
+        }
+    }
+}
+
 /// Ziele des Szenendurchgangs: Farbe (bei Kantenglättung multisampled, sonst direkt das aufgelöste Bild), Tiefe,
-/// aufgelöstes Bild als Quelle der Nachbearbeitung.
+/// aufgelöstes Bild als Quelle der Nachbearbeitung, dazu die Bloom-Stufen ½ und ¼.
 pub(crate) struct SceneTargets {
     pub color: wgpu::TextureView,
     pub resolve: Option<wgpu::TextureView>,
     pub depth: wgpu::TextureView,
     pub post: wgpu::BindGroup,
+    pub half: wgpu::TextureView,
+    pub quarter: wgpu::TextureView,
+    pub half_bind: wgpu::BindGroup,
+    pub quarter_bind: wgpu::BindGroup,
 }
 
 impl SceneTargets {
@@ -218,13 +245,13 @@ impl SceneTargets {
         size: PhysicalSize<u32>,
         samples: u32,
     ) -> Self {
-        let make = |label, format, samples, usage| {
+        let make_sized = |label, format, samples, usage, w: u32, h: u32| {
             device
                 .create_texture(&wgpu::TextureDescriptor {
                     label: Some(label),
                     size: wgpu::Extent3d {
-                        width: size.width.max(1),
-                        height: size.height.max(1),
+                        width: w.max(1),
+                        height: h.max(1),
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
@@ -236,13 +263,12 @@ impl SceneTargets {
                 })
                 .create_view(&Default::default())
         };
+        let make = |label, format, samples, usage| {
+            make_sized(label, format, samples, usage, size.width, size.height)
+        };
         let attach = wgpu::TextureUsages::RENDER_ATTACHMENT;
-        let image = make(
-            "Szenenbild",
-            SCENE_FORMAT,
-            1,
-            attach | wgpu::TextureUsages::TEXTURE_BINDING,
-        );
+        let sampled = attach | wgpu::TextureUsages::TEXTURE_BINDING;
+        let image = make("Szenenbild", SCENE_FORMAT, 1, sampled);
         let (color, resolve) = if samples > 1 {
             (
                 make("Szenenbild (Abtastungen)", SCENE_FORMAT, samples, attach),
@@ -251,25 +277,34 @@ impl SceneTargets {
         } else {
             (image.clone(), None)
         };
-        let post = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Nachbearbeitung"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&image),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-            ],
-        });
+        let bind = |label, view: &wgpu::TextureView| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(label),
+                layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(sampler),
+                    },
+                ],
+            })
+        };
+        let (w, h) = (size.width.max(2), size.height.max(2));
+        let half = make_sized("Bloom ½", SCENE_FORMAT, 1, sampled, w / 2, h / 2);
+        let quarter = make_sized("Bloom ¼", SCENE_FORMAT, 1, sampled, w / 4, h / 4);
         Self {
             color,
             resolve,
             depth: make("Szenentiefe", DEPTH_FORMAT, samples, attach),
-            post,
+            post: bind("Nachbearbeitung", &image),
+            half_bind: bind("Bloom ½", &half),
+            quarter_bind: bind("Bloom ¼", &quarter),
+            half,
+            quarter,
         }
     }
 }
