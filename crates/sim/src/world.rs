@@ -2619,6 +2619,7 @@ impl World {
             );
             let mut gr = ground(db, &v.tire, &mix);
             gr.groove = groove;
+            env.surface[k] = mix.main();
             // Bordstein: Wechsel zwischen Fahrbahn und Gehweg unter dem Rad
             let on = matches!(g, G::Road | G::Cobble);
             let off = matches!(g, G::Sidewalk);

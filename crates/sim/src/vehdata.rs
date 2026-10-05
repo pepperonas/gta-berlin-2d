@@ -623,9 +623,20 @@ pub fn game_vehicle_tire(id: &str, tire: Option<&str>) -> Option<&'static Vehicl
 }
 /// Spielgefühl des Spiels (`feel.json`).
 pub fn game_feel() -> &'static Feel {
-    static FEEL_GAME: std::sync::OnceLock<Feel> = std::sync::OnceLock::new();
-    FEEL_GAME.get_or_init(Feel::game)
+    if let Some(f) = *FEEL_NOW.read().unwrap_or_else(|e| e.into_inner()) {
+        return f;
+    }
+    let mut w = FEEL_NOW.write().unwrap_or_else(|e| e.into_inner());
+    *w.get_or_insert_with(|| Box::leak(Box::new(Feel::game())))
 }
+
+/// Spielgefühl zur Laufzeit ersetzen (Entwickler-Anzeige mit Live-Reglern). Jede Änderung legt einen neuen,
+/// dauerhaften Stand an – die alten bleiben gültig, wer sie gerade liest, bekommt keinen halben Wechsel.
+pub fn set_game_feel(f: Feel) {
+    *FEEL_NOW.write().unwrap_or_else(|e| e.into_inner()) = Some(Box::leak(Box::new(f)));
+}
+
+static FEEL_NOW: std::sync::RwLock<Option<&'static Feel>> = std::sync::RwLock::new(None);
 
 impl VehicleDb {
     /// Eingebettete Daten (beim Bauen eingelesen).

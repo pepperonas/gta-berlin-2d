@@ -150,6 +150,8 @@ impl Ground {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Env {
     pub wheel: [Ground; 4],
+    /// Hauptuntergrund je Rad (Kennung aus `surfaces.json`, nur zur Anzeige)
+    pub surface: [&'static str; 4],
 }
 impl Default for Env {
     fn default() -> Self {
@@ -159,7 +161,10 @@ impl Default for Env {
 impl Env {
     /// Überall derselbe Untergrund.
     pub fn uniform(g: Ground) -> Self {
-        Self { wheel: [g; 4] }
+        Self {
+            wheel: [g; 4],
+            surface: ["asphalt_trocken"; 4],
+        }
     }
     /// Mittel über die Räder einer Achse (0 vorn, 1 hinten).
     pub fn axle(&self, i: usize, f: impl Fn(&Ground) -> f64) -> f64 {

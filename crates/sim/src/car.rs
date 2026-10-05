@@ -98,6 +98,10 @@ pub struct Car {
     pub season_tire: Option<&'static str>,
     pub esp: bool,
     pub esp_full: bool,
+    /// Entwickler-Anzeige: live verstellter Datensatz für dieses Fahrzeug (statt der Spieldaten)
+    pub tuned: Option<Box<crate::vehdata::Vehicle>>,
+    /// zuletzt gefahrener Untergrund je Rad (Anzeige)
+    pub env_seen: Option<Box<crate::vphys::Env>>,
     /// Lkw-Begrenzer abgeschaltet (Konsole `begrenzer aus`)
     pub no_limiter: bool,
     pub abs: bool,
@@ -161,6 +165,8 @@ impl Car {
             season_tire: None,
             esp: true,
             esp_full: false,
+            tuned: None,
+            env_seen: None,
             no_limiter: false,
             abs: true,
             traction: DRY,
@@ -269,12 +275,13 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     let info = car.kind_info();
     // Der Spieler fährt mit echter Fahrdynamik; Verkehr, geparkte und geschobene Autos sowie Räder arcadig.
     // Vierrädrige Fahrzeuge mit Datensatz fahren über den Kern `vphys`, Zweiräder bis Phase 5 über `dynamics`.
-    if car.driver == Some(Driver::Player)
-        && !car.wrecked
-        && let Some(v) = vphys_vehicle(car)
-    {
-        step_vphys(car, v, ctl, ground.unwrap_or(Ground::Road), dt);
-        return;
+    if car.driver == Some(Driver::Player) && !car.wrecked {
+        let tuned = car.tuned.take();
+        if let Some(v) = tuned.as_deref().or_else(|| vphys_vehicle(car)) {
+            step_vphys(car, v, ctl, ground.unwrap_or(Ground::Road), dt);
+            car.tuned = tuned;
+            return;
+        }
     }
     if car.driver == Some(Driver::Player) && info.top.is_none() && !car.wrecked {
         let spec = spec_of(car.model_name());
@@ -458,6 +465,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
         }
         Env {
             wheel: [front, front, base, base],
+            ..Env::default()
         }
     });
     let esp = match (car.esp, car.esp_full) {
@@ -478,6 +486,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
             && feel.truck_limiter_tunable,
     };
     step(v, feel, s, &inp, &env, dt);
+    car.env_seen = Some(Box::new(env));
     // zurück ins Spielsystem
     let (dx, dy) = (s.x * PX, -s.y * PX);
     car.x += dx * ca - dy * sa;
@@ -694,7 +703,10 @@ mod tests {
             (c.vx, c.vy)
         };
         let (gx, gy) = hit(15.);
-        assert!(gx > 200. * 15f64.to_radians().cos() * 0.75, "streifend gleitet weiter: {gx}");
+        assert!(
+            gx > 200. * 15f64.to_radians().cos() * 0.75,
+            "streifend gleitet weiter: {gx}"
+        );
         assert!(gy <= 0., "nicht mehr in die Wand: {gy}");
         let (hx, hy) = hit(90.);
         assert!(hx.hypot(hy) < 40., "frontal fast steht: {}", hx.hypot(hy));

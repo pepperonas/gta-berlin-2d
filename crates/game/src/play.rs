@@ -70,6 +70,9 @@ pub struct Play {
     pub demo_drift: bool,
     demo_drift_started: bool,
     demo_drift_t: f64,
+    /// Entwickler-Build (`--dev`, `GTA_DEV=1` oder Debug-Build): Physik-Anzeige mit Live-Reglern (F3)
+    pub dev: bool,
+    pub physdebug: crate::physdebug::PhysDebug,
     /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
     pub vehicle_show: bool,
     /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
@@ -287,6 +290,7 @@ impl Play {
             viewport,
             out,
         );
+        self.physdebug.draw(out, &self.world);
         let p = &self.world.player;
         let ctrl_aim = !self.diablo || self.ctrl_held;
         if self.screen == Screen::Playing
@@ -430,6 +434,8 @@ impl Play {
             demo_drift: false,
             demo_drift_started: false,
             demo_drift_t: 0.,
+            dev: cfg!(debug_assertions) || std::env::var_os("GTA_DEV").is_some(),
+            physdebug: Default::default(),
             vehicle_show: false,
             demo_drive: false,
             demo_station: None,
@@ -2107,6 +2113,35 @@ impl Game for Play {
                     self.ui_sound();
                 }
                 _ => {}
+            }
+        }
+        // Physik-Anzeige mit Live-Reglern (nur Entwickler-Build)
+        if self.dev && bind.pressed(keys, Bind::DebugToggle) {
+            self.physdebug.open = !self.physdebug.open;
+        }
+        if self.physdebug.open {
+            if bind.pressed(keys, Bind::DebugPrev) {
+                self.physdebug.select(&self.world, -1);
+            }
+            if bind.pressed(keys, Bind::DebugNext) {
+                self.physdebug.select(&self.world, 1);
+            }
+            if bind.pressed(keys, Bind::DebugLess) {
+                self.physdebug.adjust(&mut self.world, -1.);
+            }
+            if bind.pressed(keys, Bind::DebugMore) {
+                self.physdebug.adjust(&mut self.world, 1.);
+            }
+            if bind.pressed(keys, Bind::DebugExport) {
+                let json = self.physdebug.export(&self.world);
+                println!("Physik-Änderungen: {json}");
+                self.console
+                    .log
+                    .push((format!("Physik: {json}"), true, self.world.time));
+                self.world.notice = Some(berlin_sim::world::Notice {
+                    text: "Physik-Änderungen in der Konsole".into(),
+                    t: 1.6,
+                });
             }
         }
         if bind.pressed(keys, Bind::Mute)
