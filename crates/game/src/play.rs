@@ -104,7 +104,6 @@ pub struct Play {
     /// Steuerschema zu Fuß am PC: Diablo (Klick, Standard) oder klassisch (WASD + Maus zielt)
     pub diablo: bool,
     /// letzter Linksklick (Spielzeit, HUD-Punkt) für den Doppelklick
-    last_click: Option<(f64, Vec2)>,
     ctrl_held: bool,
     /// Teleport-Rückfrage: Ziel (Kartenpunkt) und, sobald geladen, die Landestelle mit Namen
     pub teleport: Option<Teleport>,
@@ -474,7 +473,6 @@ impl Play {
             mouse_aim: false,
             cursor: None,
             diablo,
-            last_click: None,
             ctrl_held: false,
             teleport: None,
 
@@ -2512,19 +2510,12 @@ impl Game for Play {
             input.combat.fire_pressed |= m.right_pressed;
         }
         if self.diablo && on_foot && !combo {
-            // Diablo: Klick läuft hin bzw. steigt ein (greift nie an, `click_attack` bleibt aus)
+            // Diablo: Klick läuft hin (steigt nie ein, greift nie an, `click_attack` bleibt aus)
             let ctrl = keys.held.contains(&KeyCode::ControlLeft)
                 || keys.held.contains(&KeyCode::ControlRight);
             input.click_world = world_pt;
             input.click_held = m.left;
             input.click_pressed = m.left_pressed;
-            if m.left_pressed {
-                let now = w2.time;
-                input.click_double = self.last_click.is_some_and(|(t, p)| {
-                    now - t < 0.35 && m.hud.is_some_and(|h| h.distance(p) < 20.)
-                });
-                self.last_click = m.hud.map(|h| (now, h));
-            }
             if ctrl {
                 // Strg allein zielt mit der Maus (Fadenkreuz), feuern mit Klick oder Strg-Taste
                 input.combat.aim_world = world_pt;

@@ -32,6 +32,11 @@ pub const JUMP_V: f64 = 32.;
 pub const GRAVITY: f64 = 98.;
 /// ab dieser Höhe (px) halten niedrige Hindernisse (Zäune, Gleisseiten, Poller, Kisten) die Figur nicht mehr auf
 pub const JUMP_CLEAR: f64 = 1.5;
+/// Schwung beim Sprung (px/s, mindestens; sprintend schneller). Im Gehtempo (15 px/s) käme die Figur in der Zeit über
+/// der Freigabehöhe (~0,55 s) nur 8 px weit, braucht aber 2 × Radius (14 px) über die Zaunlinie; und wer per Klick an
+/// einen Zaun gelaufen ist, steht ~14 px davor (der Laufweg endet an der letzten freien Rasterzelle) – 45 px/s tragen
+/// ~25 px weit.
+pub const JUMP_CARRY: f64 = 45.;
 pub const ENTER_DIST: f64 = 40.;
 pub const STAMINA_DRAIN: f64 = 12.;
 pub const STAMINA_RECOVER: f64 = 20.;
@@ -74,12 +79,12 @@ pub struct Input {
     pub abs_toggle: bool,
     /// Kampf (nur zu Fuß wirksam)
     pub combat: crate::combat::CombatInput,
-    /// Klicksteuerung zu Fuß (Diablo-Schema): Zeigerpunkt, gedrückt/gehalten, mit Strg, Doppelklick
+    /// Klicksteuerung zu Fuß (Diablo-Schema): Zeigerpunkt, gedrückt/gehalten, mit Strg. Eingestiegen wird nie per
+    /// Klick (nur per Taste); ein Klick auf ein Auto oder Rad läuft bloß hin.
     pub click_world: Option<(f64, f64)>,
     pub click_pressed: bool,
     pub click_held: bool,
     pub click_force: bool,
-    pub click_double: bool,
     /// Darf ein Klick angreifen (Person anklicken = zuschlagen, Strg = am Platz)? Am PC aus: dort schießt nur die
     /// rechte Maustaste, ein Linksklick auf eine Person läuft bloß hin.
     pub click_attack: bool,
@@ -100,23 +105,18 @@ pub enum Click {
     },
     /// zur Person laufen und angreifen (`done` = schon ein Angriff)
     Target { ped: u32, done: bool },
-    /// zum Auto laufen; `approach` = nur danebenstellen, sonst kurz an der Tür und einsteigen
-    Enter {
+    /// zum Auto laufen und danebenstellen (eingestiegen wird nur per Taste)
+    Approach {
         car: u32,
-        approach: bool,
         path: Vec<(f64, f64)>,
         i: usize,
         to: (f64, f64),
-        door: Option<f64>,
     },
     /// mit Strg: am Platz angreifen, wohin gezeigt wird (bzw. auf die Person darunter)
     Force { at: (f64, f64), ped: Option<u32> },
-    /// Rad: fahrend angreifen (bis der Fahrer runter ist), sonst bzw. mit Doppelklick hinlaufen und nehmen
-    Bike { bike: u32, attack: bool },
+    /// fahrenden Radler angreifen (nur mit Angriffsrecht), bis der Fahrer runter ist
+    Bike { bike: u32 },
 }
-/// Klick: an der Tür stehen (s), Doppelklick-Fenster (s), Annäherung über die Einsteigweite hinaus (px).
-pub const CLICK_DOOR: f64 = 0.35;
-pub const CLICK_NEAR_CAR: f64 = 30.;
 /// so lange ohne Vorankommen, dann plant der Klick-Laufweg neu (s)
 pub const CLICK_STALL: f64 = 0.6;
 
@@ -148,6 +148,13 @@ pub struct Player {
     /// Sprung: Höhe über dem Boden (px) und Steiggeschwindigkeit (px/s)
     pub z: f64,
     pub vz: f64,
+    /// Sprung: Schwung beim Absprung (px/s); in der Luft lenkt man nicht, die Figur fliegt so weiter
+    pub jump_v: (f64, f64),
+    /// Klicksteuerung: wohin zuletzt geklickt wurde (ein Sprung zielt dorthin, nach der Landung geht es weiter –
+    /// der Laufweg endet vor einem Zaun, das Ziel liegt dahinter)
+    pub click_goal: Option<(f64, f64)>,
+    /// gerade gelandet (der Klick-Laufweg wird danach neu geplant)
+    pub landed: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -355,6 +362,9 @@ impl World {
                 click_stall: (0., 0., 0.),
                 z: 0.,
                 vz: 0.,
+                jump_v: (0., 0.),
+                click_goal: None,
+                landed: false,
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -1728,8 +1738,10 @@ impl World {
     /// Zielen, Angriff) und steigt am Ziel ins Auto. WASD bricht den Auftrag ab.
     fn click_control(&mut self, input: &Input, dt: f64) -> Input {
         let mut out = *input;
+        let landed = std::mem::take(&mut self.player.landed);
         if input.move_x.hypot(input.move_y) > 0.05 {
             self.player.click = None;
+            self.player.click_goal = None;
             return out;
         }
         let lvl = self.player.level.lvl;
@@ -1751,13 +1763,17 @@ impl World {
         if let Some(at) = input.click_world {
             if input.click_pressed {
                 self.player.click_t = 0.15;
+                self.player.click_goal = Some(at);
                 self.player.click = self.click_intent(
                     at,
                     input.click_force && input.click_attack,
-                    input.click_double,
                     input.click_attack,
                     walk,
                 );
+                // nur ein Laufklick hat ein Ziel, über das gesprungen werden kann
+                if !matches!(self.player.click, Some(Click::Walk { .. })) {
+                    self.player.click_goal = None;
+                }
             } else if input.click_held {
                 match &mut self.player.click {
                     Some(Click::Walk { follow: true, .. }) => {
@@ -1765,6 +1781,7 @@ impl World {
                         if self.player.click_t <= 0. {
                             // gehalten: dem Zeiger nachlaufen (Weg alle 0,15 s neu)
                             self.player.click_t = 0.15;
+                            self.player.click_goal = Some(at);
                             if let Some(path) = walk(self, at) {
                                 self.player.click = Some(Click::Walk {
                                     path,
@@ -1785,6 +1802,32 @@ impl World {
             o.combat.fire = false;
             o.combat.fire_pressed = false;
         };
+        // nach der Landung: weiter zum Klickziel, Weg von hier neu (das Ziel lag hinter dem Zaun)
+        if landed
+            && let Some(g) = self.player.click_goal
+            && matches!(self.player.click, None | Some(Click::Walk { .. }))
+        {
+            self.player.click = if (g.0 - px).hypot(g.1 - py) > 6. {
+                walk(self, g).map(|path| Click::Walk {
+                    path,
+                    i: 1,
+                    follow: false,
+                })
+            } else {
+                None
+            };
+        }
+        // Sprung bei Klicksteuerung: Richtung Klickziel, nicht entlang des Umwegs
+        if input.jump
+            && let Some(g) = self.player.click_goal
+            && matches!(self.player.click, None | Some(Click::Walk { .. }))
+            && (g.0 - px).hypot(g.1 - py) > 6.
+        {
+            let d = (g.0 - px).hypot(g.1 - py);
+            out.move_x = (g.0 - px) / d;
+            out.move_y = (g.1 - py) / d;
+            return out;
+        }
         let Some(click) = self.player.click.clone() else {
             return out;
         };
@@ -1839,17 +1882,15 @@ impl World {
                 out.combat.fire = true;
                 out.combat.fire_pressed = ready;
             }
-            Click::Enter {
+            Click::Approach {
                 car,
-                approach,
                 mut path,
                 mut i,
                 mut to,
-                door,
             } => {
                 let Some((cx, cy)) = self
                     .car(car)
-                    .filter(|c| !c.wrecked && Some(c.id) != self.player.in_car)
+                    .filter(|c| Some(c.id) != self.player.in_car)
                     .map(|c| (c.x, c.y))
                 else {
                     self.player.click = None;
@@ -1857,26 +1898,10 @@ impl World {
                 };
                 let d = (cx - px).hypot(cy - py);
                 if d < ENTER_DIST - 2. {
+                    // daneben angekommen: stehen bleiben, zum Auto schauen – einsteigen nur per Taste
                     stop(&mut out);
                     self.player.angle = (cy - py).atan2(cx - px);
-                    if approach {
-                        self.player.click = None;
-                        return out;
-                    }
-                    // an der Tür: kurz stehen bleiben (Tür auf), dann einsteigen
-                    let left = match door {
-                        None => {
-                            self.events.push(Event::Door { x: cx, y: cy });
-                            CLICK_DOOR
-                        }
-                        Some(t) => t - dt,
-                    };
-                    if left <= 0. {
-                        self.player.click = None;
-                        self.try_enter_car(Some(car));
-                    } else if let Some(Click::Enter { door, .. }) = self.player.click.as_mut() {
-                        *door = Some(left);
-                    }
+                    self.player.click = None;
                     return out;
                 }
                 // kein Vorankommen (ein wartendes Auto steht im Weg und wartet seinerseits
@@ -1904,55 +1929,32 @@ impl World {
                 toward(&mut out, goal);
                 out.combat.fire = false;
                 out.combat.fire_pressed = false;
-                self.player.click = Some(Click::Enter {
-                    car,
-                    approach,
-                    path,
-                    i,
-                    to,
-                    door,
-                });
+                self.player.click = Some(Click::Approach { car, path, i, to });
             }
-            Click::Bike { bike, attack } => {
+            Click::Bike { bike } => {
+                // nur fahrende Radler, bis der Fahrer vom Rad ist
                 let Some(b) = self
                     .bikes
                     .iter()
-                    .find(|b| b.id == bike && b.state != crate::bikes::State::Gone)
-                    .map(|b| (b.x, b.y, b.state))
+                    .find(|b| b.id == bike && b.state == crate::bikes::State::Ride)
+                    .map(|b| (b.x, b.y))
                 else {
                     self.player.click = None;
                     return out;
                 };
                 let d = (b.0 - px).hypot(b.1 - py);
-                if attack {
-                    // bis der Fahrer vom Rad ist
-                    if b.2 != crate::bikes::State::Ride {
-                        self.player.click = None;
-                        return out;
-                    }
-                    let wp = self.player.combat.weapon();
-                    let reach = if wp.melee {
-                        wp.range + 6.
-                    } else {
-                        wp.range * 0.85
-                    };
-                    if d > reach {
-                        toward(&mut out, (b.0, b.1));
-                    } else {
-                        out.combat.aim_world = Some((b.0, b.1));
-                        out.combat.fire = true;
-                        out.combat.fire_pressed = self.player.combat.cool <= 0.;
-                    }
-                } else if d < crate::bikes::GRAB - 4. {
-                    // packen und aufsteigen
-                    stop(&mut out);
-                    self.player.click = None;
-                    self.try_enter();
+                let wp = self.player.combat.weapon();
+                let reach = if wp.melee {
+                    wp.range + 6.
                 } else {
-                    // fahrendem Rad direkt nach (sprinten hilft)
+                    wp.range * 0.85
+                };
+                if d > reach {
                     toward(&mut out, (b.0, b.1));
-                    out.combat.fire = false;
-                    out.combat.fire_pressed = false;
+                } else {
+                    out.combat.aim_world = Some((b.0, b.1));
+                    out.combat.fire = true;
+                    out.combat.fire_pressed = self.player.combat.cool <= 0.;
                 }
             }
             Click::Walk {
@@ -1974,14 +1976,13 @@ impl World {
         out
     }
 
-    /// Was ein Klick bedeutet (combat.js clickIntent): Person → angreifen, heiles Auto daneben oder Doppelklick →
-    /// einsteigen, weiter weg → nur hinlaufen, sonst (Boden, Wrack) hinlaufen; mit Strg am Platz angreifen.
+    /// Was ein Klick bedeutet: Person bzw. fahrender Radler → angreifen (nur mit `attack`), Auto → danebenstellen,
+    /// sonst (Boden, Wrack, liegendes Rad) hinlaufen; mit Strg am Platz angreifen. Eingestiegen wird nie per Klick.
     /// Ohne `attack` greift ein Klick nie an: Personen und fahrende Radler werden nur angelaufen.
     fn click_intent(
         &mut self,
         at: (f64, f64),
         force: bool,
-        double: bool,
         attack: bool,
         walk: impl Fn(&mut World, (f64, f64)) -> Option<Vec<(f64, f64)>>,
     ) -> Option<Click> {
@@ -2003,42 +2004,31 @@ impl World {
                 done: false,
             });
         }
-        let bike = self
+        let riding = self
             .bikes
             .iter()
-            .filter(|b| b.state != crate::bikes::State::Gone && b.level.lvl == lvl)
+            .filter(|b| b.state == crate::bikes::State::Ride && b.level.lvl == lvl)
             .find(|b| (b.x - at.0).hypot(b.y - at.1) < crate::bikes::RADIUS + 5.)
-            .map(|b| (b.id, b.state == crate::bikes::State::Ride));
-        if let Some((id, riding)) = bike.filter(|&(_, riding)| attack || !riding || double) {
-            return Some(Click::Bike {
-                bike: id,
-                attack: riding && !double,
-            });
+            .map(|b| b.id);
+        if let Some(id) = riding.filter(|_| attack) {
+            return Some(Click::Bike { bike: id });
         }
         let car = self
             .cars
             .iter()
-            .filter(|c| c.lvl() == lvl && Some(c.id) != self.player.in_car)
+            .filter(|c| c.lvl() == lvl && Some(c.id) != self.player.in_car && !c.wrecked)
             .find(|c| {
                 let (s, co) = c.angle.sin_cos();
                 let (dx, dy) = (at.0 - c.x, at.1 - c.y);
                 (dx * co + dy * s).abs() < c.hw + 2. && (-dx * s + dy * co).abs() < c.hh + 2.
             })
-            .map(|c| {
-                (
-                    c.id,
-                    c.wrecked,
-                    (c.x - self.player.x).hypot(c.y - self.player.y),
-                )
-            });
-        if let Some((id, false, d)) = car {
-            return Some(Click::Enter {
+            .map(|c| c.id);
+        if let Some(id) = car {
+            return Some(Click::Approach {
                 car: id,
-                approach: !(d <= ENTER_DIST + CLICK_NEAR_CAR || double),
                 path: Vec::new(),
                 i: 1,
                 to: (f64::NAN, f64::NAN),
-                door: None,
             });
         }
         let path = walk(self, at)?;
@@ -2378,6 +2368,15 @@ impl World {
         let airborne = p.z > 0. || p.vz > 0.;
         if input.jump && !airborne && !p.swimming && !stunned && p.inside.is_none() {
             p.vz = JUMP_V;
+            // mit Anlauf: Richtung bleibt, mindestens Jogg-Tempo (Hechtsprung); aus dem Stand: senkrecht
+            p.jump_v = if mag > 0.05 {
+                let l = mx.hypot(my);
+                let v = if sprinting { SPRINT } else { JUMP_CARRY };
+                // (gesprungen wird auch aus dem Stand am Zaun: die Klicksteuerung gibt dann die Richtung zum Ziel)
+                (mx / l * v, my / l * v)
+            } else {
+                (0., 0.)
+            };
             self.events.push(Event::Jump { x: p.x, y: p.y });
         }
         let p = &mut self.player;
@@ -2386,11 +2385,21 @@ impl World {
             p.z += p.vz * dt;
             if p.z <= 0. {
                 (p.z, p.vz) = (0., 0.);
+                p.landed = true;
                 self.events.push(Event::Land { x: p.x, y: p.y });
             }
         }
         let p = &mut self.player;
-        if mag > 0.05 {
+        if p.z > 0. || p.vz > 0. {
+            // in der Luft: Schwung vom Absprung, keine Lenkung
+            let (vx, vy) = p.jump_v;
+            p.x += vx * dt;
+            p.y += vy * dt;
+            p.move_speed = vx.hypot(vy);
+            if p.move_speed > 0. {
+                p.angle = vy.atan2(vx);
+            }
+        } else if mag > 0.05 {
             let speed = if p.swimming {
                 18.
             } else if sprinting {

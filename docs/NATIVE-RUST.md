@@ -611,6 +611,17 @@ Brückengeländer bleiben Hindernisse (ein Sturz von der Brücke ließe die Figu
 Ebenen kennen keinen Fall). In der Luft wird die Figur größer, ihr Schatten bleibt am Boden und rückt ab; Absprung
 und Landung klingen als Schritt auf dem Untergrund.
 
+**Sprung-Schwung (05.10.2026, Fehlerbehebung „kann nicht über Zäune springen“):** Gemessen an 85 Zäunen gelang der
+Sprung im Gehtempo nur bei einem: in den ~0,55 s über `JUMP_CLEAR` kam die Figur mit 15 px/s nur 8 px weit, braucht
+aber 14 px (2 × Radius) über die Zaunlinie, landete im Zaun und wurde zurückgeschoben (der alte Test verlangte nur
+drei gelungene Zäune und joggte). Jetzt trägt der Absprung die Figur in der Laufrichtung mit mindestens
+`JUMP_CARRY` = 45 px/s (sprintend mit Sprinttempo), in der Luft wird nicht gelenkt (`Player::jump_v`); aus dem Stand
+geht es senkrecht hoch. **Klicksteuerung:** der Laufweg zu einem Ziel hinter einem Zaun endet ~14 px davor (letzte
+freie Rasterzelle); die Leertaste springt dann Richtung Klickziel (`Player::click_goal`), nicht entlang eines
+Umwegs, und nach der Landung (`Player::landed`) wird der Weg zum Ziel neu geplant. Tests
+`jumping_clears_fences_at_every_pace` (Gehen, Joggen, Sprinten: je ≥ 90 % der Zäune) und
+`click_walking_jumps_toward_the_clicked_spot`.
+
 **Darstellung** (`game/effects.rs`, Waffeneffekte in `game/gunfx.rs`, Figuren in `play.rs`):
 - Mündungsfeuer (05.10.2026): heißer Kern, Flammenzunge und 2–4 seitliche Strahlen, je Schuss anders, 35–60 ms
   (ein bis zwei Bilder), Schrotflinte größer; nachts als Lichtquelle. Pulverdampf quillt vor der Mündung auf und
@@ -724,7 +735,8 @@ linear bis 1,42 g, ein Drittel Druck gab 0,5 g.
 ## Mausbelegung (04.10.2026, Nutzerwunsch)
 
 In beiden Schemata (Diablo und klassisch) gilt am PC:
-- **Linke Maustaste schießt nie.** Diablo: laufen, Auto/Rad anlaufen bzw. einsteigen; ein Klick auf eine Person
+- **Linke Maustaste schießt nie und steigt nie ein** (seit 05.10.2026). Diablo: laufen, Auto/Rad anlaufen; eingestiegen
+  wird nur per Taste (F/Y). Ein Klick auf eine Person
   oder einen fahrenden Radler läuft nur hin (`Input::click_attack` aus, auch Strg + Links greift nicht mehr an).
   Klassisch: keine Funktion.
 - **Rechte Maustaste schießt bzw. schlägt immer**, zum Mauszeiger (gehalten: Dauerfeuer bzw. weiter zuschlagen).
@@ -751,8 +763,9 @@ das klassische Schema (WASD, die Maus zielt) um. Die Wahl liegt in `settings.jso
   - Person: hinlaufen bis in Waffenreichweite und angreifen; gehalten weiter, bis sie liegt. **Seit der neuen
     Mausbelegung (s. unten) nur noch mit `Input::click_attack` – am PC ist das aus, ein Linksklick läuft dann bloß
     hin.**
-  - Heiles Auto neben der Figur oder Doppelklick: hinlaufen, 0,35 s an der Tür, einsteigen. Ein Auto weiter weg
-    wird nur angelaufen. Ein Wrack zählt als Boden.
+  - Auto: hinlaufen und danebenstellen (`Click::Approach`). ~~Einsteigen per Klick oder Doppelklick~~ – seit
+    05.10.2026 entfernt (Nutzerwunsch), eingestiegen wird nur per Taste; `Input::click_double` gibt es nicht mehr.
+    Ein Wrack zählt als Boden.
   - ~~Strg + Klick: am Platz angreifen~~ und ~~rechte Taste: treten~~ – abgelöst, s. „Mausbelegung“. WASD bricht
     jeden Klickauftrag ab.
   - Ein Ring am Boden zeigt das Laufziel.
@@ -765,7 +778,8 @@ Kacheln getestet:
 - Wege zu Zielen hinter Häusern verlaufen nie durch ein Haus; mindestens eines ist erreichbar und braucht Ecken.
 - Klick auf den Boden: die Figur kommt an.
 - Klick auf eine Person: hinlaufen und treffen.
-- Doppelklick aufs eigene Auto: einsteigen.
+- ~~Doppelklick aufs eigene Auto: einsteigen~~ – seit 05.10.2026: Klick stellt daneben, F steigt ein
+  (`click_walks_attacks_and_never_enters`).
 
 ## Polizei und Rettungsdienst (04.10.2026)
 
@@ -858,8 +872,8 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
   er.
 - **Kampf:** Fahrende Radfahrer sind Ziele für Strahl, Nahkampf, Zeiger und Zielhilfe. Ein Treffer holt sie vom
   Rad, der Fahrer nimmt den Treffer als Person (`combat::hurt_bike`, Ereignis `BikeDown`).
-- **Klicken (Diablo):** Ein Klick auf einen fahrenden Radfahrer läuft hin (angegriffen wird mit rechts). Ein
-  Doppelklick oder ein Klick auf ein liegendes Rad läuft hin und nimmt es.
+- **Klicken (Diablo):** Ein Klick auf einen fahrenden Radfahrer oder ein liegendes Rad läuft hin (angegriffen wird
+  mit rechts); genommen wird ein Rad seit 05.10.2026 nur per Taste.
 - **Darstellung:** zwei Räder, Rahmen bzw. Trittbrett, Lenker und der Fahrer im Trikot, beim Rad mit
   Tretbewegung. Liegende Räder sind gekippt und ohne Fahrer.
 - **Statistik:** Radfahrer umgefahren, vom Rad geholt, Räder gekapert.

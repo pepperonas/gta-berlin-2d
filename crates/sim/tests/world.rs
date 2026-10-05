@@ -899,7 +899,7 @@ fn foot_path_goes_around_buildings() {
 }
 
 #[test]
-fn click_walks_attacks_and_enters() {
+fn click_walks_attacks_and_never_enters() {
     use berlin_sim::world::Click;
     let mut w = world(32);
     run(&mut w, 5, idle());
@@ -962,31 +962,43 @@ fn click_walks_attacks_and_enters() {
     run(&mut w, 180, idle());
     let p = w.peds.iter().find(|p| p.id == id).unwrap();
     assert!(p.hp < hp, "getroffen");
-    // Klick auf das eigene Auto in der Nähe (Doppelklick): hinlaufen, kurz an der Tür, einsteigen
+    // Klick auf das eigene Auto: nur danebenstellen – per Maus wird nie eingestiegen (auch nicht mit Doppelklick)
     let pc = w.player_car_id.unwrap();
     let (cx, cy) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
-    w.update(
-        &Input {
-            click_world: Some((cx, cy)),
-            click_pressed: true,
-            click_double: true,
-            ..idle()
-        },
-        DT,
-    );
+    for _ in 0..2 {
+        w.update(
+            &Input {
+                click_world: Some((cx, cy)),
+                click_pressed: true,
+                ..idle()
+            },
+            DT,
+        );
+    }
     assert!(
-        matches!(
-            w.player.click,
-            Some(Click::Enter {
-                approach: false,
-                ..
-            })
-        ),
+        matches!(w.player.click, Some(Click::Approach { car, .. }) if car == pc),
         "{:?}",
         w.player.click
     );
     run(&mut w, 1200, idle());
-    assert_eq!(w.player.in_car, Some(pc), "eingestiegen");
+    assert_eq!(w.player.in_car, None, "per Klick nicht eingestiegen");
+    let d = w
+        .car(pc)
+        .map(|c| (c.x - w.player.x).hypot(c.y - w.player.y))
+        .unwrap();
+    assert!(
+        d < berlin_sim::world::ENTER_DIST,
+        "steht neben dem Auto: {d}"
+    );
+    // per Taste geht es weiter
+    w.update(
+        &Input {
+            enter_exit: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert_eq!(w.player.in_car, Some(pc), "per Taste eingestiegen");
 }
 
 #[test]
@@ -2604,4 +2616,170 @@ fn hurt_pedestrians_carry_a_hit_timer() {
     if let Some(p) = w.peds.iter().find(|p| p.id == id) {
         assert!((p.hurt_t - 0.5).abs() < 0.05 && p.hp < 100.);
     }
+}
+
+/// Über Zäune kommt man in jedem Tempo: der Absprung trägt die Figur mindestens mit Jogg-Tempo weiter (im Gehtempo
+/// landete sie vorher mitten im Zaun und wurde zurückgeschoben – 1 von 85 Zäunen).
+#[test]
+fn jumping_clears_fences_at_every_pace() {
+    use berlin_sim::city::{Solid, WallKind, WallSub};
+    use berlin_sim::collision::Rect;
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    let (px, py) = (w.player.x, w.player.y);
+    let area = Rect {
+        x: px - 2500.,
+        y: py - 2500.,
+        w: 5000.,
+        h: 5000.,
+    };
+    let fences: Vec<(f64, f64, f64, f64)> = w
+        .city
+        .solids
+        .query(&area)
+        .into_iter()
+        .filter_map(|h| match *w.city.solids.get(h) {
+            Solid::Wall {
+                seg,
+                kind: WallKind::Wall,
+                sub: WallSub::Fence,
+                lvl: 0,
+            } => Some((seg.ax, seg.ay, seg.bx, seg.by)),
+            _ => None,
+        })
+        .filter(|&(ax, ay, bx, by)| (bx - ax).hypot(by - ay) > 60.)
+        .take(60)
+        .collect();
+    for (name, mag, sprint, slow) in [
+        ("gehen", 0.5, false, true),
+        ("joggen", 1.0, false, false),
+        ("sprinten", 1.0, true, false),
+    ] {
+        let (mut blocked, mut over) = (0, 0);
+        for &(ax, ay, bx, by) in &fences {
+            let (mx, my) = ((ax + bx) / 2., (ay + by) / 2.);
+            let l = (bx - ax).hypot(by - ay);
+            let (nx, ny) = (-(by - ay) / l, (bx - ax) / l);
+            let mut side = |jump: bool| {
+                w.player.x = mx + nx * 12.;
+                w.player.y = my + ny * 12.;
+                (w.player.z, w.player.vz) = (0., 0.);
+                w.player.level.lvl = 0;
+                w.player.stamina = 1.;
+                let mut jumped = false;
+                for _ in 0..90 {
+                    let d = (w.player.x - mx) * nx + (w.player.y - my) * ny;
+                    let j = jump && !jumped && d <= 9.5;
+                    jumped |= j;
+                    w.update(
+                        &Input {
+                            move_x: -nx * mag,
+                            move_y: -ny * mag,
+                            sprint,
+                            walk_slow: slow,
+                            jump: j,
+                            ..idle()
+                        },
+                        DT,
+                    );
+                }
+                (w.player.x - mx) * nx + (w.player.y - my) * ny
+            };
+            if side(false) > 0. {
+                blocked += 1;
+                if side(true) < 0. {
+                    over += 1;
+                }
+            }
+        }
+        assert!(blocked >= 20, "{name}: nur {blocked} Zäune geprüft");
+        assert!(
+            over * 10 >= blocked * 9,
+            "{name}: {over} von {blocked} Zäunen übersprungen"
+        );
+    }
+}
+
+/// Klicksteuerung: ein Klick hinter einen Zaun führt bis an den Zaun; Leertaste springt Richtung Klickziel
+/// (nicht entlang eines Umwegs), danach läuft die Figur auf der anderen Seite weiter zum Ziel.
+#[test]
+fn click_walking_jumps_toward_the_clicked_spot() {
+    use berlin_sim::city::{Solid, WallKind, WallSub};
+    use berlin_sim::collision::Rect;
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    let (px, py) = (w.player.x, w.player.y);
+    let area = Rect {
+        x: px - 2500.,
+        y: py - 2500.,
+        w: 5000.,
+        h: 5000.,
+    };
+    let fences: Vec<(f64, f64, f64, f64)> = w
+        .city
+        .solids
+        .query(&area)
+        .into_iter()
+        .filter_map(|h| match *w.city.solids.get(h) {
+            Solid::Wall {
+                seg,
+                kind: WallKind::Wall,
+                sub: WallSub::Fence,
+                lvl: 0,
+            } => Some((seg.ax, seg.ay, seg.bx, seg.by)),
+            _ => None,
+        })
+        .filter(|&(ax, ay, bx, by)| (bx - ax).hypot(by - ay) > 80.)
+        .take(40)
+        .collect();
+    let mut ok = 0;
+    let mut tried = 0;
+    for (ax, ay, bx, by) in fences {
+        let (mx, my) = ((ax + bx) / 2., (ay + by) / 2.);
+        let l = (bx - ax).hypot(by - ay);
+        let (nx, ny) = (-(by - ay) / l, (bx - ax) / l);
+        let lvl = 0;
+        let goal = (mx - nx * 25., my - ny * 25.);
+        let start = (mx + nx * 30., my + ny * 30.);
+        if !berlin_sim::footpath::foot_free(&mut w, goal.0, goal.1, lvl)
+            || !berlin_sim::footpath::foot_free(&mut w, start.0, start.1, lvl)
+        {
+            continue;
+        }
+        (w.player.x, w.player.y) = start;
+        (w.player.z, w.player.vz) = (0., 0.);
+        w.player.level.lvl = lvl;
+        w.player.click = None;
+        tried += 1;
+        w.update(
+            &Input {
+                click_world: Some(goal),
+                click_pressed: true,
+                ..idle()
+            },
+            DT,
+        );
+        // bis an den Zaun laufen – der Weg endet ~14 px davor, dort bleibt die Figur stehen –, dann springen
+        let mut jumped = false;
+        for _ in 0..240 {
+            let d = (w.player.x - mx) * nx + (w.player.y - my) * ny;
+            let j = !jumped && (d < 11. || (w.player.click.is_none() && d < 20.));
+            jumped |= j;
+            w.update(&Input { jump: j, ..idle() }, DT);
+        }
+        if (w.player.x - goal.0).hypot(w.player.y - goal.1) < 10. {
+            ok += 1;
+        }
+        if tried >= 12 {
+            break;
+        }
+    }
+    assert!(
+        tried >= 6,
+        "nur {tried} Zäune mit freiem Platz davor und dahinter"
+    );
+    assert!(
+        ok * 4 >= tried * 3,
+        "{ok} von {tried}: am Klickziel hinter dem Zaun angekommen"
+    );
 }

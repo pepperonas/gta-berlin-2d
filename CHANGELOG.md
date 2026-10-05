@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Per Maus wird nicht mehr eingestiegen – ein Klick auf ein Auto oder Rad läuft nur hin und stellt
+  die Figur daneben, eingestiegen wird per Taste (F/Y); der Doppelklick zum Einsteigen ist entfallen.
+
 - Native Fassung: Diesel klingen nach echten Dieseln – Bank `d4` aus einem Renault Master dCi135 (Drehzahlrampe,
   Leerlauf, Start, Gasstöße; Freesound, CC BY 3.0) für Diesel-Pkw, Transporter und Geländewagen, Bank `d6` aus einem
   anfahrenden Mack-Sattelzug (CC0) für Lkw und Busse.
@@ -359,6 +362,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 - Kompakter Fahrzeugstatus mit sichtbaren ESP-/ABS-Anzeigen.
 
 ### Behoben
+
+- Native Fassung: Über Zäune springen klappt jetzt auch im Gehtempo und mit der Maussteuerung. Der Absprung trägt die
+  Figur mit Schwung weiter (vorher landete sie im Gehtempo mitten im Zaun und wurde zurückgeschoben – 1 von 85
+  Zäunen); bei Klicksteuerung springt die Leertaste Richtung Klickziel, danach läuft die Figur weiter.
 
 - Native Rust-Portierung: Silhouetten verdeckter Figuren und Fahrzeuge neu gestaltet – feine warmweiße Kontur in der
   echten Fahrzeugform mit dunklem Innensaum statt hellblauer Fläche; andere Verkehrsteilnehmer dezent grau.
