@@ -3668,7 +3668,8 @@ mod tests {
         );
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
     }
-    /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad.
+    /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad;
+    /// im Auto steigt keine Maustaste aus.
     #[test]
     fn mouse_left_walks_right_shoots_both_open_the_wheel() {
         use berlin_engine::Mouse;
@@ -3809,6 +3810,45 @@ mod tests {
             },
         );
         assert!(!p.wheel_m.open && !p.wheel_m.down, "loslassen schließt");
+        // im Auto: keine Maustaste steigt aus (einzeln, zusammen, getippt, gehalten, doppelt)
+        let pc = p.world.player_car_id.expect("Spielerauto");
+        let (cx, cy) = p.world.car(pc).map(|c| (c.x, c.y)).unwrap();
+        (p.world.player.x, p.world.player.y) = (cx + 15., cy);
+        p.world.update(
+            &Input {
+                enter_exit: true,
+                ..Default::default()
+            },
+            DT,
+        );
+        assert_eq!(p.world.player.in_car, Some(pc), "per Taste eingestiegen");
+        let car_at = Some(glam::Vec2::new(cx as f32, cy as f32));
+        let presses = [
+            (true, false),
+            (false, true),
+            (true, true),
+            (true, false),
+            (true, false),
+            (false, true),
+            (false, true),
+        ];
+        for (l, r) in presses {
+            for k in 0..20 {
+                step(
+                    &mut p,
+                    Mouse {
+                        world: car_at,
+                        hud,
+                        left: l && k < 12,
+                        right: r && k < 12,
+                        left_pressed: l && k == 0,
+                        right_pressed: r && k == 0,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        assert_eq!(p.world.player.in_car, Some(pc), "per Maus nicht ausgestiegen");
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]

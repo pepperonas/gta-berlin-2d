@@ -735,7 +735,8 @@ linear bis 1,42 g, ein Drittel Druck gab 0,5 g.
 ## Mausbelegung (04.10.2026, Nutzerwunsch)
 
 In beiden Schemata (Diablo und klassisch) gilt am PC:
-- **Linke Maustaste schießt nie und steigt nie ein** (seit 05.10.2026). Diablo: laufen, Auto/Rad anlaufen; eingestiegen
+- **Keine Maustaste steigt ein oder aus** (seit 05.10.2026; im Auto geht die Maus gar nicht an die Simulation,
+  geprüft in `mouse_left_walks_right_shoots_both_open_the_wheel`). **Linke Maustaste schießt nie.** Diablo: laufen, Auto/Rad anlaufen; eingestiegen
   wird nur per Taste (F/Y). Ein Klick auf eine Person
   oder einen fahrenden Radler läuft nur hin (`Input::click_attack` aus, auch Strg + Links greift nicht mehr an).
   Klassisch: keine Funktion.

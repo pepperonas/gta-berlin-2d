@@ -159,7 +159,7 @@ addEventListener('pointerdown', () => sound.unlock());
 // (menuHover/menuPick) durch dieselbe Spiellogik wie Controller und Tastatur.
 const toHud = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * (canvas.width / r.width) / hud.s, (e.clientY - r.top) * (canvas.height / r.height) / hud.s]; };
 const hitAt = (vx, vy) => { const hs = hud.hits ?? []; for (let i = hs.length - 1; i >= 0; i--) { const b = hs[i]; if (vx >= b.x && vx <= b.x + b.w && vy >= b.y && vy <= b.y + b.h) return b; } return null; };
-const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0, enterExit: false, slot: 0, prevWeapon: false,
+const pointer = { vx: -1, vy: -1, moved: -1e9, hover: null, pick: null, key: null, drag: null, cursor: '', fire: false, firePressed: false, wheel: 0, slot: 0, prevWeapon: false,
   lmb: false, lmbPressed: false, lmbDouble: false, lastPress: null, kick: false, rmb: false, rmbPressed: false };
 // Waffenrad öffnet nur bei gleichzeitig gedrückter linker und rechter Maustaste.
 // Am Controller dasselbe mit LB: tippen = vorige Waffe, halten = Rad, rechter Stick wählt (padBtn).

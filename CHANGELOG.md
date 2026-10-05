@@ -8,8 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
-- Native Fassung: Per Maus wird nicht mehr eingestiegen – ein Klick auf ein Auto oder Rad läuft nur hin und stellt
-  die Figur daneben, eingestiegen wird per Taste (F/Y); der Doppelklick zum Einsteigen ist entfallen.
+- Per Maus wird weder ein- noch ausgestiegen – ein Klick auf ein Auto oder Rad läuft nur hin und stellt die Figur
+  daneben, Ein- und Aussteigen nur per Taste (F/Y); der Doppelklick zum Einsteigen ist entfallen. Ein Test drückt im
+  Auto alle Maustasten (einzeln, zusammen, getippt, gehalten). Im Browser meldet das getippte Waffenrad kein
+  `enterExit` mehr.
 
 - Native Fassung: Diesel klingen nach echten Dieseln – Bank `d4` aus einem Renault Master dCi135 (Drehzahlrampe,
   Leerlauf, Start, Gasstöße; Freesound, CC BY 3.0) für Diesel-Pkw, Transporter und Geländewagen, Bank `d6` aus einem

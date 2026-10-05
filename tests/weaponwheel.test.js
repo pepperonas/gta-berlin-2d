@@ -26,7 +26,7 @@ test('Rechte Maustaste: tippen = ein-/aussteigen, halten = Rad auf, Maus wählt,
   // Tippen
   rb.press(10, 500, 300);
   assert.deepEqual(rb.tick(10.1, true, 0, 6), {});
-  assert.deepEqual(rb.release(10.12), { tap: true, enterExit: true });
+  assert.deepEqual(rb.release(10.12), { tap: true });
   assert.equal(rb.open, false);
   // Halten öffnet das Rad, die Anzeige startet bei der aktuellen Waffe
   rb.press(20, 500, 300);
@@ -91,7 +91,7 @@ test('Rad: Mausrad dreht weiter, Zifferntaste wählt und schließt, Abbrechen oh
   pad.aim(-0.9, -0.5); assert.equal(pad.state.hover, 5);
   pad.aim(0, 0); assert.equal(pad.state.hover, 5, 'Stick los: Wahl bleibt');
   assert.deepEqual(pad.release(2), { pick: 5, closed: true });
-  pad.press(3); assert.deepEqual(pad.release(3.1), { tap: true, enterExit: true }, 'LB getippt');
+  pad.press(3); assert.deepEqual(pad.release(3.1), { tap: true }, 'LB getippt');
   // verpasstes Loslassen (außerhalb des Fensters): sync entscheidet wie release
   const lost = createRightButton();
   lost.press(0, 0, 0); lost.tick(1, true, 1, 6); lost.move(0, 80);
@@ -99,7 +99,7 @@ test('Rad: Mausrad dreht weiter, Zifferntaste wählt und schließt, Abbrechen oh
   assert.deepEqual(lost.sync(1.3, false), { pick: 3, closed: true });
   assert.equal(lost.down, false); assert.deepEqual(lost.sync(1.4, false), {});
   const tap = createRightButton(); tap.press(0, 0, 0);
-  assert.deepEqual(tap.sync(0.1, false), { tap: true, enterExit: true }, 'kurz: getippt');
+  assert.deepEqual(tap.sync(0.1, false), { tap: true }, 'kurz: getippt');
 });
 
 test('Zeitlupe blendet weich ein und aus und kommt genau am Ziel an', () => {

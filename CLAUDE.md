@@ -122,7 +122,7 @@ change in `web/`.
 - **Input pipeline (`input.js`):** keyboard + Web Gamepad API + host readings are merged into one raw state, then
   `InputState.frame()` derives the abstract actions. Short key presses are latched until the next sim step.
   Weapon wheel: `weaponwheel.js createRightButton` (pure state machine, two instances in `main.js`: right mouse button
-  and gamepad LB). Tap → `tap` (mouse: `enterExit`, LB: previous weapon), hold → wheel; the mouse wheel opens at the
+  and gamepad LB). Tap → `tap` (mouse: nothing – entering/exiting is key-only, LB: previous weapon), hold → wheel; the mouse wheel opens at the
   cursor (`place`), the real cursor's direction from its centre selects (`move`, absolute), stick via `aim`, `nudge` (mouse wheel), `choose` (digit keys),
   `cancel` (Esc/B), `sync(held)` resolves a missed release. The right button uses `mousedown`/`mouseup` (pointer events
   don't report a second button on the same pointer, e.g. while firing). `easeTimeScale` fades the slow-motion; the aim

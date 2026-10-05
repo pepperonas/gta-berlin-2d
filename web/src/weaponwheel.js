@@ -78,7 +78,7 @@ export function createRightButton(opts = {}) {
       if (!st.down) return {};
       st.down = false;
       if (st.open) { st.open = false; return st.hover >= 0 ? { pick: st.hover, closed: true } : { closed: true }; }
-      return t - st.t0 < cfg.hold ? { tap: true, enterExit: true } : {};
+      return t - st.t0 < cfg.hold ? { tap: true } : {}; // getippt: nie Ein-/Aussteigen (das geht nur per Taste)
     },
     sync(t, held) { return st.down && !held ? this.release(t) : {}; },
     cancel() { const was = st.open; st.down = false; st.open = false; return was ? { closed: true, cancelled: true } : {}; },
