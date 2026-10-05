@@ -1,0 +1,138 @@
+{
+  "_hinweis": "Rezepte für tools/audio/build_sfx.py: Quellen (Archiv mit Prüfsumme, Lizenz, Urheber) und je Klang die Varianten. Eine Variante ist eine Liste von Schichten {datei, at, db}; 'dateien' (Glob) ist die Kurzform für eine Variante je Datei.",
+  "quellen": {
+    "kenney_impact": {
+      "titel": "Kenney – Impact Sounds",
+      "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "seite": "https://kenney.nl/assets/impact-sounds",
+      "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "kenney_rpg": {
+      "titel": "Kenney – RPG Audio",
+      "url": "https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip",
+      "seite": "https://kenney.nl/assets/rpg-audio",
+      "sha256": "6dbeaf8544da958d8f2adcb4a4a4b76c1ade34a05f8ab9edccd327da7375f38b",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "oga_swishes": {
+      "titel": "Swishes Sound Pack",
+      "url": "https://opengameart.org/sites/default/files/swishes.zip",
+      "seite": "https://opengameart.org/content/swishes-sound-pack",
+      "sha256": "7980215241b739a787dcf26f660ce510bb237900968789395a86911619795693",
+      "lizenz": "CC0 1.0",
+      "urheber": "artisticdude"
+    },
+    "oga_footsteps": {
+      "titel": "Footsteps on different surfaces (water)",
+      "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+      "seite": "https://opengameart.org/content/footsteps-on-different-surfaces",
+      "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+      "lizenz": "CC BY 3.0",
+      "urheber": "congusbongus, nach „Water Footsteps“ von EminYILDIRIM (freesound.org/s/608663) und „footstep-concrete.wav“ von swuing (freesound.org/s/38873)"
+    }
+  },
+  "klaenge": {
+    "step_hard": {
+      "zweck": "Schritt auf Asphalt, Pflaster, Beton",
+      "quelle": "kenney_impact",
+      "dateien": "*/footstep_concrete_00[0-4].ogg",
+      "laenge_s": 0.15,
+      "fade_s": 0.04,
+      "hochpass_hz": 60
+    },
+    "step_grass": {
+      "zweck": "Schritt auf Gras und Erde",
+      "quelle": "kenney_impact",
+      "dateien": "*/footstep_grass_00[0-4].ogg",
+      "laenge_s": 0.3,
+      "fade_s": 0.12,
+      "hochpass_hz": 60
+    },
+    "step_snow": {
+      "zweck": "Schritt im Schnee",
+      "quelle": "kenney_impact",
+      "dateien": "*/footstep_snow_00[0-4].ogg",
+      "laenge_s": 0.32,
+      "fade_s": 0.1,
+      "hochpass_hz": 60
+    },
+    "step_wet": {
+      "zweck": "Schritt auf nasser Straße, in Pfützen",
+      "quelle": "oga_footsteps",
+      "dateien": "footsteps/water/[0-4].ogg",
+      "laenge_s": 0.26,
+      "fade_s": 0.08,
+      "hochpass_hz": 60
+    },
+    "swing": {
+      "zweck": "Schlag ins Leere (Faust, Schläger, Messer)",
+      "quelle": "oga_swishes",
+      "dateien": "swishes/swish-[13456789].wav",
+      "laenge_s": 0.2,
+      "fade_s": 0.05,
+      "hochpass_hz": 120
+    },
+    "punch": {
+      "zweck": "Treffer mit Faust oder Schläger, eigene Treffer",
+      "quelle": "kenney_impact",
+      "dateien": "*/impactPunch_medium_00[0-4].ogg",
+      "laenge_s": 0.35,
+      "fade_s": 0.12,
+      "hochpass_hz": 40
+    },
+    "thud": {
+      "zweck": "Schlag auf Blech (Auto)",
+      "quelle": "kenney_impact",
+      "dateien": "*/impactMetal_heavy_00[0-4].ogg",
+      "laenge_s": 0.35,
+      "fade_s": 0.1,
+      "hochpass_hz": 40
+    },
+    "impact": {
+      "zweck": "Kugeleinschlag in Wand und Boden",
+      "quelle": "kenney_impact",
+      "dateien": "*/impactMining_00[0-4].ogg",
+      "laenge_s": 0.3,
+      "fade_s": 0.2,
+      "hochpass_hz": 250
+    },
+    "hit": {
+      "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
+      "quelle": "kenney_impact",
+      "dateien": "*/impactSoft_heavy_00[0-4].ogg",
+      "laenge_s": 0.35,
+      "fade_s": 0.12,
+      "hochpass_hz": 40
+    },
+    "reload": {
+      "zweck": "Nachladen beginnt: Magazin raus",
+      "quelle": "kenney_rpg",
+      "varianten": [
+        [{"datei": "*/metalClick.ogg", "at": 0}],
+        [{"datei": "*/metalClick.ogg", "at": 0}, {"datei": "*/beltHandle1.ogg", "at": 0.06, "db": -8}]
+      ],
+      "laenge_s": 0.4,
+      "fade_s": 0.08,
+      "hochpass_hz": 150
+    },
+    "reloaded": {
+      "zweck": "Nachladen fertig: Magazin rastet ein",
+      "quelle": "kenney_rpg",
+      "varianten": [[{"datei": "*/metalLatch.ogg", "at": 0}]],
+      "laenge_s": 0.2,
+      "fade_s": 0.05,
+      "hochpass_hz": 150
+    },
+    "weapon_switch": {
+      "zweck": "Waffe wechseln (Holster, Gürtel)",
+      "quelle": "kenney_rpg",
+      "dateien": ["*/beltHandle1.ogg", "*/clothBelt2.ogg", "*/handleSmallLeather.ogg"],
+      "laenge_s": 0.35,
+      "fade_s": 0.1,
+      "hochpass_hz": 150
+    }
+  }
+}

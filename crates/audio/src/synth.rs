@@ -7,7 +7,7 @@
 use crate::dsp::{
     Biquad, Compressor, Env, FilterType, Noise, Osc, Reverb, Smooth, Table, Wave, pan, shape,
 };
-use crate::sampler::{EngineFrame, SamplerVoice, bank_v10, weapon_bank};
+use crate::sampler::{EngineFrame, SamplerVoice, bank_v10, sfx_bank, sfx_samples_on, weapon_bank};
 use berlin_sim::ambience::Mix;
 use berlin_sim::enginevoice::{Voice, engine_spectrum};
 use berlin_sim::railsound::{RailMix, TrainLayers};
@@ -27,6 +27,38 @@ pub const GUN_LEVEL: [f32; 3] = [0.85, 0.6, 0.9];
 /// vorige schon so alt ist (s) – eine Salve verschwimmt sonst zu Brei, nur der letzte Hall klingt aus
 pub const GUN_CHOKE_TC: f32 = 0.03;
 pub const GUN_CHOKE_AGE: f64 = 0.03;
+/// Klang-Samples (tools/audio/build_sfx.py): Name, Pegel, Tonhöhenstreuung (±), Entfernungs-Tiefpass.
+/// Pegel eingemessen auf Zielwerte (Test `sfx_samples_match_the_synth_loudness`): Schritte so laut wie der frühere
+/// harte Synthese-Schritt (Gras leiser – die Synthese war dort fast unhörbar), alles andere 20 % über der Synthese.
+#[derive(Debug, Clone, Copy)]
+pub struct SfxSpec {
+    pub name: &'static str,
+    pub level: f32,
+    pub spread: f32,
+    pub distance: bool,
+}
+const fn spec(name: &'static str, level: f32, spread: f32, distance: bool) -> SfxSpec {
+    SfxSpec {
+        name,
+        level,
+        spread,
+        distance,
+    }
+}
+pub const STEP_HARD: SfxSpec = spec("step_hard", 0.129, 0.08, false);
+pub const STEP_GRASS: SfxSpec = spec("step_grass", 0.087, 0.08, false);
+pub const STEP_SNOW: SfxSpec = spec("step_snow", 0.071, 0.08, false);
+pub const STEP_WET: SfxSpec = spec("step_wet", 0.069, 0.08, false);
+pub const SWING: SfxSpec = spec("swing", 0.096, 0.1, true);
+pub const PUNCH: SfxSpec = spec("punch", 0.314, 0.06, true);
+pub const THUD: SfxSpec = spec("thud", 0.279, 0.06, true);
+pub const IMPACT: SfxSpec = spec("impact", 0.131, 0.1, true);
+pub const HIT: SfxSpec = spec("hit", 0.217, 0.06, true);
+pub const RELOAD: SfxSpec = spec("reload", 0.205, 0.03, false);
+pub const RELOADED: SfxSpec = spec("reloaded", 0.135, 0.03, false);
+pub const WEAPON_SWITCH: SfxSpec = spec("weapon_switch", 0.154, 0.05, false);
+/// Choke-Gruppe für Samples ohne Choke
+const NO_CHOKE: u8 = u8::MAX;
 const BLOCK: usize = 32;
 
 /// Zustand des selbst gefahrenen Fahrzeugs (oder `active = false` zu Fuß).
@@ -237,6 +269,7 @@ struct SamplePlay {
     release: bool,
     lp_k: f32,
     lp: f32,
+    dest: Dest,
 }
 
 struct EngineVoice {
@@ -349,8 +382,10 @@ pub struct Synth {
     samplers: Vec<SamplerVoice>,
     engine_ch: Smooth,
     reference: Option<(Arc<[f32]>, f64)>,
-    /// laufende Schuss-Aufnahmen
+    /// laufende Aufnahmen (Schüsse, Klang-Samples)
     plays: Vec<SamplePlay>,
+    /// Klang-Samples statt Synthese (`GTA_SFX_SAMPLES=0` = aus)
+    pub use_samples: bool,
 }
 
 fn layer(kind: FilterType, f: f32, q: f32, seed: &mut u32) -> NoiseLayer {
@@ -484,6 +519,7 @@ impl Synth {
             engine_ch: Smooth::new(1.),
             reference: None,
             plays: Vec::new(),
+            use_samples: sfx_samples_on(),
         }
     }
 
@@ -1060,6 +1096,46 @@ impl Synth {
         });
     }
 
+    /// Klang-Sample abspielen: zufällige Variante und Tonhöhe, Pegel `k` (trägt schon die Entfernung),
+    /// bei `distance` dunkler mit sinkendem `k`. Falsch, wenn es keine Aufnahme gibt bzw. Samples aus sind – dann
+    /// spielt der Aufrufer den Synthese-Klang.
+    fn sample(&mut self, sp: SfxSpec, k: f32, dest: Dest) -> bool {
+        if !self.use_samples {
+            return false;
+        }
+        let bank = sfx_bank(sp.name);
+        if bank.is_empty() {
+            return false;
+        }
+        if k <= 0. {
+            return true;
+        }
+        let v = ((self.rng.unit() * bank.len() as f32) as usize).min(bank.len() - 1);
+        let rate = 1. + (self.rng.unit() as f64 - 0.5) * 2. * sp.spread as f64;
+        let lp_k = if sp.distance {
+            let cutoff = 1200. + 16000. * k.clamp(0., 1.).powi(2);
+            1. - (-std::f32::consts::TAU * cutoff / self.sr).exp()
+        } else {
+            1.
+        };
+        self.plays.push(SamplePlay {
+            buf: bank[v].clone(),
+            pos: 0.,
+            rate: rate * 48000. / self.sr as f64,
+            gain: sp.level * k,
+            group: NO_CHOKE,
+            age: 0.,
+            release: false,
+            lp_k,
+            lp: 0.,
+            dest,
+        });
+        if self.plays.len() > 48 {
+            self.plays.remove(0);
+        }
+        true
+    }
+
     /// Einzelklang abspielen (SYNTH in `audio.js`).
     pub fn play(&mut self, s: Sfx) {
         use Dest::Master as M;
@@ -1094,6 +1170,7 @@ impl Synth {
                     }
                 }
             }
+            Sfx::Hit if self.sample(HIT, 1., M) => {}
             Sfx::Hit => {
                 self.burst(0.12, 400., 0.3, Lowpass, 0.7, 0., 0., M);
                 self.tone(160., 0.12, Sine, 0.2, 0., -80., 0., M);
@@ -1143,21 +1220,26 @@ impl Synth {
                     release: false,
                     lp_k,
                     lp: 0.,
+                    dest: Dest::Master,
                 });
                 // nie mehr als ein paar Dutzend gleichzeitig (Dauerfeuer vieler Schützen)
                 if self.plays.len() > 24 {
                     self.plays.remove(0);
                 }
             }
+            Sfx::Swing(k) if self.sample(SWING, k, M) => {}
             Sfx::Swing(k) => self.burst(0.12, 900., 0.12 * k, Bandpass, 0.7, 0., 0., M),
+            Sfx::Punch(k) if self.sample(PUNCH, k, M) => {}
             Sfx::Punch(k) => {
                 self.burst(0.08, 500., 0.35 * k, Lowpass, 0.7, 0., 0., M);
                 self.tone(110., 0.1, Sine, 0.3 * k, 0., -50., 0., M);
             }
+            Sfx::Thud(k) if self.sample(THUD, k, M) => {}
             Sfx::Thud(k) => {
                 self.burst(0.1, 1200., 0.25 * k, Bandpass, 0.7, 0., 0., M);
                 self.tone(90., 0.12, Triangle, 0.2 * k, 0., 0., 0., M);
             }
+            Sfx::Impact(k) if self.sample(IMPACT, k, M) => {}
             Sfx::Impact(k) => self.burst(0.05, 3500., 0.12 * k, Highpass, 0.7, 0., 0., M),
             Sfx::GongOpen => {
                 self.tone(659., 0.35, Sine, 0.1, 0., 0., 0., M);
@@ -1204,11 +1286,14 @@ impl Synth {
                 self.burst(0.35, 700., 0.3 * k, Lowpass, 0.7, 0., 0., M);
                 self.burst(0.18, 2200., 0.12 * k, Bandpass, 0.7, 0., 0., M);
             }
+            Sfx::Reload if self.sample(RELOAD, 1., M) => {}
             Sfx::Reload => {
                 self.tone(1400., 0.04, Sine, 0.06, 0., 0., 0., M);
                 self.tone(900., 0.05, Sine, 0.06, 0.12, 0., 0., M);
             }
+            Sfx::Reloaded if self.sample(RELOADED, 1., M) => {}
             Sfx::Reloaded => self.tone(1800., 0.04, Sine, 0.07, 0., 0., 0., M),
+            Sfx::WeaponSwitch if self.sample(WEAPON_SWITCH, 1., M) => {}
             Sfx::WeaponSwitch => self.tone(1100., 0.04, Triangle, 0.07, 0., 0., 0., M),
             Sfx::Tick => self.tone(1200., 0.05, Square, 0.06, 0., 0., 0., M),
             Sfx::Pickup => {
@@ -1267,6 +1352,17 @@ impl Synth {
                     rumble: Some((pts, if near { 420. } else { 160. }, 70.)),
                 });
             }
+            Sfx::Footstep(kind, k)
+                if self.sample(
+                    match kind {
+                        Footstep::Hard => STEP_HARD,
+                        Footstep::Grass => STEP_GRASS,
+                        Footstep::Snow => STEP_SNOW,
+                        Footstep::Wet => STEP_WET,
+                    },
+                    k,
+                    M,
+                ) => {}
             Sfx::Footstep(kind, k) => match kind {
                 Footstep::Snow => {
                     for i in 0..4 {
@@ -1463,8 +1559,14 @@ impl Synth {
                 if p.release {
                     p.gain *= choke;
                 }
-                ml += p.lp * p.gain;
-                mr += p.lp * p.gain;
+                let v = p.lp * p.gain;
+                if p.dest == Dest::Outside {
+                    ol += v;
+                    or += v;
+                } else {
+                    ml += v;
+                    mr += v;
+                }
                 p.pos += p.rate;
                 p.age += dt;
             }
@@ -1517,6 +1619,70 @@ fn envelope(pts: &[(f32, f32)], t: f32) -> f32 {
 mod tests {
     /// Schüsse aus Aufnahmen: kräftiger als der frühere Synthese-Knall (Spitze 0,12–0,26, Effektivwert der ersten
     /// 0,3 s 0,012–0,044), aber ohne Übersteuern; mit hörbarem Nachhall statt Stille nach 0,3 s.
+    /// Lautheit eines Einzelklangs: Mittel über mehrere Auslösungen des lautesten 50-ms-Fensters (Effektivwert),
+    /// dazu die Spitze.
+    fn sfx_loudness(sfx: Sfx, samples: bool) -> (f32, f32) {
+        let mut s = Synth::new(48000.);
+        s.use_samples = samples;
+        let (mut sum, mut peak) = (0., 0f32);
+        for _ in 0..12 {
+            s.play(sfx);
+            let out = render(&mut s, 0.8);
+            let m: Vec<f32> = out.chunks(2).map(|c| (c[0] + c[1]) / 2.).collect();
+            let w = 2400;
+            let best = m
+                .chunks(w / 2)
+                .enumerate()
+                .map(|(i, _)| {
+                    let a = i * w / 2;
+                    let b = (a + w).min(m.len());
+                    (m[a..b].iter().map(|x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                })
+                .fold(0f32, f32::max);
+            sum += best;
+            peak = m.iter().fold(peak, |p, x| p.max(x.abs()));
+        }
+        (sum / 12., peak)
+    }
+
+    /// Klänge aus Aufnahmen sind etwa so laut wie die frühere Synthese (nicht leiser, höchstens deutlich lauter,
+    /// wo der Synthese-Klang kaum hörbar war) und übersteuern nicht.
+    #[test]
+    fn sfx_samples_match_the_synth_loudness() {
+        use Footstep as F;
+        // (Klang, Name, Ziel: Effektivwert des lautesten 50-ms-Fensters)
+        let cases = [
+            (Sfx::Footstep(F::Hard, 1.), "step_hard", 0.010),
+            (Sfx::Footstep(F::Grass, 1.), "step_grass", 0.007),
+            (Sfx::Footstep(F::Snow, 1.), "step_snow", 0.008),
+            (Sfx::Footstep(F::Wet, 1.), "step_wet", 0.009),
+            (Sfx::Swing(1.), "swing", 0.015),
+            (Sfx::Punch(1.), "punch", 0.06),
+            (Sfx::Thud(1.), "thud", 0.037),
+            (Sfx::Impact(1.), "impact", 0.0125),
+            (Sfx::Hit, "hit", 0.043),
+            (Sfx::Reload, "reload", 0.01),
+            (Sfx::Reloaded, "reloaded", 0.011),
+            (Sfx::WeaponSwitch, "weapon_switch", 0.009),
+        ];
+        let mut bad = Vec::new();
+        for (sfx, name, target) in cases {
+            assert!(!sfx_bank(name).is_empty(), "keine Aufnahme für {name}");
+            let (syn, _) = sfx_loudness(sfx, false);
+            let (smp, peak) = sfx_loudness(sfx, true);
+            println!(
+                "SFX {name:14} synth {syn:.4} sample {smp:.4} ziel {target:.4} peak {peak:.3}"
+            );
+            // nah am Ziel, nie leiser als die Synthese, keine Übersteuerung
+            if !(0.8..=1.25).contains(&(smp / target)) || smp < syn * 0.9 || peak > 0.95 {
+                bad.push(format!(
+                    "{name}: {smp:.4} statt {target} (Synthese {syn:.4}, Spitze {peak:.2})"
+                ));
+            }
+        }
+        assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
+    }
+
     #[test]
     fn gun_samples_are_loud_but_not_clipping() {
         for k in 0..3u8 {

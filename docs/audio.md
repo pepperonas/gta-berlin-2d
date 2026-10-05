@@ -237,3 +237,41 @@ idempotent (gleicher Eingang, bitgleiche Dateien).
 Nachhall des vorigen in 30 ms aus (sonst türmen sich bei Dauerfeuer bis zu 13 Nachhallfahnen), höchstens 24
 gleichzeitig. Entfernung dunkelt ab: Tiefpass 1,2 kHz (fern) bis ~17 kHz (nah), zusätzlich zur Lautstärke. Pegel je
 Waffe in `GUN_LEVEL`; ein Test hält die Lautheit mindestens auf dem Stand des Synthesizers und unter Übersteuerung.
+
+## Geräusche aus Aufnahmen (05.10.2026)
+
+Alle übrigen Klänge werden schrittweise von Synthese auf frei lizenzierte Aufnahmen umgestellt (CC0 und CC BY;
+CC-BY-Urheber erscheinen im Reiter „Lizenzen“ der Über-Seite). Die Synthese bleibt als Rückfall:
+`GTA_SFX_SAMPLES=0` schaltet zum Gegenhören zurück, ebenso fehlt eine Aufnahme nie hörbar.
+
+| Teil | Ort |
+|---|---|
+| Rezepte (Quellen mit URL, SHA-256, Lizenz, Urheber; Varianten je Klang) | `tools/audio/sfx_recipes.json` |
+| Build-Skript | `tools/audio/build_sfx.py [KLANG …]` (Archive nach `tools/audio/.cache/sfx/`, idempotent) |
+| Ausgabe | `data/audio/sfx/<klang>_<n>.wav` + `manifest.json` (Mono, 48 kHz, 16 Bit) |
+| Dateiliste | `crates/audio/build.rs` erzeugt sie aus dem Ordner (`SFX_FILES`), keine Handliste |
+| Wiedergabe | `sampler.rs sfx_bank(name)`, `synth.rs Synth::sample` mit `SfxSpec` (Pegel, Tonhöhenstreuung, Entfernungs-Tiefpass) |
+| Lizenzseite | `crates/game/src/about.rs sfx_credits` liest das Manifest |
+
+**Bearbeitung je Variante:** Schichten laden (Mono, 48 kHz), am Einsatz ausrichten (3 ms vor dem ersten Wert über
+10 % der Spitze), versetzt mischen, Hochpass, kürzen, ausblenden, Spitze −1 dBFS. **Laufzeit:** zufällige Variante,
+Tonhöhe ± `spread`, ferne Klänge (`distance`) zusätzlich dunkler (Tiefpass 1,2–17 kHz wie bei den Schüssen).
+
+**Pegel:** Die Synthese war sehr ungleich laut (Schritt auf Gras fast unhörbar), Gleichheit mit ihr wäre falsch.
+Der Test `sfx_samples_match_the_synth_loudness` misst das lauteste 50-ms-Fenster gegen Zielwerte: Schritte so laut
+wie der frühere harte Schritt (Gras etwas leiser), alles andere 20 % über der Synthese; nie leiser als die
+Synthese, keine Übersteuerung.
+
+**Neuer Klang:** Quelle und Rezept in `sfx_recipes.json` eintragen, `build_sfx.py <klang>` laufen lassen, in
+`synth.rs` ein `SfxSpec` anlegen und im `play`-Arm `Sfx::X if self.sample(SPEC, k, M) => {}` vor den
+Synthese-Arm setzen, Zielwert in den Pegel-Test aufnehmen.
+
+### Phase 1: Schritte und Nahkampf
+
+| Klang | Quelle | Lizenz |
+|---|---|---|
+| Schritt hart / Gras / Schnee | Kenney „Impact Sounds“ (footstep_concrete/grass/snow) | CC0 |
+| Schritt nass | „Footsteps on different surfaces“ (water) von congusbongus, nach EminYILDIRIM und swuing (Freesound) | CC BY 3.0 |
+| Ausholen | „Swishes Sound Pack“ von artisticdude | CC0 |
+| Faustschlag / Treffer, Blech, Einschlag, Aufprall | Kenney „Impact Sounds“ (impactPunch_medium, impactMetal_heavy, impactMining, impactSoft_heavy) | CC0 |
+| Nachladen, eingerastet, Waffenwechsel | Kenney „RPG Audio“ (metalClick, metalLatch, beltHandle, clothBelt, handleSmallLeather) | CC0 |

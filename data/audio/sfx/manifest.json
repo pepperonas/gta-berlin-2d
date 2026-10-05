@@ -1,0 +1,158 @@
+{
+  "_hinweis": "Erzeugt von tools/audio/build_sfx.py aus tools/audio/sfx_recipes.json – nicht von Hand ändern.",
+  "samplerate": 48000,
+  "klaenge": {
+    "hit": {
+      "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
+      "dateien": [
+        "hit_1.wav",
+        "hit_2.wav",
+        "hit_3.wav",
+        "hit_4.wav",
+        "hit_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "impact": {
+      "zweck": "Kugeleinschlag in Wand und Boden",
+      "dateien": [
+        "impact_1.wav",
+        "impact_2.wav",
+        "impact_3.wav",
+        "impact_4.wav",
+        "impact_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "punch": {
+      "zweck": "Treffer mit Faust oder Schläger, eigene Treffer",
+      "dateien": [
+        "punch_1.wav",
+        "punch_2.wav",
+        "punch_3.wav",
+        "punch_4.wav",
+        "punch_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "reload": {
+      "zweck": "Nachladen beginnt: Magazin raus",
+      "dateien": [
+        "reload_1.wav",
+        "reload_2.wav"
+      ],
+      "quelle": "kenney_rpg"
+    },
+    "reloaded": {
+      "zweck": "Nachladen fertig: Magazin rastet ein",
+      "dateien": [
+        "reloaded_1.wav"
+      ],
+      "quelle": "kenney_rpg"
+    },
+    "step_grass": {
+      "zweck": "Schritt auf Gras und Erde",
+      "dateien": [
+        "step_grass_1.wav",
+        "step_grass_2.wav",
+        "step_grass_3.wav",
+        "step_grass_4.wav",
+        "step_grass_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "step_hard": {
+      "zweck": "Schritt auf Asphalt, Pflaster, Beton",
+      "dateien": [
+        "step_hard_1.wav",
+        "step_hard_2.wav",
+        "step_hard_3.wav",
+        "step_hard_4.wav",
+        "step_hard_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "step_snow": {
+      "zweck": "Schritt im Schnee",
+      "dateien": [
+        "step_snow_1.wav",
+        "step_snow_2.wav",
+        "step_snow_3.wav",
+        "step_snow_4.wav",
+        "step_snow_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "step_wet": {
+      "zweck": "Schritt auf nasser Straße, in Pfützen",
+      "dateien": [
+        "step_wet_1.wav",
+        "step_wet_2.wav",
+        "step_wet_3.wav",
+        "step_wet_4.wav",
+        "step_wet_5.wav"
+      ],
+      "quelle": "oga_footsteps"
+    },
+    "swing": {
+      "zweck": "Schlag ins Leere (Faust, Schläger, Messer)",
+      "dateien": [
+        "swing_1.wav",
+        "swing_2.wav",
+        "swing_3.wav",
+        "swing_4.wav",
+        "swing_5.wav",
+        "swing_6.wav",
+        "swing_7.wav",
+        "swing_8.wav"
+      ],
+      "quelle": "oga_swishes"
+    },
+    "thud": {
+      "zweck": "Schlag auf Blech (Auto)",
+      "dateien": [
+        "thud_1.wav",
+        "thud_2.wav",
+        "thud_3.wav",
+        "thud_4.wav",
+        "thud_5.wav"
+      ],
+      "quelle": "kenney_impact"
+    },
+    "weapon_switch": {
+      "zweck": "Waffe wechseln (Holster, Gürtel)",
+      "dateien": [
+        "weapon_switch_1.wav",
+        "weapon_switch_2.wav",
+        "weapon_switch_3.wav"
+      ],
+      "quelle": "kenney_rpg"
+    }
+  },
+  "quellen": {
+    "kenney_impact": {
+      "titel": "Kenney – Impact Sounds",
+      "seite": "https://kenney.nl/assets/impact-sounds",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "kenney_rpg": {
+      "titel": "Kenney – RPG Audio",
+      "seite": "https://kenney.nl/assets/rpg-audio",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kenney (www.kenney.nl)"
+    },
+    "oga_swishes": {
+      "titel": "Swishes Sound Pack",
+      "seite": "https://opengameart.org/content/swishes-sound-pack",
+      "lizenz": "CC0 1.0",
+      "urheber": "artisticdude"
+    },
+    "oga_footsteps": {
+      "titel": "Footsteps on different surfaces (water)",
+      "seite": "https://opengameart.org/content/footsteps-on-different-surfaces",
+      "lizenz": "CC BY 3.0",
+      "urheber": "congusbongus, nach „Water Footsteps“ von EminYILDIRIM (freesound.org/s/608663) und „footstep-concrete.wav“ von swuing (freesound.org/s/38873)"
+    }
+  }
+}

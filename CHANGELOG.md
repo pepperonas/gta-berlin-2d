@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Schritte, Nahkampf und Waffenhandhabung klingen nach echten Aufnahmen (CC0/CC BY: Kenney,
+  OpenGameArt) statt nach Synthese – Schritte auf Pflaster, Gras, Schnee und nasser Straße, Ausholen, Faustschlag,
+  Schlag auf Blech, Kugeleinschlag, Aufprall, Nachladen und Waffenwechsel, je mit mehreren Varianten und leicht
+  gestreuter Tonhöhe. Grundlage für alle weiteren Geräusche: Rezeptdatei und Build-Skript `tools/audio/build_sfx.py`;
+  die Urheber stehen im Reiter „Lizenzen“. `GTA_SFX_SAMPLES=0` spielt zum Vergleich die alte Synthese.
+
 - Native Fassung: Waffen klingen und sehen echt aus. Pistole, MP und Schrotflinte spielen Aufnahmen echter Waffen
   (Walther PPQ, Carl Gustav M45, Benelli Nova; „The Free Firearm Sound Library“, CC0) mit Nachhall vom Schießstand,
   mehreren Varianten je Waffe und Abdunklung mit der Entfernung. Mündungsfeuer mit Kern, Flammenzunge und seitlichen

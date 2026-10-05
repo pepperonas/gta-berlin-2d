@@ -203,8 +203,8 @@ fn about_blocks() -> Vec<Block> {
              „Grand Theft Auto“ ist deren Marke.",
         ),
         b(
-            "Alle Grafiken, Fahrzeuge, Figuren, Musik und Klänge erzeugt das Spiel selbst – keine Inhalte aus \
-             anderen Spielen.",
+            "Grafiken, Fahrzeuge, Figuren und Musik erzeugt das Spiel selbst; Geräusche stammen aus frei \
+             lizenzierten Aufnahmen (Reiter „Lizenzen“) – keine Inhalte aus anderen Spielen.",
         ),
         b("Quellcode: privates Projekt, keine öffentliche Lizenz."),
         Block::Gap,
@@ -216,6 +216,37 @@ fn about_blocks() -> Vec<Block> {
         Block::Sub("Versionierung".into()),
         b("Semantic Versioning; Änderungen im Reiter „Changelog“ (Keep a Changelog)"),
     ]
+}
+
+/// Quellen der Geräusch-Samples aus dem Manifest von tools/audio/build_sfx.py: „Titel – Urheber, Lizenz (Seite)“.
+fn sfx_credits() -> Vec<String> {
+    let man: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/audio/sfx/manifest.json"))
+            .unwrap_or_default();
+    let Some(q) = man.get("quellen").and_then(|q| q.as_object()) else {
+        return Vec::new();
+    };
+    let s = |v: &serde_json::Value, k: &str| {
+        v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
+    };
+    let mut out: Vec<String> = q
+        .values()
+        .map(|v| {
+            let seite = s(v, "seite");
+            let seite = seite
+                .trim_start_matches("https://")
+                .trim_start_matches("www.");
+            format!(
+                "{} – {}, {} – {}",
+                s(v, "titel"),
+                s(v, "urheber"),
+                s(v, "lizenz"),
+                seite
+            )
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 fn license_blocks() -> Vec<Block> {
@@ -239,12 +270,18 @@ fn license_blocks() -> Vec<Block> {
              Matthew Nanney), CC0 1.0 – opengameart.org"
                 .into(),
         ),
+        Block::Bullet("Weitere Geräusche (Liste aus data/audio/sfx/manifest.json):".into()),
+    ];
+    out.extend(sfx_credits().into_iter().map(Block::Bullet));
+    out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),
-        Block::Bullet("Bitmapschrift aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen".into()),
+        Block::Bullet(
+            "Bitmapschrift aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen".into(),
+        ),
         Block::Gap,
         Block::Head(format!("Rust-Pakete ({})", pk.len())),
-    ];
+    ]);
     // Übersicht: wie viele Pakete unter welcher Lizenz
     let mut counts: Vec<(String, usize)> = Vec::new();
     for p in &pk {
@@ -585,6 +622,23 @@ mod tests {
 
     fn measure(s: &str, size: f32) -> f32 {
         s.chars().count() as f32 * size * 0.6
+    }
+
+    #[test]
+    fn sound_sources_are_credited_with_license() {
+        let c = sfx_credits();
+        assert!(!c.is_empty(), "Manifest ohne Quellen");
+        assert!(c.iter().all(|l| l.contains("CC")), "{c:?}");
+        // CC-BY verlangt die Namensnennung der Urheber
+        assert!(
+            c.iter()
+                .any(|l| l.contains("CC BY") && l.contains("EminYILDIRIM"))
+        );
+        let all = license_blocks();
+        assert!(
+            all.iter()
+                .any(|b| matches!(b, Block::Bullet(t) if t.starts_with("Kenney")))
+        );
     }
 
     #[test]

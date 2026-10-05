@@ -91,6 +91,40 @@ pub fn weapon_bank() -> &'static [Vec<Arc<[f32]>>; 3] {
     })
 }
 
+mod sfx_files {
+    include!(concat!(env!("OUT_DIR"), "/sfx_files.rs"));
+}
+pub use sfx_files::SFX_FILES;
+
+/// Klang-Samples nach Namen (`step_hard`, `punch`, …), je Name die Varianten `<name>_1.wav`, `<name>_2.wav` …
+/// (gebaut von tools/audio/build_sfx.py; Dateiliste aus build.rs). Unbekannter Name → leere Liste.
+pub fn sfx_bank(name: &str) -> &'static [Arc<[f32]>] {
+    static B: OnceLock<std::collections::HashMap<String, Vec<Arc<[f32]>>>> = OnceLock::new();
+    let map = B.get_or_init(|| {
+        type Numbered = Vec<(u32, Arc<[f32]>)>;
+        let mut m: std::collections::HashMap<String, Numbered> = Default::default();
+        for (stem, bytes) in SFX_FILES {
+            let (base, n) = stem.rsplit_once('_').expect("Klangdatei <name>_<n>.wav");
+            let n: u32 = n.parse().expect("Variantennummer");
+            let buf = parse_wav(bytes).expect("Klang-Sample: 16-Bit-PCM-WAV").0;
+            m.entry(base.to_string()).or_default().push((n, buf.into()));
+        }
+        m.into_iter()
+            .map(|(k, mut v)| {
+                v.sort_by_key(|(n, _)| *n);
+                (k, v.into_iter().map(|(_, b)| b).collect())
+            })
+            .collect()
+    });
+    map.get(name).map_or(&[], |v| v.as_slice())
+}
+
+/// Klang-Samples an? `GTA_SFX_SAMPLES=0` schaltet zum Gegenhören auf den Synthese-Klang zurück.
+pub fn sfx_samples_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("GTA_SFX_SAMPLES").map_or(true, |v| v != "0"))
+}
+
 /// Dateiliste einer Bank nach Namen.
 fn files_of(name: &str) -> &'static [(&'static str, &'static [u8])] {
     match name {
@@ -387,6 +421,31 @@ pub fn load_reference(bank_name: &str) -> Option<Arc<[f32]>> {
 
 #[cfg(test)]
 mod tests {
+    /// Manifest von build_sfx.py und eingebaute Dateien stimmen überein; jede Quelle nennt Lizenz und Urheber.
+    #[test]
+    fn sfx_manifest_matches_the_files() {
+        let man = include_str!("../../../data/audio/sfx/manifest.json");
+        let mut listed: Vec<String> = Vec::new();
+        for line in man.lines() {
+            let t = line.trim().trim_end_matches(',');
+            if t.starts_with('"') && t.ends_with(".wav\"") {
+                listed.push(t.trim_matches('"').trim_end_matches(".wav").to_string());
+            }
+        }
+        listed.sort();
+        let files: Vec<String> = SFX_FILES.iter().map(|(n, _)| n.to_string()).collect();
+        assert_eq!(
+            listed, files,
+            "data/audio/sfx: neu bauen mit tools/audio/build_sfx.py"
+        );
+        assert!(man.matches("\"lizenz\"").count() == man.matches("\"urheber\"").count());
+        for name in ["step_hard", "punch", "reload"] {
+            let b = sfx_bank(name);
+            assert!(b.len() >= 2 && b.iter().all(|v| v.len() > 1000), "{name}");
+        }
+        assert!(sfx_bank("gibt_es_nicht").is_empty());
+    }
+
     use super::*;
     use berlin_sim::enginesound::{EngineSound, SoundInput};
 
