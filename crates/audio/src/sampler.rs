@@ -428,7 +428,8 @@ mod tests {
         let mut listed: Vec<String> = Vec::new();
         for line in man.lines() {
             let t = line.trim().trim_end_matches(',');
-            if t.starts_with('"') && t.ends_with(".wav\"") {
+            // Einträge der Dateilisten sind reine Zeichenketten; Titel („…wav“) stehen hinter einem Schlüssel
+            if t.starts_with('"') && t.ends_with(".wav\"") && !t.contains("\":") {
                 listed.push(t.trim_matches('"').trim_end_matches(".wav").to_string());
             }
         }
