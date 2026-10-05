@@ -41,7 +41,7 @@ seit Phase 3 spielbar: Kollision (SAT), Fahrphysik mit Einspurmodell/ESP/ABS,
 KI-Verkehr mit Ampeln und Vorfahrt, Passanten, die Mission „Kisten für den Kiez“
 und Spielstände als JSON-Datei; seit Phase 4 Tag und Nacht mit Schatten,
 Laternen und Scheinwerfern (`--uhr 22:30`, Taste T: +1 Stunde); seit Phase 5
-synthetisierter Klang (Motoren, Reifen, Verkehr, Stadt; Taste M, `--stumm`),
+Klang (Taste M, `--stumm`; in der nativen Fassung aus echten, frei lizenzierten Aufnahmen),
 dazu HUD, Gamepad und Wetter (Regen, Schnee, Nebel, Gewitter, Glätte;
 `--wetter heavysnow`, Taste N), Minikarte, Stadtplan (Tab), Titelbildschirm und
 Pausenmenü. Waffen und Nahverkehr folgen;
@@ -72,8 +72,10 @@ echte Straßen, Gebäude, Spree, Havel, Seen, Wälder, Parks und rund eine Milli
 vollständige Mission. Läuft im Browser (Entwicklung auf dem Mac)
 und in einer UWP-Hülle für die **Xbox Series X|S im Developer Mode** (privat, Sideloading).
 
-Alle Grafiken und Klänge sind selbst erzeugte Platzhalter (Canvas-Zeichnung, Web-Audio-Synthese) und austauschbar, siehe
-[`web/assets/README.md`](web/assets/README.md). Keine Namen, Grafiken, Musik, Karten oder Dialoge aus fremden Spielen.
+Alle Grafiken sind selbst erzeugt und austauschbar, siehe [`web/assets/README.md`](web/assets/README.md). Die
+Browser-Fassung synthetisiert ihre Klänge; die native Fassung spielt frei lizenzierte Aufnahmen (CC0/CC BY, u. a.
+Freesound, Kenney, OpenGameArt – Quellen und Urheber im Reiter „Lizenzen“ und in [`docs/audio.md`](docs/audio.md)).
+Keine Namen, Grafiken, Musik, Karten oder Dialoge aus fremden Spielen.
 
 **Kartendaten © OpenStreetMap-Mitwirkende (ODbL)**, Bezirksgrenzen und Baumbestand: Geoportal Berlin (LOR 2021, Straßen- und Anlagenbäume; dl-de/zero-2.0). Die
 Attribution steht im Titelbildschirm und auf dem Stadtplan. `web/data/berlin/` ist eine aus OSM abgeleitete Datenbank und
@@ -582,7 +584,16 @@ jedem Hindernis. Über dem Tacho warnt ein Schild: Aquaplaning, Glätte, Schnee,
 
 ## Klang und Nachtleben
 
-Alle Klänge sind selbst synthetisiert (Web Audio, keine Samples). Das eigene Auto hat Drehzahl und Gänge (Pkw,
+**Native Fassung (Stand 05.10.2026):** Fast alle Geräusche kommen aus echten, frei lizenzierten Aufnahmen – Schüsse,
+Schritte, Nahkampf, Unfälle, Hupen, Türen, das deutsche Martinshorn, Reifen, Fahrtwind, Stadt, Wetter, Donner,
+Kneipe und Club, U-/S-Bahn mit Berliner Abfertigung, Straßenbahnklingel, Kirchenglocken, Menü- und Auftragsklänge.
+Motoren: Sample-Bänke für V10/V12-Sportwagen, Vierzylinder, Diesel-Pkw/Transporter und Lkw/Busse; V8,
+Sechszylinder-Limousinen, Motorräder, Zweitakter, Boxer und Elektroantriebe sind noch synthetisch. Gebaut von
+`tools/audio/build_sfx.py` bzw. `build_engine_sounds.py` mit festgehaltenen Prüfsummen, Pegel per Test gegen die
+Synthese eingemessen; `GTA_SFX_SAMPLES=0` bzw. `GTA_ENGINE_SAMPLES=0` spielt die Synthese. Einzelheiten:
+[`docs/audio.md`](docs/audio.md).
+
+**Browser-Fassung:** Alle Klänge sind selbst synthetisiert (Web Audio, keine Samples). Das eigene Auto hat Drehzahl und Gänge (Pkw,
 Transporter und Rettungswagen mit Diesel-Nageln, Lkw, Müllauto und Bus tief und langsam), Reifen rumpeln auf
 Kopfsteinpflaster, zischen auf nasser Straße, knirschen im Schnee und quietschen beim Rutschen; im Auto klingt die
 Stadt draußen dumpf, Regen trommelt aufs Dach. Die vier nächsten fremden Autos sind einzeln zu hören, mit Richtung und
