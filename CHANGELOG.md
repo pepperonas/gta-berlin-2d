@@ -8,6 +8,16 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 8: Feinschliff und Abnahme. 14 Abnahmeszenen (Kreisfahrt, Elchtest,
+  Vollbremsung, Pfütze, Gleise, Sattelzug, Drift, Neuschnee, Bordstein, Wheelie, 350 km/h …) laufen als Tests,
+  dazu Leistungsbudget (Spieler + 50 Autos: 0,022 ms je Bild), Determinismus und eine Kalibrier-Schranke.
+  Entwickler-Anzeige mit F3 (Entwickler-Build oder `--physik-anzeige`): Messwerte je Rad und Live-Regler für das
+  Spielgefühl, F6 gibt die Änderungen als JSON aus. Der KI-Verkehr fährt mit den Fahrzeugdaten, bremst vor
+  Kurven nach deren Krümmung, Lkw und Busse holen beim Abbiegen aus; in der Nähe des Spielers rechnet die KI die
+  volle Fahrphysik. Autos gleiten an Wänden entlang, die Kamera zoomt mit dem Tempo heraus, Motorräder halten
+  einen Wheelie, Aquaplaning trifft die Hinterachse schwächer. Behoben: Anfahren mit voll eingeschlagener Lenkung
+  bremste das Auto aus; Klick-Laufen konnte vor einem wartenden Auto steckenbleiben.
+
 - Native Rust-Portierung, Fahrphysik Phase 7: Arcade-Drift. Ein kurzer Zug an der Handbremse mit Lenkung leitet
   einen Drift ein (ebenso Lastwechsel, Anbremsen mit Einlenken und – mit ESP aus – Gas in der Kurve). Im Drift
   bestimmt das Gas den Winkel, die Lenkung die Linie; ein Gyro-Assist hält den Winkel und lenkt selbst gegen.

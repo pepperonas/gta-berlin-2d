@@ -52,6 +52,10 @@ rigs via `Vehicle.hitch` + `State.art` (`car::trailer_pose` draws the trailer); 
 `World::spawn_data_vehicle` / console `auto <id>`.
 Phase 7: arcade drift layer `sim/drift.rs` (pure state machine, `vphys::State.drift`), off in `Feel::simulation`
 so calibration stays pure; a collision voids the running drift (`World` checks `Crash` events and `DRIFT_JOLT`).
+Phase 8: tests `sim/tests/{physics_budget,calibration_gate,acceptance}.rs` (known calibration misses go into
+`data/vehicles/bekannte_abweichungen.json` with a reason); dev overlay `game/physdebug.rs` (F3, sliders write
+`set_game_feel` / `Car::tuned`, never the data files); AI uses `car::Limits` from data and runs full vphys within
+`World::ai_full_radius` (`Car::lod_full`, pure-pursuit wheel angle in `traffic.rs`), kinematic beyond.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

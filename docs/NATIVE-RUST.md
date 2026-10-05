@@ -1707,3 +1707,41 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
   Quietschen um bis zu 300 Hz; Kamera folgt im Drift weicher (3,2 statt 5). HUD: Wertung oben mittig.
   `--drift-demo` stellt das Spielerauto auf die nächste freie Spur (`World::demo_launch`) und fährt einen Drift.
 
+
+## Fahrphysik Phase 8: Feinschliff, Entwickler-Anzeige, KI-Verkehr, Abnahme (05.10.2026)
+
+- **Leistung und Determinismus** (`tests/physics_budget.rs`): Spielerauto + 50 Fahrzeuge im Einspurmodell bei
+  120 Hz kosten 0,022 ms je Bild (Release, Grenze im Test 2 ms); gleiche Eingaben ergeben bitgleiche Endlagen.
+  `tests/calibration_gate.rs` hält die Kalibrierung: neue Abweichungen von den Zielwerten machen den Test rot,
+  bekannte stehen mit Begründung in `data/vehicles/bekannte_abweichungen.json` (23 Einträge, 184 von 207 in der
+  Toleranz).
+- **Abnahmeszenen** (`tests/acceptance.rs`, 14 Szenen, alle grün): Kreisfahrt (18,3 m Radius bei 40 km/h,
+  Untersteuern bei 70 km/h), Elchtest mit/ohne ESP, Turbo S gegen Kleinwagen am Berg, Vollbremsung Oldtimer
+  (blockiert, 58 m) gegen ABS, Pfütze nimmt Lenkwirkung, Gleisquerung Fahrrad, Sattelzug kippt bei 50 km/h,
+  Doppeldecker gegen Pkw, Drift-Coupé, Frontantriebs-Drift, Neuschnee mit Sommer- und Winterreifen, Bordstein
+  Fahrrad gegen SUV, Wheelie, 350 km/h stabil.
+- **Feinschliff:** Aquaplaning trifft die Hinterachse schwächer (`REAR_WATER` 0,15); Wheelie-Kontrolle für
+  Motorräder (`WC_*` in `twowheel.rs`), das Kalibrierwerkzeug verlängert deren Gänge nicht mehr; Drift endet mit
+  Gas weg (Zielwinkel 0); Gleisrillen-Risiko verdoppelt; Bordsteinsturz erst ab 6,5 m/s; Kamera zoomt mit dem
+  Tempo heraus (`camera_zoom_for`, 0,45 bei 1000 px/s); Autos gleiten an Wänden entlang statt abzuprallen
+  (`WALL_SLIDE_LOSS` 0,8, `WALL_BOUNCE` 0,15); der Lenk-Assist blendet mit dem Realismus-Regler
+  (`Feel::steer_assist`).
+- **Entwickler-Anzeige** (`game/physdebug.rs`, F3 im Entwickler-Build, mit `--dev`, `GTA_DEV=1` oder
+  `--physik-anzeige`): Messwerte je Rad (Last, Schlupf, Haftung, Untergrund), Schwimmwinkel, Gierrate, Assistenten,
+  Drift; Bild auf/ab wählt einen Regler, Komma/Punkt verstellt ihn (alle `feel.json`-Werte und die wichtigsten
+  Fahrzeugdaten, live über `vehdata::set_game_feel` bzw. `Car::tuned` – die Daten selbst bleiben unverändert),
+  F6 gibt die Abweichungen als JSON in der Konsole aus. Alle Tasten sind belegbar (`DebugToggle` …).
+- **KI-Verkehr:** das Arcade-Modell der KI liest Höchsttempo, Zugkraft, Leistung, Bremse und Seitenführung aus den
+  Fahrzeugdaten (`car::Limits`); das Kurventempo folgt der Krümmung des Weges (`CORNER_G` 0,45 g), lange Fahrzeuge
+  holen vor dem Abbiegen aus (`LONG_VEHICLE`, `SWING_MAX`). **Physik-LOD:** KI im Umkreis von `AI_FULL_RADIUS`
+  (1500 px = 150 m) um den Spieler rechnet das volle Einspurmodell (ohne Drift-Schicht, Pure-Pursuit-Lenkung auf
+  den Radwinkel), weiter weg kinematisch; `GTA_AI_LOD=0` schaltet es zum Vergleich ab. `--check-sim 300`: 91 %
+  der Autos fahren im Mittel, 21 km/h (ohne LOD 93 %, 19 km/h), keine Unfälle.
+- **Gefundene Fehler:** ein voll eingeschlagenes Rad bremste beim Anfahren aus dem Stand (Schräglauf mit der
+  0,5-m/s-Untergrenze) – die Seitenkraft wird jetzt zwischen 0,5 und 3 m/s eingeblendet (`LAT_FADE`). Der
+  Klick-Laufweg plant nach 0,6 s ohne Vorankommen neu (`CLICK_STALL`): ein Auto, das auf den Spieler wartet,
+  während der Spieler auf das Auto zuläuft, war ein Patt.
+- **Abweichungen vom Auftrag:** Power-Over-Drift praktisch nur mit ESP aus (die Antriebsschlupfregelung verhindert
+  das Durchdrehen); der Sattelzug kippt in Szene 7 nur ohne RSC; Szene 3 (Kleinwagen 25 km/h) steht im
+  Widerspruch zu den Leistungsdaten – gemessen 36 km/h, die Daten haben Vorrang; Superbike 0–100 weicht wegen
+  der Wheelie-Kontrolle ab (in `bekannte_abweichungen.json`).
