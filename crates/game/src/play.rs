@@ -76,6 +76,7 @@ pub struct Play {
     /// Entwickler-Build (`--dev`, `GTA_DEV=1` oder Debug-Build): Physik-Anzeige mit Live-Reglern (F3)
     pub dev: bool,
     pub physdebug: crate::physdebug::PhysDebug,
+    pub enginedebug: crate::enginedebug::EngineDebug,
     /// Aufnahme-Option `--fahrzeugschau`: einmal alle Fahrzeugarten vor die Figur stellen
     pub vehicle_show: bool,
     /// Aufnahme-Option `--bildschirm zugfahrt`: die nächste Straßenbahn übernehmen und anfahren
@@ -305,6 +306,7 @@ impl Play {
             out,
         );
         self.physdebug.draw(out, &self.world);
+        self.enginedebug.draw(out, &self.listener.engine_view);
         let p = &self.world.player;
         let ctrl_aim = !self.diablo || self.ctrl_held;
         if self.screen == Screen::Playing
@@ -452,6 +454,7 @@ impl Play {
             demo_drift_t: 0.,
             dev: cfg!(debug_assertions) || std::env::var_os("GTA_DEV").is_some(),
             physdebug: Default::default(),
+            enginedebug: Default::default(),
             vehicle_show: false,
             demo_drive: false,
             demo_station: None,
@@ -792,12 +795,22 @@ impl Play {
             actions: Vec::new(),
             debug: crate::console::Debug {
                 physics: self.physdebug.open,
+                engine_sound: self.enginedebug.open,
                 ..self.debug
             },
         };
         let r = crate::console::execute(line, &mut ctx);
         self.debug = ctx.debug;
         self.physdebug.open = ctx.debug.physics;
+        self.enginedebug.open = ctx.debug.engine_sound;
+        // beide Anzeigen teilen sich die Tasten: die zuletzt geöffnete gewinnt
+        if self.enginedebug.open && self.physdebug.open {
+            if line.contains("motor") || line.contains("sound") || line.contains("f4") {
+                self.physdebug.open = false;
+            } else {
+                self.enginedebug.open = false;
+            }
+        }
         let actions = std::mem::take(&mut ctx.actions);
         let now = self.world.time;
         self.console_actions(actions, now);
@@ -2196,7 +2209,31 @@ impl Game for Play {
         // Physik-Anzeige mit Live-Reglern (nur Entwickler-Build)
         if self.dev && bind.pressed(keys, Bind::DebugToggle) {
             self.physdebug.open = !self.physdebug.open;
+            self.enginedebug.open &= !self.physdebug.open;
         }
+        // Motorsound-Anzeige (nur Entwickler-Build; per Konsole `motorsound` in jedem Build)
+        if self.dev && bind.pressed(keys, Bind::EngineDebug) {
+            self.enginedebug.open = !self.enginedebug.open;
+            self.physdebug.open &= !self.enginedebug.open;
+        }
+        if self.enginedebug.open {
+            if bind.pressed(keys, Bind::DebugPrev) {
+                self.enginedebug.select(-1);
+            }
+            if bind.pressed(keys, Bind::DebugNext) {
+                self.enginedebug.select(1);
+            }
+            if bind.pressed(keys, Bind::DebugLess) {
+                self.enginedebug.adjust(-1.);
+            }
+            if bind.pressed(keys, Bind::DebugMore) {
+                self.enginedebug.adjust(1.);
+            }
+            if bind.pressed(keys, Bind::EngineAb) {
+                self.enginedebug.toggle_ab();
+            }
+        }
+        self.enginedebug.sync(&mut self.listener);
         if self.physdebug.open {
             if bind.pressed(keys, Bind::DebugPrev) {
                 self.physdebug.select(&self.world, -1);

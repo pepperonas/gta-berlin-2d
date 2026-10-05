@@ -301,7 +301,7 @@ pub enum Action {
     Bars(Option<String>),
 }
 
-/// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`); gehören dem Spiel, nicht der Welt.
+/// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`, `motorsound`); gehören dem Spiel, nicht der Welt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Debug {
     pub fps: bool,
@@ -309,6 +309,8 @@ pub struct Debug {
     pub silhouettes: bool,
     /// Fahrphysik-Anzeige mit Live-Reglern (wie F3 im Entwickler-Build)
     pub physics: bool,
+    /// Motorsound-Anzeige (wie F4 im Entwickler-Build)
+    pub engine_sound: bool,
 }
 impl Default for Debug {
     fn default() -> Self {
@@ -317,6 +319,7 @@ impl Default for Debug {
             levels: false,
             silhouettes: true,
             physics: false,
+            engine_sound: false,
         }
     }
 }
@@ -569,6 +572,13 @@ pub const COMMANDS: &[Command] = &[
         name: "physik",
         aliases: &["fahrphysik", "physikanzeige", "physdebug", "f3"],
         help: "Fahrphysik-Anzeige mit Live-Reglern an/aus (Bild auf/ab, Komma/Punkt, F6)",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
+    },
+    Command {
+        name: "motorsound",
+        aliases: &["motorklang", "sound", "f4"],
+        help: "Motorsound-Anzeige an/aus (Regler für Drehzahl, Gas, Gang, Profil; A/B mit der Referenz)",
         cheat: false,
         args: &[arg("an|aus", true, ONOFF)],
     },
@@ -1281,6 +1291,16 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 ))
             }
             None => err("physik an|aus"),
+        },
+        "motorsound" => match on_off(a0, ctx.debug.engine_sound) {
+            Some(on) => {
+                ctx.debug.engine_sound = on;
+                ok(format!(
+                    "Motorsound-Anzeige {}",
+                    if on { "an" } else { "aus" }
+                ))
+            }
+            None => err("motorsound an|aus"),
         },
         "fps" => match on_off(a0, ctx.debug.fps) {
             Some(on) => {
@@ -2051,6 +2071,12 @@ mod tests {
         assert_eq!(dbg("physik", ph), (true, d0));
         assert_eq!(dbg("fahrphysik an", d0), (true, ph), "Alias");
         assert_eq!(dbg("physik aus", ph), (true, d0));
+        let ms = Debug {
+            engine_sound: true,
+            ..d0
+        };
+        assert_eq!(dbg("motorsound", d0), (true, ms));
+        assert_eq!(dbg("motorsound aus", ms), (true, d0));
         // Konsole: Enter übernimmt erst den Vorschlag, das zweite führt aus
         let mut con = Console::default();
         con.open(&places);

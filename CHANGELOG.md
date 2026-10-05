@@ -8,6 +8,18 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Sportwagen, Supercars und Hypercars mit Verbrennungsmotor (ab sechs Zylindern) klingen nach einer
+  echten V10-Aufnahme statt nach dem Synthesizer. Sechs Last- und sechs Schub-Loops (1360–7180 1/min) werden nach
+  Drehzahl überblendet und verstimmt, Gas mischt Last und Schub; dazu Anlassen, Schaltgeräusch, Zwischengas beim
+  Runterschalten, Pops beim Gaswegnehmen aus hoher Drehzahl und ein rhythmischer Begrenzer. Drei Kategorien
+  (Sportwagen tiefer und weicher, Supercar nah an der Aufnahme, Hypercar höher und rauer) und Feinabstimmung je
+  Fahrzeug in `data/audio/engine_profiles.json`. Fremde Sportwagen klingen mit Entfernung, Panorama, Doppler und
+  Tiefpass; höchstens sechs Sample-Motoren gleichzeitig, das eigene Auto hat Vorrang, ferne Autos spielen nur einen
+  Loop. Eigener Mischpult-Kanal „engine“. Motorsound-Anzeige mit F4 (Entwickler-Build) bzw. Konsole `motorsound`:
+  Regler für Drehzahl, Gas, Gang und Profil, aktive Loops mit Gewicht und Tonhöhe, F7 = A/B mit der Referenz.
+  Build-Skript, Analyse und Doku: `tools/audio/`, `docs/audio.md`. Elektroautos, Vierzylinder und alle anderen
+  Fahrzeuge klingen unverändert; die Fahrphysik ist unberührt.
+
 - Native Rust-Portierung, Fahrphysik Phase 8: Feinschliff und Abnahme. 14 Abnahmeszenen (Kreisfahrt, Elchtest,
   Vollbremsung, Pfütze, Gleise, Sattelzug, Drift, Neuschnee, Bordstein, Wheelie, 350 km/h …) laufen als Tests,
   dazu Leistungsbudget (Spieler + 50 Autos: 0,022 ms je Bild), Determinismus und eine Kalibrier-Schranke.

@@ -426,6 +426,66 @@ mod tests {
         }
     }
 
+    /// Die drei Kategorien klingen bei gleicher Eingabe hörbar verschieden: Grundton (Verstimmung) und Helligkeit
+    /// (Tiefpass, Shelf, Sättigung) steigen vom Sportwagen über das Supercar zum Hypercar.
+    #[test]
+    fn categories_sound_different() {
+        let sr = 48000.;
+        let bank = bank_v10();
+        let info = config().bank("v10");
+        let render = |name: &str| {
+            let p = config().preset(name).unwrap();
+            let mut e = EngineSound::new(1);
+            let mut v = SamplerVoice::new(bank);
+            let inp = SoundInput {
+                rpm: Some(4500.),
+                gear: Some(3),
+                throttle: 0.8,
+                speed: 20.,
+                ..Default::default()
+            };
+            let mut out = Vec::new();
+            for _ in 0..60 {
+                let o = e.step(p, info, &inp, 1. / 60., false);
+                v.apply(
+                    &EngineFrame {
+                        id: 1,
+                        player: true,
+                        out: o,
+                        gain: 1.,
+                        pan: 0.,
+                        rate: 1.,
+                        lowpass: 20000.,
+                    },
+                    sr,
+                );
+                for i in 0..800 {
+                    out.push(v.next(bank, sr, i % 32 == 0));
+                }
+            }
+            let x = &out[24000..];
+            // Helligkeit: Energie der ersten Differenz relativ zur Energie (≈ spektraler Schwerpunkt)
+            let e0: f32 = x.iter().map(|v| v * v).sum();
+            let e1: f32 = x.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum();
+            // Grundton: Maximum der Autokorrelation zwischen 2,5 und 12 ms
+            let lag = (120..576)
+                .max_by(|&a, &b| {
+                    let ac = |l: usize| x.iter().zip(&x[l..]).map(|(p, q)| p * q).sum::<f32>();
+                    ac(a).total_cmp(&ac(b))
+                })
+                .unwrap();
+            ((e1 / e0).sqrt(), sr / lag as f32)
+        };
+        let (s, u, h) = (render("sport"), render("supercar"), render("hypercar"));
+        assert!(s.0 < u.0 && u.0 < h.0, "Helligkeit {s:?} {u:?} {h:?}");
+        assert!(s.1 < u.1 && u.1 < h.1, "Grundton {s:?} {u:?} {h:?}");
+        // Verstimmung 0,9 / 1,0 / 1,08 wiederzufinden (±3 %)
+        assert!(
+            (s.1 / u.1 - 0.9).abs() < 0.03 && (h.1 / u.1 - 1.08).abs() < 0.03,
+            "{s:?} {u:?} {h:?}"
+        );
+    }
+
     #[test]
     fn many_voices_render_fast() {
         let sr = 48000.;

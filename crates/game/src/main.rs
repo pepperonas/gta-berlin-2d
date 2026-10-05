@@ -6,6 +6,7 @@ mod bindmenu;
 mod carart;
 mod console;
 mod effects;
+mod enginedebug;
 mod figure;
 mod fps;
 mod hud;

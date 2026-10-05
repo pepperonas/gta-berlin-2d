@@ -56,6 +56,11 @@ Phase 8: tests `sim/tests/{physics_budget,calibration_gate,acceptance}.rs` (know
 `data/vehicles/bekannte_abweichungen.json` with a reason); dev overlay `game/physdebug.rs` (F3, sliders write
 `set_game_feel` / `Car::tuned`, never the data files); AI uses `car::Limits` from data and runs full vphys within
 `World::ai_full_radius` (`Car::lod_full`, pure-pursuit wheel angle in `traffic.rs`), kinematic beyond.
+Engine samples (docs/audio.md): sports/super/hypercars with ≥ 6 cylinders play the `v10` bank
+(`data/audio/engine/v10/`, built by `tools/audio/build_engine_sounds.py`, never edit by hand); pure control logic
+`sim/enginesound.rs` (profiles `data/audio/engine_profiles.json`), playback `audio/sampler.rs` (16-bit WAV via
+`include_bytes!`, list `V10` must match the manifest), wiring in `game/sound.rs`; such cars are removed from the
+synth voices. Panel `game/enginedebug.rs` (F4 / console `motorsound`). `GTA_ENGINE_SAMPLES=0` = synth only.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

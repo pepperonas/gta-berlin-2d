@@ -61,6 +61,9 @@ pub enum Action {
     DebugLess,
     DebugMore,
     DebugExport,
+    /// Motorsound-Anzeige (Entwickler-Build) und A/B-Vergleich mit der Referenzaufnahme
+    EngineDebug,
+    EngineAb,
 }
 
 /// Controller-Tasten (Xbox-Bezeichnungen); Trigger gelten als Taste ab halbem Weg, Gas/Bremse lesen sie analog.
@@ -486,6 +489,22 @@ pub const ACTIONS: &[Info] = &[
         "Physik-Änderungen ausgeben",
         Both,
         [Some(KeyCode::F6), None],
+        None,
+        None,
+    ),
+    info(
+        A::EngineDebug,
+        "Motorsound-Anzeige (Entwickler)",
+        Both,
+        [Some(KeyCode::F4), None],
+        None,
+        None,
+    ),
+    info(
+        A::EngineAb,
+        "Motorsound A/B (Referenz)",
+        Both,
+        [Some(KeyCode::F7), None],
         None,
         None,
     ),
