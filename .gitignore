@@ -16,5 +16,3 @@ web/data/bars.json
 # Native Rust builds
 /target/
 
-# Motorsound: Referenzaufnahmen erst nach geklärter Lizenz einchecken
-data/audio/raw/

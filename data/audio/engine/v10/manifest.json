@@ -1,0 +1,303 @@
+{
+  "bank": "v10",
+  "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
+  "quelle": "data/audio/raw/engine_reference_lambo.m4a",
+  "quelle_sha256": "7dd39ebbcb239cdca43c759b70c75314a2a9941f93485754f680133e11fb5f26",
+  "samplerate": 48000,
+  "drehzahl_annahme": "V10, Grundton = halbe Zündfrequenz: Drehzahl = f0 × 24, Doppler des wegfahrenden Autos herausgerechnet",
+  "loops": [
+    {
+      "datei": "on_idle.wav",
+      "rpm": 1362,
+      "last": "on",
+      "samples": 27066,
+      "loop_start": 0,
+      "loop_ende": 27066,
+      "grundton_hz": 56.75,
+      "quelle_s": [
+        0.35,
+        0.95
+      ],
+      "gain_db": 0.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "off_idle.wav",
+      "rpm": 1362,
+      "last": "off",
+      "samples": 27066,
+      "loop_start": 0,
+      "loop_ende": 27066,
+      "grundton_hz": 56.75,
+      "quelle_s": [
+        0.35,
+        0.95
+      ],
+      "gain_db": -7.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "on_r2700.wav",
+      "rpm": 2739,
+      "last": "on",
+      "samples": 17909,
+      "loop_start": 0,
+      "loop_ende": 17909,
+      "grundton_hz": 112.57,
+      "quelle_s": [
+        1.35,
+        1.75
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 19.1
+    },
+    {
+      "datei": "off_r2700.wav",
+      "rpm": 2739,
+      "last": "off",
+      "samples": 17909,
+      "loop_start": 0,
+      "loop_ende": 17909,
+      "grundton_hz": 112.57,
+      "quelle_s": [
+        1.35,
+        1.75
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 19.1
+    },
+    {
+      "datei": "on_r3300.wav",
+      "rpm": 3313,
+      "last": "on",
+      "samples": 23591,
+      "loop_start": 0,
+      "loop_ende": 23591,
+      "grundton_hz": 134.29,
+      "quelle_s": [
+        1.8,
+        2.32
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 9.6
+    },
+    {
+      "datei": "off_r3300.wav",
+      "rpm": 3313,
+      "last": "off",
+      "samples": 23591,
+      "loop_start": 0,
+      "loop_ende": 23591,
+      "grundton_hz": 134.29,
+      "quelle_s": [
+        1.8,
+        2.32
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 9.6
+    },
+    {
+      "datei": "on_r4900.wav",
+      "rpm": 4930,
+      "last": "on",
+      "samples": 10280,
+      "loop_start": 0,
+      "loop_ende": 10280,
+      "grundton_hz": 196.12,
+      "quelle_s": [
+        2.64,
+        2.88
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 2.2
+    },
+    {
+      "datei": "off_r4900.wav",
+      "rpm": 4930,
+      "last": "off",
+      "samples": 10280,
+      "loop_start": 0,
+      "loop_ende": 10280,
+      "grundton_hz": 196.12,
+      "quelle_s": [
+        2.64,
+        2.88
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 2.2
+    },
+    {
+      "datei": "on_r6000.wav",
+      "rpm": 5974,
+      "last": "on",
+      "samples": 10189,
+      "loop_start": 0,
+      "loop_ende": 10189,
+      "grundton_hz": 235.56,
+      "quelle_s": [
+        2.98,
+        3.22
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 7.1
+    },
+    {
+      "datei": "off_r6000.wav",
+      "rpm": 5974,
+      "last": "off",
+      "samples": 10189,
+      "loop_start": 0,
+      "loop_ende": 10189,
+      "grundton_hz": 235.56,
+      "quelle_s": [
+        2.98,
+        3.22
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 7.1
+    },
+    {
+      "datei": "on_r7200.wav",
+      "rpm": 7175,
+      "last": "on",
+      "samples": 15076,
+      "loop_start": 0,
+      "loop_ende": 15076,
+      "grundton_hz": 280.17,
+      "quelle_s": [
+        3.3,
+        3.64
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 21.6
+    },
+    {
+      "datei": "off_r7200.wav",
+      "rpm": 7175,
+      "last": "off",
+      "samples": 15076,
+      "loop_start": 0,
+      "loop_ende": 15076,
+      "grundton_hz": 280.17,
+      "quelle_s": [
+        3.3,
+        3.64
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 21.6
+    }
+  ],
+  "einzel": [
+    {
+      "datei": "start.wav",
+      "art": "start",
+      "samples": 40560,
+      "quelle_s": [
+        0.105,
+        0.95
+      ],
+      "gain_db": 0.0,
+      "rpm": 1374
+    },
+    {
+      "datei": "blip.wav",
+      "art": "blip",
+      "samples": 31200,
+      "quelle_s": [
+        1.05,
+        1.7
+      ],
+      "gain_db": 0.0,
+      "rpm": 2412
+    },
+    {
+      "datei": "shift_1.wav",
+      "art": "schalten",
+      "samples": 17279,
+      "quelle_s": [
+        3.7,
+        4.06
+      ],
+      "gain_db": 0.0,
+      "rpm": 1800
+    },
+    {
+      "datei": "shift_2.wav",
+      "art": "schalten",
+      "samples": 10560,
+      "quelle_s": [
+        5.3,
+        5.52
+      ],
+      "gain_db": 0.0,
+      "rpm": 5166
+    },
+    {
+      "datei": "shift_3.wav",
+      "art": "schalten",
+      "samples": 8640,
+      "quelle_s": [
+        7.09,
+        7.27
+      ],
+      "gain_db": 0.0,
+      "rpm": 4812
+    },
+    {
+      "datei": "pop_1.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        7.845,
+        7.965
+      ],
+      "gain_db": 0.0,
+      "rpm": 4716
+    },
+    {
+      "datei": "pop_2.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        8.015,
+        8.135
+      ],
+      "gain_db": 0.0,
+      "rpm": 2772
+    },
+    {
+      "datei": "pop_3.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        8.215,
+        8.335
+      ],
+      "gain_db": 0.0,
+      "rpm": 2838
+    },
+    {
+      "datei": "pop_4.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        3.745,
+        3.865
+      ],
+      "gain_db": 0.0,
+      "rpm": 1884
+    },
+    {
+      "datei": "pop_5.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        3.88,
+        4.0
+      ],
+      "gain_db": 0.0,
+      "rpm": 1800
+    }
+  ],
+  "referenz": "reference.wav"
+}
