@@ -2107,3 +2107,22 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   `docs/images/native/grafik/09-schrift/`.
 - **Notiz für später:** Straßenschilder werden bisher als HUD-Text gezeichnet (`streetfurn.rs`); mit der SDF-Schrift
   könnten sie als Schild in die Welt zurück.
+
+## Grafik HD/Pixel: Figuren aus gemalten Teilen (Phase 6, Variante B, 06.10.2026)
+
+- **Teile-Atlas ohne neue Pipeline:** `game/figart.rs` malt 21 Teile (Rümpfe in drei Staturen, Kopf, sechs
+  Frisuren, fünf Kopfbedeckungen, vier Taschen, Kinderwagen, Hund) mit dem Rasterer der Fahrzeuge in 64-px-Teilzellen
+  eines eigenen Zellenpaars im Fahrzeugatlas (`carart::figure_pair`, hinter allen Modellen). Body-Form
+  `FIG_BASE (4096) + Paar · 32 + Teil` (`engine/vehatlas.rs`); `veh_uv` rechnet die Teilzelle aus, damit gelten
+  Glanzmaske, Silhouetten (`sprite_cover`) und Mip-Stufen wie bei den Autos. Speicher: ein Zellenpaar (≈ 1 MB mit Mips).
+- **Ebenen wie bei den Fahrzeugen:** Lack = Schattierung (Wölbung, Nähte, Strähnen) + Glanz (Stoff 0,12, Haar 0,3,
+  Helm 0,85, Aktentasche 0,5) und Material; Detail = Feststehendes (Räder, Schnallen, Hundenase). Die Farbe setzt der
+  Shader aus `look_of` (Oberteil, Haar, Hut, Tasche, Wagen, Fell).
+- **Licht:** im `body_fs` bekommen Figurenteile eine Kuppel-Normale (gedreht mit dem Körper) und Licht von der
+  Sonnenseite wie die Baumkronen, dazu `body_gloss` (Haar, Helm).
+- **`figure.rs`:** `Look` trägt `build`, `hair_part`, `hat_part`, `bag_part`, je nach Personentyp und Hash gewählt
+  (Geschäftsleute kurz/Dutt, Punks Irokese, Arbeiter breit mit Helm, Touristen Sonnenhut/Kappe und Rucksack,
+  Jugendliche schmal mit Kappe …). Arme, Beine, Hände und Schuhe bleiben einfache Formen; Lage, Größe und Gangbild
+  sind unverändert (`figart::half` rechnet die Zeichnungsgröße auf die Body-Größe um).
+- Vorschau der Teile: `GTA_FIG_DUMP=x.ppm cargo test -p gta-berlin dump_figures -- --ignored`; Bilder unter
+  `docs/images/native/grafik/06b-figuren/`.

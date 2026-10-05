@@ -1439,7 +1439,8 @@ pub fn models() -> Vec<(&'static str, f32, f32)> {
 /// Atlas: je Modell zwei Zellen (Lack, Details) nebeneinander. Liefert Pixel, Breite, Höhe.
 pub fn atlas() -> (Vec<u8>, u32, u32) {
     let ms = models();
-    let cells = ms.len() * 2;
+    // dahinter ein Zellenpaar mit den Figurenteilen (`figart`)
+    let cells = ms.len() * 2 + 2;
     let rows = cells.div_ceil(COLS);
     let (w, h) = (COLS * CELL_W, rows * CELL_H);
     let mut out = vec![0u8; w * h * 4];
@@ -1461,7 +1462,22 @@ pub fn atlas() -> (Vec<u8>, u32, u32) {
             }
         }
     }
+    let (fp, fd) = crate::figart::cells();
+    for (j, px) in [fp, fd].iter().enumerate() {
+        let cell = figure_pair() * 2 + j;
+        let (cx, cy) = ((cell % COLS) * CELL_W, (cell / COLS) * CELL_H);
+        for y in 0..CELL_H {
+            let dst = ((cy + y) * w + cx) * 4;
+            out[dst..dst + CELL_W * 4].copy_from_slice(&px[y * CELL_W * 4..(y + 1) * CELL_W * 4]);
+        }
+    }
     (out, w as u32, h as u32)
+}
+
+/// Zellenpaar der Figurenteile im Atlas (hinter allen Fahrzeugmodellen).
+pub fn figure_pair() -> usize {
+    static N: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *N.get_or_init(|| models().len())
 }
 
 /// Index eines Modells im Atlas

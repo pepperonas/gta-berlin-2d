@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Figuren (Phase 6, Variante B): **Passanten aus gemalten Teilen** statt flacher Ellipsen –
+  Oberkörper in drei Staturen mit Nähten und Falten, Kopf mit Ohren und Nase, sechs Frisuren (kurz, lang, Dutt,
+  Locken, Irokese, Pferdeschwanz), fünf Kopfbedeckungen (Kappe, Mütze, Helm, Kopftuch, Sonnenhut), Umhängetasche,
+  Rucksack, Aktentasche, Einkaufstüte, Kinderwagen und Hund in zwei Größen. Farben und Zubehör bleiben je Person frei
+  kombiniert, das Gangbild ist unverändert; die Teile werden von der Sonnenseite beleuchtet.
 - Grafik-Überarbeitung, Phase 9 (native Fassung): **HUD-Schrift im HD-Modus** ist jetzt Inter SemiBold (SIL Open
   Font License) als Abstandsfeld-Atlas: scharf in jeder Größe, mit echten Laufweiten und dunkler Kontur über der
   Karte. Der Pixel-Modus behält die 8×8-Bitmapschrift. Zeichen, die Inter fehlen (▣, ☾), kommen weiter aus der

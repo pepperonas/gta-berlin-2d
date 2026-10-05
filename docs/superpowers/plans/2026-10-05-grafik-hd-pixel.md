@@ -142,7 +142,10 @@ dem Baum und hellt die Sonnenseite auf (bei Bedeckung und nachts gleichmäßig).
 `mesh.rs tree_look` (Nadelbäume zu 65 % Kiefer); `is_crown` kommt als WGSL-Funktion aus `atlas.rs` und gilt auch für
 den Baumschatten.
 
-### Vorschlag Figuren-Atlas (nicht umgesetzt, wartet auf Freigabe)
+### Figuren-Atlas – Variante B umgesetzt ✅ (06.10.2026)
+
+Freigegeben („mach wie du es empfiehlst“): Teile als Teilzellen eines Zellenpaars im Fahrzeugatlas
+(`game/figart.rs`, Form `FIG_BASE + …`), Details in NATIVE-RUST.md. Ursprünglicher Vorschlag:
 
 Heute: `game/figure.rs` setzt jede Person aus 8–14 Bodies zusammen (Ellipsen und Rechtecke mit flacher Farbe: Rumpf,
 Arme, Kopf, Haare, Tasche, Zubehör), 615 Zeilen, Gangbild aus `pose()`. Von oben bei Zoom 1,2 trägt das; bei 2,6 und

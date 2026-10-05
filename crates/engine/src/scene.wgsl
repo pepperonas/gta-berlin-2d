@@ -499,9 +499,19 @@ fn veh_uv(shape: f32, q: vec2<f32>) -> vec4<f32> {
     let dims = vec2<f32>(textureDimensions(atlas));
     let cw = dims.x / VEH_COLS;
     let cell = vec2(cw, cw / VEH_ASPECT);
-    let cb = floor(shape - 16.0 + 0.5) * 2.0;
+    var cb = floor(shape - 16.0 + 0.5) * 2.0;
+    var uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
+    if shape >= FIG_BASE {
+        // Figurenteil: Teilzelle eines Zellenpaars
+        let k = floor(shape - FIG_BASE + 0.5);
+        let parts = FIG_COLS * FIG_ROWS;
+        cb = floor(k / parts) * 2.0;
+        let sub = k % parts;
+        let sc = cell / vec2(FIG_COLS, FIG_ROWS);
+        let local = clamp((q + 1.0) * 0.5, vec2(0.5) / sc, vec2(1.0) - vec2(0.5) / sc);
+        uv = (vec2(sub % FIG_COLS, floor(sub / FIG_COLS)) + local) / vec2(FIG_COLS, FIG_ROWS);
+    }
     let cd = cb + 1.0;
-    let uv = clamp((q + 1.0) * 0.5, vec2(1.0) / cell, vec2(1.0) - vec2(1.0) / cell);
     let pb = (vec2(cb % VEH_COLS, floor(cb / VEH_COLS)) + uv) * cell / dims;
     let pd = (vec2(cd % VEH_COLS, floor(cd / VEH_COLS)) + uv) * cell / dims;
     return vec4(pb, pd);
@@ -516,7 +526,8 @@ fn vehicle(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> Vehicle {
     if abs(q.x) > 1.0 || abs(q.y) > 1.0 { return v; }
     let dims = vec2<f32>(textureDimensions(atlas));
     let p = veh_uv(in.shape, q);
-    let k = 0.5 * vec2(dims.x / VEH_COLS) * vec2(1.0, 1.0 / VEH_ASPECT) / dims;
+    var k = 0.5 * vec2(dims.x / VEH_COLS) * vec2(1.0, 1.0 / VEH_ASPECT) / dims;
+    if in.shape >= FIG_BASE { k /= vec2(FIG_COLS, FIG_ROWS); }
     let dx = gx / in.extent * k;
     let dy = gy / in.extent * k;
     let b = textureSampleGrad(atlas, atlas_sampler, p.xy, dx, dy);
@@ -624,7 +635,19 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     if in.shape >= 16.0 {
         let v = vehicle(in, gx, gy);
         if v.color.a < 0.03 { discard; }
-        let shine = body_gloss(car_slope(in.local / in.extent), in.rot, v.gloss);
+        let q = in.local / in.extent;
+        if in.shape >= FIG_BASE {
+            // Figurenteil: gewölbt (Kopf, Schultern, Tasche), Licht von der Sonnenseite wie bei den Baumkronen
+            let nl = q * 0.75;
+            let w = vec2(nl.x * in.rot.x - nl.y * in.rot.y, nl.x * in.rot.y + nl.y * in.rot.x);
+            let n = normalize(vec3(w, 1.0));
+            let sun = normalize(camera.sun.xyz);
+            let vis = clamp(camera.sun.z * 3.0, 0.0, 1.0) * (1.0 - camera.ambient.w) * clamp(camera.shadow.w, 0.0, 1.0);
+            let light = mix(1.0, 0.78 + 0.34 * max(dot(n, sun), 0.0), vis);
+            let shine = body_gloss(nl, in.rot, v.gloss);
+            return vec4(linear_color(v.color.rgb * light) + shine, v.color.a);
+        }
+        let shine = body_gloss(car_slope(q), in.rot, v.gloss);
         return vec4(linear_color(v.color.rgb) + shine, v.color.a);
     }
     var d: f32;

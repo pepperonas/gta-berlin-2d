@@ -1,6 +1,7 @@
 //! Aussehen der Passanten je Typ (vereinfachter Port von `figure.js figureLook` und `assets.js drawDog`): Oberteil,
 //! Haare oder Kopfbedeckung, Tasche und ein Zubehör, das die Silhouette von oben prägt (Kinderwagen, Hund an der
 //! Leine, Stock, Aktentasche …). Alles deterministisch aus der Nummer, nur Darstellung.
+use crate::figart::{self, Part};
 use berlin_engine::Body;
 use berlin_sim::figure::{Kind, h01};
 use berlin_sim::pedestrians::Ped;
@@ -30,6 +31,11 @@ pub struct Look {
     pub scale: f32,
     pub pants: u32,
     pub shoes: u32,
+    /// gemalte Teile (`figart`): Rumpf nach Statur, Frisur, Kopfbedeckung, Tasche
+    pub build: Part,
+    pub hair_part: Part,
+    pub hat_part: Part,
+    pub bag_part: Part,
 }
 
 const HAIR: [u32; 7] = [
@@ -65,6 +71,30 @@ pub fn look_of(p: &Ped) -> Look {
             pick(&PANTS, h(8.))
         },
         shoes: pick(&SHOES, h(14.)),
+        build: [
+            Part::TorsoSlim,
+            Part::TorsoMid,
+            Part::TorsoMid,
+            Part::TorsoBroad,
+        ][(h(21.) * 4.) as usize % 4],
+        hair_part: [
+            Part::HairShort,
+            Part::HairShort,
+            Part::HairLong,
+            Part::HairBun,
+            Part::HairCurly,
+            Part::HairPony,
+        ][(h(22.) * 6.) as usize % 6],
+        hat_part: if h(23.) < 0.5 {
+            Part::HatCap
+        } else {
+            Part::HatBeanie
+        },
+        bag_part: if h(24.) < 0.4 {
+            Part::Backpack
+        } else {
+            Part::Bag
+        },
     };
     match p.kind {
         Kind::Everyday => {
@@ -77,6 +107,12 @@ pub fn look_of(p: &Ped) -> Look {
             l.top = pick(&[0x1f2733, 0x2b2d33, 0x3a3f4a, 0x2a3a55, 0x4a4038], h(6.));
             l.pants = l.top;
             l.shoes = 0x15171b;
+            l.build = Part::TorsoMid;
+            l.hair_part = if h(22.) < 0.7 {
+                Part::HairShort
+            } else {
+                Part::HairBun
+            };
             if h(11.) >= 0.3 && h(11.) < 0.4 {
                 l.hair = None; // Glatze
             }
@@ -96,6 +132,12 @@ pub fn look_of(p: &Ped) -> Look {
                 l.hat = Some(pick(&[0xf5f5f5, 0xe8c46a, 0x2f5aa8, 0xc0392b], h(13.)));
             }
             l.bag = Some(pick(&BAGS, h(18.)));
+            l.bag_part = Part::Backpack;
+            l.hat_part = if h(25.) < 0.6 {
+                Part::HatSun
+            } else {
+                Part::HatCap
+            };
             l.acc = Acc::Camera;
         }
         Kind::Senior => {
@@ -104,6 +146,13 @@ pub fn look_of(p: &Ped) -> Look {
                 h(6.),
             );
             l.hair = (h(11.) >= 0.3).then(|| pick(&GREY, h(2.)));
+            l.hair_part = if h(22.) < 0.6 {
+                Part::HairShort
+            } else {
+                Part::HairBun
+            };
+            l.hat_part = Part::HatCap;
+            l.build = Part::TorsoMid;
             if h(9.) < 0.35 {
                 l.hat = Some(pick(&[0x4a3a2a, 0x3a3a3a, 0x6a5a4a], h(13.)));
             }
@@ -128,6 +177,15 @@ pub fn look_of(p: &Ped) -> Look {
             }
             l.acc = if h(12.) < 0.5 { Acc::Phone } else { Acc::None };
             l.bag = (h(4.) < 0.4).then(|| pick(&BAGS, h(18.)));
+            l.bag_part = Part::Backpack;
+            l.hat_part = Part::HatCap;
+            l.build = Part::TorsoSlim;
+            l.hair_part = [
+                Part::HairCurly,
+                Part::HairPony,
+                Part::HairShort,
+                Part::HairLong,
+            ][(h(22.) * 4.) as usize % 4];
             l.scale = 0.86;
         }
         Kind::Hipster => {
@@ -142,11 +200,17 @@ pub fn look_of(p: &Ped) -> Look {
                 ));
             }
             l.bag = Some(0xe8dcc0);
+            l.bag_part = Part::Bag;
+            l.hat_part = Part::HatBeanie;
+            l.hair_part =
+                [Part::HairBun, Part::HairCurly, Part::HairLong][(h(22.) * 3.) as usize % 3];
         }
         Kind::Worker => {
             l.top = pick(&[0xff8c1a, 0xe8e82a], h(6.));
             l.pants = pick(&[0x3a4a5a, 0x2b3a2b, 0x4a3a2a], h(8.));
             l.shoes = 0x4a3a24;
+            l.build = Part::TorsoBroad;
+            l.hat_part = Part::HatHard;
             if h(9.) < 0.5 {
                 l.hat = Some(if h(13.) < 0.6 { 0xf5f5f5 } else { 0xf1c40f });
             }
@@ -160,9 +224,11 @@ pub fn look_of(p: &Ped) -> Look {
                 h(2.),
             ));
             l.acc = if h(12.) < 0.3 { Acc::Bottle } else { Acc::None };
+            l.hair_part = Part::HairMohawk;
         }
         Kind::Headscarf => {
             l.top = pick(&[0x3a3a4a, 0x5a4a5a, 0x2f3b52, 0x6b5a4a, 0x4a5a5a], h(6.));
+            l.hat_part = Part::HatScarf;
             l.hat = Some(pick(
                 &[0x8a2f5a, 0x2f5a8a, 0xd8c8b8, 0x5a8a6a, 0x1d1d1d, 0xc9a24a],
                 h(13.),
@@ -182,12 +248,19 @@ pub fn look_of(p: &Ped) -> Look {
             // Trikot kommt aus p.shirt
             l.pants = 0x1d1d1d;
             l.shoes = pick(&[0xf0f0f0, 0xff6b6b, 0x4d96ff], h(14.));
+            l.build = Part::TorsoSlim;
+            l.hair_part = if h(22.) < 0.5 {
+                Part::HairPony
+            } else {
+                Part::HairShort
+            };
         }
         Kind::Dogwalker => {
             l.top = pick(&[0x4a5a3a, 0x5a4a3a, 0x2f3b52, 0x7a6a5a], h(6.));
             if h(9.) < 0.3 {
                 l.hat = Some(pick(&[0x6b8a4a, 0x2f3b52], h(13.)));
             }
+            l.hat_part = Part::HatBeanie;
             l.acc = Acc::Dog;
             l.acc_color = DOGS[p.id as usize % 5];
         }
@@ -250,6 +323,10 @@ pub fn player_look() -> Look {
         scale: 1.05,
         pants: 0x26324a,
         shoes: 0xf2f2f2,
+        build: Part::TorsoMid,
+        hair_part: Part::HairShort,
+        hat_part: Part::HatCap,
+        bag_part: Part::Bag,
     }
 }
 
@@ -320,14 +397,13 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
     match look.acc {
         Acc::Stroller => {
             // Wagen vor der Person, Griff quer
-            push(at(12., 0.), [6., 4.2], a, 0., 0.00025, rgba(look.acc_color));
             push(
-                at(13., 0.),
-                [3.8, 2.8],
+                at(12.4, 0.),
+                figart::half([6.6, 4.8]),
                 a,
-                1.,
-                0.0002,
-                shade(rgba(look.acc_color), 1.35),
+                figart::shape(Part::Stroller),
+                0.00025,
+                rgba(look.acc_color),
             );
             push(at(6.2, 0.), [0.7, 4.], a, 4., 0.0002, rgba(0x2a2a2a));
         }
@@ -361,13 +437,18 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
                 let q = [d[0] + c * (lf + o) - s * lr, d[1] + s * (lf + o) + c * lr];
                 push(q, [0.8, 0.6], a, 4., 0.00031, shade(col, 0.7));
             }
-            push(d, [5., 2.4], a, 1., 0.00028, col);
+            // gemalter Hund (Rumpf, Kopf, Ohren, Nase): zwei Größen aus der Fellfarbe
+            let size = if look.acc_color & 0x10 == 0 {
+                0.85
+            } else {
+                1.12
+            };
             push(
-                [d[0] + c * 5., d[1] + s * 5.],
-                [2., 2.],
-                0.,
-                1.,
-                0.00026,
+                [d[0] + c * 1.3 * size, d[1] + s * 1.3 * size],
+                figart::half([6.7 * size, 5.7 * size]),
+                a,
+                figart::shape(Part::Dog),
+                0.00027,
                 col,
             );
             let wag = (t * 12.).sin() as f32 * 1.6;
@@ -401,9 +482,9 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
     if let Some(b) = look.bag {
         push(
             at(-4.4 * k, 0.),
-            [1.8, 3.4 * k],
+            figart::half([2.1, 3.7 * k]),
             a + twist,
-            0.,
+            figart::shape(look.bag_part),
             0.0001,
             rgba(b),
         );
@@ -444,20 +525,12 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
             color: skin,
         });
     }
-    // Oberkörper: Schultern breit, vorn/hinten schmal; Kante dunkler
+    // Oberkörper (gemalt, `figart`): Schultern breit, vorn/hinten schmal, Nähte und Falten
     out.push(Body {
         center: [x, y],
-        half: [3.6 * k, 5.7 * k],
+        half: figart::half([5.3 * k, 6.1 * k]),
         angle: ta,
-        shape: 1.,
-        depth: depth + 0.00002,
-        color: shade(top, 0.75),
-    });
-    out.push(Body {
-        center: [x, y],
-        half: [3.2 * k, 5.3 * k],
-        angle: ta,
-        shape: 0.,
+        shape: figart::shape(look.build),
         depth,
         color: top,
     });
@@ -477,9 +550,13 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
     match look.acc {
         Acc::Briefcase | Acc::Shopping => push2(
             [hand[0] + ts * 1.6, hand[1] - tc * 1.6],
-            [2.4, 1.2],
+            figart::half([2.6, 1.35]),
             ta,
-            0.,
+            figart::shape(if look.acc == Acc::Shopping {
+                Part::Shopping
+            } else {
+                Part::Briefcase
+            }),
             0.00003,
             rgba(if look.acc == Acc::Shopping {
                 0xd8c8a8
@@ -493,34 +570,31 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
         Acc::Bottle => push2(hand, [1.3, 0.7], ta, 0., -0.00003, rgba(0x2f6b3a)),
         _ => {}
     }
-    // Kopf: Ohren, Gesicht leicht vorn, darüber Haare (Ansatz hinten) oder Kopfbedeckung
-    for side in [-1f32, 1.] {
-        push2(
-            at(0., side * 2.9 * k),
-            [0.7 * k, 0.8 * k],
-            a,
-            1.,
-            -0.00011,
-            shade(skin, 0.9),
-        );
-    }
-    push2(at(0.5, 0.), [2.9 * k, 2.8 * k], a, 1., -0.00012, skin);
+    // Kopf (gemalt: Gesicht, Ohren, Nase), darüber Frisur oder Kopfbedeckung – alle mit demselben Kopfraster
+    let hh = figart::half([2.85 * k / figart::HEAD_R; 2]);
+    push2(
+        at(0.5, 0.),
+        hh,
+        a,
+        figart::shape(Part::Head),
+        -0.00012,
+        skin,
+    );
     if let Some(hat) = look.hat {
-        push2(at(-0.3, 0.), [3.0 * k, 3.0 * k], a, 1., -0.00016, rgba(hat));
         push2(
-            at(-0.6, 0.),
-            [1.9 * k, 1.9 * k],
+            at(0.5, 0.),
+            hh,
             a,
-            1.,
-            -0.00017,
-            shade(rgba(hat), 1.15),
+            figart::shape(look.hat_part),
+            -0.00016,
+            rgba(hat),
         );
     } else if let Some(hair) = look.hair {
         push2(
-            at(-0.8, 0.),
-            [2.6 * k, 2.75 * k],
+            at(0.5, 0.),
+            hh,
             a,
-            1.,
+            figart::shape(look.hair_part),
             -0.00016,
             rgba(hair),
         );
