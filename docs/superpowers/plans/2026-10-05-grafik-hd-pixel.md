@@ -186,7 +186,13 @@ Ursprünglicher Entwurf:
   `data/gfx/palette.json`), Bayer 4×4 (Stärke einstellbar), Nearest-Upscale ganzzahlig + Letterbox, HD-Effekte aus.
   Palette/LUT/Quantisierung als reine, getestete Rust-Funktionen. Bildvergleich aller Szenen. **STOPP.**
 
-## Phase 9 – HUD-Schrift im HD-Modus (≈ 2 Tage)
+## Phase 9 – HUD-Schrift im HD-Modus ✅ (06.10.2026)
+
+Umgesetzt mit Inter SemiBold (OFL) als SDF-Atlas aus `tools/gfx/build_font.py`, gemeinsamer Atlas mit der Bitmap,
+Schrift-Abstraktion über `Hud.sdf` (Metriken aus der Schrift), Kontur als eigene SDF-Form, Credits aus dem Manifest.
+Pixel behält font8x8; alle Bildschirmseiten in beiden Modi geprüft. Straßenschilder in der Welt: offen (Notiz).
+
+Ursprünglicher Entwurf:
 
 - OFL-Schrift (Vorschlag Inter / IBM Plex Sans / Atkinson Hyperlegible) als SDF-Atlas, erzeugt von
   `tools/gfx/build_font.py` (Pillow, eingebettet + Manifest), Laufweiten aus dem Font; Schrift-Abstraktion in

@@ -7,6 +7,8 @@ pub mod hud;
 mod lightpass;
 mod materials;
 pub use materials::MANIFEST as MATERIAL_MANIFEST;
+/// Herkunft und Lizenz der HD-Schrift (`data/gfx/font/manifest.json`), für die Danksagungen im Spiel.
+pub const FONT_MANIFEST: &str = include_str!("../../../data/gfx/font/manifest.json");
 pub mod pad;
 mod palette;
 mod renderer;
@@ -541,6 +543,8 @@ impl ApplicationHandler for App {
                         work_ms: self.work_ms,
                     });
                     let mut overlay = hud::Hud::new([viewport.x, viewport.y]);
+                    // HD: Schrift aus dem Abstandsfeld, Pixel: Bitmapschrift
+                    overlay.sdf = game.graphics().mode == graphics::GraphicsMode::Hd;
                     game.hud(&self.camera, viewport, &mut overlay);
                     game.end_frame();
                     renderer.set_hud(&overlay.items, overlay.map);

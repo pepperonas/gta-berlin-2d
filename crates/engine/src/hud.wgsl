@@ -21,16 +21,38 @@ struct HudOut {
     out.local = local; out.color = color; out.shape = shape; out.extent = extent; out.extra = extra;
     return out;
 }
+// Abstandsfeld bilinear (textureLoad, damit der Sampler der Bitmap scharf bleiben kann)
+fn sdf_texel(p: vec2<f32>) -> f32 {
+    let q = p - 0.5;
+    let i = vec2<i32>(floor(q));
+    let f = fract(q);
+    let a = textureLoad(atlas, i, 0).r;
+    let b = textureLoad(atlas, i + vec2(1, 0), 0).r;
+    let c = textureLoad(atlas, i + vec2(0, 1), 0).r;
+    let e = textureLoad(atlas, i + vec2(1, 1), 0).r;
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
 fn coverage(d: f32) -> f32 {
     return clamp(0.5 - d / max(fwidth(d), 0.0001), 0.0, 1.0);
 }
 @fragment fn hud_fs(in: HudOut) -> @location(0) vec4<f32> {
     var a = 1.0;
     if in.shape == 3.0 {
+        // Bitmapzeichen: Zelle unter dem SDF-Teil des Atlas, nächster Texel (scharf)
         let uv01 = in.local / in.extent * 0.5 + 0.5;
         let cell = in.extra.x;
-        let uv = (vec2(cell % 16.0, floor(cell / 16.0)) * 8.0 + clamp(uv01, vec2(0.0), vec2(0.999)) * 8.0) / 128.0;
-        a = textureSample(atlas, atlas_sampler, uv).r;
+        let t = vec2(cell % 16.0, floor(cell / 16.0)) * 8.0 + clamp(uv01, vec2(0.0), vec2(0.999)) * 8.0;
+        a = textureLoad(atlas, vec2<i32>(floor(t + vec2(0.0, HUD_BITMAP_Y))), 0).r;
+    } else if in.shape == 6.0 || in.shape == 7.0 {
+        // SDF-Zeichen (Inter): 0,5 = Kante; Kontur (7) als dickere, dunkle Fassung darunter
+        let uv01 = in.local / in.extent * 0.5 + 0.5;
+        let d = sdf_texel(in.extra.xy + uv01 * in.extra.zw);
+        // Bildschirmpixel je Atlaspixel → Konturbreite (1,4 px) im Feld; 1 Atlaspixel = 0,5 / Spannweite
+        let screen_per_atlas = in.extent.y * 2.0 / max(in.extra.w, 1.0);
+        let per_px = 0.5 / HUD_SDF_SPREAD / screen_per_atlas;
+        let edge = select(0.5, max(0.5 - 1.4 * per_px, 0.08), in.shape == 7.0);
+        let w = max(fwidth(d) * 0.75, 1e-4);
+        a = smoothstep(edge - w, edge + w, d);
     } else if in.shape == 1.0 {
         let q = in.local / in.extent;
         a = coverage((length(q) - 1.0) * min(in.extent.x, in.extent.y));

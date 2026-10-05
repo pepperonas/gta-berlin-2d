@@ -1,0 +1,12 @@
+{
+ "_hinweis": "Erzeugt von tools/gfx/build_font.py – nicht von Hand ändern.",
+ "schrift": {
+  "name": "Inter SemiBold",
+  "version": "4.1",
+  "urheber": "Rasmus Andersson (The Inter Project Authors)",
+  "lizenz": "SIL Open Font License 1.1",
+  "seite": "https://rsms.me/inter/",
+  "quelle": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+  "sha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e"
+ }
+}

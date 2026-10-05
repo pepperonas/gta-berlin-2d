@@ -298,6 +298,22 @@ fn material_credits() -> Vec<String> {
         .collect()
 }
 
+/// HD-Schrift aus ihrem Manifest (Name, Urheber, Lizenz, Seite).
+fn font_credit() -> String {
+    let man: serde_json::Value =
+        serde_json::from_str(berlin_engine::FONT_MANIFEST).unwrap_or_default();
+    let f = &man["schrift"];
+    let s = |k: &str| f[k].as_str().unwrap_or("").to_string();
+    format!(
+        "{} {} (HD-Modus): {}, {} – {}",
+        s("name"),
+        s("version"),
+        s("urheber"),
+        s("lizenz"),
+        s("seite").trim_start_matches("https://")
+    )
+}
+
 fn license_blocks() -> Vec<Block> {
     let pk = packages();
     let mut out = vec![
@@ -327,8 +343,10 @@ fn license_blocks() -> Vec<Block> {
     out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),
+        Block::Bullet(font_credit()),
         Block::Bullet(
-            "Bitmapschrift aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen".into(),
+            "Bitmapschrift (Pixel-Modus) aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen"
+                .into(),
         ),
         Block::Gap,
         Block::Head(format!("Rust-Pakete ({})", pk.len())),
@@ -677,6 +695,11 @@ mod tests {
 
     #[test]
     fn ground_textures_are_credited_with_license() {
+        let f = font_credit();
+        assert!(
+            f.contains("Inter") && f.contains("Open Font License") && f.contains("rsms.me"),
+            "{f}"
+        );
         let c = material_credits();
         let man: serde_json::Value =
             serde_json::from_str(berlin_engine::MATERIAL_MANIFEST).unwrap();

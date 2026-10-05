@@ -376,11 +376,12 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+        let (font_px, font_w, font_h) = hud::atlas();
         let font = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("HUD-Schrift"),
             size: wgpu::Extent3d {
-                width: hud::ATLAS,
-                height: hud::ATLAS,
+                width: font_w,
+                height: font_h,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -397,11 +398,11 @@ impl Renderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &hud::atlas(),
+            &font_px,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(hud::ATLAS),
-                rows_per_image: Some(hud::ATLAS),
+                bytes_per_row: Some(font_w),
+                rows_per_image: Some(font_h),
             },
             font.size(),
         );
@@ -1424,6 +1425,7 @@ pub(crate) fn shader_source() -> String {
         crate::facade::shader_constants().as_str(),
         crate::vehatlas::shader_constants().as_str(),
         crate::palette::shader_constants().as_str(),
+        hud::shader_constants().as_str(),
         include_str!("scene.wgsl"),
         include_str!("lighting.wgsl"),
         include_str!("hud.wgsl"),

@@ -2085,3 +2085,25 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
 - **Kosten (abwechselnd gemessen, je dreimal, 2560 × 1440, gegen einen Build der Grafik-Phase 0):** Häuserblock
   3,54 ms statt 4,03 ms, Boulevard 2,85 ms statt 3,51 ms. Bildvergleich: alle neun Szenen bei Zoom 1,2 und 2,6 unter
   `docs/images/native/grafik/08-pixel/`.
+
+## Grafik HD/Pixel: Phase 9 – HUD-Schrift im HD-Modus (06.10.2026)
+
+- **Schrift:** Inter 4.1 SemiBold (Rasmus Andersson, SIL OFL 1.1), Paket SHA-256-geprüft. `tools/gfx/build_font.py`
+  (Pillow + numpy, kein scipy) rastert jede Glyphe vierfach überabgetastet und rechnet das Abstandsfeld selbst
+  (Abstand jedes Atlaspixels zur nächsten Kante, 6 Pixel Spannweite bei 48 Pixel je em). Ergebnis
+  `data/gfx/font/hud_sdf.png` (1024 × 512, ein Kanal), `hud_sdf.json` (Rechteck, Lage zum Ursprung, Vorschub je
+  Zeichen in em; fehlende Zeichen), `manifest.json`, `OFL.txt`. Fehlende Zeichen erkennt das Skript am Vergleich
+  mit einem sicher fehlenden Codepunkt (U+10FFFD; U+E000 belegt Inter selbst).
+- **Ein Atlas für beide Schriften:** `hud::atlas` legt die SDF-Schrift oben und die 8×8-Bitmapzellen darunter ab
+  (`HUD_BITMAP_Y`, `HUD_SDF_SPREAD` als WGSL-Konstanten aus `hud::shader_constants`). Beide werden mit `textureLoad`
+  gelesen (Bitmap: nächster Texel, SDF: bilinear von Hand), der Sampler bleibt unverändert.
+- **Schrift-Abstraktion `engine/hud.rs`:** `Hud.sdf` (die Engine setzt es aus `Game::graphics()`: HD → SDF);
+  `text_width` aus den Vorschüben der Schrift (fehlende Zeichen mit Bitmap-Laufweite), `sdf_line` für gerade und
+  gedrehte Zeilen. Größe so, dass Großbuchstaben so hoch sind wie bei der Bitmap (7/8 der Größe, `sdf_em`), Grundlinie
+  gleich – Layouts in `game/hud.rs` bleiben unverändert. Formen 6 (Zeichen) und 7 (Kontur: dieselbe Glyphe mit um
+  1,4 Bildschirmpixel abgesenkter Schwelle, dunkel, vorher) statt fünf versetzter Kopien.
+- **Danksagung:** `about.rs font_credit` liest `berlin_engine::FONT_MANIFEST` (Test).
+- **Geprüft:** alle 19 `--bildschirm`-Seiten in HD und Pixel (1920 × 1080); Auswahl unter
+  `docs/images/native/grafik/09-schrift/`.
+- **Notiz für später:** Straßenschilder werden bisher als HUD-Text gezeichnet (`streetfurn.rs`); mit der SDF-Schrift
+  könnten sie als Schild in die Welt zurück.

@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 9 (native Fassung): **HUD-Schrift im HD-Modus** ist jetzt Inter SemiBold (SIL Open
+  Font License) als Abstandsfeld-Atlas: scharf in jeder Größe, mit echten Laufweiten und dunkler Kontur über der
+  Karte. Der Pixel-Modus behält die 8×8-Bitmapschrift. Zeichen, die Inter fehlen (▣, ☾), kommen weiter aus der
+  Bitmap. Erzeugt von `tools/gfx/build_font.py`, Herkunft und Lizenz im Reiter „Lizenzen“.
 - Grafik-Überarbeitung, Phase 8 (native Fassung): **Pixel-Modus** (F8, Menü, Konsole `grafik pixel`). Die Szene
   entsteht in grober Auflösung (ein Bildpunkt = 4 Bildschirmpunkte bei 1080p, 5 bei 1440p) und wird ganzzahlig
   vergrößert, Rest als schwarzer Rand. Feste Palette mit 43 Farben (`data/gfx/palette.json`), Bayer-Streuung

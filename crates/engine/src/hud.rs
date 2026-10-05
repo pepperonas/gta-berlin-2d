@@ -1,9 +1,12 @@
 //! HUD im Bildschirmraum: Rechtecke (abgerundet), Ellipsen, Kreisbögen, Dreiecke und Schriftzeichen als
-//! Instanzen einer Pipeline. Die Schrift ist der gemeinfreie 8×8-Bitmapfont (`font8x8`, Basic Latin + Latin‑1 mit
-//! Umlauten und ß), proportional gesetzt (Breite je Zeichen aus der Bitmap); einige Zeichen wie €, → und ✓ sind
-//! hier selbst gezeichnet. Das Spiel legt die Anzeigen in Basiseinheiten (720 Zeilen hoch) an, `scale` passt sie
-//! an die Fensterhöhe an.
+//! Instanzen einer Pipeline. Zwei Schriften: im Pixel-Modus der gemeinfreie 8×8-Bitmapfont (`font8x8`, Basic Latin
+//! und Latin‑1 mit Umlauten und ß), proportional gesetzt (Breite je Zeichen aus der Bitmap; €, → und ✓ sind hier selbst
+//! gezeichnet); im HD-Modus Inter SemiBold als Abstandsfeld (SDF, `data/gfx/font/`, erzeugt von
+//! `tools/gfx/build_font.py`) mit Laufweiten aus der Schrift – Zeichen, die Inter fehlen, kommen aus der Bitmap.
+//! Beide liegen in einem Atlas (SDF oben, Bitmap darunter ab `HUD_BITMAP_Y`). Das Spiel legt die Anzeigen in
+//! Basiseinheiten (720 Zeilen hoch) an, `scale` passt sie an die Fensterhöhe an.
 use font8x8::legacy::{BASIC_LEGACY, LATIN_LEGACY};
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// Ein HUD-Element (Bildschirm-Pixel).
@@ -13,8 +16,8 @@ pub struct HudItem {
     pub center: [f32; 2],
     pub half: [f32; 2],
     pub angle: f32,
-    /// 0 Rechteck (extra.x = Eckradius), 1 Ellipse, 2 Bogen (extra = a0, a1, Dicke), 3 Zeichen (extra.x = Zelle),
-    /// 4 Dreieck (Spitze nach +x)
+    /// 0 Rechteck (extra.x = Eckradius), 1 Ellipse, 2 Bogen (extra = a0, a1, Dicke), 3 Bitmapzeichen (extra.x =
+    /// Zelle), 4 Dreieck (Spitze nach +x), 6 SDF-Zeichen, 7 dessen Kontur (extra = Atlas-Rechteck x, y, w, h)
     pub shape: f32,
     pub color: [f32; 4],
     pub extra: [f32; 4],
@@ -79,8 +82,96 @@ fn bitmap(cell: u32) -> [u8; 8] {
             .unwrap_or([0; 8]),
     }
 }
-/// Atlas (128 × 128, ein Kanal): 16 × 16 Zellen à 8 × 8.
-pub fn atlas() -> Vec<u8> {
+/// Ein Zeichen der SDF-Schrift: Atlas-Rechteck (Pixel), linke obere Ecke relativ zum Ursprung auf der Grundlinie
+/// und Vorschub (in em).
+#[derive(Debug, Clone, Copy)]
+struct Glyph {
+    rect: [f32; 4],
+    left: f32,
+    top: f32,
+    adv: f32,
+}
+struct Sdf {
+    /// Atlas-Pixel je em
+    em: f32,
+    /// Atlas-Pixel von der Kante bis zum vollen Feldwert
+    spread: f32,
+    width: u32,
+    height: u32,
+    cap: f32,
+    glyphs: HashMap<char, Glyph>,
+    px: Vec<u8>,
+}
+fn sdf() -> &'static Sdf {
+    static S: OnceLock<Sdf> = OnceLock::new();
+    S.get_or_init(|| {
+        let meta: serde_json::Value =
+            serde_json::from_str(include_str!("../../../data/gfx/font/hud_sdf.json"))
+                .expect("hud_sdf.json");
+        let (rgba, width, height) =
+            crate::materials::decode(include_bytes!("../../../data/gfx/font/hud_sdf.png"))
+                .expect("hud_sdf.png");
+        let f = |v: &serde_json::Value| v.as_f64().unwrap_or(0.) as f32;
+        let mut glyphs = HashMap::new();
+        for (k, v) in meta["zeichen"].as_object().expect("zeichen") {
+            let c = char::from_u32(k.parse().expect("Zeichencode")).expect("Zeichen");
+            let a: Vec<f32> = v.as_array().expect("Metrik").iter().map(f).collect();
+            glyphs.insert(
+                c,
+                Glyph {
+                    rect: [a[0], a[1], a[2], a[3]],
+                    left: a[4],
+                    top: a[5],
+                    adv: a[6],
+                },
+            );
+        }
+        Sdf {
+            em: f(&meta["em"]),
+            spread: f(&meta["spread"]),
+            width,
+            height,
+            cap: f(&meta["cap"]),
+            glyphs,
+            px: rgba.iter().step_by(4).copied().collect(),
+        }
+    })
+}
+/// Schriftgröße der SDF-Schrift in em je Basiseinheit `size`: Großbuchstaben so hoch wie die der Bitmapschrift
+/// (7 von 8 Zeilen).
+fn sdf_em(size: f32) -> f32 {
+    size * 0.875 / sdf().cap
+}
+/// WGSL-Konstanten der Schrift (Lage der Bitmapzellen im gemeinsamen Atlas).
+pub fn shader_constants() -> String {
+    format!(
+        "const HUD_BITMAP_Y: f32 = {}.0;\nconst HUD_SDF_SPREAD: f32 = {:?};\n",
+        sdf().height,
+        sdf().spread
+    )
+}
+
+/// Gemeinsamer Atlas (ein Kanal): SDF-Schrift oben, darunter die 16 × 16 Bitmapzellen à 8 × 8. Liefert Pixel,
+/// Breite, Höhe.
+pub fn atlas() -> (Vec<u8>, u32, u32) {
+    let s = sdf();
+    let (w, h) = (s.width.max(ATLAS), s.height + ATLAS);
+    let mut out = vec![0u8; (w * h) as usize];
+    for y in 0..s.height {
+        let row = (y * s.width) as usize;
+        out[(y * w) as usize..(y * w + s.width) as usize]
+            .copy_from_slice(&s.px[row..row + s.width as usize]);
+    }
+    let bits = bitmap_atlas();
+    for y in 0..ATLAS {
+        let src = (y * ATLAS) as usize;
+        let dst = ((s.height + y) * w) as usize;
+        out[dst..dst + ATLAS as usize].copy_from_slice(&bits[src..src + ATLAS as usize]);
+    }
+    (out, w, h)
+}
+/// Bitmapzellen (128 × 128, ein Kanal): 16 × 16 Zellen à 8 × 8.
+fn bitmap_atlas() -> Vec<u8> {
     let mut px = vec![0u8; (ATLAS * ATLAS) as usize];
     for c in 0..256 {
         let b = bitmap(c);
@@ -165,6 +256,8 @@ pub struct Hud {
     /// Breite in Basiseinheiten
     pub width: f32,
     pub height: f32,
+    /// SDF-Schrift (HD-Modus) statt der Bitmapschrift
+    pub sdf: bool,
 }
 impl Hud {
     pub fn new(viewport: [f32; 2]) -> Self {
@@ -175,6 +268,7 @@ impl Hud {
             scale,
             width: viewport[0] / scale,
             height: 720.,
+            sdf: false,
         }
     }
     /// Minikarte in das Rechteck (Basiseinheiten) legen; was danach gezeichnet wird, liegt über der Karte.
@@ -319,6 +413,9 @@ impl Hud {
     }
     /// Breite eines Texts in Basiseinheiten.
     pub fn text_width(&self, text: &str, size: f32) -> f32 {
+        if self.sdf {
+            return self.sdf_width(text, size);
+        }
         let adv = advances();
         let w: u32 = text
             .chars()
@@ -341,6 +438,16 @@ impl Hud {
         outline: bool,
     ) -> f32 {
         let w = self.text_width(text, size);
+        if self.sdf {
+            let x0 = match align {
+                Align::Left => x,
+                Align::Center => x - w / 2.,
+                Align::Right => x - w,
+            } * self.scale;
+            let base = y * self.scale;
+            self.sdf_line(text, (x0, base), size, 0., color, outline);
+            return w;
+        }
         let p = self.px(size);
         let x0 = match align {
             Align::Left => x,
@@ -383,6 +490,18 @@ impl Hud {
     ) {
         let p = self.px(size);
         let w = self.text_width(text, size) * self.scale;
+        if self.sdf {
+            // Grundlinie so, dass die Großbuchstaben mittig auf (cx, cy) liegen
+            let (ca, sa) = (angle.cos(), angle.sin());
+            let cap = 0.875 * size * self.scale;
+            let (bx, by) = (-w / 2., cap / 2.);
+            let start = (
+                cx * self.scale + ca * bx - sa * by,
+                cy * self.scale + sa * bx + ca * by,
+            );
+            self.sdf_line(text, start, size, angle, color, outline);
+            return;
+        }
         let (adv, lefts) = (advances(), lefts());
         let (ca, sa) = (angle.cos(), angle.sin());
         let (dir, perp) = ((ca, sa), (-sa, ca));
@@ -415,6 +534,82 @@ impl Hud {
                     });
                 }
                 pen += adv[ch as usize] as f32 * p;
+            }
+        }
+    }
+    /// Breite in Basiseinheiten mit der SDF-Schrift (fehlende Zeichen mit der Bitmap-Laufweite).
+    fn sdf_width(&self, text: &str, size: f32) -> f32 {
+        let s = sdf();
+        let em = sdf_em(size) * self.scale;
+        let (p, adv) = (self.px(size), advances());
+        let w: f32 = text
+            .chars()
+            .map(|c| match s.glyphs.get(&c) {
+                Some(g) => g.adv * em,
+                None => cell(c).map_or(0., |k| adv[k as usize] as f32 * p),
+            })
+            .sum();
+        w / self.scale
+    }
+    /// Eine Zeile SDF-Text ab `start` (Bildschirm-Pixel, Ursprung auf der Grundlinie) in Richtung `angle`. Kontur =
+    /// dieselben Zeichen, dicker und dunkel, vorher. Zeichen, die Inter fehlt, als Bitmapzeichen.
+    fn sdf_line(
+        &mut self,
+        text: &str,
+        start: (f32, f32),
+        size: f32,
+        angle: f32,
+        color: [f32; 4],
+        outline: bool,
+    ) {
+        let s = sdf();
+        let em = sdf_em(size) * self.scale;
+        let k = em / s.em; // Bildschirm-Pixel je Atlas-Pixel
+        let (p, adv, lefts) = (self.px(size), advances(), lefts());
+        let (ca, sa) = (angle.cos(), angle.sin());
+        let at = |along: f32, across: f32| {
+            [
+                start.0 + ca * along - sa * across,
+                start.1 + sa * along + ca * across,
+            ]
+        };
+        let shadow = [0.02, 0.02, 0.03, color[3] * 0.85];
+        let passes: &[(f32, [f32; 4])] = if outline {
+            &[(7., shadow), (6., color)]
+        } else {
+            &[(6., color)]
+        };
+        for &(shape, col) in passes {
+            let mut pen = 0.;
+            for c in text.chars() {
+                if let Some(g) = s.glyphs.get(&c) {
+                    if g.rect[2] > 0. {
+                        let (w, h) = (g.rect[2] * k, g.rect[3] * k);
+                        self.items.push(HudItem {
+                            center: at(pen + g.left * em + w / 2., g.top * em + h / 2.),
+                            half: [w / 2., h / 2.],
+                            angle,
+                            shape,
+                            color: col,
+                            extra: g.rect,
+                        });
+                    }
+                    pen += g.adv * em;
+                } else if let Some(cl) = cell(c) {
+                    // Bitmapzeichen auf derselben Grundlinie (Zeile 7 von 8)
+                    if shape == 6. && cl != 32 {
+                        let along = pen - lefts[cl as usize] as f32 * p + 4. * p;
+                        self.items.push(HudItem {
+                            center: at(along, -3. * p),
+                            half: [4. * p, 4. * p],
+                            angle,
+                            shape: 3.,
+                            color: col,
+                            extra: [cl as f32, 0., 0., 0.],
+                        });
+                    }
+                    pen += adv[cl as usize] as f32 * p;
+                }
             }
         }
     }
@@ -459,7 +654,7 @@ mod tests {
         assert_eq!(cell('A'), Some(65));
         assert_eq!(cell('ä'), Some(128 + 0xE4 - 0xA0));
         assert!(cell('漢').is_none());
-        let a = atlas();
+        let a = bitmap_atlas();
         assert_eq!(a.len(), 128 * 128);
         // 'A' hat gesetzte Pixel in seiner Zelle, das Leerzeichen keine
         let filled = |c: u32| {
@@ -488,5 +683,42 @@ mod tests {
         let mut big = Hud::new([2560., 1440.]);
         big.rect(10., 10., 100., 20., [1.; 4], 0.);
         assert_eq!(big.items[0].half, [100., 20.]);
+    }
+    #[test]
+    fn sdf_font_metrics_and_atlas() {
+        let s = sdf();
+        // alle deutschen Zeichen in Inter, nur einzelne Eigenzeichen fallen auf die Bitmap zurück
+        for c in "Kisten für den Kiez – Größe ÄÖÜäöüß 12:30 € → ✓ ▲▼↑↓".chars()
+        {
+            assert!(s.glyphs.contains_key(&c), "{c:?} fehlt in der SDF-Schrift");
+        }
+        assert!(s.cap > 0.6 && s.cap < 0.8 && s.em > 16.);
+        let (px, w, h) = atlas();
+        assert_eq!(px.len(), (w * h) as usize);
+        assert_eq!(h, s.height + ATLAS);
+        assert!(shader_constants().contains(&format!("HUD_BITMAP_Y: f32 = {}.0", s.height)));
+        // Bitmap liegt unter dem SDF-Teil: 'A' (Zelle 65) hat dort Pixel
+        let filled = (0..64)
+            .filter(|i| px[((s.height + 32 + i / 8) * w + 8 + i % 8) as usize] > 0)
+            .count();
+        assert!(filled > 10);
+    }
+    #[test]
+    fn sdf_text_uses_font_advances_and_falls_back() {
+        let mut h = Hud::new([1280., 720.]);
+        h.sdf = true;
+        assert!(h.text_width("iii", 16.) < h.text_width("WWW", 16.));
+        let w = h.text("Hallo", 100., 100., 16., [1.; 4], Align::Left, true);
+        assert!((w - h.text_width("Hallo", 16.)).abs() < 1e-4);
+        assert_eq!(h.items.iter().filter(|i| i.shape == 6.).count(), 5);
+        assert_eq!(h.items.iter().filter(|i| i.shape == 7.).count(), 5);
+        // Großbuchstabe sitzt auf der Grundlinie und ist so hoch wie die Bitmap-Großbuchstaben (7/8 der Größe)
+        let hh = h.items.iter().find(|i| i.shape == 6.).unwrap();
+        let bottom = hh.center[1] + hh.half[1];
+        assert!((bottom - 100.).abs() < 3., "Grundlinie {bottom}");
+        // ☾ fehlt Inter: Bitmapzeichen
+        h.items.clear();
+        h.text("☾", 0., 50., 16., [1.; 4], Align::Left, false);
+        assert_eq!(h.items[0].shape, 3.);
     }
 }

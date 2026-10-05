@@ -80,7 +80,7 @@ pub(crate) fn params() -> Result<Params> {
 }
 
 /// Ein Bild als RGBA8 (W × H) aus eingebettetem PNG.
-fn decode(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32)> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32)> {
     let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
     dec.set_transformations(png::Transformations::EXPAND);
     let mut reader = dec.read_info()?;
