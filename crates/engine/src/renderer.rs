@@ -1,6 +1,7 @@
 use crate::{
     Body, LightSource, Lighting, atlas,
     camera::Camera,
+    gputime::GpuTimer,
     hud::{self, HudItem, MapInset},
     lightpass,
 };
@@ -53,7 +54,11 @@ pub(crate) struct Renderer {
     atlas_sampler: wgpu::Sampler,
     depth: wgpu::TextureView,
     tiles: BTreeMap<TileKey, GpuTile>,
+    /// Zeichengröße (Fenster oder fest, `--fenster`)
     size: PhysicalSize<u32>,
+    /// feste Zeichengröße: das Bild entsteht abseits des Fensters (Messung, Aufnahmen größer als der Bildschirm)
+    fixed: Option<PhysicalSize<u32>>,
+    offscreen: Option<wgpu::TextureView>,
     scale: f32,
     lighting: Lighting,
     light: lightpass::LightPass,
@@ -70,9 +75,19 @@ pub(crate) struct Renderer {
     map_bind: wgpu::BindGroup,
     overlay_pipeline: wgpu::RenderPipeline,
     overview: Option<(wgpu::Buffer, wgpu::Buffer, u32)>,
+    /// GPU-Zeit je Bild (nur mit `--messung` und wenn der Adapter Zeitstempel kann)
+    gpu: Option<GpuTimer>,
+    /// Wartezeit auf das nächste Swapchain-Bild im letzten `render` (ms; Bildtakt, keine Arbeit)
+    pub acquire_ms: f32,
 }
 impl Renderer {
-    pub async fn new(window: Arc<Window>, scale: f32, lighting: Lighting) -> Result<Self> {
+    pub async fn new(
+        window: Arc<Window>,
+        scale: f32,
+        lighting: Lighting,
+        measure: bool,
+        fixed: Option<(u32, u32)>,
+    ) -> Result<Self> {
         let backends = if cfg!(target_os = "macos") {
             wgpu::Backends::METAL
         } else if cfg!(target_os = "windows") {
@@ -96,12 +111,20 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Berlin device"),
+                // Zeitstempel nur zum Messen anfordern (optionales Merkmal; ohne läuft alles wie bisher)
+                required_features: if measure {
+                    adapter.features() & wgpu::Features::TIMESTAMP_QUERY
+                } else {
+                    wgpu::Features::empty()
+                },
                 ..Default::default()
             })
             .await?;
-        let size = window.inner_size();
+        let fixed = fixed.map(|(w, h)| PhysicalSize::new(w, h));
+        let win = window.inner_size();
+        let size = fixed.unwrap_or(win);
         let mut config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+            .get_default_config(&adapter, win.width.max(1), win.height.max(1))
             .context("Keine Surface-Konfiguration")?;
         let caps = surface.get_capabilities(&adapter);
         config.format = caps
@@ -369,7 +392,7 @@ impl Renderer {
         });
         let vehicle_bind =
             vehicle_atlas_bind(&device, &queue, &atlas_layout, &sampler, &[0; 4], 1, 1);
-        let depth = depth_view(&device, &config);
+        let depth = depth_view(&device, size);
         let hud_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Float32,3=>Float32,4=>Float32x4,5=>Float32x4];
         let hud_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("HUD"),
@@ -504,9 +527,15 @@ impl Renderer {
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &sprite_attrs,
             },
-            config.width,
-            config.height,
+            size.width,
+            size.height,
         );
+        let offscreen = fixed.map(|f| offscreen_view(&device, config.format, f));
+        let gpu = if measure {
+            GpuTimer::new(&device, &queue)
+        } else {
+            None
+        };
         Ok(Self {
             window,
             instance,
@@ -535,6 +564,8 @@ impl Renderer {
             depth,
             tiles: BTreeMap::new(),
             size,
+            fixed,
+            offscreen,
             scale,
             lighting,
             light,
@@ -549,9 +580,15 @@ impl Renderer {
             map: None,
             map_uniform,
             map_bind,
+            gpu,
+            acquire_ms: 0.,
             overlay_pipeline,
             overview: None,
         })
+    }
+    /// Gemessene GPU-Zeiten (ms) seit dem letzten Leeren; `None` = keine Zeitstempel verfügbar.
+    pub fn gpu_samples(&mut self) -> Option<&mut Vec<f32>> {
+        self.gpu.as_mut().map(|g| &mut g.samples)
     }
     pub fn viewport(&self) -> Vec2 {
         Vec2::new(self.size.width as f32, self.size.height as f32)
@@ -743,13 +780,20 @@ impl Renderer {
     pub fn drawable(&self) -> bool {
         self.size.width > 0 && self.size.height > 0
     }
-    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+    /// Fenstergröße geändert (bei fester Zeichengröße ändert sich nur die Fensterfläche).
+    pub fn resize(&mut self, window: PhysicalSize<u32>) {
+        if window.width > 0 && window.height > 0 {
+            self.config.width = window.width;
+            self.config.height = window.height;
+            self.surface.configure(&self.device, &self.config);
+        }
+        let size = self.fixed.unwrap_or(window);
         self.size = size;
         if self.drawable() {
-            self.config.width = size.width;
-            self.config.height = size.height;
-            self.surface.configure(&self.device, &self.config);
-            self.depth = depth_view(&self.device, &self.config);
+            self.depth = depth_view(&self.device, size);
+            if let Some(f) = self.fixed {
+                self.offscreen = Some(offscreen_view(&self.device, self.config.format, f));
+            }
             let cx = lightpass::Ctx {
                 device: &self.device,
                 layout: &self.layout,
@@ -765,7 +809,17 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         camera: &Camera,
+        timestamps: Option<u32>,
     ) {
+        // Messung: Anfang im ersten Durchgang des Bildes, Ende im HUD-Durchgang (dem letzten)
+        let stamp = |begin: bool| {
+            let (set, q) = (self.gpu.as_ref()?, timestamps?);
+            Some(wgpu::RenderPassTimestampWrites {
+                query_set: &set.set,
+                beginning_of_pass_write_index: begin.then_some(q),
+                end_of_pass_write_index: (!begin).then_some(q + 1),
+            })
+        };
         let visible = self.view_bounds(camera).expand(512.);
         let l = self.lighting;
         let shadows = l.shadow_strength > 0.02;
@@ -775,6 +829,7 @@ impl Renderer {
             let casters = visible.expand(900.);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Schattenmaske"),
+                timestamp_writes: stamp(true),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.light.mask.view,
                     depth_slice: None,
@@ -809,6 +864,7 @@ impl Renderer {
             let lin = |c: f32| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) } as f64;
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Lichtkarte"),
+                timestamp_writes: if shadows { None } else { stamp(true) },
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.light.lightmap.view,
                     depth_slice: None,
@@ -841,6 +897,7 @@ impl Renderer {
         // 3) Bild: Karte, Schatten auf den Boden, Bäume/Decals, bewegte Objekte, dann das Licht
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Berlin frame"),
+            timestamp_writes: if shadows || night { None } else { stamp(true) },
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 depth_slice: None,
@@ -939,6 +996,7 @@ impl Renderer {
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("HUD"),
+            timestamp_writes: stamp(false),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 depth_slice: None,
@@ -1043,6 +1101,7 @@ impl Renderer {
             &mut encoder,
             &texture.create_view(&Default::default()),
             camera,
+            None,
         );
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -1106,6 +1165,7 @@ impl Renderer {
         if !self.drawable() {
             return Ok(false);
         }
+        let t0 = std::time::Instant::now();
         let (frame, suboptimal) = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
             wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
@@ -1113,16 +1173,17 @@ impl Renderer {
                 return Ok(false);
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.resize(self.size);
+                self.resize(self.window.inner_size());
                 return Ok(false);
             }
             wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface = self.instance.create_surface(self.window.clone())?;
-                self.resize(self.size);
+                self.resize(self.window.inner_size());
                 return Ok(false);
             }
             wgpu::CurrentSurfaceTexture::Validation => anyhow::bail!("Surface-Validierungsfehler"),
         };
+        self.acquire_ms = t0.elapsed().as_secs_f32() * 1000.;
         let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
         // freier Platz hinter `scale`: Nebel für das Fensterlicht
@@ -1135,25 +1196,72 @@ impl Renderer {
             .write_buffer(&self.uniform, 0, bytemuck::cast_slice(&uniform));
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        self.draw_scene(&mut encoder, &view, camera);
+        let timestamps = self.gpu.as_mut().and_then(GpuTimer::begin);
+        if let Some(target) = &self.offscreen {
+            // feste Zeichengröße: Bild abseits, das Fenster bleibt dunkel
+            self.draw_scene(&mut encoder, target, camera, timestamps);
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Fenster (feste Zeichengröße)"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+        } else {
+            self.draw_scene(&mut encoder, &view, camera, timestamps);
+        }
+        if let Some(g) = &self.gpu {
+            g.resolve(&mut encoder);
+        }
         self.queue.submit([encoder.finish()]);
+        if let Some(g) = &mut self.gpu {
+            g.after_submit(&self.device);
+        }
         self.window.pre_present_notify();
         frame.present();
         if suboptimal {
-            self.resize(self.size);
+            self.resize(self.window.inner_size());
         }
         Ok(true)
     }
 }
 /// Kamera (32 B) + Sonne + Parameter + Schatten + Umgebungslicht (je 16 B).
 const UNIFORM_BYTES: u64 = 96;
-fn depth_view(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> wgpu::TextureView {
+fn offscreen_view(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    size: PhysicalSize<u32>,
+) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("Feste Zeichengröße"),
+            size: wgpu::Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&Default::default())
+}
+fn depth_view(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
     device
         .create_texture(&wgpu::TextureDescriptor {
             label: Some("2D layer / building depth"),
             size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
+                width: size.width.max(1),
+                height: size.height.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,

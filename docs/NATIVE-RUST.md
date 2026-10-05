@@ -1847,3 +1847,22 @@ Kleinigkeiten. Jetzt:
   `sizes_vary_and_wheels_sit_inside`, `cars_take_their_model_dimensions`, `paint_is_mostly_neutral`,
   `two_wheelers_are_readable`.
 - Nur die native Fassung; die Browser-Fassung zeichnet weiter wie bisher.
+
+## Grafik HD/Pixel: Messwerkzeug und Baseline (05.10.2026)
+
+Vorbereitung der Grafik-Überarbeitung (HD als Standard, Pixel-Modus als Filter). Design:
+`docs/superpowers/specs/2026-10-05-grafik-hd-pixel-design.md`, Plan: `docs/superpowers/plans/2026-10-05-grafik-hd-pixel.md`.
+
+- `--fenster 2560x1440`: feste Zeichengröße, das Bild entsteht in einer eigenen Textur, das Fenster bleibt dunkel
+  (macOS lässt kein Fenster größer als den Bildschirm zu). `--capture` liest diese Textur.
+- `--messung X.json`: nach 60 Aufwärmbildern je Bild die CPU-Arbeit (ohne Warten auf das Swapchain-Bild) und die
+  GPU-Zeit vom Anfang des ersten bis zum Ende des letzten Durchgangs (`engine/gputime.rs`, Zeitstempel über einen Ring
+  von Lesepuffern, ohne auf die GPU zu warten); Median und P95. `TIMESTAMP_QUERY` wird nur beim Messen angefordert.
+- `--geo LAT LON` springt im Spiel dorthin (wie `tp`), `--zoom Z` hält die Kamera fest.
+- `tools/gfx/captures.sh PHASE` (Variablen `MODI`, `SZENEN`, `ZOOMS`, `FRAMES`): neun Szenen (Häuserblock, Boulevard,
+  Park, Spree, Regennacht, Schnee, U-Bahnhof, Autos, Leute), Seed 7, feste Uhr und festes Wetter; WebP eingecheckt,
+  PNG nur lokal; Messwerte in `docs/images/native/grafik/metrics.json`.
+
+Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Regen und Schnee sind am teuersten (P95 bis
+8,8 ms). Tabelle im Design-Dokument.
+

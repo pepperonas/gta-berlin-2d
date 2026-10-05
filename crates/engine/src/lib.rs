@@ -1,5 +1,6 @@
 mod atlas;
 pub mod camera;
+mod gputime;
 pub mod hud;
 mod lightpass;
 pub mod pad;
@@ -193,6 +194,10 @@ pub struct Options {
     pub lighting: Lighting,
     pub capture: Option<PathBuf>,
     pub zoom: f32,
+    /// Bildzeiten messen (CPU-Arbeit, GPU per Zeitstempel) und beim Ende als JSON schreiben (`--messung`)
+    pub metrics: Option<PathBuf>,
+    /// Fenstergröße in Bildpunkten (`--fenster BxH`, reproduzierbare Aufnahmen unabhängig vom Bildschirm)
+    pub window: Option<(u32, u32)>,
 }
 
 pub fn run(options: Options) -> Result<()> {
@@ -208,6 +213,8 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         lighting,
         capture,
         zoom,
+        metrics,
+        window,
     } = options;
     let index = Arc::new(Index::read(&data_root)?);
     let streamer = Streamer::new(data_root, index.clone())?;
@@ -246,6 +253,9 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         error: None,
         focused: true,
         mouse: Mouse::default(),
+        metrics,
+        cpu_samples: Vec::new(),
+        window_size: window,
     };
     EventLoop::new()?.run_app(&mut app)?;
     if let Some(error) = app.error {
@@ -282,6 +292,10 @@ struct App {
     smoke_started: Instant,
     capture: Option<PathBuf>,
     mouse: Mouse,
+    metrics: Option<PathBuf>,
+    /// CPU-Arbeit je Bild (ms, ohne Warten auf das Swapchain-Bild) nach der Aufwärmphase
+    cpu_samples: Vec<f32>,
+    window_size: Option<(u32, u32)>,
 }
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -293,13 +307,18 @@ impl ApplicationHandler for App {
                 event_loop.create_window(
                     Window::default_attributes()
                         .with_title("GTA Berlin · Rust · Berlin wird geladen …")
-                        .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
+                        .with_inner_size::<winit::dpi::Size>(match self.window_size {
+                            Some((w, h)) => winit::dpi::PhysicalSize::new(w, h).into(),
+                            None => winit::dpi::LogicalSize::new(1280, 720).into(),
+                        }),
                 )?,
             );
             pollster::block_on(renderer::Renderer::new(
                 window,
                 self.index.meta.scale,
                 self.lighting,
+                self.metrics.is_some(),
+                self.window_size,
             ))
         })();
         match result {
@@ -560,6 +579,17 @@ impl ApplicationHandler for App {
                 }
                 let rendered = renderer.render(&self.camera);
                 self.work_ms = now.elapsed().as_secs_f32() * 1000.;
+                if self.metrics.is_some() && matches!(rendered, Ok(true)) {
+                    // erst nach der Aufwärmphase (Kacheln hochladen, Kamera eingeschwungen) zählen
+                    if self.frames < METRICS_WARMUP {
+                        if let Some(g) = renderer.gpu_samples() {
+                            g.clear();
+                        }
+                    } else {
+                        self.cpu_samples
+                            .push((self.work_ms - renderer.acquire_ms).max(0.));
+                    }
+                }
                 match rendered {
                     Ok(true) => {
                         if self.status.ready() && self.game.as_ref().is_none_or(|g| g.ready()) {
@@ -567,6 +597,14 @@ impl ApplicationHandler for App {
                         }
                         if self.smoke_frames.is_some_and(|limit| self.frames >= limit) {
                             self.done = true;
+                            if let Some(path) = self.metrics.take() {
+                                let gpu = renderer.gpu_samples().map(std::mem::take);
+                                if let Err(error) =
+                                    write_metrics(&path, &self.cpu_samples, gpu.as_deref())
+                                {
+                                    self.error = Some(error);
+                                }
+                            }
                             if let Some(path) = self.capture.take()
                                 && let Err(error) = renderer.capture(&self.camera, &path)
                             {
@@ -605,5 +643,58 @@ impl ApplicationHandler for App {
                 event_loop.set_control_flow(ControlFlow::Wait);
             }
         }
+    }
+}
+
+/// Bilder nach „bereit“, die nicht gemessen werden (Hochladen der Kacheln, Kamera schwingt ein).
+const METRICS_WARMUP: u32 = 60;
+
+/// Median und 95. Perzentil (nächster Rang) einer Messreihe; `None` bei leerer Reihe.
+pub fn median_p95(samples: &[f32]) -> Option<(f32, f32)> {
+    if samples.is_empty() {
+        return None;
+    }
+    let mut v = samples.to_vec();
+    v.sort_by(f32::total_cmp);
+    let rank = |p: f64| v[((p * v.len() as f64).ceil() as usize).clamp(1, v.len()) - 1];
+    Some((rank(0.5), rank(0.95)))
+}
+
+/// Messung als JSON: Anzahl, Median, P95 je für CPU und GPU (`null`, wenn keine Zeitstempel verfügbar sind).
+fn write_metrics(path: &std::path::Path, cpu: &[f32], gpu: Option<&[f32]>) -> Result<()> {
+    let block = |s: &[f32]| match median_p95(s) {
+        Some((m, p)) => format!(
+            "{{\"frames\": {}, \"median_ms\": {m:.3}, \"p95_ms\": {p:.3}}}",
+            s.len()
+        ),
+        None => "null".into(),
+    };
+    let gpu_text = gpu.map_or("null".into(), block);
+    let note = if gpu.is_some() {
+        "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    } else {
+        "keine Zeitstempel-Abfragen auf diesem Adapter"
+    };
+    let json = format!(
+        "{{\n  \"cpu\": {},\n  \"gpu\": {gpu_text},\n  \"gpu_quelle\": \"{note}\"\n}}\n",
+        block(cpu)
+    );
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, json)?;
+    eprintln!("Messung: {}", path.display());
+    Ok(())
+}
+
+#[cfg(test)]
+mod metric_tests {
+    use super::median_p95;
+    #[test]
+    fn median_and_p95_use_nearest_rank() {
+        assert_eq!(median_p95(&[]), None);
+        assert_eq!(median_p95(&[3.]), Some((3., 3.)));
+        let v: Vec<f32> = (1..=100).rev().map(|i| i as f32).collect();
+        assert_eq!(median_p95(&v), Some((50., 95.)));
     }
 }

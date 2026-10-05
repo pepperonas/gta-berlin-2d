@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 0 (Bestandsaufnahme): Messwerkzeug für reproduzierbare Testszenen. `--fenster BxH`
+  zeichnet in fester Größe abseits des Fensters (Aufnahmen 2560 × 1440 auch auf kleineren Bildschirmen),
+  `--messung DATEI.json` schreibt Median und P95 der CPU-Arbeit und der GPU-Zeit (Zeitstempel-Abfragen, nur beim
+  Messen angefordert), `--geo` und `--zoom` wirken jetzt auch im Spiel (Sprung wie `tp`, feste Kamera).
+  `tools/gfx/captures.sh` nimmt neun Szenen bei Zoom 1,2 und 2,6 auf; Baseline unter `docs/images/native/grafik/`,
+  Design und Plan unter `docs/superpowers/`.
 - Fahrzeuge unterscheiden sich deutlich: jedes Pkw-Modell hat eine eigene Karosserieform (Schrägheck, Stufenheck,
   Kombi, SUV, Kastenform, Coupé, Mittelmotor, Roadster, Van, Pickup, Oldtimer) mit eigener Haube, Glasfläche,
   Dachform, Scheinwerfern, Rückleuchten und Details (Dachreling, Glas- und Schiebedach, Rennstreifen, Heckflügel,

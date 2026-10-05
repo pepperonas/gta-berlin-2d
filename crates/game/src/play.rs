@@ -60,6 +60,8 @@ pub struct Play {
     pub about: crate::about::About,
     /// Kamerazoom über die Belegung (Kamera näher/weiter), Faktor auf den Spielzoom
     zoom_user: f32,
+    /// Fester Kamerazoom für reproduzierbare Aufnahmen (`--zoom` im Spiel); `None` = Kamera folgt dem Spiel
+    pub zoom_fix: Option<f32>,
     /// Controller-Vibration: Regeln und die nächste abzuholende
     rumbler: crate::rumble::Rumbler,
     rumble_out: Option<berlin_engine::Rumble>,
@@ -449,6 +451,7 @@ impl Play {
             bindmenu: Default::default(),
             about: Default::default(),
             zoom_user: 1.,
+            zoom_fix: None,
             rumbler: Default::default(),
             rumble_out: None,
             pedals: [0.; 2],
@@ -603,6 +606,12 @@ impl Play {
         self.bigmap.open = true;
         self.screen = Screen::Playing;
         self.request_teleport(x, y);
+    }
+    /// Startpunkt für Aufnahmen (`--geo` im Spiel): wie `tp` der Befehlszeile ohne Rückfrage springen, sobald das
+    /// Ziel geladen ist.
+    pub fn start_at(&mut self, x: f64, y: f64) {
+        self.teleport = Some(((x, y), None));
+        self.teleport_auto = true;
     }
     pub fn request_teleport(&mut self, x: f64, y: f64) {
         use berlin_sim::world::TeleportSpot;
@@ -2813,7 +2822,7 @@ impl Game for Play {
         }
         (
             Vec2::new(c.x as f32, c.y as f32),
-            c.zoom as f32 * self.zoom_user,
+            self.zoom_fix.unwrap_or(c.zoom as f32 * self.zoom_user),
         )
     }
     fn quit(&self) -> bool {

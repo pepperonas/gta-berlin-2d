@@ -43,11 +43,14 @@ fn main() -> Result<()> {
         lighting: Default::default(),
         capture: None,
         zoom: 2.,
+        metrics: None,
+        window: None,
     };
     let mut args = std::env::args().skip(1);
     let mut geo = None;
     let mut check_map = false;
     let mut free = false;
+    let mut zoom_set = false;
     let mut new_game = false;
     let mut resume = false;
     let mut screen: Option<String> = None;
@@ -116,6 +119,7 @@ fn main() -> Result<()> {
             }
             "--zoom" => {
                 options.zoom = args.next().context("Zoom fehlt")?.parse()?;
+                zoom_set = true;
                 ensure!(
                     (0.72..=2.6).contains(&options.zoom),
                     "Zoom muss zwischen 0.72 und 2.6 liegen"
@@ -123,6 +127,24 @@ fn main() -> Result<()> {
             }
             "--capture" => {
                 options.capture = Some(args.next().context("PNG-Pfad fehlt")?.into());
+            }
+            "--messung" => {
+                options.metrics =
+                    Some(args.next().context("JSON-Pfad für --messung fehlt")?.into());
+            }
+            "--fenster" => {
+                let text = args
+                    .next()
+                    .context("Größe für --fenster fehlt (z. B. 2560x1440)")?;
+                let (w, h) = text
+                    .split_once('x')
+                    .context("--fenster erwartet BREITExHÖHE, z. B. 2560x1440")?;
+                let (w, h): (u32, u32) = (w.parse()?, h.parse()?);
+                ensure!(
+                    (320..=7680).contains(&w) && (240..=4320).contains(&h),
+                    "--fenster: 320x240 bis 7680x4320"
+                );
+                options.window = Some((w, h));
             }
             "--check-map" => check_map = true,
             "--stumm" | "--mute" => sound = false,
@@ -250,9 +272,9 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--free [--position X Y | --geo LAT LON] [--zoom 0.72..2.6]] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
---free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen)"
+--free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen) · im Spiel springen --position/--geo dorthin, --zoom hält die Kamera fest · --messung: Bildzeiten (CPU, GPU) als JSON"
                 );
                 return Ok(());
             }
@@ -325,10 +347,8 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     if free {
         return berlin_engine::run(options);
     }
-    ensure!(
-        options.position.is_none(),
-        "--position/--geo gelten nur mit --free"
-    );
+    // im Spiel: --position/--geo springen dorthin (wie `tp`), --zoom hält die Kamera fest (Aufnahmen, Messung)
+    let start_at = options.position.take();
     let storage = save_path
         .map(berlin_sim::save::FileStorage::new)
         .unwrap_or_else(|| {
@@ -427,6 +447,13 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     }
     if let Some(c) = clock {
         play.world.clock = c;
+    }
+    if let Some(p) = start_at {
+        play.start_at(p.x as f64, p.y as f64);
+        options.position = Some(p);
+    }
+    if zoom_set {
+        play.zoom_fix = Some(options.zoom);
     }
     berlin_engine::run_with(options, Some(Box::new(play)))
 }
