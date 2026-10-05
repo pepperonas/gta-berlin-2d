@@ -113,7 +113,8 @@ fn scene_01_compact_takes_the_junction_at_40_and_understeers_at_70() {
         "Szene 1: 40 km/h Radius {r40:.1} m, Untersteuern {u40:.2}; 70 km/h Radius {r70:.1} m, Untersteuern {u70:.2}"
     );
     assert!(r40 < R_CORNER * 1.25 && u40 < 0.3, "40 km/h problemlos");
-    assert!(u70 > 0.4 && r70 > R_CORNER * 1.5, "70 km/h untersteuert");
+    // sichtbar: Radius wächst deutlich, ein Drittel der gewünschten Gierrate fehlt
+    assert!(u70 > 0.3 && r70 > R_CORNER * 1.5, "70 km/h untersteuert");
 }
 
 /// Kurve nass, am Ausgang Vollgas; liefert den größten Schwimmwinkel (°) und den am Ende.

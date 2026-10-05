@@ -995,13 +995,13 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         }
     }
     // Lenk-Assist (Spielgefühl): wer nicht gegenlenkt, dem dämpft er das Ausbrechen leicht
-    if feel.steer_assist > 0.
+    if feel.steer_assist() > 0.
         && !dout.aids_off
         && speed > 5.
         && s.beta().abs() > ASSIST_BETA
         && inp.steer * s.r >= 0.
     {
-        mz -= (s.r - r_ref) * iz * feel.steer_assist * ASSIST_RATE;
+        mz -= (s.r - r_ref) * iz * feel.steer_assist() * ASSIST_RATE;
     }
     // Integration (halbimplizit); die Drehträgheit steckt schon in der Antriebskraft
     let ax = fxb / m;

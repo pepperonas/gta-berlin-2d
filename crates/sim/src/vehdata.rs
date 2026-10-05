@@ -127,6 +127,10 @@ impl Feel {
     pub fn aqua(&self) -> f64 {
         self.aquaplaning * lerp(0.3, 1., self.realism)
     }
+    /// Lenk-Assist: bei Realismus 0 voll, bei 1 der eingestellte Wert.
+    pub fn steer_assist(&self) -> f64 {
+        lerp(1., self.steer_assist, self.realism)
+    }
 }
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t

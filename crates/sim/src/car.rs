@@ -25,6 +25,10 @@ pub const HEALTH: f64 = 100.;
 pub const DAMAGE_THRESHOLD: f64 = 70.;
 pub const DAMAGE_FACTOR: f64 = 0.07;
 pub const RESTITUTION: f64 = 0.3;
+/// Wandkontakt gleiten (`feel.wandkontakt_gleiten`): Verlust entlang der Wand je Steilheit des Aufpralls (0 =
+/// streifend, 1 = frontal) und Rückprall senkrecht zur Wand
+pub const WALL_SLIDE_LOSS: f64 = 0.8;
+pub const WALL_BOUNCE: f64 = 0.15;
 /// Poller geben schon bei langsamem Anstoßen nach (px/s ≈ 3 km/h).
 pub const KNOCK_SPEED: f64 = 8.;
 pub const KNOCK_SLOW: f64 = 0.96;
@@ -551,10 +555,21 @@ fn apply_impact(car: &mut Car, nx: f64, ny: f64, events: &mut Vec<Event>) -> f64
     if vn >= 0. {
         return 0.;
     }
-    car.vx -= (1. + RESTITUTION) * vn * nx;
-    car.vy -= (1. + RESTITUTION) * vn * ny;
-    car.vx *= 0.85;
-    car.vy *= 0.85;
+    if crate::vehdata::game_feel().wall_slide {
+        // Wandkontakt gleiten: Tempo entlang der Wand bleibt, gemindert nach dem Aufprallwinkel (streifend kaum,
+        // frontal fast ganz); senkrecht prallt das Auto schwach ab
+        let speed = car.vx.hypot(car.vy).max(1e-6);
+        let steep = -vn / speed;
+        let (tx, ty) = (car.vx - vn * nx, car.vy - vn * ny);
+        let keep = 1. - WALL_SLIDE_LOSS * steep;
+        car.vx = tx * keep - WALL_BOUNCE * vn * nx;
+        car.vy = ty * keep - WALL_BOUNCE * vn * ny;
+    } else {
+        car.vx -= (1. + RESTITUTION) * vn * nx;
+        car.vy -= (1. + RESTITUTION) * vn * ny;
+        car.vx *= 0.85;
+        car.vy *= 0.85;
+    }
     car.ang_vel *= 0.5;
     damage(car, -vn, events);
     -vn
@@ -664,6 +679,25 @@ mod tests {
 
     fn car() -> Car {
         Car::new(1, 0., 0., 0., 0xff0000, Role::Traffic, "car")
+    }
+
+    #[test]
+    fn grazing_a_wall_slides_along_it_head_on_stops() {
+        assert!(crate::vehdata::game_feel().wall_slide);
+        let hit = |deg: f64| {
+            // Wand mit Normale (0, -1), Auto fährt im Winkel `deg` auf sie zu
+            let mut c = car();
+            let a = deg.to_radians();
+            (c.vx, c.vy) = (a.cos() * 200., a.sin() * 200.);
+            let mut ev = Vec::new();
+            apply_impact(&mut c, 0., -1., &mut ev);
+            (c.vx, c.vy)
+        };
+        let (gx, gy) = hit(15.);
+        assert!(gx > 200. * 15f64.to_radians().cos() * 0.75, "streifend gleitet weiter: {gx}");
+        assert!(gy <= 0., "nicht mehr in die Wand: {gy}");
+        let (hx, hy) = hit(90.);
+        assert!(hx.hypot(hy) < 40., "frontal fast steht: {}", hx.hypot(hy));
     }
 
     #[test]
