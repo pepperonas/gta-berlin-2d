@@ -84,6 +84,19 @@ pub const LOOP_SNOW: f32 = 0.63;
 pub const LOOP_SQUEAL: f32 = 0.144;
 pub const LOOP_WIND: f32 = 0.0624;
 pub const LOOP_ROOF: f32 = 0.159;
+/// Umgebungsschleifen: Pegel bei voller Steuergröße (Test `ambience_loops_match_the_synth_layers`)
+pub const AMB_HUM: f32 = 0.0068;
+pub const AMB_TRAFFIC: f32 = 0.0438;
+pub const AMB_WATER: f32 = 0.775;
+pub const AMB_RAIN: f32 = 0.209;
+pub const AMB_RAIN_HEAVY: f32 = 1.53;
+pub const AMB_WIND: f32 = 0.0604;
+pub const AMB_WHISTLE: f32 = 0.181;
+pub const AMB_BIRDS: f32 = 0.0197;
+pub const AMB_BAR: f32 = 0.0422;
+pub const AMB_CLUB: f32 = 0.288;
+pub const THUNDER_NEAR: SfxSpec = spec("thunder_near", 0.218, 0.08, false);
+pub const THUNDER_FAR: SfxSpec = spec("thunder_far", 0.0732, 0.1, false);
 /// Martinshorn-Schleife: Pegel bei voller Nähe (`Mix::siren` = 1)
 pub const SIREN_LEVEL: f32 = 0.217;
 /// Choke-Gruppe für Samples ohne Choke
@@ -472,6 +485,52 @@ struct Ambience {
     next_clink: f64,
     next_beat: f64,
     beat: u32,
+    /// Umgebung aus Aufnahmen (ersetzt Rauschen, Zwitschern, Tropfen, Lachen, Gläser und Club-Takt)
+    loops: Option<AmbLoops>,
+}
+
+/// Umgebungsschleifen: Stadt und Wetter (draußen, im Auto gedämpft) sowie Kneipe und Club (mit Richtung).
+struct AmbLoops {
+    hum: LoopLayer,
+    traffic: LoopLayer,
+    water: LoopLayer,
+    rain: LoopLayer,
+    rain_heavy: LoopLayer,
+    wind: LoopLayer,
+    whistle: LoopLayer,
+    birds: LoopLayer,
+    bar: LoopLayer,
+    club: LoopLayer,
+}
+impl AmbLoops {
+    fn new() -> Option<Self> {
+        Some(Self {
+            hum: LoopLayer::new("amb_hum")?,
+            traffic: LoopLayer::new("amb_traffic")?,
+            water: LoopLayer::new("amb_water")?,
+            rain: LoopLayer::new("amb_rain")?,
+            rain_heavy: LoopLayer::new("amb_rain_heavy")?,
+            wind: LoopLayer::new("amb_wind")?,
+            whistle: LoopLayer::new("amb_whistle")?,
+            birds: LoopLayer::new("amb_birds")?,
+            bar: LoopLayer::new("amb_bar")?,
+            club: LoopLayer::new("amb_club")?,
+        })
+    }
+    fn layers(&mut self) -> [&mut LoopLayer; 10] {
+        [
+            &mut self.hum,
+            &mut self.traffic,
+            &mut self.water,
+            &mut self.rain,
+            &mut self.rain_heavy,
+            &mut self.wind,
+            &mut self.whistle,
+            &mut self.birds,
+            &mut self.bar,
+            &mut self.club,
+        ]
+    }
 }
 
 pub struct Synth {
@@ -595,6 +654,7 @@ impl Synth {
             siren: Osc::new(Wave::Triangle, 440.),
             siren_g: Smooth::new(0.),
             siren_loop: LoopLayer::new("siren"),
+            loops: AmbLoops::new(),
             next_chirp: 0.,
             drops: 0.,
             last: 0.,
@@ -1088,6 +1148,56 @@ impl Synth {
                 .freq
                 .set(if m.siren_high { 585. } else { 440. }, 0.02, sr);
         }
+        let sampled = self.use_samples && a.loops.is_some();
+        if let Some(l) = &mut a.loops {
+            if sampled {
+                for x in [
+                    &mut a.hum,
+                    &mut a.traffic,
+                    &mut a.water,
+                    &mut a.rain,
+                    &mut a.rain_low,
+                    &mut a.wind,
+                    &mut a.whistle,
+                ] {
+                    x.gain.set(0., 0.6, sr);
+                }
+                for b in &mut a.babble {
+                    b.gain.set(0., 0.1, sr);
+                }
+                let g = m.gust as f32;
+                l.hum.set(AMB_HUM * m.hum as f32, 1., 0.6, sr);
+                l.traffic.set(AMB_TRAFFIC * m.traffic as f32, 1., 0.6, sr);
+                l.water.set(AMB_WATER * m.water as f32, 1., 0.6, sr);
+                l.rain.set(AMB_RAIN * rain.min(1.) as f32, 1., 0.6, sr);
+                l.rain_heavy
+                    .set(AMB_RAIN_HEAVY * (rain - 0.6).max(0.) as f32, 1., 0.6, sr);
+                // Böen: Wind lauter und heller (schneller abgespielt), ab mittleren Böen pfeift es
+                l.wind.set(
+                    AMB_WIND * m.wind as f32 * (0.8 + 0.4 * g),
+                    0.9 + 0.25 * g,
+                    0.5,
+                    sr,
+                );
+                l.whistle.set(
+                    AMB_WHISTLE * (m.wind * (m.gust - 0.35).max(0.)) as f32,
+                    0.9 + 0.3 * g,
+                    0.4,
+                    sr,
+                );
+                l.birds.set(AMB_BIRDS * m.birds.min(1.) as f32, 1., 0.6, sr);
+                l.bar.set(AMB_BAR * m.bar as f32, 1., 0.3, sr);
+                l.club.set(AMB_CLUB * m.music as f32, 1., 0.3, sr);
+                a.bar_pan.set((m.bar_pan * 0.7) as f32, 0.3, sr);
+                a.last = self.t;
+                self.muffle_f
+                    .set(18000. * 0.04f32.powf(m.muffle as f32), 0.3, sr);
+                return;
+            }
+            for x in l.layers() {
+                x.gain.set(0., 0.3, sr);
+            }
+        }
         // Regentropfen auf Blech, Pfützen und Blättern (audio.js: je Viertelsekunde bis 22 Tropfen)
         let since = (self.t - a.last).clamp(0., 0.5);
         a.last = self.t;
@@ -1529,6 +1639,8 @@ impl Synth {
             }
             Sfx::Carjack if self.sample(CARJACK, 1., M) => {}
             Sfx::Carjack => self.tone(700., 0.3, Saw, 0.05, 0., 400., 0., M),
+            Sfx::Thunder(loud, near)
+                if self.sample(if near { THUNDER_NEAR } else { THUNDER_FAR }, loud, M) => {}
             Sfx::Thunder(loud, near) => {
                 let dur = if near { 5.5 } else { 7. + self.rng.unit() * 3. };
                 if near {
@@ -1700,10 +1812,26 @@ impl Synth {
                 + a.rumble.next(sr, block)
                 + a.siren.next(sr, 0.) * a.siren_g.tick()
                 + a.siren_loop.as_mut().map_or(0., |l| l.next(sr));
+            let (mut bab_l, mut music_l) = (0., 0.);
+            let amb = if let Some(l) = &mut a.loops {
+                bab_l = l.bar.next(sr);
+                music_l = l.club.next(sr);
+                amb + l.hum.next(sr)
+                    + l.traffic.next(sr)
+                    + l.water.next(sr)
+                    + l.rain.next(sr)
+                    + l.rain_heavy.next(sr)
+                    + l.wind.next(sr)
+                    + l.whistle.next(sr)
+                    + l.birds.next(sr)
+            } else {
+                amb
+            };
             let c = std::f32::consts::FRAC_1_SQRT_2;
             ol += amb * c;
             or += amb * c;
-            let bab: f32 = a.babble.iter_mut().map(|b| b.next(sr, block)).sum();
+            let bab: f32 =
+                a.babble.iter_mut().map(|b| b.next(sr, block)).sum::<f32>() + bab_l + music_l;
             let (bl, br) = pan(a.bar_pan.tick());
             ol += bab * bl;
             or += bab * br;
@@ -2207,6 +2335,77 @@ mod tests {
             }
         }
         assert!(level(true, base, 0.) < 1e-5, "still ohne Reifen");
+        assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
+    }
+
+    /// Umgebung und Donner aus Aufnahmen: je Ebene etwa so laut wie die Synthese (Faktor 1,2), still ohne
+    /// Steuergröße.
+    #[test]
+    fn ambience_loops_match_the_synth_layers() {
+        let level = |samples: bool, m: Mix| {
+            // wie im Spiel: der Mix kommt mit jedem Bild (Zwitschern, Lachen, Club-Takt werden dabei geplant)
+            let mut s = Synth::new(SR);
+            s.use_samples = samples;
+            let mut out = Vec::new();
+            for i in 0..110 {
+                s.apply(&Frame {
+                    ambience: m.clone(),
+                    ..Default::default()
+                });
+                let x = channel(&render(&mut s, 0.05), 0);
+                if i >= 30 {
+                    out.extend(x);
+                }
+            }
+            rms(&out)
+        };
+        let z = Mix::default();
+        let cases = [
+            ("hum", Mix { hum: 1., ..z }),
+            ("traffic", Mix { traffic: 1., ..z }),
+            ("water", Mix { water: 1., ..z }),
+            ("rain", Mix { rain: 1., ..z }),
+            ("rain_heavy", Mix { rain: 1.6, ..z }),
+            ("wind", Mix { wind: 1., ..z }),
+            (
+                "gusts",
+                Mix {
+                    wind: 1.,
+                    gust: 1.,
+                    ..z
+                },
+            ),
+            ("birds", Mix { birds: 1., ..z }),
+            ("bar", Mix { bar: 1., ..z }),
+            ("club", Mix { music: 1., ..z }),
+        ];
+        let mut bad = Vec::new();
+        for (name, m) in cases {
+            let (syn, smp) = (level(false, m.clone()), level(true, m));
+            let target = syn * 1.2;
+            println!("AMB {name:10} synth {syn:.4} sample {smp:.4} ziel {target:.4}");
+            if !(0.8..=1.25).contains(&(smp / target)) {
+                bad.push(format!("{name}: {smp:.4} statt {target:.4}"));
+            }
+        }
+        assert!(level(true, z.clone()) < 1e-5, "still ohne Umgebung");
+        // Donner: Effektivwert über 6 s
+        for near in [true, false] {
+            let th = |samples: bool| {
+                let mut s = Synth::new(SR);
+                s.use_samples = samples;
+                s.play(Sfx::Thunder(1., near));
+                rms(&channel(&render(&mut s, 6.), 0))
+            };
+            let (syn, smp) = (th(false), th(true));
+            println!("AMB thunder {near} synth {syn:.4} sample {smp:.4}");
+            if !(0.8..=1.25).contains(&(smp / (syn * 1.2))) {
+                bad.push(format!(
+                    "Donner nah={near}: {smp:.4} statt {:.4}",
+                    syn * 1.2
+                ));
+            }
+        }
         assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
     }
 }

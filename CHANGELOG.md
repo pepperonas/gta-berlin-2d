@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Stadt und Wetter aus echten Aufnahmen (Freesound, CC0) – Stadtbrummen, Verkehr, Wasser an der
+  Kaimauer, Regen und Starkregen, Wind mit pfeifenden Böen, Vögel, Kneipengemurmel, Club-Bass durch die Wand und
+  echter Donner (nah mit Krachen, fern als Grollen).
+
 - Native Fassung: Reifen und Fahrtwind aus echten Aufnahmen – Abrollen auf Asphalt, Kopfsteinpflaster,
   Schotter/Gras (vorher stumm), nasse Straße, Schnee, Rutschen, Reifenquietschen (im Drift tiefer), Fahrtwind und
   Regen aufs Autodach; Tempo der Schleifen folgt der Geschwindigkeit (Freesound, CC0/CC BY).

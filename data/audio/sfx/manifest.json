@@ -2,6 +2,76 @@
   "_hinweis": "Erzeugt von tools/audio/build_sfx.py aus tools/audio/sfx_recipes.json – nicht von Hand ändern.",
   "samplerate": 48000,
   "klaenge": {
+    "amb_bar": {
+      "zweck": "Kneipe: Stimmen, Gläser, Lachen (Schleife)",
+      "dateien": [
+        "amb_bar_1.wav"
+      ],
+      "quelle": "fs_641622"
+    },
+    "amb_birds": {
+      "zweck": "Vögel in Büschen und Bäumen (Schleife)",
+      "dateien": [
+        "amb_birds_1.wav"
+      ],
+      "quelle": "fs_405421"
+    },
+    "amb_club": {
+      "zweck": "Club-Bass durch die Wand (Schleife)",
+      "dateien": [
+        "amb_club_1.wav"
+      ],
+      "quelle": "fs_870504"
+    },
+    "amb_hum": {
+      "zweck": "Stadtbrummen in der Ferne (Schleife)",
+      "dateien": [
+        "amb_hum_1.wav"
+      ],
+      "quelle": "fs_495866"
+    },
+    "amb_rain": {
+      "zweck": "Regen in der Stadt (Schleife)",
+      "dateien": [
+        "amb_rain_1.wav"
+      ],
+      "quelle": "fs_581148"
+    },
+    "amb_rain_heavy": {
+      "zweck": "Starkregen (Schleife)",
+      "dateien": [
+        "amb_rain_heavy_1.wav"
+      ],
+      "quelle": "fs_768870"
+    },
+    "amb_traffic": {
+      "zweck": "Straßenverkehr (Schleife)",
+      "dateien": [
+        "amb_traffic_1.wav"
+      ],
+      "quelle": "fs_700948"
+    },
+    "amb_water": {
+      "zweck": "Wasser an der Kaimauer (Schleife)",
+      "dateien": [
+        "amb_water_1.wav"
+      ],
+      "quelle": "fs_838025"
+    },
+    "amb_whistle": {
+      "zweck": "Böen pfeifen an Kanten (Schleife)",
+      "dateien": [
+        "amb_whistle_1.wav"
+      ],
+      "quelle": "fs_567356"
+    },
+    "amb_wind": {
+      "zweck": "Wind (Schleife)",
+      "dateien": [
+        "amb_wind_1.wav"
+      ],
+      "quelle": "fs_438876"
+    },
     "carjack": {
       "zweck": "Fahrer herausziehen",
       "dateien": [
@@ -257,6 +327,29 @@
       ],
       "quelle": "kenney_impact"
     },
+    "thunder_far": {
+      "zweck": "Donner fern: nur Grollen",
+      "dateien": [
+        "thunder_far_1.wav",
+        "thunder_far_2.wav"
+      ],
+      "quelle": "fs_712914",
+      "weitere_quellen": [
+        "fs_375999"
+      ]
+    },
+    "thunder_near": {
+      "zweck": "Donner nah: Krachen und Grollen",
+      "dateien": [
+        "thunder_near_1.wav",
+        "thunder_near_2.wav",
+        "thunder_near_3.wav"
+      ],
+      "quelle": "fs_760212",
+      "weitere_quellen": [
+        "fs_375999"
+      ]
+    },
     "tick": {
       "zweck": "Countdown-Tick",
       "dateien": [
@@ -511,6 +604,84 @@
       "seite": "https://freesound.org/people/Nox_Sound/sounds/535869/",
       "lizenz": "CC0 1.0",
       "urheber": "Nox_Sound"
+    },
+    "fs_495866": {
+      "titel": "City Ambience Distant Stereo.wav",
+      "seite": "https://freesound.org/people/Yakobb1/sounds/495866/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Yakobb1"
+    },
+    "fs_700948": {
+      "titel": "Background traffic noise",
+      "seite": "https://freesound.org/people/Froey_/sounds/700948/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Froey_"
+    },
+    "fs_838025": {
+      "titel": "bubble lapping  wave on concrete pier",
+      "seite": "https://freesound.org/people/bruno.auzet/sounds/838025/",
+      "lizenz": "CC0 1.0",
+      "urheber": "bruno.auzet"
+    },
+    "fs_581148": {
+      "titel": "City Rain Dark.wav",
+      "seite": "https://freesound.org/people/szegvari/sounds/581148/",
+      "lizenz": "CC0 1.0",
+      "urheber": "szegvari"
+    },
+    "fs_768870": {
+      "titel": "heavy_rain_outside",
+      "seite": "https://freesound.org/people/Gustavo_C/sounds/768870/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Gustavo_C"
+    },
+    "fs_438876": {
+      "titel": "G56-21-Winter Wind.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/438876/",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_567356": {
+      "titel": "200509 Wind, window, cold gusts, moan, whistle, 1pm.wav",
+      "seite": "https://freesound.org/people/TRP/sounds/567356/",
+      "lizenz": "CC0 1.0",
+      "urheber": "TRP"
+    },
+    "fs_405421": {
+      "titel": "Birds Chirping Bush Urban.mp3",
+      "seite": "https://freesound.org/people/logancircle2/sounds/405421/",
+      "lizenz": "CC0 1.0",
+      "urheber": "logancircle2"
+    },
+    "fs_641622": {
+      "titel": "Bar room background 2.wav",
+      "seite": "https://freesound.org/people/itinerantmonk108/sounds/641622/",
+      "lizenz": "CC0 1.0",
+      "urheber": "itinerantmonk108"
+    },
+    "fs_870504": {
+      "titel": "Music, Bass Thumps Through Wall",
+      "seite": "https://freesound.org/people/CHallSmith/sounds/870504/",
+      "lizenz": "CC0 1.0",
+      "urheber": "CHallSmith"
+    },
+    "fs_760212": {
+      "titel": "Thunder Clap And Rumble #5",
+      "seite": "https://freesound.org/people/Kinoton/sounds/760212/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kinoton"
+    },
+    "fs_712914": {
+      "titel": "distant rumbling thunderstorm, ambience",
+      "seite": "https://freesound.org/people/greyfeather/sounds/712914/",
+      "lizenz": "CC0 1.0",
+      "urheber": "greyfeather"
+    },
+    "fs_375999": {
+      "titel": "Some_Thunders.flac",
+      "seite": "https://freesound.org/people/Samot_Ekschotz/sounds/375999/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Samot_Ekschotz"
     }
   }
 }

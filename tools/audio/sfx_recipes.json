@@ -248,6 +248,110 @@
       "sha256": "05b9e1dac97508ff4858301dc877a83b1b3c9ed4e0942535247c9aefb570d459",
       "lizenz": "CC0 1.0",
       "urheber": "Nox_Sound"
+    },
+    "fs_495866": {
+      "freesound": 495866,
+      "titel": "City Ambience Distant Stereo.wav",
+      "seite": "https://freesound.org/people/Yakobb1/sounds/495866/",
+      "sha256": "43ae9e71ca9938824fa785209d57f76dd02347ed85c0349bd10e610d1f70c0ef",
+      "lizenz": "CC0 1.0",
+      "urheber": "Yakobb1"
+    },
+    "fs_700948": {
+      "freesound": 700948,
+      "titel": "Background traffic noise",
+      "seite": "https://freesound.org/people/Froey_/sounds/700948/",
+      "sha256": "e381a863999886cc8c2d62019a40eb83b480c240072cda98d53a65bde9439a27",
+      "lizenz": "CC0 1.0",
+      "urheber": "Froey_"
+    },
+    "fs_838025": {
+      "freesound": 838025,
+      "titel": "bubble lapping  wave on concrete pier",
+      "seite": "https://freesound.org/people/bruno.auzet/sounds/838025/",
+      "sha256": "5c13d3406ca835c72fed0d1497a527aa1cf9f1ca266cff9990f4f10fbc36f83f",
+      "lizenz": "CC0 1.0",
+      "urheber": "bruno.auzet"
+    },
+    "fs_581148": {
+      "freesound": 581148,
+      "titel": "City Rain Dark.wav",
+      "seite": "https://freesound.org/people/szegvari/sounds/581148/",
+      "sha256": "78ccd1135a46cdd3e5a0121551c134536006a401d92db7042895296a9a6d1c03",
+      "lizenz": "CC0 1.0",
+      "urheber": "szegvari"
+    },
+    "fs_768870": {
+      "freesound": 768870,
+      "titel": "heavy_rain_outside",
+      "seite": "https://freesound.org/people/Gustavo_C/sounds/768870/",
+      "sha256": "40388ce26c47c9dea19c8da5e7cd7db63426154c6604914c56d2ab064e0b5edc",
+      "lizenz": "CC0 1.0",
+      "urheber": "Gustavo_C"
+    },
+    "fs_438876": {
+      "freesound": 438876,
+      "titel": "G56-21-Winter Wind.wav",
+      "seite": "https://freesound.org/people/craigsmith/sounds/438876/",
+      "sha256": "b673a3d53527488188bb0cec382759d492611d0bec06e6cf04ef0f23573627cd",
+      "lizenz": "CC0 1.0",
+      "urheber": "craigsmith"
+    },
+    "fs_567356": {
+      "freesound": 567356,
+      "titel": "200509 Wind, window, cold gusts, moan, whistle, 1pm.wav",
+      "seite": "https://freesound.org/people/TRP/sounds/567356/",
+      "sha256": "1259f59b467b705fec2aaa3d566d6c5caef7a02ef90bf27bc88871643e5b3486",
+      "lizenz": "CC0 1.0",
+      "urheber": "TRP"
+    },
+    "fs_405421": {
+      "freesound": 405421,
+      "titel": "Birds Chirping Bush Urban.mp3",
+      "seite": "https://freesound.org/people/logancircle2/sounds/405421/",
+      "sha256": "824a6cfe230775c295aec498af13b9f60f2710fcbc6033708f0ab8a36ead28e2",
+      "lizenz": "CC0 1.0",
+      "urheber": "logancircle2"
+    },
+    "fs_641622": {
+      "freesound": 641622,
+      "titel": "Bar room background 2.wav",
+      "seite": "https://freesound.org/people/itinerantmonk108/sounds/641622/",
+      "sha256": "5d7595a304b78a92220cfdaaa57f3d8cc081de98deff8915e26e113007a93a8f",
+      "lizenz": "CC0 1.0",
+      "urheber": "itinerantmonk108"
+    },
+    "fs_870504": {
+      "freesound": 870504,
+      "titel": "Music, Bass Thumps Through Wall",
+      "seite": "https://freesound.org/people/CHallSmith/sounds/870504/",
+      "sha256": "946816881096ad50687001251847436792e325d116dbdbbe398750982e2892f9",
+      "lizenz": "CC0 1.0",
+      "urheber": "CHallSmith"
+    },
+    "fs_760212": {
+      "freesound": 760212,
+      "titel": "Thunder Clap And Rumble #5",
+      "seite": "https://freesound.org/people/Kinoton/sounds/760212/",
+      "sha256": "00137ed917bf775bd86f6bcea6066bd97ff957bbe4c0cbe1aad3ce612e47baba",
+      "lizenz": "CC0 1.0",
+      "urheber": "Kinoton"
+    },
+    "fs_712914": {
+      "freesound": 712914,
+      "titel": "distant rumbling thunderstorm, ambience",
+      "seite": "https://freesound.org/people/greyfeather/sounds/712914/",
+      "sha256": "c69f95d7dcce3c517bc486cb4c5bfe8f1f7447c4b9df4e3bd56ce20a769650b5",
+      "lizenz": "CC0 1.0",
+      "urheber": "greyfeather"
+    },
+    "fs_375999": {
+      "freesound": 375999,
+      "titel": "Some_Thunders.flac",
+      "seite": "https://freesound.org/people/Samot_Ekschotz/sounds/375999/",
+      "sha256": "6b372ca7b949f935426a8319c29d8b38eb8a823d6ae70c30d0fea709f3380169",
+      "lizenz": "CC0 1.0",
+      "urheber": "Samot_Ekschotz"
     }
   },
   "klaenge": {
@@ -805,6 +909,252 @@
       "laenge_s": 6,
       "schleife_blende_s": 0.3,
       "hochpass_hz": 60
+    },
+    "amb_hum": {
+      "zweck": "Stadtbrummen in der Ferne (Schleife)",
+      "quelle": "fs_495866",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_495866",
+            "datei": "*",
+            "at": 0,
+            "von_s": 144.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_traffic": {
+      "zweck": "Straßenverkehr (Schleife)",
+      "quelle": "fs_700948",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_700948",
+            "datei": "*",
+            "at": 0,
+            "von_s": 6.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_water": {
+      "zweck": "Wasser an der Kaimauer (Schleife)",
+      "quelle": "fs_838025",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_838025",
+            "datei": "*",
+            "at": 0,
+            "von_s": 29.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_rain": {
+      "zweck": "Regen in der Stadt (Schleife)",
+      "quelle": "fs_581148",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_581148",
+            "datei": "*",
+            "at": 0,
+            "von_s": 86.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_rain_heavy": {
+      "zweck": "Starkregen (Schleife)",
+      "quelle": "fs_768870",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_768870",
+            "datei": "*",
+            "at": 0,
+            "von_s": 6.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_wind": {
+      "zweck": "Wind (Schleife)",
+      "quelle": "fs_438876",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_438876",
+            "datei": "*",
+            "at": 0,
+            "von_s": 13.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 30
+    },
+    "amb_whistle": {
+      "zweck": "Böen pfeifen an Kanten (Schleife)",
+      "quelle": "fs_567356",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_567356",
+            "datei": "*",
+            "at": 0,
+            "von_s": 4.5
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 200
+    },
+    "amb_birds": {
+      "zweck": "Vögel in Büschen und Bäumen (Schleife)",
+      "quelle": "fs_405421",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_405421",
+            "datei": "*",
+            "at": 0,
+            "von_s": 40.5
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 300
+    },
+    "amb_bar": {
+      "zweck": "Kneipe: Stimmen, Gläser, Lachen (Schleife)",
+      "quelle": "fs_641622",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_641622",
+            "datei": "*",
+            "at": 0,
+            "von_s": 57.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 80
+    },
+    "amb_club": {
+      "zweck": "Club-Bass durch die Wand (Schleife)",
+      "quelle": "fs_870504",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_870504",
+            "datei": "*",
+            "at": 0,
+            "von_s": 63.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.5,
+      "hochpass_hz": 20
+    },
+    "thunder_near": {
+      "zweck": "Donner nah: Krachen und Grollen",
+      "quelle": "fs_760212",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_760212",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.4,
+            "bis_s": 12.4
+          }
+        ],
+        [
+          {
+            "quelle": "fs_375999",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.6,
+            "bis_s": 7.2
+          }
+        ],
+        [
+          {
+            "quelle": "fs_375999",
+            "datei": "*",
+            "at": 0,
+            "von_s": 12.3,
+            "bis_s": 24.2
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 12,
+      "fade_s": 2.5,
+      "hochpass_hz": 25
+    },
+    "thunder_far": {
+      "zweck": "Donner fern: nur Grollen",
+      "quelle": "fs_712914",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_712914",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0,
+            "bis_s": 6.3
+          }
+        ],
+        [
+          {
+            "quelle": "fs_375999",
+            "datei": "*",
+            "at": 0,
+            "von_s": 7.1,
+            "bis_s": 12.4
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 8,
+      "fade_s": 2.0,
+      "hochpass_hz": 25,
+      "tiefpass_hz": 500
     }
   }
 }

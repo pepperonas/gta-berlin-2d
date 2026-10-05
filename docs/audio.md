@@ -339,3 +339,27 @@ Geschwindigkeit, Quietschen im Drift bis 30 % tiefer (wie die Synthese), stille 
 
 **Falle:** m4a lässt sich nicht über eine Pipe dekodieren (ffmpeg braucht Sprünge) – das ergab still eine leere
 Kopfstein-Schleife. Das Build-Skript dekodiert jetzt über eine Zwischendatei und bricht bei stummen Ergebnissen ab.
+
+### Phase 4: Umgebung und Wetter (alle CC0)
+
+| Ebene (`Mix`) | Freesound-Quelle |
+|---|---|
+| Stadtbrummen (`hum`) | Yakobb1 „City Ambience Distant Stereo“ |
+| Verkehr (`traffic`) | Froey_ „Background traffic noise“ |
+| Wasser (`water`) | bruno.auzet „bubble lapping wave on concrete pier“ |
+| Regen / Starkregen (`rain`, ab 0,6 zusätzlich) | szegvari „City Rain Dark“ / Gustavo_C „heavy_rain_outside“ |
+| Wind / Pfeifen bei Böen (`wind`, `gust`) | craigsmith „G56-21-Winter Wind“ / TRP „Wind, window, cold gusts, moan, whistle“ |
+| Vögel (`birds`) | logancircle2 „Birds Chirping Bush Urban“ |
+| Kneipe (`bar`, mit Richtung) | itinerantmonk108 „Bar room background 2“ |
+| Club (`music`, mit Richtung) | CHallSmith „Music, Bass Thumps Through Wall“ |
+| Donner nah | Kinoton „Thunder Clap And Rumble #5“, Samot_Ekschotz „Some_Thunders“ (zwei der drei Donner) |
+| Donner fern (Tiefpass 500 Hz) | greyfeather „distant rumbling thunderstorm“, Samot_Ekschotz (der mittlere Donner) |
+
+Schleifen 20 s mit 0,5 s Überblendung, je das stetigste Stück der Aufnahme; bei Vögeln war das stetigste Stück
+der ersten Wahl fast still (−65 dB) – dort zählt der Pegel, nicht die Stetigkeit. Mit Aufnahmen entfallen die
+synthetischen Einzelereignisse (Zwitschern, Regentropfen, Lachen, Gläser, Club-Kick): die Schleifen enthalten sie.
+Böen machen den Wind lauter und heller (Tempo 0,9–1,15) und lassen ab mittlerer Stärke das Pfeifen einsetzen.
+
+**Pegel:** gegen die Synthese ×1,2, gemessen wie im Spiel (Mix bei jedem Bild angewendet – die Synthese plant
+Zwitschern und Beats pro Bild, ein einmaliges `apply` ergab dort 0). Regen und Starkregen sowie Wind und Pfeifen
+überlagern sich und sind gemeinsam aufgelöst (Test `ambience_loops_match_the_synth_layers`).
