@@ -627,7 +627,7 @@ pub fn game_feel() -> &'static Feel {
         return f;
     }
     let mut w = FEEL_NOW.write().unwrap_or_else(|e| e.into_inner());
-    *w.get_or_insert_with(|| Box::leak(Box::new(Feel::game())))
+    w.get_or_insert_with(|| Box::leak(Box::new(Feel::game())))
 }
 
 /// Spielgefühl zur Laufzeit ersetzen (Entwickler-Anzeige mit Live-Reglern). Jede Änderung legt einen neuen,
