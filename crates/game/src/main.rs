@@ -418,12 +418,27 @@ fn check_simulation(root: &std::path::Path, seed: u32, secs: f64) -> Result<()> 
         berlin_sim::world::TRAFFIC_CARS,
         berlin_sim::world::TRAFFIC_PEDS,
     );
+    // Vergleich: `GTA_AI_LOD=0` lässt alle KI kinematisch fahren
+    if std::env::var("GTA_AI_LOD").is_ok_and(|v| v == "0") {
+        w.ai_full_radius = 0.;
+    }
     let load = t0.elapsed();
     let steps = (secs / DT).round() as usize;
     let t1 = std::time::Instant::now();
     let mut crashes = 0;
-    for _ in 0..steps {
+    // KI-Verkehr über die Zeit gemittelt (ein Schnappschuss am Ende hängt an der Ampelphase)
+    let (mut seen, mut rolling, mut speed_sum) = (0usize, 0usize, 0.);
+    for k in 0..steps {
         w.update(&Input::default(), DT);
+        if k as f64 * DT > 10. && k % 30 == 0 {
+            for c in w.cars.iter().filter(|c| c.driver == Some(Driver::Npc)) {
+                seen += 1;
+                speed_sum += c.speed();
+                if c.speed() > 20. {
+                    rolling += 1;
+                }
+            }
+        }
         crashes += w
             .events
             .iter()
@@ -440,8 +455,10 @@ fn check_simulation(root: &std::path::Path, seed: u32, secs: f64) -> Result<()> 
     let run = t1.elapsed();
     let npc = w.cars.iter().filter(|c| c.driver == Some(Driver::Npc));
     let moving = npc.clone().filter(|c| c.speed() > 20.).count();
+    let share = rolling as f64 * 100. / seen.max(1) as f64;
+    let mean = speed_sum * 0.36 / seen.max(1) as f64;
     println!(
-        "Simulation: {:.0} s Spielzeit in {:.2} s ({:.3} ms je Schritt), Laden {:.2} s · {} · {moving}/{} KI-Autos fahren · {crashes} Unfälle",
+        "Simulation: {:.0} s Spielzeit in {:.2} s ({:.3} ms je Schritt), Laden {:.2} s · {} · {moving}/{} KI-Autos fahren (im Mittel {share:.0} %, {mean:.0} km/h) · {crashes} Unfälle",
         secs,
         run.as_secs_f64(),
         run.as_secs_f64() * 1000. / steps as f64,

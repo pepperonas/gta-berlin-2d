@@ -2423,3 +2423,40 @@ fn handbrake_drift_on_the_map_and_a_crash_voids_it() {
     assert!(s.drift.score.crashed, "Aufprall erkannt");
     assert_eq!(s.drift.score.total, 0., "nichts verbucht");
 }
+
+/// Fahrphysik Phase 8: Physik-LOD – KI nahe am Spieler fährt mit voller Fahrphysik, weiter weg kinematisch.
+#[test]
+fn ai_near_the_player_runs_full_physics_far_ones_kinematic() {
+    let mut w = world(8);
+    run(&mut w, 600, idle());
+    let (px, py) = (w.player.x, w.player.y);
+    let r = berlin_sim::world::AI_FULL_RADIUS;
+    let ai: Vec<_> = w
+        .cars
+        .iter()
+        .filter(|c| c.ai.is_some() && !c.wrecked)
+        .collect();
+    let near: Vec<_> = ai
+        .iter()
+        .filter(|c| (c.x - px).hypot(c.y - py) < r * 0.9 && !c.kind_info().moto)
+        .collect();
+    let far: Vec<_> = ai
+        .iter()
+        .filter(|c| (c.x - px).hypot(c.y - py) > r * 1.1)
+        .collect();
+    eprintln!(
+        "LOD: {} KI, {} nah, {} fern",
+        ai.len(),
+        near.len(),
+        far.len()
+    );
+    assert!(!near.is_empty(), "KI in der Nähe");
+    assert!(
+        near.iter().all(|c| c.lod_full && c.phys.is_some()),
+        "nah: volle Fahrphysik"
+    );
+    assert!(far.iter().all(|c| !c.lod_full), "fern: kinematisch");
+    // KI fährt (Tempo > 0 bei den meisten)
+    let moving = ai.iter().filter(|c| c.speed() > 10.).count();
+    assert!(moving * 2 >= ai.len(), "{moving} von {} fahren", ai.len());
+}

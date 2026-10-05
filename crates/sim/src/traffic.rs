@@ -816,6 +816,13 @@ fn zebra_ahead(car: &Car, cx: &mut Ctx) -> f64 {
 // --- Fahren --------------------------------------------------------------------------------------
 
 /// Ein KI-Schritt: setzt `car.controls` (und hält ein stehendes Auto fest).
+/// Querbeschleunigung, mit der die KI Kurven fährt (in g, trocken), und das kleinste Kurventempo (px/s)
+pub const CORNER_G: f64 = 0.45;
+pub const CORNER_MIN: f64 = 30.;
+/// Fahrzeuge ab dieser Länge (px) holen in Kurven aus, höchstens so weit (px)
+pub const LONG_VEHICLE: f64 = 80.;
+pub const SWING_MAX: f64 = 18.;
+
 pub fn drive_ai(car: &mut Car, cx: &mut Ctx, dt: f64) {
     if car.wrecked {
         return;
@@ -900,8 +907,43 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
     let kb = tr.brake;
     target *= 0.6 + 0.4 * kb;
     let (mut x0, mut y0) = (px, py);
+    // Kurventempo aus der Krümmung der Route: v ≤ √(a_quer·R), vorausschauend angebremst – das Fahrzeug kann
+    // (wie in echt) nur so eng wenden, wie seine Reifen und das Wetter es zulassen
+    let a_lat = CORNER_G * 98.1 * tr.lat;
+    let mut prev_dir: Option<f64> = None;
+    let mut turn = 0.;
+    let mut turn_len = 0.;
+    // stärkste Krümmung (1/px, mit Richtung) kurz vor und hinter dem Zielpunkt – lange Fahrzeuge holen dort aus
+    let mut kappa_near: f64 = 0.;
+    let mut turn_sign = 1.;
     for (k, &(x1, y1)) in r.iter().enumerate().skip(ai.i + 1) {
         let l = (x1 - x0).hypot(y1 - y0);
+        if l > 0.5 {
+            let dir = (y1 - y0).atan2(x1 - x0);
+            if let Some(p) = prev_dir {
+                let d = wrap_angle(dir - p);
+                turn += d.abs();
+                if d.abs() > 1e-4 {
+                    turn_sign = d.signum();
+                }
+            }
+            turn_len += l;
+            prev_dir = Some(dir);
+            // Krümmung über ein gleitendes Stück von ~40 px
+            if turn_len > 40. {
+                let kappa = turn / turn_len;
+                if acc < look + 60. && kappa > kappa_near.abs() {
+                    kappa_near = kappa * turn_sign;
+                }
+                if kappa > 1e-3 {
+                    let v_c = (a_lat / kappa).sqrt().max(CORNER_MIN);
+                    let dist = (acc - 20f64).max(0.);
+                    target = target.min((v_c * v_c + 2. * 260. * kb * dist).sqrt());
+                }
+                turn = 0.;
+                turn_len = 0.;
+            }
+        }
         if !found && acc + l >= look {
             let u = (look - acc) / if l > 0. { l } else { 1. };
             aim_x = x0 + (x1 - x0) * u;
@@ -923,6 +965,18 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
         aim_x = x0;
         aim_y = y0;
     }
+    // Lange Fahrzeuge holen in Kurven aus: das Heck schneidet die Kurve um etwa L²/(2R), also zielt die Front um
+    // so viel nach außen (höchstens bis an den Spurrand)
+    let len = 2. * car.hw;
+    if len > LONG_VEHICLE && kappa_near.abs() > 1e-4 {
+        let wb = len * 0.6;
+        let off = (wb * wb * kappa_near.abs() / 2.).min(SWING_MAX);
+        // außen = entgegen der Kurvenrichtung (Spielwinkel im Uhrzeigersinn: rechts = +Normale)
+        let (nx, ny) = (-car.angle.sin(), car.angle.cos());
+        let side = -kappa_near.signum();
+        aim_x += nx * off * side;
+        aim_y += ny * off * side;
+    }
     let (dx, dy) = (aim_x - car.x, aim_y - car.y);
     let ctl = &mut car.controls;
     if ai.reverse_t > 0. {
@@ -935,6 +989,17 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
     }
     let diff = wrap_angle(dy.atan2(dx) - car.angle);
     ctl.steer = (diff * 2.4).clamp(-1., 1.);
+    // volle Fahrphysik (Physik-LOD): Lenkung ist ein Radwinkel, keine Gierrate – Pure Pursuit für das
+    // Einspurmodell: Krümmung 2·sin(Abweichung)/Vorausschau, Radwinkel atan(Radstand·Krümmung)
+    if car.lod_full
+        && let Some(v) = crate::car::vphys_vehicle(car)
+    {
+        let look_m = dx.hypot(dy).max(20.) / 10.;
+        let kappa = 2. * diff.sin() / look_m;
+        let delta = (v.wheelbase * kappa).atan();
+        let lim = crate::vphys::steer_limit(v, vf.abs() / 10.).max(1e-3);
+        car.controls.steer = (delta / lim).clamp(-1., 1.);
+    }
     if diff.abs() > 0.6 {
         target = target.min(55. * tr.lat);
     }

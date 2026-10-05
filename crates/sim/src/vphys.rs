@@ -21,6 +21,8 @@ pub const STEP: f64 = 1. / HZ;
 pub const FAST: f64 = 60.;
 /// m/s: Übergang kinematisch → dynamisch
 pub const KIN: [f64; 2] = [2., 5.];
+/// Tempo (m/s), über das die Seitenkräfte vom Stand an einblenden
+pub const LAT_FADE: [f64; 2] = [0.5, 3.];
 /// Lastabhängigkeit: mu(Fz) = mu0 · (1 − 0,1 · (Fz/Fz_nenn − 1))
 pub const LOAD_SENS: f64 = 0.1;
 /// ABS hält diesen Anteil des Haftmaximums, Traktionskontrolle ebenso
@@ -877,6 +879,13 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         let lat = cap_lat[i] * (1. - used * used).max(0.).sqrt() * lat_k;
         fy[i] = -lat * mf(alpha[i]);
     }
+    // Seitenkräfte blenden erst mit dem Rollen ein: ein stehendes Rad hat keinen Schräglauf (der Schräglaufwinkel
+    // rechnet mit einem Mindesttempo) – sonst bremste ein eingeschlagenes Vorderrad das Anfahren aus; darunter
+    // fährt das Auto ohnehin kinematisch
+    let lat_fade = smooth(LAT_FADE[0], LAT_FADE[1], speed);
+    for f in &mut fy {
+        *f *= lat_fade;
+    }
     // Längskräfte links/rechts: beim Bremsen (ABS je Rad) und mit Sperre teilt sich die Kraft nach der Haftung
     // der Räder auf, das offene Differential treibt beide gleich; der Unterschied dreht das Auto zur griffigeren
     // Seite
@@ -1104,6 +1113,28 @@ mod tests {
         let feel = Feel::simulation();
         for _ in 0..(secs * HZ) as usize {
             step(v, &feel, s, &inp, &Env::default(), STEP);
+        }
+    }
+
+    #[test]
+    fn pulls_away_with_full_steering_lock() {
+        // vom Stand mit voll eingeschlagener Lenkung anfahren (Abbiegen an der Kreuzung): ein stehendes Rad hat
+        // keinen Schräglauf, es darf nicht bremsen
+        let db = db();
+        for id in ["kompakt_benzin", "transporter_kasten", "stadtbus"] {
+            let v = db.get(id).unwrap();
+            let mut s = State::default();
+            run(
+                v,
+                &mut s,
+                Input {
+                    throttle: 0.6,
+                    steer: -0.9,
+                    ..Default::default()
+                },
+                2.,
+            );
+            assert!(s.vx > 1. && s.r < -0.1, "{id}: {} m/s, r {}", s.vx, s.r);
         }
     }
 

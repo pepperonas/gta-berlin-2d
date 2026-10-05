@@ -110,6 +110,8 @@ pub enum Click {
 /// Klick: an der Tür stehen (s), Doppelklick-Fenster (s), Annäherung über die Einsteigweite hinaus (px).
 pub const CLICK_DOOR: f64 = 0.35;
 pub const CLICK_NEAR_CAR: f64 = 30.;
+/// so lange ohne Vorankommen, dann plant der Klick-Laufweg neu (s)
+pub const CLICK_STALL: f64 = 0.6;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -134,6 +136,8 @@ pub struct Player {
     /// im U-Bahnhof (station.rs); nach dem Hinaufgehen nicht gleich wieder hinunter
     pub inside: Option<crate::station::Inside>,
     pub entry_guard: Option<(f64, f64)>,
+    /// Klick-Laufweg: Ort und Zeit ohne Vorankommen (steht vor einem Auto, das selbst wartet)
+    pub click_stall: (f64, f64, f64),
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -204,6 +208,8 @@ pub struct World {
     pub esp_full: bool,
     /// Tempobegrenzer schwerer Lkw (abschaltbar, wenn `feel.lkw_begrenzer_tunebar`)
     pub truck_limiter: bool,
+    /// Physik-LOD-Umkreis der KI (px; 0 = alle kinematisch)
+    pub ai_full_radius: f64,
     pub abs: bool,
     pub notice: Option<Notice>,
     /// Name und Technik nach dem Einsteigen (Auto-ID, Sekunden)
@@ -323,6 +329,7 @@ impl World {
                 ride: None,
                 inside: None,
                 entry_guard: None,
+                click_stall: (0., 0., 0.),
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -342,6 +349,7 @@ impl World {
             esp: true,
             esp_full: crate::vehdata::game_feel().esp_default == "voll",
             truck_limiter: true,
+            ai_full_radius: AI_FULL_RADIUS,
             abs: true,
             notice: None,
             veh_info: None,
@@ -1845,8 +1853,20 @@ impl World {
                     }
                     return out;
                 }
+                // kein Vorankommen (ein wartendes Auto steht im Weg und wartet seinerseits
+                // auf den Spieler): neu planen, stehende Autos sind dann Hindernis
+                let st = &mut self.player.click_stall;
+                if (px - st.0).hypot(py - st.1) > 4. {
+                    *st = (px, py, 0.);
+                } else {
+                    st.2 += dt;
+                }
+                let stalled = st.2 > CLICK_STALL;
+                if stalled {
+                    st.2 = 0.;
+                }
                 // Weg zum Auto (um Häuser herum), neu, wenn es weggefahren ist
-                if path.is_empty() || (cx - to.0).hypot(cy - to.1) > 30. {
+                if stalled || path.is_empty() || (cx - to.0).hypot(cy - to.1) > 30. {
                     path = walk(self, (cx, cy)).unwrap_or_default();
                     i = 1;
                     to = (cx, cy);
@@ -2954,7 +2974,13 @@ impl World {
                 let env = self.wheel_env(i, v);
                 self.cars[i].env = Some(Box::new(env));
             }
+            // Physik-LOD: KI im Umkreis des Spielers fährt mit voller Fahrphysik (vierrädrig, mit Datensatz)
+            let (px, py) = (self.player.x, self.player.y);
             let c = &mut self.cars[i];
+            c.lod_full = c.ai.is_some()
+                && !c.wrecked
+                && (c.x - px).hypot(c.y - py) < self.ai_full_radius
+                && crate::car::vphys_vehicle(c).is_some_and(|v| !v.two_wheel);
             let fallen_was = c.phys.as_ref().is_some_and(|s| s.fallen.is_some());
             let rolled_was = c.phys.as_ref().is_some_and(|s| s.rolled);
             let jack_was = c.phys.as_ref().is_some_and(|s| s.jackknifed);
@@ -3635,15 +3661,19 @@ fn update_service(
         return;
     }
     let v = c.speed();
+    let id = c.id;
     let Some(ai) = c.ai.as_mut() else { return };
     if ai.hold <= 0. {
         c.hazard = false;
         c.work = false;
     }
     ai.odo += v * dt;
-    let next = *ai
-        .next_stop
-        .get_or_insert_with(|| crate::fleet::next_stop_after(kind, rng.float()));
+    // wer neu in der Szene auftaucht, ist mitten auf seiner Tour: der Rest bis zum ersten Halt ist ein Bruchteil
+    // des üblichen Abstands (Restlebensdauer eines Erneuerungsprozesses), sonst hielte kaum ein Lieferwagen, bevor
+    // er außer Sicht ist
+    let next = *ai.next_stop.get_or_insert_with(|| {
+        crate::fleet::next_stop_after(kind, rng.float()) * crate::math::hash01(id as f64 * 1.37)
+    });
     if ai.hold > 0. || ai.odo < next || v > 160. {
         return;
     }
@@ -3723,6 +3753,10 @@ pub fn groove_risk(heading: f64, track: f64, wet: f64) -> f64 {
         0.
     }
 }
+
+/// Physik-LOD: KI-Fahrzeuge in diesem Umkreis (px, 150 m) fahren mit voller Fahrphysik, weiter weg kinematisch
+/// mit denselben Grenzen aus den Daten.
+pub const AI_FULL_RADIUS: f64 = 1500.;
 
 /// Kamera-Zoom im Auto nach Tempo (px/s): bis 330 px/s (~120 km/h) von 1 auf 0,72, darüber (wenn
 /// `kamera_zoom_nach_tempo`) weiter bis 0,45 bei 1000 px/s (~360 km/h), damit man bei Hypercar-Tempo noch sieht,

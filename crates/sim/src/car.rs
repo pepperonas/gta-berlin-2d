@@ -100,6 +100,8 @@ pub struct Car {
     pub esp_full: bool,
     /// Entwickler-Anzeige: live verstellter Datensatz für dieses Fahrzeug (statt der Spieldaten)
     pub tuned: Option<Box<crate::vehdata::Vehicle>>,
+    /// KI nahe am Spieler: volle Fahrphysik statt des kinematischen Modells (Physik-LOD, `World::AI_FULL_RADIUS`)
+    pub lod_full: bool,
     /// zuletzt gefahrener Untergrund je Rad (Anzeige)
     pub env_seen: Option<Box<crate::vphys::Env>>,
     /// Lkw-Begrenzer abgeschaltet (Konsole `begrenzer aus`)
@@ -166,6 +168,7 @@ impl Car {
             esp: true,
             esp_full: false,
             tuned: None,
+            lod_full: false,
             env_seen: None,
             no_limiter: false,
             abs: true,
@@ -275,7 +278,7 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     let info = car.kind_info();
     // Der Spieler fährt mit echter Fahrdynamik; Verkehr, geparkte und geschobene Autos sowie Räder arcadig.
     // Vierrädrige Fahrzeuge mit Datensatz fahren über den Kern `vphys`, Zweiräder bis Phase 5 über `dynamics`.
-    if car.driver == Some(Driver::Player) && !car.wrecked {
+    if (car.driver == Some(Driver::Player) || car.lod_full) && !car.wrecked {
         let tuned = car.tuned.take();
         if let Some(v) = tuned.as_deref().or_else(|| vphys_vehicle(car)) {
             step_vphys(car, v, ctl, ground.unwrap_or(Ground::Road), dt);
@@ -322,10 +325,21 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     let mut vf = car.vx * c + car.vy * s;
     let mut vr = -car.vx * s + car.vy * c;
     let pw = info.power;
-    let top = info.top.unwrap_or(MAX_SPEED * (0.55 + 0.45 * pw)) * surf.top;
+    // KI und geschobene Autos: Grenzen aus den Fahrzeugdaten (ein KI-Bus fährt wie ein Bus), ohne Datensatz die
+    // alten Spielwerte
+    let lim = data_vehicle(car).map(Limits::of);
+    let top = lim.map_or(info.top.unwrap_or(MAX_SPEED * (0.55 + 0.45 * pw)), |l| {
+        l.top
+    }) * surf.top;
     if ctl.throttle > 0. && vf < top {
-        let t = if vf > 0. { 1. - (vf / top) * 0.55 } else { 1.4 };
-        vf += ACCEL * pw * info.accel * ctl.throttle * t * tr.accel * dt;
+        let a = match lim {
+            Some(l) => l.accel(vf.max(0.)),
+            None => {
+                let t = if vf > 0. { 1. - (vf / top) * 0.55 } else { 1.4 };
+                ACCEL * pw * info.accel * t
+            }
+        };
+        vf += a * ctl.throttle * tr.accel * dt;
         car.spin = if ctl.throttle > 0.8 && tr.accel < 0.7 && vf < 150. {
             1.
         } else {
@@ -334,7 +348,8 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     }
     if ctl.brake > 0. {
         if vf > 5. {
-            vf = (vf - BRAKE * ctl.brake * k_brake * dt).max(0.);
+            let b = lim.map_or(BRAKE, |l| l.brake);
+            vf = (vf - b * ctl.brake * k_brake * dt).max(0.);
         } else if vf > -(if info.top.is_some() { 22. } else { MAX_REVERSE }) {
             vf -= ACCEL * 0.6 * ctl.brake * dt;
         }
@@ -367,6 +382,13 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
         * k_steer
         + if aq { car.aqua_yaw } else { 0. };
     car.ang_vel += (target - car.ang_vel) * (12. * dt).min(1.);
+    // Querbeschleunigung höchstens μ·g, gemindert um das Wetter
+    if let Some(l) = lim
+        && av > 20.
+    {
+        let cap = l.lat * k_lat.min(1.) / av;
+        car.ang_vel = car.ang_vel.clamp(-cap, cap);
+    }
     car.angle += car.ang_vel * dt;
     (s, c) = car.angle.sin_cos();
     car.vx = vf * c - vr * s;
@@ -402,6 +424,48 @@ pub fn trailer_pose(car: &Car) -> Option<(f64, f64, f64, f64, f64)> {
     ))
 }
 
+/// Grenzen des kinematischen KI-Modells aus den Fahrzeugdaten (Spielsystem: px, px/s, px/s²).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Limits {
+    /// Höchsttempo
+    pub top: f64,
+    /// Antriebskraft je Masse bei Stillstand (Traktion) und Leistung je Masse (W/kg, für P/(m·v))
+    pub traction: f64,
+    pub power: f64,
+    /// Verzögerung bei Vollbremsung, größte Querbeschleunigung (trocken)
+    pub brake: f64,
+    pub lat: f64,
+}
+impl Limits {
+    pub fn of(v: &crate::vehdata::Vehicle) -> Self {
+        use crate::vehdata::{Drive, G};
+        let kmh = v
+            .targets
+            .get("vmax")
+            .copied()
+            .or(v.limiter.map(|l| l * 3.6))
+            .unwrap_or(200.);
+        let (m, _) = v.loaded(0.);
+        let driven = match v.drive {
+            Drive::Fwd => v.front,
+            Drive::Rwd => 1. - v.front,
+            Drive::Awd => 1.,
+        };
+        Self {
+            top: kmh / 3.6 * 10.,
+            traction: v.tire.mu * v.tire.mu_long * driven * G * 10.,
+            power: v.engine.watts * v.efficiency / m,
+            brake: v.brake.gain.min(v.tire.mu * v.tire.mu_long) * G * 10.,
+            lat: v.tire.mu * G * 10.,
+        }
+    }
+    /// Beschleunigung (px/s²) bei Tempo `vf` (px/s): Traktion, darüber Leistung durch Tempo.
+    pub fn accel(&self, vf: f64) -> f64 {
+        let v = (vf / 10.).max(1.);
+        self.traction.min(self.power / v * 10.)
+    }
+}
+
 /// Datensatz eines Fahrzeugs (auch für Wracks und KI; ohne Winterreifen).
 pub fn data_vehicle(car: &Car) -> Option<&'static crate::vehdata::Vehicle> {
     let id = match car.kind {
@@ -434,7 +498,17 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     use crate::vehdata::Esp;
     use crate::vphys::{Env, Ground as Road, Input, step};
     const PX: f64 = 10.;
-    let feel = crate::vehdata::game_feel();
+    // die Drift-Schicht gehört dem Spieler; KI fährt mit reiner Fahrphysik
+    let feel_ai;
+    let feel = if car.driver == Some(Driver::Player) {
+        crate::vehdata::game_feel()
+    } else {
+        feel_ai = crate::vehdata::Feel {
+            drift_layer: false,
+            ..crate::vehdata::game_feel().clone()
+        };
+        &feel_ai
+    };
     let surf = surface_of(ground);
     let tr = car.traction;
     let aq = car.aqua > 0.;
@@ -691,6 +765,24 @@ mod tests {
     }
 
     #[test]
+    fn ai_limits_come_from_the_vehicle_data() {
+        let db = crate::vehdata::shared();
+        let bus = Limits::of(db.get("stadtbus").unwrap());
+        let sport = Limits::of(db.get("sportwagen_s").unwrap());
+        // ein Bus beschleunigt und bremst wie ein Bus
+        assert!(
+            bus.accel(100.) < sport.accel(100.) * 0.4,
+            "{bus:?} {sport:?}"
+        );
+        assert!(bus.brake < sport.brake * 0.6);
+        assert!(bus.top < sport.top * 0.35);
+        // 80 km/h Begrenzer/Ziel → 222 px/s
+        assert!((bus.top - 80. / 3.6 * 10.).abs() < 1.);
+        // bei Tempo begrenzt die Leistung, im Stand die Traktion
+        assert!(sport.accel(0.) <= sport.traction + 1e-9 && sport.accel(800.) < sport.accel(100.));
+    }
+
+    #[test]
     fn grazing_a_wall_slides_along_it_head_on_stops() {
         assert!(crate::vehdata::game_feel().wall_slide);
         let hit = |deg: f64| {
@@ -747,8 +839,10 @@ mod tests {
         for _ in 0..120 {
             step_car(&mut c, 1. / 60., None);
         }
+        // Beschleunigung aus den Daten: Traktion bzw. Leistung (KI fährt wie das Fahrzeug, kein Arcade-Wert)
         let v = c.forward_speed();
-        assert!(v > 200. && v < MAX_SPEED, "{v}");
+        let lim = Limits::of(data_vehicle(&c).unwrap());
+        assert!(v > 50. && v < lim.accel(0.) * 2.05, "{v}");
         c.controls = Controls {
             brake: 1.,
             ..Default::default()
