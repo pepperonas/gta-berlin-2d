@@ -4,6 +4,8 @@ mod gputime;
 pub mod graphics;
 pub mod hud;
 mod lightpass;
+mod materials;
+pub use materials::MANIFEST as MATERIAL_MANIFEST;
 pub mod pad;
 mod renderer;
 mod scenepass;
@@ -58,6 +60,8 @@ pub struct Lighting {
     pub warmth: f32,
     /// Nebel 0…1,7 (`weather.fog`): dämpft das Fensterlicht (render.js `fogK`)
     pub fog: f32,
+    /// Nässe der Straßen 0…1 (`weather.wet`): dunklere, glänzende Bodenmaterialien
+    pub wet: f32,
 }
 impl Default for Lighting {
     /// 13 Uhr: Sonne im Süden, kurze Schatten nach Norden, volles Tageslicht.
@@ -74,6 +78,7 @@ impl Default for Lighting {
             minutes: 780.,
             warmth: 0.018,
             fog: 0.,
+            wet: 0.,
         }
     }
 }

@@ -21,3 +21,4 @@ tools/audio/.cache/
 
 # Grafik-Testszenen: verlustfreie Aufnahmen nur lokal (eingecheckt sind die WebP-Fassungen)
 docs/images/native/grafik/*/png/
+tools/gfx/.cache/

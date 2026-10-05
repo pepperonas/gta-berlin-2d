@@ -276,6 +276,28 @@ fn engine_credits() -> Vec<String> {
         .collect()
 }
 
+/// Bodentexturen aus dem Manifest von tools/gfx/build_materials.py: „Zweck: Vorlage – Urheber, Lizenz (Seite)“.
+fn material_credits() -> Vec<String> {
+    let man: serde_json::Value =
+        serde_json::from_str(berlin_engine::MATERIAL_MANIFEST).unwrap_or_default();
+    let Some(m) = man.get("materialien").and_then(|q| q.as_object()) else {
+        return Vec::new();
+    };
+    let s = |v: &serde_json::Value, k: &str| v[k].as_str().unwrap_or("").to_string();
+    m.values()
+        .map(|v| {
+            format!(
+                "Bodentextur {} ({}): {}, {} – {}",
+                s(v, "quelle"),
+                s(v, "zweck"),
+                s(v, "urheber"),
+                s(v, "lizenz"),
+                s(v, "seite").trim_start_matches("https://")
+            )
+        })
+        .collect()
+}
+
 fn license_blocks() -> Vec<Block> {
     let pk = packages();
     let mut out = vec![
@@ -301,6 +323,7 @@ fn license_blocks() -> Vec<Block> {
     ];
     out.extend(sfx_credits().into_iter().map(Block::Bullet));
     out.extend(engine_credits().into_iter().map(Block::Bullet));
+    out.extend(material_credits().into_iter().map(Block::Bullet));
     out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),
@@ -652,6 +675,23 @@ mod tests {
         s.chars().count() as f32 * size * 0.6
     }
 
+    #[test]
+    fn ground_textures_are_credited_with_license() {
+        let c = material_credits();
+        assert_eq!(c.len(), 5, "{c:?}");
+        assert!(
+            c.iter()
+                .all(|l| l.contains("CC0 1.0") && l.contains("ambientcg.com"))
+        );
+        let text: Vec<String> = license_blocks()
+            .iter()
+            .filter_map(|b| match b {
+                Block::Bullet(t) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(c.iter().all(|l| text.contains(l)), "im Lizenz-Reiter");
+    }
     #[test]
     fn sound_sources_are_credited_with_license() {
         let c = sfx_credits();

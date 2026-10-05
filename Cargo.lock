@@ -171,6 +171,7 @@ dependencies = [
  "glam",
  "png",
  "pollster",
+ "serde_json",
  "wgpu",
  "winit",
 ]

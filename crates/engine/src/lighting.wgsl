@@ -91,12 +91,20 @@ struct LightOut {
 
 // --- Auftragen: Vollbild-Dreieck in Tiefe 0,5 (Boden liegt dahinter, Dächer und Kronen davor) --------------
 struct FullOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> };
-@vertex fn full_vs(@builtin(vertex_index) i: u32) -> FullOut {
+fn full_tri(i: u32, depth: f32) -> FullOut {
     let p = vec2(f32((i << 1u) & 2u), f32(i & 2u));
     var out: FullOut;
-    out.position = vec4(p * 2.0 - 1.0, 0.5, 1.0);
+    out.position = vec4(p * 2.0 - 1.0, depth, 1.0);
     out.uv = vec2(p.x, 1.0 - p.y);
     return out;
+}
+@vertex fn full_vs(@builtin(vertex_index) i: u32) -> FullOut {
+    return full_tri(i, 0.5);
+}
+// Wie full_vs, aber ganz hinten (Tiefe 0,9999): mit Tiefentest „kleiner“ trifft es nur Stellen, an die noch nichts
+// gezeichnet wurde (Hintergrundboden nach den Kacheln).
+@vertex fn far_vs(@builtin(vertex_index) i: u32) -> FullOut {
+    return full_tri(i, 0.9999);
 }
 @fragment fn shadow_composite_fs(in: FullOut) -> @location(0) vec4<f32> {
     let m = textureSample(atlas, atlas_sampler, in.uv).r;

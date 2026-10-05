@@ -1,0 +1,96 @@
+{
+ "_hinweis": "Erzeugt von tools/gfx/build_materials.py – nicht von Hand ändern.",
+ "groesse": 512,
+ "materialien": {
+  "asphalt": {
+   "zweck": "Fahrbahn (Asphalt)",
+   "quelle": "Asphalt025C",
+   "seite": "https://ambientcg.com/view?id=Asphalt025C",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    43.48,
+    43.09,
+    40.51
+   ],
+   "hochpass_px": 6,
+   "sha256": "5a21213be4892b152c544ac20d2ee376fd6d332257ab4572920a459b9c4042e0"
+  },
+  "kopfstein": {
+   "zweck": "Kopfsteinpflaster (Granit)",
+   "quelle": "PavingStones046",
+   "seite": "https://ambientcg.com/view?id=PavingStones046",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    153.91,
+    155.55,
+    153.39
+   ],
+   "hochpass_px": 48,
+   "sha256": "a479a3e8db7eea8f3e931850ccd41c0f31b1b6fceee9cbd4ac519c8fef4c0024"
+  },
+  "platten": {
+   "zweck": "Gehwegplatten, Plätze, Brückenflächen",
+   "quelle": "Concrete010",
+   "seite": "https://ambientcg.com/view?id=Concrete010",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    138.7,
+    138.68,
+    139.3
+   ],
+   "hochpass_px": 48,
+   "sha256": "b64434ac8abe368b5132980022156536818f6690d9c8e7c0b96d9221b28edb97"
+  },
+  "gras": {
+   "zweck": "Rasen, Parks, Friedhöfe, Kleingärten, Gründächer",
+   "quelle": "Grass001",
+   "seite": "https://ambientcg.com/view?id=Grass001",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    140,
+    140
+   ],
+   "mittel_srgb": [
+    68.26,
+    91.64,
+    40.47
+   ],
+   "hochpass_px": 16,
+   "sha256": "902f447a64171c8099589642d5bf2d1d6e52c40e94d957eb78eae722084b0cfb"
+  },
+  "schotter": {
+   "zweck": "Gleisbett, Sand, unbefestigte Wege",
+   "quelle": "Gravel043",
+   "seite": "https://ambientcg.com/view?id=Gravel043",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    160,
+    160
+   ],
+   "mittel_srgb": [
+    106.98,
+    107.81,
+    103.77
+   ],
+   "hochpass_px": 24,
+   "sha256": "bca54835c7c71bea4b4b9f27fbef127d666fa1cf7de16f2b04f0ceb4294e784c"
+  }
+ }
+}

@@ -4,7 +4,7 @@ use crate::{
     gputime::GpuTimer,
     graphics::GraphicsSettings,
     hud::{self, HudItem, MapInset},
-    lightpass,
+    lightpass, materials,
     scenepass::{self, ScenePipes, SceneTargets},
 };
 use anyhow::{Context, Result};
@@ -68,6 +68,9 @@ pub(crate) struct Renderer {
     lighting: Lighting,
     light: lightpass::LightPass,
     layout: wgpu::PipelineLayout,
+    /// Layout der Kachel-Pipelines: Kamera, Atlas, Bodenmaterialien
+    tile_layout: wgpu::PipelineLayout,
+    materials: wgpu::BindGroup,
     atlas_layout: wgpu::BindGroupLayout,
     shader: wgpu::ShaderModule,
     hud_pipeline: wgpu::RenderPipeline,
@@ -394,19 +397,30 @@ impl Renderer {
                 },
             ],
         });
+        let mat_layout = materials::layout(&device);
+        let materials = materials::bind_group(&device, &queue, &mat_layout)?;
+        let tile_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Kacheln mit Bodenmaterialien"),
+            bind_group_layouts: &[Some(&camera_layout), Some(&atlas_layout), Some(&mat_layout)],
+            immediate_size: 0,
+        });
         let cx = lightpass::Ctx {
             device: &device,
             layout: &layout,
             atlas_layout: &atlas_layout,
             shader: &shader,
         };
+        let tile_cx = lightpass::Ctx {
+            layout: &tile_layout,
+            ..cx
+        };
         let light =
             lightpass::LightPass::new(&cx, scenepass::sprite_layout(), size.width, size.height);
         let graphics = GraphicsSettings::default();
-        let pipes = ScenePipes::new(&cx, graphics.msaa());
+        let pipes = ScenePipes::new(&cx, &tile_cx, graphics.msaa());
         let targets = SceneTargets::new(&device, &atlas_layout, &sampler, size, graphics.msaa());
         let map_pipeline = scenepass::pipeline(
-            &cx,
+            &tile_cx,
             "Minikarte",
             "vs",
             "fs",
@@ -469,6 +483,8 @@ impl Renderer {
             lighting,
             light,
             layout,
+            tile_layout,
+            materials,
             atlas_layout,
             shader,
             hud_pipeline,
@@ -619,7 +635,12 @@ impl Renderer {
         let samples = graphics.msaa();
         self.graphics = graphics;
         if samples != self.pipes.samples {
-            self.pipes = ScenePipes::new(&self.ctx(), samples);
+            let cx = self.ctx();
+            let tile_cx = lightpass::Ctx {
+                layout: &self.tile_layout,
+                ..cx
+            };
+            self.pipes = ScenePipes::new(&cx, &tile_cx, samples);
             self.targets = SceneTargets::new(
                 &self.device,
                 &self.atlas_layout,
@@ -861,6 +882,7 @@ impl Renderer {
         });
         pass.set_bind_group(0, &self.bind, &[]);
         pass.set_bind_group(1, &self.atlas_bind, &[]);
+        pass.set_bind_group(2, &self.materials, &[]);
         pass.set_pipeline(&self.pipes.tiles);
         for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
             if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
@@ -869,6 +891,9 @@ impl Renderer {
                 pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
             }
         }
+        // Hintergrundboden: nur wo keine Fläche liegt (Tiefe noch leer)
+        pass.set_pipeline(&self.pipes.ground);
+        pass.draw(0..3, 0..1);
         if shadows {
             pass.set_pipeline(&self.pipes.comp.shadow);
             pass.set_bind_group(1, &self.light.mask.bind, &[]);
@@ -993,6 +1018,7 @@ impl Renderer {
                         pass.draw_indexed(0..*n, 0, 0..1);
                     }
                 } else {
+                    pass.set_bind_group(2, &self.materials, &[]);
                     pass.set_pipeline(&self.map_pipeline);
                     for tile in self.tiles.values().filter(|t| t.bounds.intersects(area)) {
                         if let (Some(v), Some(i)) = (&tile.vertices, &tile.indices) {
@@ -1134,6 +1160,8 @@ impl Renderer {
         let mut uniform = camera.uniform(self.viewport()).to_vec();
         // freier Platz hinter `scale`: Nebel für das Fensterlicht
         uniform[3] = l.fog;
+        // freier Platz hinter dem Bildausschnitt: Nässe der Straßen (Glanz der Bodenmaterialien)
+        uniform[6] = l.wet;
         uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
         uniform.extend([self.scale, 0., l.windows, l.warmth]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);

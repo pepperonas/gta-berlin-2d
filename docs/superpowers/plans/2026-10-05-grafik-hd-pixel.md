@@ -70,7 +70,16 @@ Qualität, Ziele), `game/src/{play.rs,menu.rs,bindings.rs,console.rs,main.rs}`, 
 - [x] **1.10** Messung `MODI="hd" tools/gfx/captures.sh 01-architektur` (+ `QUALITAET=mittel`), Doku, Commit, Push.
       **STOPP.**
 
-## Phase 2 – Materialsystem Boden (≈ 2 Tage, Detailplan bei Phasenbeginn)
+## Phase 2 – Materialsystem Boden ✅ (05.10.2026)
+
+Umgesetzt (Abweichungen vom Entwurf fett): Build-Skript mit SHA-256-Prüfung und Manifest; je Material **zwei** Arrays
+(Detail = Farbe/periodisch geglättete Farbe, **Hochpass gegen wiederkehrende Flecken**; Normale + Rauheit +
+**Umgebungsverdeckung** gepackt) mit CPU-Mips; Parameter je Material-ID als Uniform (Gruppe 2 der Kachel-Pipelines);
+Abtastung mit `textureSampleGrad` (Ableitungen vor den Verzweigungen); **Hintergrundboden** (`ground_fs`, ID 14) für
+Stellen ohne Fläche, nach den Kacheln mit Tiefentest; Nässe über `Lighting.wet`. Anisotropie aus (bringt in der
+Draufsicht nichts). Pixel-Modus und Qualitätsstufen nutzen die Texturen noch unverändert (Phase 7/8).
+
+Ursprünglicher Entwurf:
 
 - `tools/gfx/build_materials.py` (Quelle ambientCG/Poly Haven, CC0, SHA-256 je Download, Ausgabe 512² Albedo/Normal/
   Roughness je Material als PNG unter `data/gfx/materials/` + `manifest.json` mit Kachelgröße in m, Quelle, Lizenz).

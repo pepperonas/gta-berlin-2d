@@ -1893,3 +1893,34 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   Fenster). `tools/gfx/captures.sh` kennt `MODI="hd hd:niedrig pixel"` (Modus[:Qualität]).
 - **Pixel-Modus:** bis Phase 8 Platzhalter (wie HD, 1 Abtastung).
 
+## Grafik HD/Pixel: Phase 2 – Bodenmaterialien (05.10.2026)
+
+- **Quellen:** `tools/gfx/build_materials.py` lädt die 1K-Pakete von ambientCG (CC0; Asphalt025C, PavingStones046,
+  Concrete010, Grass001, Gravel043), prüft sie gegen die SHA-256 im Manifest (geänderte Quelle = Abbruch, `--neu` übernimmt
+  bewusst), verkleinert exakt 2:1 (bleibt nahtlos) und schreibt je Material `*_detail.png` (Farbe geteilt durch eine
+  periodisch weichgezeichnete Fassung, Mittel 0,5: Hochpass, Radius je Material – Asphalt 6 px, Platten 48 px) und
+  `*_nr.png` (Normale nach OpenGL, Rauheit, Umgebungsverdeckung). Zwischenspeicher `tools/gfx/.cache/` (ignoriert);
+  `--offline` baut nur daraus. Voraussetzungen: `tools/gfx/requirements.txt`.
+- **Zuordnung:** `data/gfx/material_map.json` – je Material-ID aus `mesh.rs` Material, Kachel in Metern, Stärke, Farbanteil,
+  Relief, Verdeckung; `prozedural` = IDs, die der Shader weiter selbst zeichnet (Linien, Wasser, Dächer, Fassaden); ID 14
+  = Hintergrundboden. Test `every_material_id_in_the_tiles_is_mapped` vermascht jede 25. Kachel und prüft, dass jede
+  vorkommende ID zugeordnet ist; weitere Tests: Manifest ↔ eingebettete Dateien ↔ Schichtfolge, nur CC0, Mittelwert der
+  Detailbilder, Mip-Kette, Parameterblock.
+- **Engine:** `engine/materials.rs` dekodiert die eingebetteten PNG (vorhandenes `png`-Crate), baut Mip-Ketten auf der CPU
+  und lädt zwei `texture_2d_array` (Rgba8Unorm) plus Parameterblock (Uniform, 2 × 16 × vec4) als Bindungsgruppe 2; nur
+  die Kachel-Pipelines (Szene und Minikarte) haben dafür ein eigenes Layout (`tile_layout`).
+- **Shader (`scene.wgsl`):** `ground_sample` mischt zwei Maßstäbe (der zweite gedreht, ×2,37, versetzt) nach Rauschen –
+  keine sichtbare Wiederholung, keine Nähte; `textureSampleGrad` mit vorher berechneten Ableitungen (WGSL verbietet
+  `textureSample` in Zweigen, die von Flächendaten abhängen). Die Kartenfarbe bleibt, die Textur moduliert sie; Relief
+  über die Normale gegen die Sonne (`lit`), Nässe (`camera.padding2.x` = `Lighting.wet`) dunkelt ab und gibt einen
+  Sonnenreflex auf glatten Stellen. Die Minikarte bleibt flach.
+- **Hintergrundboden (`ground_fs`):** Wo keine Fläche liegt, schien bisher die Löschfarbe durch – in den Kiezen ein großer
+  Teil des Bodens (Vorgärten, Höfe). Ein Vollbild-Dreieck ganz hinten (`far_vs`, Tiefe 0,9999, Test „kleiner“) füllt
+  nach den Kacheln nur die freien Stellen: Rasentextur in Weltkoordinaten, große Flecken zwischen Rasen und trockenem
+  Boden, Grundton leicht heller als die alte Löschfarbe (Textur, Verdeckung und Sonne dunkeln ab).
+- **Kosten (GPU-Median, 2560 × 1440, M1 Pro):** +1,0 bis +1,5 ms gegenüber Phase 1 (Boulevard 5,0–5,3 ms, Häuserblock
+  5,1–5,5 ms); Ursache ist die doppelte Abtastung je Bodenpixel, nicht der Hintergrund (vorher/nachher gemessen). Die
+  Qualitätsstufen bekommen ihre Einsparungen in Phase 7.
+- **Fallstricke:** `patch` ist in WGSL reserviert; ein Einstiegspunkt (`full_vs`) lässt sich nicht aus einem anderen
+  aufrufen (`full_tri`). `tools/gfx/captures.sh` löscht die alte Aufnahme vor jedem Lauf – sonst übersah es Abstürze.
+

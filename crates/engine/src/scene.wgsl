@@ -8,6 +8,13 @@ struct Camera {
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var atlas: texture_2d<f32>;
 @group(1) @binding(1) var atlas_sampler: sampler;
+// Bodenmaterialien (materials.rs): Detail (Farbe/Mittelwert um 0,5) und Normale/Rauheit/Umgebungsverdeckung je
+// Schicht; Parameter je Material-ID: a = (Schicht + 1, Kachel m, Stärke, Farbanteil), b = (Relief, AO, –, –).
+struct MatParams { a: array<vec4<f32>, 16>, b: array<vec4<f32>, 16> };
+@group(2) @binding(0) var mat_detail: texture_2d_array<f32>;
+@group(2) @binding(1) var mat_nr: texture_2d_array<f32>;
+@group(2) @binding(2) var mat_sampler: sampler;
+@group(2) @binding(3) var<uniform> mat: MatParams;
 struct Out {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec3<f32>, @location(1) normal: vec3<f32>,
@@ -70,11 +77,31 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     }
     let px_per_m = camera.params.x;
     let p = in.uv / px_per_m;
+    // Ableitungen vor jeder Verzweigung (einheitlicher Kontrollfluss); die Texturen werden damit per
+    // textureSampleGrad auch in Zweigen richtig gefiltert
+    let gx = dpdx(p);
+    let gy = dpdy(p);
     let n = noise(floor(p * 12.0));
     var factor = 1.0;
     let detail = 1.0 - smoothstep(0.04, 0.3, max(fwidth(p.x), fwidth(p.y)));
-    if in.material == 1.0 { factor = 0.96 + (n - 0.5) * 0.12 * detail; }
-    if in.material == 2.0 || in.material == 3.0 || in.material == 6.0 || in.material == 7.0 {
+    let mid = min(u32(in.material + 0.5), 15u);
+    let pa = mat.a[mid];
+    let pb = mat.b[mid];
+    var tint = vec3(1.0);
+    var bump = vec2(0.0);
+    var occlusion = 1.0;
+    var rough = 1.0;
+    if pa.x > 0.5 {
+        let g = ground_sample(p, gx, gy, pa, pb);
+        tint = g.tint;
+        bump = g.bump;
+        occlusion = g.occlusion;
+        rough = g.rough;
+    }
+    if pa.x > 0.5 {
+        // Textur ersetzt die prozeduralen Muster der Fläche
+    } else if in.material == 1.0 { factor = 0.96 + (n - 0.5) * 0.12 * detail; }
+    if pa.x < 0.5 && (in.material == 2.0 || in.material == 3.0 || in.material == 6.0 || in.material == 7.0) {
         var cell = vec2(0.28, 0.20);
         if in.material == 3.0 { cell = vec2(0.70, 0.60); }
         if in.material == 6.0 || in.material == 7.0 { cell = vec2(0.26, 0.70); }
@@ -83,11 +110,14 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
         let edge = min(min(st.x, 1.0-st.x), min(st.y, 1.0-st.y));
         factor = mix(1.0, select(0.76, 1.0, edge > 0.04) + (n-0.5)*0.08, detail);
     }
-    if in.material == 4.0 { factor = 0.95 + noise(floor(p * 2.0)) * 0.12; }
+    if in.material == 4.0 && pa.x < 0.5 { factor = 0.95 + noise(floor(p * 2.0)) * 0.12; }
     if in.material == 5.0 { factor = 0.96 + 0.04 * sin(p.x * 1.7 + p.y * 2.1); }
     if in.material == 8.0 { factor = mix(1.0, 0.90 + 0.1*sin(p.y*30.0), detail); }
-    if in.material == 9.0 || in.material == 10.0 { factor = 0.97 + (n-0.5)*0.10*detail; }
-    var color = in.color * factor;
+    if in.material == 9.0 || (in.material == 10.0 && pa.x < 0.5) { factor = 0.97 + (n-0.5)*0.10*detail; }
+    var color = in.color * factor * tint * occlusion;
+    // Nässe (camera.padding2.x): dunklere, glattere Oberfläche; glatte Stellen (geringe Rauheit) stärker
+    let wet = camera.padding2.x * select(0.0, 1.0, pa.x > 0.5);
+    color *= 1.0 - 0.3 * wet * (1.0 - 0.5 * rough);
     // Gebrauchsspuren (grime.js): großräumig Schmutz in den Senken, ausgeblichene Kuppen – zwei gegeneinander
     // gedrehte Maßstäbe, damit keine Kachel sichtbar wird
     let wp = in.uv;
@@ -121,8 +151,66 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
         let glass = window.x > 0.35 && window.x < 0.72 && window.y > 0.28 && window.y < 0.80;
         color = mix(color, vec3(0.26, 0.32, 0.35), select(0.0, 0.85 * detail, glass));
     }
-    let light = 0.60 + 0.40 * max(0.0, dot(normalize(in.normal), normalize(camera.sun.xyz)));
-    return vec4(linear_color(clamp(color * light, vec3(0.0), vec3(1.0))), 1.0);
+    return vec4(linear_color(lit(color, normalize(in.normal), bump, rough, wet)), 1.0);
+}
+// Sonne auf eine (texturierte) Fläche: Grundlicht wie bisher (0,6 + 0,4 · n·Sonne) mit der Reliefnormale, dazu bei
+// Nässe ein Sonnenreflex in Richtung der Kamera (von oben) auf der Struktur der Oberfläche.
+fn lit(color: vec3<f32>, normal: vec3<f32>, bump: vec2<f32>, rough: f32, wet: f32) -> vec3<f32> {
+    let nrm = normalize(normal + vec3(bump, 0.0));
+    let sun = normalize(camera.sun.xyz);
+    let light = 0.60 + 0.40 * max(0.0, dot(nrm, sun));
+    let h = normalize(sun + vec3(0.0, 0.0, 1.0));
+    let gloss = pow(max(dot(nrm, h), 0.0), mix(16.0, 96.0, 1.0 - rough));
+    let spec = wet * (1.0 - rough) * gloss * 0.25 * clamp(camera.sun.z * 2.0, 0.0, 1.0);
+    return clamp(color * light + vec3(spec), vec3(0.0), vec3(1.0));
+}
+struct Ground { tint: vec3<f32>, bump: vec2<f32>, occlusion: f32, rough: f32 };
+// Bodentextur an p (Meter): zwei Maßstäbe (der zweite gedreht und versetzt), weich nach Rauschen gemischt – so
+// wiederholt sich keine Kachel sichtbar, und es gibt keine Nähte. gx/gy = Ableitungen von p (vor Verzweigungen
+// berechnet), damit die Filterung auch in Zweigen stimmt.
+fn ground_sample(p: vec2<f32>, gx: vec2<f32>, gy: vec2<f32>, pa: vec4<f32>, pb: vec4<f32>) -> Ground {
+    let layer = i32(pa.x - 0.5);
+    let k1 = 1.0 / pa.y;
+    let k2 = 1.0 / (pa.y * 2.37);
+    let uv1 = p * k1;
+    let r = vec2(p.x * 0.8 - p.y * 0.6, p.x * 0.6 + p.y * 0.8);
+    let uv2 = r * k2 + vec2(0.37, 0.71);
+    let rx = vec2(gx.x * 0.8 - gx.y * 0.6, gx.x * 0.6 + gx.y * 0.8) * k2;
+    let ry = vec2(gy.x * 0.8 - gy.y * 0.6, gy.x * 0.6 + gy.y * 0.8) * k2;
+    let w = smoothstep(0.3, 0.7, vnoise(p / (pa.y * 3.1) + vec2(11.0, 5.0)));
+    let d = mix(
+        textureSampleGrad(mat_detail, mat_sampler, uv1, layer, gx * k1, gy * k1).rgb,
+        textureSampleGrad(mat_detail, mat_sampler, uv2, layer, rx, ry).rgb, w) * 2.0;
+    let q = mix(
+        textureSampleGrad(mat_nr, mat_sampler, uv1, layer, gx * k1, gy * k1),
+        textureSampleGrad(mat_nr, mat_sampler, uv2, layer, rx, ry), w);
+    let lum = dot(d, vec3(0.299, 0.587, 0.114));
+    var g: Ground;
+    g.tint = mix(vec3(1.0), mix(vec3(lum), d, pa.w), pa.z);
+    // OpenGL-Normale: Grün zeigt im Bild nach oben = Norden = −y der Karte
+    g.bump = vec2(q.r * 2.0 - 1.0, 1.0 - q.g * 2.0) * pb.x;
+    g.occlusion = mix(1.0, q.a, pb.y);
+    g.rough = q.b;
+    return g;
+}
+// Hintergrund: wo keine Fläche liegt (unkartiertes Land, Vorgärten, Höfe), zeigte früher die Löschfarbe durch. Jetzt
+// ein Vollbild-Durchgang nach den Kacheln, ganz hinten (füllt nur, was frei blieb): Boden in Weltkoordinaten mit dem Material der ID 14 und großen
+// Flecken zwischen Rasen und trockener Erde.
+@fragment fn ground_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let world = camera.position + (in.position.xy - camera.viewport * 0.5) / camera.scale;
+    let p = world / camera.params.x;
+    let gx = dpdx(p);
+    let gy = dpdy(p);
+    let g = ground_sample(p, gx, gy, mat.a[14], mat.b[14]);
+    let blot = vnoise(p / 23.0) * 0.6 + vnoise(p / 7.0 + vec2(3.1, 8.7)) * 0.4;
+    // früher: Löschfarbe linear (0,14 / 0,20 / 0,12) ≈ sRGB (0,41 / 0,48 / 0,38)
+    // etwas heller als die alte Löschfarbe: Textur, Verdeckung und Sonnenlicht dunkeln ab; trockene Stellen nur
+    // leicht gelblicher (sonst liest sich der Boden schmutzig)
+    let base = mix(vec3(0.45, 0.56, 0.39), vec3(0.51, 0.55, 0.40), smoothstep(0.55, 0.85, blot));
+    var color = base * g.tint * g.occlusion;
+    let wet = camera.padding2.x;
+    color *= 1.0 - 0.3 * wet * (1.0 - 0.5 * g.rough);
+    return vec4(linear_color(lit(color, vec3(0.0, 0.0, 1.0), g.bump, g.rough, wet)), 1.0);
 }
 // Erleuchtete Fenster (windows.js): eigener Durchgang nach dem Licht, damit Glühlampenlicht nachts nicht mit der
 // Umgebung abgedunkelt wird. Gleiche Fassaden, Tiefe LessEqual ohne Schreiben; alles außer brennenden Scheiben wird

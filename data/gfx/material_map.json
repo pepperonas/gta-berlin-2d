@@ -1,0 +1,13 @@
+{
+ "_hinweis": "Welche Kartenfläche (Material-ID aus crates/map_loader/src/mesh.rs) welche Bodentextur nutzt. kachel_m = Kantenlänge einer Texturkachel in Metern, staerke = wie stark die Textur die Kartenfarbe moduliert (0 = flach), farbe = Anteil der Farbschwankungen der Vorlage (0 = nur Helligkeit), relief = Stärke der Normalen, ao = Stärke der Umgebungsverdeckung. Die ID 14 ist keine Kachelfläche, sondern der Hintergrund (ground_fs). 'prozedural' listet die IDs, die der Shader weiter selbst zeichnet (Linien, Wasser, Dächer, Fassaden). Ein Test prüft, dass jede in den Kacheln vorkommende ID hier steht.",
+ "materialien": ["asphalt", "kopfstein", "platten", "gras", "schotter"],
+ "flaechen": {
+  "1": {"material": "asphalt", "kachel_m": 4.0, "staerke": 0.9, "farbe": 0.3, "relief": 0.5, "ao": 0.3},
+  "2": {"material": "kopfstein", "kachel_m": 2.4, "staerke": 1.0, "farbe": 0.5, "relief": 1.0, "ao": 0.8},
+  "3": {"material": "platten", "kachel_m": 2.8, "staerke": 0.9, "farbe": 0.2, "relief": 0.7, "ao": 0.6},
+  "4": {"material": "gras", "kachel_m": 3.0, "staerke": 1.0, "farbe": 0.35, "relief": 0.8, "ao": 0.5},
+  "14": {"material": "gras", "kachel_m": 3.6, "staerke": 0.7, "farbe": 0.2, "relief": 0.5, "ao": 0.2, "_": "Hintergrund (keine Fläche: Vorgärten, Höfe, unkartiertes Land) – ground_fs"},
+  "10": {"material": "schotter", "kachel_m": 2.4, "staerke": 1.0, "farbe": 0.5, "relief": 0.8, "ao": 0.6}
+ },
+ "prozedural": [0, 5, 6, 7, 8, 9, 11, 12, 13]
+}

@@ -55,6 +55,7 @@ for entry in "${scenes[@]}"; do
       fi
       tag="$name-z$zoom-$tagmode"
       echo "== $tag"
+      rm -f "$out/png/$tag.png"
       # shellcheck disable=SC2086
       "$bin" --new --stumm --seed 7 --bars aus $args --zoom "$zoom" --fenster 2560x1440 \
         --smoke-frames "$frames" --messung "$tmp/$tag.json" --capture "$out/png/$tag.png" \

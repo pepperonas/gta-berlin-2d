@@ -90,6 +90,8 @@ pub(crate) fn pipeline(
 /// Pipelines des Szenendurchgangs.
 pub(crate) struct ScenePipes {
     pub samples: u32,
+    /// Boden, wo keine Fläche liegt (Vollbild nach den Kacheln, ganz hinten: füllt nur, was frei blieb)
+    pub ground: wgpu::RenderPipeline,
     pub tiles: wgpu::RenderPipeline,
     pub windows: wgpu::RenderPipeline,
     pub sprites: wgpu::RenderPipeline,
@@ -100,7 +102,8 @@ pub(crate) struct ScenePipes {
 }
 
 impl ScenePipes {
-    pub fn new(cx: &lightpass::Ctx, samples: u32) -> Self {
+    /// `tiles` = Kontext mit Materialgruppe (Gruppe 2) für die Kachel-Pipeline.
+    pub fn new(cx: &lightpass::Ctx, tiles: &lightpass::Ctx, samples: u32) -> Self {
         use wgpu::CompareFunction::{Greater, LessEqual};
         let alpha = Some(wgpu::BlendState::ALPHA_BLENDING);
         let p = |label, vs, fs, layout: wgpu::VertexBufferLayout, blend, write, compare| {
@@ -119,11 +122,26 @@ impl ScenePipes {
         };
         Self {
             samples,
-            tiles: p(
+            ground: pipeline(
+                tiles,
+                "Hintergrundboden",
+                "far_vs",
+                "ground_fs",
+                &[],
+                SCENE_FORMAT,
+                samples,
+                None,
+                false,
+                wgpu::CompareFunction::Less,
+            ),
+            tiles: pipeline(
+                tiles,
                 "Berlin indexed meshes",
                 "vs",
                 "fs",
-                mesh_layout(),
+                &[mesh_layout()],
+                SCENE_FORMAT,
+                samples,
                 None,
                 true,
                 LessEqual,

@@ -8,6 +8,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 2 (native Fassung, HD): **Bodenmaterialien aus Texturen** – Asphalt, Kopfsteinpflaster,
+  Gehwegplatten, Rasen und Schotter/Gleisbett aus CC0-Vorlagen von ambientCG (gebaut von
+  `tools/gfx/build_materials.py`, Danksagung unter „Über das Spiel“). Die Textur bringt Struktur, Relief
+  (Normalen), Umgebungsverdeckung und Rauheit, die Farbe bleibt die der Karte; zwei Maßstäbe gegen sichtbare
+  Kachelung, Hochpass gegen wiederkehrende Flecken. Nasse Straßen werden dunkler und glänzen in der Sonne. Flächen ohne
+  Kartenobjekt (Vorgärten, Höfe, unkartiertes Land) zeigen jetzt Boden mit Rasen und trockenen Stellen statt einer
+  flachen Löschfarbe. Zuordnung Fläche → Material in `data/gfx/material_map.json`; ein Test prüft, dass jede in den
+  Kacheln vorkommende Material-ID zugeordnet ist. GPU +1,0 bis +1,5 ms (Boulevard 5,0–5,3 ms bei 2560 × 1440).
 - Grafik-Überarbeitung, Phase 1 (native Fassung): **Grafikmodus HD (Standard) / Pixel** und **Qualität
   niedrig/mittel/hoch**, umschaltbar mit F8, im Titel- und Pausenmenü („Grafik: HD“), per Konsole (`grafik`,
   `qualitaet`) und CLI (`--grafik`, `--qualitaet`, gilt nur für den Start); gespeichert in `settings.json`. Die Szene

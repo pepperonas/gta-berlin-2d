@@ -259,6 +259,7 @@ pub fn lighting_of(l: &berlin_sim::daylight::Light) -> Lighting {
         minutes: l.minutes as f32,
         warmth: berlin_sim::daylight::film_mood(l).0 as f32,
         fog: 0.,
+        wet: 0.,
     }
 }
 
@@ -3593,6 +3594,7 @@ impl Game for Play {
     fn lighting(&self) -> Option<Lighting> {
         let mut l = lighting_of(&world_light(&self.world));
         l.fog = self.world.sky.p.fog as f32;
+        l.wet = self.world.weather.wet.clamp(0., 1.) as f32;
         // Blitze hellen alles kurz auf
         let flash = berlin_sim::weather::flash_total(
             self.world.seed,
