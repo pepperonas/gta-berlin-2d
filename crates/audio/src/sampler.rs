@@ -142,11 +142,47 @@ const R4: &[(&str, &[u8])] = bank_files!("r4":
     "off_r6400.wav",
     "start.wav",
 );
+/// Diesel-Vierzylinder (Renault Master dCi135, Freesound/Soundholder, CC BY 3.0)
+const D4: &[(&str, &[u8])] = bank_files!("d4":
+    "blip_1.wav",
+    "blip_2.wav",
+    "off_idle.wav",
+    "off_r1700.wav",
+    "off_r2400.wav",
+    "off_r3000.wav",
+    "off_r3600.wav",
+    "off_r4200.wav",
+    "on_idle.wav",
+    "on_r1700.wav",
+    "on_r2300.wav",
+    "on_r2900.wav",
+    "on_r3500.wav",
+    "on_r4100.wav",
+    "on_r4300.wav",
+    "start.wav",
+);
+/// Sechszylinder-Diesel (Mack-Sattelzug, Freesound/kyles, CC0)
+const D6: &[(&str, &[u8])] = bank_files!("d6":
+    "off_idle.wav",
+    "off_r1150.wav",
+    "off_r1350.wav",
+    "off_r1550.wav",
+    "off_r1750.wav",
+    "off_r1900.wav",
+    "on_idle.wav",
+    "on_r1150.wav",
+    "on_r1350.wav",
+    "on_r1550.wav",
+    "on_r1750.wav",
+    "on_r1900.wav",
+);
 /// Dateiliste einer Bank nach Namen.
 fn files_of(name: &str) -> &'static [(&'static str, &'static [u8])] {
     match name {
         "v12" => V12,
         "r4" => R4,
+        "d4" => D4,
+        "d6" => D6,
         _ => V10,
     }
 }

@@ -1,0 +1,208 @@
+{
+  "bank": "d6",
+  "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
+  "quelle": [
+    {
+      "freesound": 451935,
+      "sha256": "138b892eab3b90d0ce99243a56ab709b8d7f0b78c5c7d7a45852e5ba004f6d3d",
+      "titel": "truck mack transport semi trailer idle at red light and pull away slow long diesel rev",
+      "url": "https://freesound.org/s/451935/",
+      "beginn_s": 0.0
+    }
+  ],
+  "quelle_sha256": "88cfe99cd2219bdee418e0a055c8dc3b34fee5414a826233f58d187dd5b3133b",
+  "lizenz": "CC0 1.0",
+  "urheber": "kyles",
+  "samplerate": 48000,
+  "drehzahl_annahme": "Sechszylinder-Diesel (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 20; rollt langsam an",
+  "loops": [
+    {
+      "datei": "on_idle.wav",
+      "rpm": 648,
+      "last": "on",
+      "samples": 65178,
+      "loop_start": 0,
+      "loop_ende": 65178,
+      "grundton_hz": 32.4,
+      "quelle_s": [
+        1.2,
+        2.6
+      ],
+      "gain_db": 0.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "off_idle.wav",
+      "rpm": 648,
+      "last": "off",
+      "samples": 65178,
+      "loop_start": 0,
+      "loop_ende": 65178,
+      "grundton_hz": 32.4,
+      "quelle_s": [
+        1.2,
+        2.6
+      ],
+      "gain_db": -7.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "on_r1150.wav",
+      "rpm": 1160,
+      "last": "on",
+      "samples": 12411,
+      "loop_start": 0,
+      "loop_ende": 12411,
+      "grundton_hz": 58.01,
+      "quelle_s": [
+        3.62,
+        3.92
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 7.8
+    },
+    {
+      "datei": "off_r1150.wav",
+      "rpm": 1160,
+      "last": "off",
+      "samples": 12411,
+      "loop_start": 0,
+      "loop_ende": 12411,
+      "grundton_hz": 58.01,
+      "quelle_s": [
+        3.62,
+        3.92
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 7.8
+    },
+    {
+      "datei": "on_r1350.wav",
+      "rpm": 1338,
+      "last": "on",
+      "samples": 10766,
+      "loop_start": 0,
+      "loop_ende": 10766,
+      "grundton_hz": 66.88,
+      "quelle_s": [
+        4.2,
+        4.45
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 4.4
+    },
+    {
+      "datei": "off_r1350.wav",
+      "rpm": 1338,
+      "last": "off",
+      "samples": 10766,
+      "loop_start": 0,
+      "loop_ende": 10766,
+      "grundton_hz": 66.88,
+      "quelle_s": [
+        4.2,
+        4.45
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 4.4
+    },
+    {
+      "datei": "on_r1550.wav",
+      "rpm": 1550,
+      "last": "on",
+      "samples": 9288,
+      "loop_start": 0,
+      "loop_ende": 9288,
+      "grundton_hz": 77.52,
+      "quelle_s": [
+        4.85,
+        5.08
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 26.7
+    },
+    {
+      "datei": "off_r1550.wav",
+      "rpm": 1550,
+      "last": "off",
+      "samples": 9288,
+      "loop_start": 0,
+      "loop_ende": 9288,
+      "grundton_hz": 77.52,
+      "quelle_s": [
+        4.85,
+        5.08
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 26.7
+    },
+    {
+      "datei": "on_r1750.wav",
+      "rpm": 1692,
+      "last": "on",
+      "samples": 9078,
+      "loop_start": 0,
+      "loop_ende": 9078,
+      "grundton_hz": 84.6,
+      "quelle_s": [
+        5.2,
+        5.42
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 13.2
+    },
+    {
+      "datei": "off_r1750.wav",
+      "rpm": 1692,
+      "last": "off",
+      "samples": 9078,
+      "loop_start": 0,
+      "loop_ende": 9078,
+      "grundton_hz": 84.6,
+      "quelle_s": [
+        5.2,
+        5.42
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 13.2
+    },
+    {
+      "datei": "on_r1900.wav",
+      "rpm": 1940,
+      "last": "on",
+      "samples": 12864,
+      "loop_start": 0,
+      "loop_ende": 12864,
+      "grundton_hz": 97.01,
+      "quelle_s": [
+        5.7,
+        6.0
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 8.6
+    },
+    {
+      "datei": "off_r1900.wav",
+      "rpm": 1940,
+      "last": "off",
+      "samples": 12864,
+      "loop_start": 0,
+      "loop_ende": 12864,
+      "grundton_hz": 97.01,
+      "quelle_s": [
+        5.7,
+        6.0
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 8.6
+    }
+  ],
+  "einzel": [],
+  "referenz": "reference.wav",
+  "referenz_auszug_s": [
+    [
+      0.0,
+      10.0
+    ]
+  ]
+}

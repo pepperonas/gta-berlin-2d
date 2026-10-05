@@ -1,0 +1,264 @@
+{
+  "bank": "d4",
+  "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
+  "quelle": [
+    {
+      "freesound": 425846,
+      "sha256": "859156521b08388ae55a14d4424458cdbf7c828a3aaa24af9918a6cf86a100e5",
+      "titel": "Renault Master F3500 dCi135 Engine RPM Ramp 2 Mono",
+      "url": "https://freesound.org/s/425846/",
+      "beginn_s": 0.0
+    },
+    {
+      "freesound": 425845,
+      "sha256": "b31137b94000096490e8a7cf010b5c102639e172a0b27aed9194a0dd40b910a4",
+      "titel": "Renault Master F3500 dCi135 Engine Start Up Idle Gas Pressing And Shut Down Mono",
+      "url": "https://freesound.org/s/425845/",
+      "beginn_s": 17.951
+    }
+  ],
+  "quelle_sha256": "02c9b614db50ddfd00cd44e2ce2a67d73424d4b97ff4738b0f13bf83ec246590",
+  "lizenz": "CC BY 3.0",
+  "urheber": "Soundholder",
+  "samplerate": 48000,
+  "drehzahl_annahme": "Diesel-Vierzylinder (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 30; steht, kein Doppler",
+  "loops": [
+    {
+      "datei": "on_idle.wav",
+      "rpm": 772,
+      "last": "on",
+      "samples": 93211,
+      "loop_start": 0,
+      "loop_ende": 93211,
+      "grundton_hz": 25.75,
+      "quelle_s": [
+        24.950666666666667,
+        26.950666666666667
+      ],
+      "gain_db": 0.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "off_idle.wav",
+      "rpm": 772,
+      "last": "off",
+      "samples": 93211,
+      "loop_start": 0,
+      "loop_ende": 93211,
+      "grundton_hz": 25.75,
+      "quelle_s": [
+        24.950666666666667,
+        26.950666666666667
+      ],
+      "gain_db": -7.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "on_r1700.wav",
+      "rpm": 1630,
+      "last": "on",
+      "samples": 13253,
+      "loop_start": 0,
+      "loop_ende": 13253,
+      "grundton_hz": 54.33,
+      "quelle_s": [
+        1.95,
+        2.25
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 21.7
+    },
+    {
+      "datei": "on_r2300.wav",
+      "rpm": 2342,
+      "last": "on",
+      "samples": 10450,
+      "loop_start": 0,
+      "loop_ende": 10450,
+      "grundton_hz": 78.08,
+      "quelle_s": [
+        3.3,
+        3.55
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 13.3
+    },
+    {
+      "datei": "on_r2900.wav",
+      "rpm": 2921,
+      "last": "on",
+      "samples": 10351,
+      "loop_start": 0,
+      "loop_ende": 10351,
+      "grundton_hz": 97.38,
+      "quelle_s": [
+        4.25,
+        4.5
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 10.5
+    },
+    {
+      "datei": "on_r3500.wav",
+      "rpm": 3506,
+      "last": "on",
+      "samples": 10677,
+      "loop_start": 0,
+      "loop_ende": 10677,
+      "grundton_hz": 116.88,
+      "quelle_s": [
+        5.2,
+        5.45
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 11.3
+    },
+    {
+      "datei": "on_r4100.wav",
+      "rpm": 4040,
+      "last": "on",
+      "samples": 10694,
+      "loop_start": 0,
+      "loop_ende": 10694,
+      "grundton_hz": 134.66,
+      "quelle_s": [
+        6.15,
+        6.4
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 8.3
+    },
+    {
+      "datei": "on_r4300.wav",
+      "rpm": 4322,
+      "last": "on",
+      "samples": 22655,
+      "loop_start": 0,
+      "loop_ende": 22655,
+      "grundton_hz": 144.07,
+      "quelle_s": [
+        8.0,
+        8.5
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 4.1
+    },
+    {
+      "datei": "off_r1700.wav",
+      "rpm": 1666,
+      "last": "off",
+      "samples": 22478,
+      "loop_start": 0,
+      "loop_ende": 22478,
+      "grundton_hz": 55.52,
+      "quelle_s": [
+        16.0,
+        16.5
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 17.3
+    },
+    {
+      "datei": "off_r2400.wav",
+      "rpm": 2484,
+      "last": "off",
+      "samples": 17972,
+      "loop_start": 0,
+      "loop_ende": 17972,
+      "grundton_hz": 82.8,
+      "quelle_s": [
+        13.4,
+        13.8
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 5.8
+    },
+    {
+      "datei": "off_r3000.wav",
+      "rpm": 3001,
+      "last": "off",
+      "samples": 15353,
+      "loop_start": 0,
+      "loop_ende": 15353,
+      "grundton_hz": 100.05,
+      "quelle_s": [
+        12.0,
+        12.35
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 7.2
+    },
+    {
+      "datei": "off_r3600.wav",
+      "rpm": 3517,
+      "last": "off",
+      "samples": 13103,
+      "loop_start": 0,
+      "loop_ende": 13103,
+      "grundton_hz": 117.23,
+      "quelle_s": [
+        10.8,
+        11.1
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 4.0
+    },
+    {
+      "datei": "off_r4200.wav",
+      "rpm": 4152,
+      "last": "off",
+      "samples": 13179,
+      "loop_start": 0,
+      "loop_ende": 13179,
+      "grundton_hz": 138.4,
+      "quelle_s": [
+        9.4,
+        9.7
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 4.3
+    }
+  ],
+  "einzel": [
+    {
+      "datei": "start.wav",
+      "art": "start",
+      "samples": 81599,
+      "quelle_s": [
+        18.650666666666666,
+        20.350666666666665
+      ],
+      "gain_db": 0.0,
+      "rpm": 2327
+    },
+    {
+      "datei": "blip_1.wav",
+      "art": "blip",
+      "samples": 134400,
+      "quelle_s": [
+        20.550666666666668,
+        23.35066666666667
+      ],
+      "gain_db": 0.0,
+      "rpm": 2161
+    },
+    {
+      "datei": "blip_2.wav",
+      "art": "blip",
+      "samples": 134400,
+      "quelle_s": [
+        29.550666666666665,
+        32.35066666666667
+      ],
+      "gain_db": 0.0,
+      "rpm": 2311
+    }
+  ],
+  "referenz": "reference.wav",
+  "referenz_auszug_s": [
+    [
+      0.0,
+      17.45
+    ]
+  ]
+}

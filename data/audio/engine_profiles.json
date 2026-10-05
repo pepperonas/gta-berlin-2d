@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Motorsound-Profile (docs/audio.md). Bänke: 'v10' (Sportwagen, Supercars), 'v12' (Hypercars), 'r4' (Vierzylinder); die Profile färben und verstimmen sie. Felder eines Presets lassen sich je Fahrzeug unter 'fahrzeuge' überschreiben.",
+  "_hinweis": "Motorsound-Profile (docs/audio.md). Bänke: 'v10' (Sportwagen, Supercars), 'v12' (Hypercars), 'r4' (Vierzylinder), 'd4' (Diesel-Pkw, Transporter), 'd6' (Lkw, Busse); die Profile färben und verstimmen sie. Felder eines Presets lassen sich je Fahrzeug unter 'fahrzeuge' überschreiben.",
   "mix": {
     "_hinweis": "engine = eigener Mischpult-Kanal der Motor-Samples (Spielerauto und Verkehr), stimmen = höchstens so viele Sample-Motoren gleichzeitig (das Spielerauto zählt mit und hat immer Vorrang), lod_px = ab dieser Entfernung nur noch ein Loop ohne Überblendung, hoerweite_px = Grenze der Hörbarkeit fremder Autos, doppler = Stärke des Dopplereffekts (1 = physikalisch).",
     "engine": 1.0,
@@ -11,7 +11,7 @@
     "tiefpass_fern_hz": 900.0
   },
   "zuordnung": {
-    "_hinweis": "Fahrzeug → Preset: zuerst Überschreibung je Fahrzeug ('fahrzeuge'), dann Motortyp ('typen', null = Synthese), dann Klasse ('klassen'). Elektromotoren und 'ausgenommen' behalten immer den Synthese-Klang. Diesel, Zweitakter, luftgekühlter Boxer und V2 haben noch keine Bank.",
+    "_hinweis": "Fahrzeug → Preset: zuerst Überschreibung je Fahrzeug ('fahrzeuge'), dann Motortyp ('typen', null = Synthese), dann Klasse ('klassen'). Elektromotoren und 'ausgenommen' behalten immer den Synthese-Klang. Zweitakter, luftgekühlter Boxer und V2 haben noch keine Bank (null).",
     "klassen": {
       "sport": "sport",
       "supercar": "supercar",
@@ -25,9 +25,9 @@
       "hypercar_elektro"
     ],
     "typen": {
-      "diesel": null,
-      "diesel_sauger": null,
-      "diesel_lkw": null,
+      "diesel": "diesel",
+      "diesel_sauger": "diesel",
+      "diesel_lkw": "lkw",
       "zweitakt": null,
       "boxer_luft": null,
       "v2_drehmoment": null
@@ -183,6 +183,66 @@
       "gas_glaettung_s": 0.05,
       "begrenzer_hz": 13.0,
       "start": true
+    },
+    "diesel": {
+      "_hinweis": "Diesel-Pkw, Transporter und Geländewagen: Diesel-Vierzylinder eines Transporters (Bank d4).",
+      "bank": "d4",
+      "leerlauf": 800.0,
+      "begrenzer": 4500.0,
+      "gaenge": [
+        28.0,
+        50.0,
+        74.0,
+        98.0,
+        125.0,
+        155.0,
+        190.0
+      ],
+      "schalt_hoch": 0.75,
+      "schalt_hoch_teillast": 0.42,
+      "schalt_runter": 0.28,
+      "pitch": 1.0,
+      "tiefpass_hz": 6000.0,
+      "low_shelf_db": 1.5,
+      "high_shelf_db": -2.0,
+      "saettigung": 0.1,
+      "pop_chance": 0.0,
+      "pop_gain": 0.0,
+      "lautstaerke": 0.8,
+      "drehzahl_glaettung_s": 0.09,
+      "gas_glaettung_s": 0.08,
+      "begrenzer_hz": 8.0,
+      "start": true
+    },
+    "lkw": {
+      "_hinweis": "Lkw und Busse: großer Sechszylinder-Diesel (Mack-Sattelzug, Bank d6), kein eigener Start.",
+      "bank": "d6",
+      "leerlauf": 650.0,
+      "begrenzer": 2200.0,
+      "gaenge": [
+        12.0,
+        20.0,
+        28.0,
+        37.0,
+        47.0,
+        58.0,
+        70.0
+      ],
+      "schalt_hoch": 0.85,
+      "schalt_hoch_teillast": 0.6,
+      "schalt_runter": 0.45,
+      "pitch": 1.0,
+      "tiefpass_hz": 5000.0,
+      "low_shelf_db": 3.0,
+      "high_shelf_db": -2.0,
+      "saettigung": 0.12,
+      "pop_chance": 0.0,
+      "pop_gain": 0.0,
+      "lautstaerke": 0.75,
+      "drehzahl_glaettung_s": 0.15,
+      "gas_glaettung_s": 0.1,
+      "begrenzer_hz": 6.0,
+      "start": false
     }
   },
   "fahrzeuge": {

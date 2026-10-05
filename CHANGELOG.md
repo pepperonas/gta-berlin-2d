@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Diesel klingen nach echten Dieseln – Bank `d4` aus einem Renault Master dCi135 (Drehzahlrampe,
+  Leerlauf, Start, Gasstöße; Freesound, CC BY 3.0) für Diesel-Pkw, Transporter und Geländewagen, Bank `d6` aus einem
+  anfahrenden Mack-Sattelzug (CC0) für Lkw und Busse.
+
 - Native Fassung: Vierzylinder klingen nach einem echten Motor – neue Sample-Bank `r4` aus einer Prüfstands-Session
   eines Mercedes 190E 2.3-16V (Freesound, CC0): Last- und echte Schub-Loops, Leerlauf, Anlassen. Klein-, Kompakt-,
   Mittelklasse und SUV sowie die Vierzylinder-Sportler (Roadster, Rallye, Drift-Coupé …) nutzen sie; der Motortyp

@@ -163,7 +163,78 @@ R4 = {
     ],
     "referenz": [((0, 0.0), (0, 4.27)), ((1, 0.0), (1, 8.5))],
 }
-BANKS = {"v10": V10, "v12": V12, "r4": R4}
+# d4 – Diesel-Vierzylinder, Renault Master F3500 dCi135 (Transporter), Soundholder (Freesound, CC BY 3.0), steht.
+# Viertakt-Vierzylinder: hellste Linie = Zündfrequenz → Drehzahl = f0 × 30. Teil 0: Drehzahlrampe 44 → 144 Hz
+# (1330 → 4330 1/min, Nenndrehzahl eines Transporterdiesels) und zurück auf 51 Hz – hoch = Last, runter = Schub.
+# Teil 1: Anlassen, Leerlauf stetig 25,9 Hz (≈ 780 1/min), Gasstöße.
+D4 = {
+    "teile": [
+        {"freesound": 425846, "sha256": "859156521b08388ae55a14d4424458cdbf7c828a3aaa24af9918a6cf86a100e5",
+         "titel": "Renault Master F3500 dCi135 Engine RPM Ramp 2 Mono"},
+        {"freesound": 425845, "sha256": "b31137b94000096490e8a7cf010b5c102639e172a0b27aed9194a0dd40b910a4",
+         "titel": "Renault Master F3500 dCi135 Engine Start Up Idle Gas Pressing And Shut Down Mono"},
+    ],
+    "lizenz": "CC BY 3.0",
+    "urheber": "Soundholder",
+    "rpm_per_hz": 30.0,
+    "annahme": "Diesel-Vierzylinder (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 30; steht, kein Doppler",
+    "verfolgung": "linie",
+    "doppler": False,
+    "loops": [
+        ("idle", (1, 7.0), (1, 9.0), 25.9, False),
+        ("r1700", (0, 1.95), (0, 2.25), 54.0),
+        ("r2300", (0, 3.30), (0, 3.55), 77.0),
+        ("r2900", (0, 4.25), (0, 4.50), 96.0),
+        ("r3500", (0, 5.20), (0, 5.45), 116.0),
+        ("r4100", (0, 6.15), (0, 6.40), 134.0),
+        ("r4300", (0, 8.00), (0, 8.50), 144.0),
+    ],
+    "schub": [
+        ("r1700", (0, 16.0), (0, 16.5), 55.5),
+        ("r2400", (0, 13.40), (0, 13.80), 84.0),
+        ("r3000", (0, 12.00), (0, 12.35), 102.0),
+        ("r3600", (0, 10.8), (0, 11.1), 120.0),
+        ("r4200", (0, 9.40), (0, 9.70), 140.0),
+    ],
+    "schub_abgeleitet": ["idle"],
+    "einzel": [
+        ("start", "start", (1, 0.70), (1, 2.40), (0.002, 0.25), ("peak", -1.0)),
+        ("blip_1", "blip", (1, 2.60), (1, 5.40), (0.01, 0.25), ("lufs", -16.0)),
+        ("blip_2", "blip", (1, 11.60), (1, 14.40), (0.01, 0.25), ("lufs", -16.0)),
+    ],
+    "referenz": [((0, 0.0), (0, 17.45))],
+}
+# d6 – großer Sechszylinder-Diesel: Mack-Sattelzug an der Ampel, Leerlauf und langsames Anfahren unter Last, kyles
+# „truck mack transport semi trailer idle at red light and pull away slow long diesel rev“ (Freesound, CC0).
+# Sechszylinder-Viertakt: hellste Linie = Zündfrequenz → Drehzahl = f0 × 20; Leerlauf 32,4 Hz ≈ 650 1/min, Anfahren
+# 40 → 97 Hz (800 → 1940 1/min) im ersten Gang. Er rollt langsam an (Doppler ≈ 1 %, vernachlässigt). Echter Schub
+# fehlt – abgeleitet wie beim V10. (Eine Bus-Aufnahme im Stand war verworfen: ihre Linien sind oberhalb von
+# 1230 1/min mehrdeutig.)
+D6 = {
+    "teile": [
+        {"freesound": 451935, "sha256": "138b892eab3b90d0ce99243a56ab709b8d7f0b78c5c7d7a45852e5ba004f6d3d",
+         "titel": "truck mack transport semi trailer idle at red light and pull away slow long diesel rev"},
+    ],
+    "lizenz": "CC0 1.0",
+    "urheber": "kyles",
+    "rpm_per_hz": 20.0,
+    "annahme": "Sechszylinder-Diesel (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 20; rollt langsam an",
+    "verfolgung": "linie",
+    "doppler": False,
+    "loops": [
+        ("idle", (0, 1.2), (0, 2.6), 32.4, False),
+        ("r1150", (0, 3.62), (0, 3.92), 57.5),
+        ("r1350", (0, 4.20), (0, 4.45), 66.5),
+        ("r1550", (0, 4.85), (0, 5.08), 76.5),
+        ("r1750", (0, 5.2), (0, 5.42), 84.0),
+        ("r1900", (0, 5.70), (0, 6.00), 96.5),
+    ],
+    "schub": [],
+    "schub_abgeleitet": ["idle", "r1150", "r1350", "r1550", "r1750", "r1900"],
+    "einzel": [],
+    "referenz": [((0, 0.0), (0, 10.0))],
+}
+BANKS = {"v10": V10, "v12": V12, "r4": R4, "d4": D4, "d6": D6}
 GAP_S = 0.5
 
 

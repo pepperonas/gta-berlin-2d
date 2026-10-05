@@ -415,3 +415,24 @@ keine Fehlzündungen (Prüfstand, Alltagsmotor).
 Synthese). Klein-, Kompakt-, Mittelklasse und SUV → Preset `kompakt`; die Vierzylinder-Sportler (Roadster,
 Leichtcoupé, Leichtbau, Rallye, Drift-Coupé, bisher ausgenommen) → `sport4`. Diesel, Zweitakter, luftgekühlter Boxer
 und V2 behalten den Synthese-Klang, auch wenn ihre Klasse sonst den Vierzylinder bekäme (Diesel-Kombi).
+
+### Phase 7b: Diesel-Bänke `d4` (Pkw, Transporter) und `d6` (Lkw, Busse)
+
+| Bank | Quelle | Lizenz | Inhalt |
+|---|---|---|---|
+| `d4` | Soundholder „Renault Master F3500 dCi135 Engine RPM Ramp 2“ + „… Start Up Idle Gas Pressing And Shut Down“ | CC BY 3.0 | Rampe 44 → 144 Hz (1330 → 4330 1/min) hoch = Last, zurück = echter Schub; Leerlauf 25,9 Hz (≈ 780 1/min), Start, zwei Gasstöße |
+| `d6` | kyles „truck mack transport semi trailer idle at red light and pull away slow long diesel rev“ | CC0 | Leerlauf 32,4 Hz (≈ 650 1/min), Anfahren unter Last 40 → 97 Hz (800 → 1940 1/min); Schub abgeleitet |
+
+Annahmen: Vierzylinder-Diesel f0 × 30, Sechszylinder-Diesel f0 × 20 (hellste Linie = Zündfrequenz). Der Mack rollt
+langsam an (Doppler ≈ 1 %, vernachlässigt). **Verworfen:** eine Bus-Aufnahme im Stand (Linien oberhalb von
+1230 1/min mehrdeutig, nur zwei brauchbare Fenster). Zuordnung über den Motortyp: `diesel`/`diesel_sauger` → Preset
+`diesel`, `diesel_lkw` → `lkw` (Lkw, Busse, Müllwagen); Pegel gegen die Synthese: Diesel-Pkw −1,5 dB, Lkw +1,3 dB.
+
+**Lizenzseite:** `about.rs engine_credits` liest Lizenz und Urheber aus den Manifesten der Freesound-Bänke.
+
+### Was (noch) Synthese bleibt
+
+Für **V8** (Muscle-Cars), **Sechszylinder-Limousinen** (Oberklasse), **Motorräder**, **Zweitakter** und den
+**luftgekühlten Boxer** fand sich keine frei lizenzierte Aufnahme mit einem gehaltenen Drehzahlbereich: die
+V8-Prüfstandsaufnahme (Ears68) ist von Publikum und Ansager überlagert, die Corvette- und Motorradaufnahmen haben nur
+Leerlauf und kurze Gasstöße. Elektroantriebe bleiben bewusst synthetisch (Umrichterton).

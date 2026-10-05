@@ -62,10 +62,10 @@ Phase 8: tests `sim/tests/{physics_budget,calibration_gate,acceptance}.rs` (know
 `set_game_feel` / `Car::tuned`, never the data files); AI uses `car::Limits` from data and runs full vphys within
 `World::ai_full_radius` (`Car::lod_full`, pure-pursuit wheel angle in `traffic.rs`), kinematic beyond.
 Engine samples (docs/audio.md): combustion cars play sample banks (`data/audio/engine/
-v10/` sport/supercar, `v12/` hypercar, `r4/` four-cylinders; preset field `bank`; `zuordnung.typen` maps engine type before class, `null` = synth; a bank may be built from several Freesound `teile`), built by `tools/audio/build_engine_sounds.py
+v10/` sport/supercar, `v12/` hypercar, `r4/` four-cylinders, `d4/` diesel cars/vans, `d6/` trucks/buses; preset field `bank`; `zuordnung.typen` maps engine type before class, `null` = synth; a bank may be built from several Freesound `teile`), built by `tools/audio/build_engine_sounds.py
 [bank]`, never edit by hand; on/off loops may sit on different rpm grids; pure control logic
 `sim/enginesound.rs` (profiles `data/audio/engine_profiles.json`), playback `audio/sampler.rs` (16-bit WAV via
-`include_bytes!`, lists `V10`/`V12`/`R4` must match the manifests), wiring in `game/sound.rs`; such cars are removed from the
+`include_bytes!`, lists `V10`/`V12`/`R4`/`D4`/`D6` must match the manifests), wiring in `game/sound.rs`; such cars are removed from the
 synth voices. Panel `game/enginedebug.rs` (F4 / console `motorsound`). `GTA_ENGINE_SAMPLES=0` = synth only.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.

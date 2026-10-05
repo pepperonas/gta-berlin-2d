@@ -249,6 +249,33 @@ fn sfx_credits() -> Vec<String> {
     out
 }
 
+/// Quellen der Motor-Bänke aus Freesound (Manifeste von build_engine_sounds.py mit Lizenz und Urheber).
+fn engine_credits() -> Vec<String> {
+    let manifests = [
+        include_str!("../../../data/audio/engine/r4/manifest.json"),
+        include_str!("../../../data/audio/engine/d4/manifest.json"),
+        include_str!("../../../data/audio/engine/d6/manifest.json"),
+    ];
+    manifests
+        .iter()
+        .filter_map(|m| {
+            let v: serde_json::Value = serde_json::from_str(m).ok()?;
+            let lic = v["lizenz"].as_str()?;
+            let who = v["urheber"].as_str()?;
+            let titles: Vec<&str> = v["quelle"]
+                .as_array()?
+                .iter()
+                .filter_map(|t| t["titel"].as_str())
+                .collect();
+            Some(format!(
+                "Motor ({}): {} – {who}, {lic} – freesound.org",
+                v["bank"].as_str().unwrap_or("?"),
+                titles.join(", ")
+            ))
+        })
+        .collect()
+}
+
 fn license_blocks() -> Vec<Block> {
     let pk = packages();
     let mut out = vec![
@@ -273,6 +300,7 @@ fn license_blocks() -> Vec<Block> {
         Block::Bullet("Weitere Geräusche (Liste aus data/audio/sfx/manifest.json):".into()),
     ];
     out.extend(sfx_credits().into_iter().map(Block::Bullet));
+    out.extend(engine_credits().into_iter().map(Block::Bullet));
     out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),

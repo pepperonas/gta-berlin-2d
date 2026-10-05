@@ -20,6 +20,8 @@ const PROFILES: &str = include_str!("../../../data/audio/engine_profiles.json");
 const BANK_V10: &str = include_str!("../../../data/audio/engine/v10/manifest.json");
 const BANK_V12: &str = include_str!("../../../data/audio/engine/v12/manifest.json");
 const BANK_R4: &str = include_str!("../../../data/audio/engine/r4/manifest.json");
+const BANK_D4: &str = include_str!("../../../data/audio/engine/d4/manifest.json");
+const BANK_D6: &str = include_str!("../../../data/audio/engine/d6/manifest.json");
 
 /// Tonhöhe eines Loops: tiefer klingt verwaschen, höher nach Spielzeug.
 pub const PITCH_MIN: f64 = 0.7;
@@ -204,7 +206,9 @@ impl Config {
             "hypercar" => 2,
             "sport4" => 3,
             "kompakt" => 4,
-            _ => 5,
+            "diesel" => 5,
+            "lkw" => 6,
+            _ => 7,
         });
         let classes: HashMap<String, String> = j["zuordnung"]["klassen"]
             .as_object()
@@ -294,7 +298,7 @@ impl Config {
 
 pub fn config() -> &'static Config {
     static C: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
-    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10, BANK_V12, BANK_R4]))
+    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10, BANK_V12, BANK_R4, BANK_D4, BANK_D6]))
 }
 
 /// Motor-Samples an? `GTA_ENGINE_SAMPLES=0` schaltet zum Gegenhören auf den Synthese-Klang zurück.
@@ -709,14 +713,16 @@ mod tests {
                 .iter()
                 .map(|p| p.name.as_str())
                 .collect::<Vec<_>>(),
-            ["sport", "supercar", "hypercar", "sport4", "kompakt"]
+            [
+                "sport", "supercar", "hypercar", "sport4", "kompakt", "diesel", "lkw"
+            ]
         );
         assert_eq!(
             c.banks()
                 .iter()
                 .map(|b| b.name.as_str())
                 .collect::<Vec<_>>(),
-            ["v10", "v12", "r4"]
+            ["v10", "v12", "r4", "d4", "d6"]
         );
         for b in c.banks() {
             assert!(b.on.len() >= 4 && b.off.len() >= 4, "{}", b.name);
@@ -764,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn combustion_engines_get_their_bank_diesel_and_electric_stay_synth() {
+    fn combustion_engines_get_their_bank_electric_and_two_stroke_stay_synth() {
         let c = config();
         let get = |id: &str| {
             let v = crate::vehdata::game_vehicle(id).unwrap_or_else(|| panic!("{id}"));
@@ -789,15 +795,20 @@ mod tests {
                 "r4"
             );
         }
-        // Motortyp vor Klasse: der Diesel-Kombi bleibt Synthese, obwohl seine Klasse Vierzylinder-Benziner hat
+        // Motortyp vor Klasse: der Diesel-Kombi bekommt den Diesel, obwohl seine Klasse Vierzylinder-Benziner hat
         assert_eq!(get("kombi").as_deref(), Some("kompakt"));
-        assert_eq!(get("familienkombi"), None, "Diesel");
+        assert_eq!(get("familienkombi").as_deref(), Some("diesel"));
+        assert_eq!(get("transporter_kasten").as_deref(), Some("diesel"));
+        for id in ["stadtbus", "sattelzug_40t", "muellwagen"] {
+            assert_eq!(get(id).as_deref(), Some("lkw"), "{id}");
+        }
+        // Elektro, Zweitakter und luftgekühlter Boxer behalten die Synthese
         for id in [
             "hypercar_elektro",
             "e_kompakt",
-            "transporter_kasten",
-            "stadtbus",
+            "e_bus",
             "trabant",
+            "oldtimer_kaefer",
         ] {
             if crate::vehdata::game_vehicle(id).is_some() {
                 assert_eq!(get(id), None, "{id}");
