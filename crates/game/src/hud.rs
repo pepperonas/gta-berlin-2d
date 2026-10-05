@@ -702,6 +702,55 @@ pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f3
     }
 }
 
+/// Farbe eines Lebensbalkens nach Anteil (grün → gelb → rot).
+pub fn hp_color(frac: f32) -> [f32; 4] {
+    if frac > 0.6 {
+        [0.37, 0.83, 0.37, 1.]
+    } else if frac > 0.3 {
+        [0.91, 0.77, 0.25, 1.]
+    } else {
+        [0.91, 0.28, 0.24, 1.]
+    }
+}
+
+/// Lebensbalken über verletzten Passanten (lebend, schon getroffen, auf der Ebene des Spielers). Frisch getroffen
+/// blitzt der verlorene Teil kurz weiß auf; die Breite folgt dem Zoom wie die Figur.
+pub fn ped_health_bars(w: &World, camera: &Camera, viewport: Vec2, h: &mut Hud) {
+    use berlin_sim::combat::PED_HP;
+    use berlin_sim::pedestrians::PedState;
+    if w.in_tunnel_station() {
+        return;
+    }
+    let lvl = w.player.level.lvl;
+    for p in &w.peds {
+        if p.state == PedState::Dead
+            || p.hp >= PED_HP
+            || !p.hurt_t.is_finite()
+            || p.level.lvl != lvl
+        {
+            continue;
+        }
+        let at = Vec2::new(p.x as f32, p.y as f32);
+        let s = camera.world_to_screen(at, 0., viewport) / h.scale;
+        let s2 = camera.world_to_screen(at + Vec2::new(10., 0.), 0., viewport) / h.scale;
+        let unit = (s2 - s).length();
+        let (bw, bh) = ((unit * 2.6).clamp(18., 46.), (unit * 0.38).clamp(3., 6.));
+        // über dem Kopf (die Figur ist rund 1 m breit)
+        let (x, y) = (s.x - bw / 2., s.y - unit * 1.35 - bh);
+        if x + bw < 0. || x > h.width || y + bh < 0. || y > 720. {
+            continue;
+        }
+        let frac = (p.hp / PED_HP).clamp(0., 1.) as f32;
+        h.rect(x - 1., y - 1., bw + 2., bh + 2., [0., 0., 0., 0.7], 1.);
+        h.rect(x, y, bw, bh, [0.25, 0.25, 0.28, 0.85], 0.);
+        if p.hurt_t < 0.35 {
+            let k = (1. - p.hurt_t / 0.35) as f32;
+            h.rect(x, y, bw, bh, [1., 1., 1., 0.85 * k], 0.);
+        }
+        h.rect(x, y, bw * frac, bh, hp_color(frac), 0.);
+    }
+}
+
 /// Waffe und Magazin unten rechts (hud.js drawWeaponPanel); `r`/`b` = rechte bzw. untere Kante.
 /// Hex-Farbe einer Linie („#c00“, „cc0000“) → Farbe, sonst `None`.
 pub fn line_color(s: &str) -> Option<[f32; 4]> {

@@ -598,6 +598,7 @@ mod tests {
             return_best: 0.,
             dead_t: 0.,
             hp: 100.,
+            hurt_t: f64::INFINITY,
             level: Default::default(),
             level_init: true,
             fall: 0.,

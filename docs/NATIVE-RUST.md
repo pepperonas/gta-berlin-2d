@@ -588,9 +588,28 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
 **Bedienung:**
 - **Angreifen/Schießen:** Strg bzw. RT. Pistole und Schrotflinte je Druck, MP und Nahkampf solange gehalten.
 - **Treten:** V bzw. B.
+- **Springen:** Leertaste bzw. L3 (über Zäune, Poller, Kisten).
 - **Nachladen:** R bzw. X.
 - **Waffe wechseln:** Q oder RB vor, LB zurück, 1–6 direkt.
 - **Zielen:** rechter Stick (mit Zielhilfe) oder Maus (siehe unten).
+
+**Trefferzonen und Zufall (05.10.2026, `combat.rs`):** Schaden = Grundschaden der Waffe × Zone × (1 ± 20 %).
+Bei Schüssen bestimmt der seitliche Abstand des Strahls zur Mitte der Figur die Zone (`ray_zone`: unter 30 % des
+Radius Kopf ×2,2, unter 72 % Rumpf ×1, sonst Arme/Beine ×0,55); im Nahkampf wird sie gewürfelt (`melee_zone`:
+Schläge Kopf 25 %/Rumpf 55 %, Tritte Kopf 8 %/Rumpf 50 %, Rest Arme/Beine). Der Zufall kommt aus dem
+deterministischen Welt-Zufall. Eine Pistole tötet damit in 2 (Kopf) bis 8 Treffern (Arme/Beine).
+
+**Lebensbalken über Passanten (05.10.2026, `hud.rs ped_health_bars`):** über jedem lebenden, schon getroffenen
+Passanten auf der Ebene des Spielers; Farbe grün → gelb → rot, frisch getroffen blitzt der Balken 0,35 s weiß auf
+(`Ped::hurt_t` = Sekunden seit dem letzten Treffer). Die Breite folgt dem Zoom.
+
+**Springen (05.10.2026, `world.rs`):** Leertaste zu Fuß (Controller L3, umbelegbar als „Springen“; im Auto bleibt
+die Leertaste die Handbremse). Absprung 3,2 m/s, Schwerkraft 9,8 m/s² → ~0,65 s in der Luft, ~0,5 m hoch, nur vom
+Boden, nicht schwimmend, nicht im U-Bahnhof. Ab 0,15 m Höhe (`JUMP_CLEAR`) halten niedrige Hindernisse die Figur
+nicht auf (`jumpable`): Zäune, Gleisseiten, Poller, Kisten. Hauswände, Mauern und Hecken, Bäume, Kaikanten und
+Brückengeländer bleiben Hindernisse (ein Sturz von der Brücke ließe die Figur auf der Brückenebene stehen – die
+Ebenen kennen keinen Fall). In der Luft wird die Figur größer, ihr Schatten bleibt am Boden und rückt ab; Absprung
+und Landung klingen als Schritt auf dem Untergrund.
 
 **Darstellung** (`game/effects.rs` + Figuren in `play.rs`):
 - Mündungsfeuer (nachts auch als Lichtquelle), Leuchtspuren und Einschläge (Staub bzw. Funken auf Blech).

@@ -153,6 +153,15 @@ pub enum Event {
         /// Endpunkte der Kugeln (Leuchtspuren)
         traces: Vec<(f64, f64)>,
     },
+    /// Spieler springt ab bzw. landet
+    Jump {
+        x: f64,
+        y: f64,
+    },
+    Land {
+        x: f64,
+        y: f64,
+    },
     Swing {
         x: f64,
         y: f64,

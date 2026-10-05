@@ -506,6 +506,57 @@ fn melee_targets(w: &World, ang: f64, wp: &Weapon) -> Vec<Target> {
 
 // --- Wirkung -----------------------------------------------------------------------------------------------------
 
+/// Wo ein Treffer sitzt. Von oben gesehen ist der Kopf die Mitte der Figur, Rumpf und Schultern liegen darum,
+/// Arme (und im Nahkampf die Beine) am Rand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HitZone {
+    Head,
+    Torso,
+    Limb,
+}
+impl HitZone {
+    /// Schadensfaktor der Zone
+    pub fn mult(self) -> f64 {
+        match self {
+            HitZone::Head => 2.2,
+            HitZone::Torso => 1.,
+            HitZone::Limb => 0.55,
+        }
+    }
+}
+/// Zufallsspanne des Schadens: ±20 % um den Wert der Zone
+pub const DMG_SPREAD: f64 = 0.2;
+
+/// Zone eines Schusses aus dem seitlichen Abstand des Strahls zur Mitte der Figur (Radius `r`).
+pub fn ray_zone(ox: f64, oy: f64, dx: f64, dy: f64, cx: f64, cy: f64, r: f64) -> HitZone {
+    let off = ((cx - ox) * dy - (cy - oy) * dx).abs() / r.max(1e-6);
+    if off < 0.3 {
+        HitZone::Head
+    } else if off < 0.72 {
+        HitZone::Torso
+    } else {
+        HitZone::Limb
+    }
+}
+
+/// Zone eines Nahkampftreffers (gewürfelt): Tritte treffen eher die Beine, Schläge eher Kopf und Rumpf.
+pub fn melee_zone(rng: &mut Rng, kick: bool) -> HitZone {
+    let (head, torso) = if kick { (0.08, 0.5) } else { (0.25, 0.55) };
+    let u = rng.float();
+    if u < head {
+        HitZone::Head
+    } else if u < head + torso {
+        HitZone::Torso
+    } else {
+        HitZone::Limb
+    }
+}
+
+/// Schaden eines Treffers: Grundschaden × Zone × Zufall (1 ± `DMG_SPREAD`).
+pub fn roll_damage(rng: &mut Rng, base: f64, zone: HitZone) -> f64 {
+    base * zone.mult() * (1. - DMG_SPREAD + 2. * DMG_SPREAD * rng.float())
+}
+
 /// Treffer auf einen Passanten; `player` = vom Spieler (Statistik).
 pub fn hurt_ped(
     w: &mut World,
@@ -521,6 +572,7 @@ pub fn hurt_ped(
         return;
     }
     q.hp -= dmg;
+    q.hurt_t = 0.;
     let a = (q.y - from.1).atan2(q.x - from.0);
     w.events.push(Event::Blood {
         x: q.x,
@@ -655,8 +707,16 @@ pub fn strike(w: &mut World, wp: &Weapon, ang: f64) -> usize {
                 let (x, y) = (w.cars[i].x, w.cars[i].y);
                 w.events.push(Event::Thud { x, y });
             }
-            Target::Ped(i) => hurt_ped(w, i, wp.dmg, (px, py), true, wp.id, true),
-            Target::Bike(i) => hurt_bike(w, i, wp.dmg, (px, py), true, wp.id, true),
+            Target::Ped(i) => {
+                let zone = melee_zone(&mut w.rng, wp.id == KICK.id);
+                let dmg = roll_damage(&mut w.rng, wp.dmg, zone);
+                hurt_ped(w, i, dmg, (px, py), true, wp.id, true)
+            }
+            Target::Bike(i) => {
+                let zone = melee_zone(&mut w.rng, wp.id == KICK.id);
+                let dmg = roll_damage(&mut w.rng, wp.dmg, zone);
+                hurt_bike(w, i, dmg, (px, py), true, wp.id, true)
+            }
             Target::Wall => {}
         }
     }
@@ -680,13 +740,17 @@ pub fn shoot(w: &mut World, wp: &Weapon, ang: f64, spread_k: f64) {
         };
         let r = cast_ray(w, px, py, ang + off, wp.range, lvl);
         traces.push((r.x, r.y));
+        let (dx, dy) = ((ang + off).cos(), (ang + off).sin());
         match r.hit {
             Some(Target::Ped(i)) => {
                 w.events.push(Event::WeaponHit {
                     weapon: wp.id,
                     car: false,
                 });
-                hurt_ped(w, i, wp.dmg, (px, py), false, wp.id, true);
+                let (cx, cy) = (w.peds[i].x, w.peds[i].y);
+                let zone = ray_zone(px, py, dx, dy, cx, cy, PED_RADIUS + 2.);
+                let dmg = roll_damage(&mut w.rng, wp.dmg, zone);
+                hurt_ped(w, i, dmg, (px, py), false, wp.id, true);
             }
             Some(Target::Car(i)) => {
                 w.events.push(Event::WeaponHit {
@@ -700,7 +764,10 @@ pub fn shoot(w: &mut World, wp: &Weapon, ang: f64, spread_k: f64) {
                     weapon: wp.id,
                     car: false,
                 });
-                hurt_bike(w, i, wp.dmg, (px, py), false, wp.id, true);
+                let (cx, cy) = (w.bikes[i].x, w.bikes[i].y);
+                let zone = ray_zone(px, py, dx, dy, cx, cy, crate::bikes::RADIUS + 2.);
+                let dmg = roll_damage(&mut w.rng, wp.dmg, zone);
+                hurt_bike(w, i, dmg, (px, py), false, wp.id, true);
             }
             Some(Target::Wall) => w.events.push(Event::Impact {
                 x: r.x,
@@ -863,6 +930,43 @@ pub fn start_fight(q: &mut Ped) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hits_land_in_zones_and_damage_varies() {
+        // Schuss von links nach rechts auf eine Figur bei (100, 0), Radius 10: mittig = Kopf, Rand = Arm
+        let z = |off: f64| ray_zone(0., off, 1., 0., 100., 0., 10.);
+        assert_eq!(z(0.), HitZone::Head);
+        assert_eq!(z(2.5), HitZone::Head);
+        assert_eq!(z(-5.), HitZone::Torso);
+        assert_eq!(z(9.), HitZone::Limb);
+        assert!(HitZone::Head.mult() > HitZone::Torso.mult());
+        assert!(HitZone::Torso.mult() > HitZone::Limb.mult());
+        // Zufall: nie zweimal genau gleich, immer innerhalb ±20 %
+        let mut rng = Rng::new(7);
+        let rolls: Vec<f64> = (0..400)
+            .map(|_| roll_damage(&mut rng, 34., HitZone::Torso))
+            .collect();
+        assert!(rolls.iter().all(|d| (34. * 0.8..=34. * 1.2).contains(d)));
+        let (lo, hi) = rolls
+            .iter()
+            .fold((f64::MAX, f64::MIN), |(a, b), &d| (a.min(d), b.max(d)));
+        assert!(hi - lo > 34. * 0.3, "Spanne {lo}…{hi}");
+        assert!(rolls.windows(2).all(|w| w[0] != w[1]));
+        // Nahkampf: Tritte treffen seltener den Kopf als Schläge, beide treffen alle Zonen
+        let count = |kick: bool| {
+            let mut rng = Rng::new(3);
+            let mut n = [0usize; 3];
+            for _ in 0..2000 {
+                n[melee_zone(&mut rng, kick) as usize] += 1;
+            }
+            n
+        };
+        let (k, p) = (count(true), count(false));
+        assert!(k.iter().all(|&c| c > 0) && p.iter().all(|&c| c > 0));
+        assert!(k[0] * 2 < p[0], "Kopf: Tritt {} / Schlag {}", k[0], p[0]);
+        assert!(k[2] > p[2], "Beine/Arme: Tritt {} / Schlag {}", k[2], p[2]);
+    }
+
     #[test]
     fn rays_hit_shapes() {
         assert_eq!(ray_circle(0., 0., 1., 0., 10., 0., 2.), 8.);

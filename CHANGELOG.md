@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Springen mit der Leertaste (Controller L3) – zu Fuß über Zäune, Gleisseiten, Poller und Kisten;
+  Hauswände, Mauern, Hecken, Bäume, Kaikanten und Brückengeländer bleiben Hindernisse. Getroffene Passanten zeigen
+  einen Lebensbalken über dem Kopf. Schaden hängt von der Trefferzone ab (Kopf ×2,2, Rumpf ×1, Arme/Beine ×0,55;
+  Schüsse nach Treffpunkt, Nahkampf gewürfelt, Tritte treffen eher die Beine) und schwankt zufällig um ±20 %.
+
 - Native Fassung: Hypercars klingen nach einem Twin-Turbo-V12 mit 1000+ PS, aufgenommen am Prüfstand (neue
   Sample-Bank `v12`): sieben Last-Loops von 1235 bis 8383 1/min aus einem sauberen Volllast-Zug, erstmals **echte
   Schub-Loops** aus dem Ausrollen (4000–7700 1/min), Gasstöße und sieben echte Fehlzündungen. Sportwagen und

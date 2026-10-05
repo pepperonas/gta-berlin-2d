@@ -3,7 +3,7 @@
 //! Ereignisse ([`Event`]). Der feste Schritt ist [`DT`].
 use crate::car::{self, Car, Driver, Knocked, Role, collide_car_world, collide_cars, step_car};
 use crate::carmodels::{CAR_COLORS, is_open_kind};
-use crate::city::{City, Ground, Solid, point_along};
+use crate::city::{City, Ground, Solid, WallKind, WallSub, point_along};
 use crate::collision::{
     Grid, Obb, Rect, circle_vs_circle, circle_vs_obb, circle_vs_rect, circle_vs_segment,
     obb_vs_rect, obb_vs_segment,
@@ -27,6 +27,11 @@ pub const PLAYER_RADIUS: f64 = 7.;
 pub const WALK: f64 = 15.;
 pub const JOG: f64 = 35.;
 pub const SPRINT: f64 = 70.;
+/// Sprung: Absprunggeschwindigkeit (px/s) und Schwerkraft (px/s², 10 px = 1 m) → ~0,65 s in der Luft, ~0,5 m hoch
+pub const JUMP_V: f64 = 32.;
+pub const GRAVITY: f64 = 98.;
+/// ab dieser Höhe (px) halten niedrige Hindernisse (Zäune, Gleisseiten, Poller, Kisten) die Figur nicht mehr auf
+pub const JUMP_CLEAR: f64 = 1.5;
 pub const ENTER_DIST: f64 = 40.;
 pub const STAMINA_DRAIN: f64 = 12.;
 pub const STAMINA_RECOVER: f64 = 20.;
@@ -80,6 +85,8 @@ pub struct Input {
     pub click_attack: bool,
     /// Mitfahren: einsteigen bzw. aussteigen (Flanke, G / Steuerkreuz unten)
     pub ride: bool,
+    /// Springen (zu Fuß, gedrückt in diesem Schritt)
+    pub jump: bool,
 }
 
 /// Laufender Klickauftrag der Spielfigur (world.js `p.click`).
@@ -138,6 +145,9 @@ pub struct Player {
     pub entry_guard: Option<(f64, f64)>,
     /// Klick-Laufweg: Ort und Zeit ohne Vorankommen (steht vor einem Auto, das selbst wartet)
     pub click_stall: (f64, f64, f64),
+    /// Sprung: Höhe über dem Boden (px) und Steiggeschwindigkeit (px/s)
+    pub z: f64,
+    pub vz: f64,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -284,6 +294,19 @@ fn spot_free_static(city: &mut City, knocked: &Knocked, x: f64, y: f64, r: f64, 
     true
 }
 
+/// Niedrige Hindernisse, über die man springen kann: Zäune, Gleisseiten, Poller, Kisten. Hauswände, Mauern und
+/// Hecken, Bäume, Kaikanten (Absturz ins Wasser) und Brückengeländer (Absturz von der Brücke – die Ebenen kennen
+/// keinen Fall) bleiben Hindernisse.
+pub fn jumpable(s: &Solid) -> bool {
+    match s {
+        Solid::Wall { kind, sub, .. } => {
+            *kind == WallKind::Wall && matches!(sub, WallSub::Fence | WallSub::Rail)
+        }
+        Solid::Circle { kind, .. } => matches!(kind, crate::city::CircleKind::Barrier { .. }),
+        Solid::Rect(_) => true,
+    }
+}
+
 impl World {
     /// Neue Welt am Missionsort. `cars`/`peds`: Zielbevölkerung um die Kamera.
     pub fn new(city: City, seed: u32, cars: usize, peds: usize) -> Self {
@@ -330,6 +353,8 @@ impl World {
                 inside: None,
                 entry_guard: None,
                 click_stall: (0., 0., 0.),
+                z: 0.,
+                vz: 0.,
             },
             player_car_id: None,
             mission: Mission::default(),
@@ -1608,9 +1633,10 @@ impl World {
     fn push_circle_out(&mut self, r: f64) {
         let lvl = self.player.level.lvl;
         let p = &mut self.player;
+        let over = p.z >= JUMP_CLEAR;
         for h in self.city.solids.query(&Rect::around(p.x, p.y, r + 2.)) {
             let s = *self.city.solids.get(h);
-            if !car::blocks(&self.knocked, &s, lvl) {
+            if !car::blocks(&self.knocked, &s, lvl) || (over && jumpable(&s)) {
                 continue;
             }
             let m = match s {
@@ -2348,6 +2374,22 @@ impl World {
                 p.stamina = (p.stamina + dt / STAMINA_RECOVER).min(1.);
             }
         }
+        // Sprung: nur vom Boden, nicht schwimmend, nicht benommen, nicht im Bahnhof
+        let airborne = p.z > 0. || p.vz > 0.;
+        if input.jump && !airborne && !p.swimming && !stunned && p.inside.is_none() {
+            p.vz = JUMP_V;
+            self.events.push(Event::Jump { x: p.x, y: p.y });
+        }
+        let p = &mut self.player;
+        if p.z > 0. || p.vz > 0. {
+            p.vz -= GRAVITY * dt;
+            p.z += p.vz * dt;
+            if p.z <= 0. {
+                (p.z, p.vz) = (0., 0.);
+                self.events.push(Event::Land { x: p.x, y: p.y });
+            }
+        }
+        let p = &mut self.player;
         if mag > 0.05 {
             let speed = if p.swimming {
                 18.

@@ -704,8 +704,13 @@ fn shooting_and_melee_hurt_pedestrians() {
         );
     }
     let p = w.peds.iter().find(|p| p.id == id).expect("Passant noch da");
-    assert_eq!(p.state, PedState::Dead, "drei Pistolentreffer à 34 töten");
-    assert!((3..=6).contains(&shots), "{shots} Schüsse");
+    assert_eq!(
+        p.state,
+        PedState::Dead,
+        "Pistolentreffer à 34 (× Zone × Zufall) töten"
+    );
+    // Kopf ×2,2 tötet in zwei Treffern, Arme/Beine ×0,55 brauchen bis zu acht
+    assert!((2..=9).contains(&shots), "{shots} Schüsse");
     assert_eq!(w.player.combat.mag[3], 12 - shots as u32);
     // Nahkampf: ein Faustschlag aus nächster Nähe trifft und lässt bluten
     let j = ped_in_front(&mut w, 0.);
@@ -2459,4 +2464,144 @@ fn ai_near_the_player_runs_full_physics_far_ones_kinematic() {
     // KI fährt (Tempo > 0 bei den meisten)
     let moving = ai.iter().filter(|c| c.speed() > 10.).count();
     assert!(moving * 2 >= ai.len(), "{moving} von {} fahren", ai.len());
+}
+
+#[test]
+fn space_jumps_once_and_lands() {
+    use berlin_sim::events::Event;
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    assert!(w.player.in_car.is_none());
+    let jump = Input {
+        jump: true,
+        ..idle()
+    };
+    let (mut peak, mut air, mut jumps, mut landed) = (0f64, 0, 0, false);
+    for _ in 0..120 {
+        // Taste dauernd gedrückt: in der Luft kein zweiter Absprung
+        w.update(&jump, DT);
+        jumps += w
+            .events
+            .iter()
+            .filter(|e| matches!(e, Event::Jump { .. }))
+            .count();
+        peak = peak.max(w.player.z);
+        if w.player.z > 0. {
+            air += 1;
+        }
+        if w.events.iter().any(|e| matches!(e, Event::Land { .. })) {
+            landed = true;
+            break;
+        }
+    }
+    assert!(landed && jumps == 1, "gelandet {landed}, Absprünge {jumps}");
+    let t = air as f64 * DT;
+    assert!((0.55..=0.75).contains(&t), "{t:.2} s in der Luft");
+    assert!((4. ..=7.).contains(&peak), "{peak:.1} px hoch");
+    assert_eq!((w.player.z, w.player.vz), (0., 0.));
+}
+
+/// Über einen Zaun kommt man nur springend; eine Hauswand hält auch im Sprung.
+#[test]
+fn jumping_clears_fences_but_not_buildings() {
+    use berlin_sim::city::{Solid, WallKind, WallSub};
+    use berlin_sim::collision::Rect;
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    let (px, py) = (w.player.x, w.player.y);
+    let area = Rect {
+        x: px - 2500.,
+        y: py - 2500.,
+        w: 5000.,
+        h: 5000.,
+    };
+    let walls: Vec<(f64, f64, f64, f64, bool)> = w
+        .city
+        .solids
+        .query(&area)
+        .into_iter()
+        .filter_map(|h| match *w.city.solids.get(h) {
+            Solid::Wall {
+                seg,
+                kind: WallKind::Wall,
+                sub: WallSub::Fence,
+                lvl: 0,
+            } => Some((seg.ax, seg.ay, seg.bx, seg.by, true)),
+            Solid::Wall {
+                seg,
+                kind: WallKind::Building,
+                lvl: 0,
+                ..
+            } => Some((seg.ax, seg.ay, seg.bx, seg.by, false)),
+            _ => None,
+        })
+        .filter(|&(ax, ay, bx, by, _)| (bx - ax).hypot(by - ay) > 60.)
+        .collect();
+    // läuft 1 s quer auf die Wand zu (12 px davor), mit oder ohne Sprung; Ergebnis: Seite danach (+ = Start)
+    let cross = |w: &mut World, (ax, ay, bx, by): (f64, f64, f64, f64), jump: bool| {
+        let (mx, my) = ((ax + bx) / 2., (ay + by) / 2.);
+        let l = (bx - ax).hypot(by - ay);
+        let (nx, ny) = (-(by - ay) / l, (bx - ax) / l);
+        w.player.x = mx + nx * 12.;
+        w.player.y = my + ny * 12.;
+        (w.player.z, w.player.vz) = (0., 0.);
+        w.player.level.lvl = 0;
+        for k in 0..60 {
+            w.update(
+                &Input {
+                    move_x: -nx,
+                    move_y: -ny,
+                    jump: jump && k == 0,
+                    ..idle()
+                },
+                DT,
+            );
+        }
+        (w.player.x - mx) * nx + (w.player.y - my) * ny
+    };
+    let mut fence_ok = 0;
+    for &(ax, ay, bx, by, fence) in walls.iter().filter(|x| x.4).take(300) {
+        let seg = (ax, ay, bx, by);
+        if cross(&mut w, seg, false) > 0. && cross(&mut w, seg, true) < 0. {
+            fence_ok += 1;
+            if fence_ok >= 3 {
+                break;
+            }
+        }
+        let _ = fence;
+    }
+    assert!(fence_ok >= 3, "nur {fence_ok} Zäune übersprungen");
+    // Hauswände: im Sprung nie hindurch
+    let mut tested = 0;
+    for &(ax, ay, bx, by, _) in walls.iter().filter(|x| !x.4).take(60) {
+        let seg = (ax, ay, bx, by);
+        if cross(&mut w, seg, false) > 0. {
+            tested += 1;
+            assert!(
+                cross(&mut w, seg, true) > 0.,
+                "durch eine Hauswand gesprungen"
+            );
+        }
+    }
+    assert!(tested >= 10, "{tested} Hauswände geprüft");
+}
+
+#[test]
+fn hurt_pedestrians_carry_a_hit_timer() {
+    let mut w = world(1989);
+    run(&mut w, 5, idle());
+    let i = w
+        .peds
+        .iter()
+        .position(|p| p.state != PedState::Dead)
+        .unwrap();
+    assert!(w.peds[i].hurt_t.is_infinite(), "nie getroffen");
+    let from = (w.peds[i].x - 20., w.peds[i].y);
+    berlin_sim::combat::hurt_ped(&mut w, i, 30., from, false, "pistol", true);
+    assert_eq!(w.peds[i].hurt_t, 0.);
+    let id = w.peds[i].id;
+    run(&mut w, 30, idle());
+    if let Some(p) = w.peds.iter().find(|p| p.id == id) {
+        assert!((p.hurt_t - 0.5).abs() < 0.05 && p.hp < 100.);
+    }
 }

@@ -252,6 +252,7 @@ impl Play {
             crate::underground::entrance_letters(&self.world, camera, viewport, out);
             crate::streetfurn::sign_texts(&self.street_signs, camera, viewport, out);
             crate::neon::draw(&self.neon, camera, viewport, out);
+            crate::hud::ped_health_bars(&self.world, camera, viewport, out);
         }
         self.hud_width = out.width;
         if self.sign_lab {
@@ -1249,6 +1250,7 @@ pub fn input_from(keys: &Keys, driving: bool, b: &crate::bindings::Bindings) -> 
         esp_toggle: driving && b.pressed(keys, A::Esp),
         abs_toggle: driving && b.pressed(keys, A::Abs),
         ride: !driving && b.pressed(keys, A::Ride),
+        jump: !driving && b.pressed(keys, A::Jump),
         combat: combat_input(keys, driving, b),
         ..Default::default()
     }
@@ -1434,6 +1436,33 @@ fn demo_cover(w: &mut World) {
 }
 
 /// Aufnahmen: in den nächsten U-Bahnhof hinunter, mit `ride` danach in den nächsten haltenden Zug; `true` = fertig.
+/// Sprung: die Figur (und die Waffe in der Hand) kommt der Kamera näher und wird größer, ihr Schatten (der erste
+/// Körper der Figur) bleibt am Boden, rückt ab und wird blasser.
+fn lift_bodies(
+    out: &mut [Body],
+    weapon: std::ops::Range<usize>,
+    fig0: usize,
+    (x, y): (f32, f32),
+    z: f32,
+) {
+    let s = 1. + z * 0.045;
+    let grow = |b: &mut Body| {
+        b.center = [x + (b.center[0] - x) * s, y + (b.center[1] - y) * s];
+        b.half = [b.half[0] * s, b.half[1] * s];
+    };
+    for b in &mut out[weapon] {
+        grow(b);
+    }
+    if let Some((shadow, body)) = out[fig0..].split_first_mut() {
+        shadow.center[0] += z * 0.6;
+        shadow.center[1] += z * 0.6;
+        shadow.color[3] *= 1. / (1. + z * 0.15);
+        for b in body {
+            grow(b);
+        }
+    }
+}
+
 pub fn demo_station_step(w: &mut World, ride: bool) -> bool {
     if w.player.ride.is_some() {
         return true;
@@ -3060,7 +3089,10 @@ impl Game for Play {
             } else {
                 0.617
             };
+            let lift = w.player.z as f32;
+            let weapon0 = out.len();
             weapon_bodies(&w.player.combat, (x, y), a, depth0, out);
+            let weapon1 = out.len();
             let depth = if w.player.level.lvl >= 1 {
                 0.548
             } else {
@@ -3084,7 +3116,11 @@ impl Game for Play {
                 run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
                 skin: 0xf2d0b1,
             };
+            let fig0 = out.len();
             crate::figure::person_bodies(&who, &crate::figure::player_look(), depth, w.time, out);
+            if lift > 0. {
+                lift_bodies(out, weapon0..weapon1, fig0, (x, y), lift);
+            }
         }
         crate::streetfurn::lamp_bodies(&self.street_lamps, self.lamps_lit, out);
         crate::streetfurn::sign_bodies(&self.street_signs, out);

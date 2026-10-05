@@ -138,6 +138,8 @@ impl Listener {
                 Event::Reload { .. } => Some((Sfx::Reload, 1.)),
                 Event::Reloaded { .. } => Some((Sfx::Reloaded, 1.)),
                 Event::WeaponSwitch { .. } => Some((Sfx::WeaponSwitch, 1.)),
+                // Absprung und Landung: Schritte auf dem Untergrund (unten, braucht die Stadt)
+                Event::Jump { .. } | Event::Land { .. } => None,
                 Event::Wreck { .. }
                 | Event::Notice(_)
                 | Event::Blood { .. }
@@ -163,6 +165,20 @@ impl Listener {
         }
         // eigenes Fahrzeug
         let (wet, snow) = (w.weather.wet, w.weather.snow);
+        let hops: Vec<(f64, f64, f32)> = w
+            .events
+            .iter()
+            .filter_map(|e| match *e {
+                Event::Jump { x, y } => Some((x, y, 0.7)),
+                Event::Land { x, y } => Some((x, y, 1.4)),
+                _ => None,
+            })
+            .collect();
+        for (x, y, gain) in hops {
+            let lvl = w.player.level.lvl;
+            let kind = footstep_kind(w.city.surface_at(x, y, Some(lvl)), wet, snow);
+            f.sfx.push(Sfx::Footstep(kind, gain));
+        }
         let pc = w.player_car().cloned();
         let mix = &sound_config().mix;
         f.engine_mix = mix.engine as f32;

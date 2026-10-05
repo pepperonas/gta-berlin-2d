@@ -39,6 +39,8 @@ pub enum Action {
     EnterExit,
     Use,
     Ride,
+    /// Springen (zu Fuß): über Zäune, Poller, Kisten
+    Jump,
     Fire,
     Kick,
     Reload,
@@ -330,6 +332,14 @@ pub const ACTIONS: &[Info] = &[
         Foot,
         [Some(KeyCode::KeyG), None],
         Some(P::Down),
+        None,
+    ),
+    info(
+        A::Jump,
+        "Springen",
+        Foot,
+        [Some(KeyCode::Space), None],
+        Some(P::LS),
         None,
     ),
     info(

@@ -68,6 +68,8 @@ pub struct Ped {
     pub return_best: f64,
     pub dead_t: f64,
     pub hp: f64,
+    /// Sekunden seit dem letzten Treffer (Lebensbalken), unendlich = nie getroffen
+    pub hurt_t: f64,
     pub level: LevelState,
     pub level_init: bool,
     /// Sturzrichtung (tot)
@@ -226,6 +228,7 @@ pub fn create_ped(id: u32, city: &mut City, sw: &mut Sidewalks, spot: Spot, rng:
         return_best: f64::INFINITY,
         dead_t: 0.,
         hp: 100.,
+        hurt_t: f64::INFINITY,
         level: LevelState::default(),
         level_init: false,
         fall: 0.,
@@ -487,6 +490,7 @@ fn next_leg(p: &mut Ped, cx: &mut PedCtx) {
 
 pub fn update_ped(p: &mut Ped, cx: &mut PedCtx, dt: f64) {
     p.car_hit_cd = (p.car_hit_cd - dt).max(0.);
+    p.hurt_t += dt;
     let (px, py) = (p.x, p.y);
     match p.state {
         PedState::Walk => 'walk: {
