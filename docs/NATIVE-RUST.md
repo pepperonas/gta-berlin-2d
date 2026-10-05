@@ -611,8 +611,17 @@ Brückengeländer bleiben Hindernisse (ein Sturz von der Brücke ließe die Figu
 Ebenen kennen keinen Fall). In der Luft wird die Figur größer, ihr Schatten bleibt am Boden und rückt ab; Absprung
 und Landung klingen als Schritt auf dem Untergrund.
 
-**Darstellung** (`game/effects.rs` + Figuren in `play.rs`):
-- Mündungsfeuer (nachts auch als Lichtquelle), Leuchtspuren und Einschläge (Staub bzw. Funken auf Blech).
+**Darstellung** (`game/effects.rs`, Waffeneffekte in `game/gunfx.rs`, Figuren in `play.rs`):
+- Mündungsfeuer (05.10.2026): heißer Kern, Flammenzunge und 2–4 seitliche Strahlen, je Schuss anders, 35–60 ms
+  (ein bis zwei Bilder), Schrotflinte größer; nachts als Lichtquelle. Pulverdampf quillt vor der Mündung auf und
+  verweht in ~1 s.
+- Geschossbahn: ein heller Streifen fliegt mit ~350 m/s (`BULLET_SPEED`) zum Ziel, statt die ganze Strecke auf
+  einmal aufleuchten zu lassen.
+- Hülsen: Messing fliegt nach rechts aus, springt einmal auf und bleibt 30 s liegen (höchstens 160); die
+  Schrotflinte wirft ihre rote Hülse erst beim Repetieren aus (0,42 s nach dem Schuss).
+- Einschläge: Staub und Splitter zurück zum Schützen und ein Einschussloch, das 30 s bleibt; auf Blech
+  Funkenregen. Die Richtung kommt aus der Geschossbahn desselben Schritts (Einschläge stehen vor dem Schuss im
+  Ereignisstrom). Streuung nur aus Hashes, nie aus dem Welt-Zufall.
 - Blutstropfen in Schlagrichtung bleiben 90 s liegen und dunkeln nach.
 - Tote liegen in Sturzrichtung, Kämpfer zeigen ihren Schlag. Die Spielfigur trägt die gewählte Waffe; Schlag
   und Tritt sind sichtbar.
@@ -622,7 +631,8 @@ und Landung klingen als Schritt auf dem Untergrund.
 - Waffenanzeige unten rechts mit Magazin, Nachladebalken und Waffenleiste.
 - Roter Rand bei Treffern, K. o.-Schriftzug.
 
-**Klang:** Pistole, MP und Schrotflinte (hörbar bis zur doppelten Ereignisweite), Schlag, Treffer, Blech,
+**Klang:** Pistole, MP und Schrotflinte (hörbar bis zur doppelten Ereignisweite; seit 05.10.2026 echte Aufnahmen,
+siehe `docs/audio.md` „Schüsse“), Schlag, Treffer, Blech,
 Einschlag, Nachladen und Waffenwechsel.
 
 **Statistik:** neuer Abschnitt Kampf mit Getöteten (erschossen bzw. im Nahkampf), Schüssen, Kugeln, Treffern,

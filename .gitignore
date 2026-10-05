@@ -17,3 +17,4 @@ web/data/bars.json
 /target/
 
 tools/audio/__pycache__/
+tools/audio/.cache/

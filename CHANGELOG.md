@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Waffen klingen und sehen echt aus. Pistole, MP und Schrotflinte spielen Aufnahmen echter Waffen
+  (Walther PPQ, Carl Gustav M45, Benelli Nova; „The Free Firearm Sound Library“, CC0) mit Nachhall vom Schießstand,
+  mehreren Varianten je Waffe und Abdunklung mit der Entfernung. Mündungsfeuer mit Kern, Flammenzunge und seitlichen
+  Strahlen, je Schuss anders; Pulverdampf, der verweht; ein Geschossstreifen fliegt mit Geschossgeschwindigkeit zum
+  Ziel; Hülsen fliegen nach rechts aus und bleiben liegen (die Schrotflinte wirft beim Repetieren aus); Einschläge
+  sprühen Staub und Splitter zurück zum Schützen und hinterlassen Einschusslöcher, Blech sprüht Funken.
+
 - Native Fassung: Motorräder sehen aus wie Motorräder und fahren sich wie welche. Gezeichnet aus Teilen statt als
   Rechteck – Reifen, lenkendes Vorderrad, Tank, Sitzbank, Heck mit Bremslicht, Lenker mit Spiegeln, je Bauart
   Verkleidung (Superbike), Rundscheinwerfer (Naked), Chrom und Trittbretter (Cruiser) oder Roller-Karosserie – mit

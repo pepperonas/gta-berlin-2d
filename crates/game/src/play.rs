@@ -2487,6 +2487,8 @@ impl Game for Play {
         }
         if self.demo_combat && !w2.loading && w2.player.in_car.is_none() {
             demo_combat_input(w2, &mut input);
+            // nah heran, damit Mündungsfeuer, Hülsen und Einschläge im Bild zu erkennen sind
+            self.zoom_user = 1.8;
         }
         // Maus oder Controller zielt: wer zuletzt bewegt wurde
         let m = keys.mouse;

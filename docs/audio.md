@@ -215,3 +215,25 @@ Bild; die Physik-Anzeige (F3) liegt links, es ist immer nur eine offen (sie teil
   Geschwindigkeit für den Doppler.
 - Abgehört wurde nicht von Menschen in dieser Sitzung; verifiziert sind Spektrogramme der Testfahrt, Pegelmessung
   und die Tests (Klicks, Aussetzer, Tonhöhengrenzen, Unterscheidbarkeit der Kategorien, Rechenzeit).
+
+## Schüsse (05.10.2026)
+
+Pistole, Maschinenpistole und Schrotflinte spielen echte Aufnahmen statt des Synthesizers.
+
+| Teil | Ort |
+|---|---|
+| Quelle | [The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library), „Prepared SFX Library.7z“ (194 MB), **CC0 1.0** – Ben Jaszczak, Brian Nelson, Kevin Heras, Matthew Nanney |
+| Build-Skript | `tools/audio/build_weapon_sounds.py` (lädt das Archiv nach `tools/audio/.cache/`, prüft SHA-256, entpackt mit `7z`) |
+| Ausgabe | `data/audio/weapons/{pistol_1..3,smg_1..3,shotgun_1..2}.wav` + `manifest.json` (je 1,5 s, Mono, 48 kHz, 16 Bit) |
+| Wiedergabe | `crates/audio/src/sampler.rs weapon_bank`, `synth.rs` (`Sfx::Gun`, `SamplePlay`) |
+
+Vorbilder: Walther PPQ (Pistole), Carl Gustav M45 (MP), Benelli Nova (Schrotflinte). Je Variante zwei Schichten
+derselben Waffe, am Knall ausgerichtet: die trockene Nahaufnahme und – 15 ms später, 3–6 dB leiser – die
+Mittelaufnahme mit Körper und Echo vom Schießstand (der Widerhall, den die Nahaufnahme nicht hat). Bei der MP sind
+die Aufnahmen Zweierstöße; genommen wird nur der erste Schuss, den Takt schießt das Spiel selbst. Das Skript ist
+idempotent (gleicher Eingang, bitgleiche Dateien).
+
+**Laufzeit:** je Schuss eine zufällige Variante mit ±3 % Tonhöhe. Ein neuer Schuss derselben Waffe blendet den
+Nachhall des vorigen in 30 ms aus (sonst türmen sich bei Dauerfeuer bis zu 13 Nachhallfahnen), höchstens 24
+gleichzeitig. Entfernung dunkelt ab: Tiefpass 1,2 kHz (fern) bis ~17 kHz (nah), zusätzlich zur Lautstärke. Pegel je
+Waffe in `GUN_LEVEL`; ein Test hält die Lautheit mindestens auf dem Stand des Synthesizers und unter Übersteuerung.

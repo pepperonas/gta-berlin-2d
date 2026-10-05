@@ -7,7 +7,7 @@
 use crate::dsp::{
     Biquad, Compressor, Env, FilterType, Noise, Osc, Reverb, Smooth, Table, Wave, pan, shape,
 };
-use crate::sampler::{EngineFrame, SamplerVoice, bank_v10};
+use crate::sampler::{EngineFrame, SamplerVoice, bank_v10, weapon_bank};
 use berlin_sim::ambience::Mix;
 use berlin_sim::enginevoice::{Voice, engine_spectrum};
 use berlin_sim::railsound::{RailMix, TrainLayers};
@@ -20,6 +20,13 @@ pub const MASTER: f32 = 0.55;
 pub const SAMPLE_LEVEL: f32 = 0.38;
 /// so viele Sample-Motorstimmen hält der Synthesizer bereit (die Auswahl trifft das Spiel)
 pub const SAMPLE_VOICES: usize = 10;
+/// Pegel der Schuss-Samples je Waffe (Pistole, MP, Schrotflinte), eingemessen gegen den früheren Synthese-Schuss
+/// (Test `gun_samples_are_loud_but_not_clipping`)
+pub const GUN_LEVEL: [f32; 3] = [0.85, 0.6, 0.9];
+/// Choke: ein neuer Schuss derselben Waffe blendet den Nachhall des vorigen aus (Zeitkonstante s), wenn der
+/// vorige schon so alt ist (s) – eine Salve verschwimmt sonst zu Brei, nur der letzte Hall klingt aus
+pub const GUN_CHOKE_TC: f32 = 0.03;
+pub const GUN_CHOKE_AGE: f64 = 0.03;
 const BLOCK: usize = 32;
 
 /// Zustand des selbst gefahrenen Fahrzeugs (oder `active = false` zu Fuß).
@@ -219,6 +226,19 @@ struct Shot {
 /// Stützpunkte (Zeit, Pegel), Filterfrequenz am Anfang und am Ende.
 type Rumble = (Vec<(f32, f32)>, f32, f32);
 
+/// Abspielende Aufnahme (Schuss): Puffer, Lesekopf, Tempo, Pegel, Choke-Gruppe, Tiefpass der Entfernung.
+struct SamplePlay {
+    buf: Arc<[f32]>,
+    pos: f64,
+    rate: f64,
+    gain: f32,
+    group: u8,
+    age: f64,
+    release: bool,
+    lp_k: f32,
+    lp: f32,
+}
+
 struct EngineVoice {
     bus: Smooth,
     o1: Osc,
@@ -329,6 +349,8 @@ pub struct Synth {
     samplers: Vec<SamplerVoice>,
     engine_ch: Smooth,
     reference: Option<(Arc<[f32]>, f64)>,
+    /// laufende Schuss-Aufnahmen
+    plays: Vec<SamplePlay>,
 }
 
 fn layer(kind: FilterType, f: f32, q: f32, seed: &mut u32) -> NoiseLayer {
@@ -461,6 +483,7 @@ impl Synth {
                 .collect(),
             engine_ch: Smooth::new(1.),
             reference: None,
+            plays: Vec::new(),
         }
     }
 
@@ -1092,20 +1115,40 @@ impl Synth {
             }
             Sfx::Ui => self.tone(880., 0.09, Triangle, 0.12, 0., 0., 0., M),
             // Waffen (audio.js): Knall aus gefiltertem Rauschen plus tiefer Schlag
-            Sfx::Gun(kind, k) => match kind {
-                0 => {
-                    self.burst(0.16, 2600., 0.45 * k, Lowpass, 0.7, 0., 0., M);
-                    self.tone(140., 0.12, Sine, 0.3 * k, 0., -90., 0., M);
+            // Waffen: echte Aufnahmen (Free Firearm Sound Library, CC0) – Variante und Tonhöhe gestreut, ferne
+            // Schüsse dumpfer, ein neuer Schuss derselben Waffe blendet den Nachhall des vorigen aus
+            Sfx::Gun(kind, k) => {
+                let kind = kind.min(2);
+                let bank = &weapon_bank()[kind as usize];
+                if bank.is_empty() || k <= 0. {
+                    return;
                 }
-                1 => {
-                    self.burst(0.07, 3200., 0.32 * k, Lowpass, 0.7, 0., 0., M);
-                    self.tone(170., 0.06, Sine, 0.18 * k, 0., -80., 0., M);
+                let v = ((self.rng.unit() * bank.len() as f32) as usize).min(bank.len() - 1);
+                let rate = 1. + (self.rng.unit() as f64 - 0.5) * 0.06;
+                for p in &mut self.plays {
+                    if p.group == kind && p.age > GUN_CHOKE_AGE {
+                        p.release = true;
+                    }
                 }
-                _ => {
-                    self.burst(0.42, 1500., 0.6 * k, Lowpass, 0.7, 0., 0., M);
-                    self.tone(80., 0.3, Sine, 0.4 * k, 0., -40., 0., M);
+                // Tiefpass der Entfernung: nah offen, fern dumpf (k = Pegel nach Entfernung, 0…1)
+                let cutoff = 1200. + 16000. * k.clamp(0., 1.).powi(2);
+                let lp_k = 1. - (-std::f32::consts::TAU * cutoff / self.sr).exp();
+                self.plays.push(SamplePlay {
+                    buf: bank[v].clone(),
+                    pos: 0.,
+                    rate: rate * 48000. / self.sr as f64,
+                    gain: GUN_LEVEL[kind as usize] * k,
+                    group: kind,
+                    age: 0.,
+                    release: false,
+                    lp_k,
+                    lp: 0.,
+                });
+                // nie mehr als ein paar Dutzend gleichzeitig (Dauerfeuer vieler Schützen)
+                if self.plays.len() > 24 {
+                    self.plays.remove(0);
                 }
-            },
+            }
             Sfx::Swing(k) => self.burst(0.12, 900., 0.12 * k, Bandpass, 0.7, 0., 0., M),
             Sfx::Punch(k) => {
                 self.burst(0.08, 500., 0.35 * k, Lowpass, 0.7, 0., 0., M);
@@ -1407,6 +1450,28 @@ impl Synth {
                     }
                 }
             }
+            // Schuss-Aufnahmen (mittig; der Pegel trägt schon die Entfernung)
+            let choke = (-1. / (GUN_CHOKE_TC * sr)).exp();
+            for p in &mut self.plays {
+                let i = p.pos as usize;
+                if i + 1 >= p.buf.len() {
+                    continue;
+                }
+                let t = (p.pos - i as f64) as f32;
+                let x = p.buf[i] * (1. - t) + p.buf[i + 1] * t;
+                p.lp += (x - p.lp) * p.lp_k;
+                if p.release {
+                    p.gain *= choke;
+                }
+                ml += p.lp * p.gain;
+                mr += p.lp * p.gain;
+                p.pos += p.rate;
+                p.age += dt;
+            }
+            if block {
+                self.plays
+                    .retain(|p| (p.pos as usize) + 1 < p.buf.len() && p.gain > 1e-4);
+            }
             let mf = self.muffle_f.tick();
             if block {
                 self.muffle[0].set_freq(mf);
@@ -1450,6 +1515,58 @@ fn envelope(pts: &[(f32, f32)], t: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// Schüsse aus Aufnahmen: kräftiger als der frühere Synthese-Knall (Spitze 0,12–0,26, Effektivwert der ersten
+    /// 0,3 s 0,012–0,044), aber ohne Übersteuern; mit hörbarem Nachhall statt Stille nach 0,3 s.
+    #[test]
+    fn gun_samples_are_loud_but_not_clipping() {
+        for k in 0..3u8 {
+            let mut s = Synth::new(48000.);
+            s.play(Sfx::Gun(k, 1.));
+            let mut out = vec![0f32; 48000 * 2];
+            s.render(&mut out);
+            let m: Vec<f32> = out.chunks(2).map(|c| (c[0] + c[1]) / 2.).collect();
+            let rms = |a: usize, b: usize| {
+                (m[a..b].iter().map(|x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            };
+            let peak = m.iter().fold(0f32, |p, x| p.max(x.abs()));
+            println!(
+                "GUN {k} peak {peak:.3} rms {:.4} tail {:.5}",
+                rms(0, 14400),
+                rms(14400, 48000)
+            );
+            assert!((0.2..0.95).contains(&peak), "Waffe {k}: Spitze {peak}");
+            // mindestens so kräftig wie der frühere Synthese-Schuss (Effektivwert der ersten 0,3 s)
+            let before = [0.0254, 0.0123, 0.0435][k as usize];
+            assert!(rms(0, 14400) >= before * 0.95, "Waffe {k}: zu leise");
+            assert!(rms(14400, 48000) > 0.001, "Waffe {k}: kein Nachhall");
+        }
+    }
+
+    /// Dauerfeuer: der Nachhall des vorigen Schusses wird ausgeblendet (sonst stapeln sich 13 Hallfahnen je
+    /// Sekunde); ein ferner Schuss klingt dumpfer als ein naher.
+    #[test]
+    fn rapid_fire_chokes_tails_and_distance_darkens() {
+        let mut s = Synth::new(48000.);
+        let mut chunk = vec![0f32; 3600 * 2];
+        for _ in 0..10 {
+            s.play(Sfx::Gun(1, 1.));
+            s.render(&mut chunk);
+        }
+        let alive = s.plays.iter().filter(|p| !p.release).count();
+        assert_eq!(alive, 1, "nur der letzte Schuss klingt voll aus");
+        // Helligkeit: Energie der ersten Differenz im Verhältnis zur Energie
+        let bright = |k: f32| {
+            let mut s = Synth::new(48000.);
+            s.play(Sfx::Gun(0, k));
+            let mut out = vec![0f32; 24000 * 2];
+            s.render(&mut out);
+            let m: Vec<f32> = out.chunks(2).map(|c| c[0]).collect();
+            let e0: f32 = m.iter().map(|x| x * x).sum();
+            let e1: f32 = m.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum();
+            (e1 / e0.max(1e-12)).sqrt()
+        };
+        assert!(bright(1.) > bright(0.2) * 1.5, "fern nicht dumpfer");
+    }
     use super::*;
     use berlin_sim::enginevoice::voice_for;
     const SR: f32 = 48000.;

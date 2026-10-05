@@ -62,6 +62,35 @@ const V12: &[(&str, &[u8])] = bank_files!("v12":
     "pop_6.wav",
     "pop_7.wav",
 );
+/// Schuss-Aufnahmen je Waffe (Pistole, MP, Schrotflinte), gebaut von tools/audio/build_weapon_sounds.py aus der
+/// „Free Firearm Sound Library“ (CC0).
+macro_rules! weapon_files {
+    ($($f:literal),* $(,)?) => {
+        &[$(include_bytes!(concat!("../../../data/audio/weapons/", $f)) as &[u8]),*]
+    };
+}
+const PISTOL: &[&[u8]] = weapon_files!("pistol_1.wav", "pistol_2.wav", "pistol_3.wav");
+const SMG: &[&[u8]] = weapon_files!("smg_1.wav", "smg_2.wav", "smg_3.wav");
+const SHOTGUN: &[&[u8]] = weapon_files!("shotgun_1.wav", "shotgun_2.wav");
+/// Geladene Schuss-Aufnahmen: [Pistole, MP, Schrotflinte] (Index = `Sfx::Gun`-Waffe).
+pub fn weapon_bank() -> &'static [Vec<Arc<[f32]>>; 3] {
+    static B: OnceLock<[Vec<Arc<[f32]>>; 3]> = OnceLock::new();
+    B.get_or_init(|| {
+        let load = |files: &[&[u8]]| -> Vec<Arc<[f32]>> {
+            files
+                .iter()
+                .map(|b| {
+                    parse_wav(b)
+                        .expect("Schuss-Aufnahme: 16-Bit-PCM-WAV")
+                        .0
+                        .into()
+                })
+                .collect()
+        };
+        [load(PISTOL), load(SMG), load(SHOTGUN)]
+    })
+}
+
 /// Dateiliste einer Bank nach Namen.
 fn files_of(name: &str) -> &'static [(&'static str, &'static [u8])] {
     match name {

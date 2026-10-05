@@ -9,6 +9,7 @@ mod effects;
 mod enginedebug;
 mod figure;
 mod fps;
+mod gunfx;
 mod hud;
 mod interp;
 mod levelview;

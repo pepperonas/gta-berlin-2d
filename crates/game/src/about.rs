@@ -234,6 +234,11 @@ fn license_blocks() -> Vec<Block> {
         ),
         Block::Bullet("Fahrplandaten: VBB Verkehrsverbund Berlin-Brandenburg GmbH, CC BY 3.0".into()),
         Block::Bullet("Bar-Auslastung (nur mit eingeschaltetem Bar-Feed): gostumblr.com".into()),
+        Block::Bullet(
+            "Schussgeräusche: The Free Firearm Sound Library (Ben Jaszczak, Brian Nelson, Kevin Heras, \
+             Matthew Nanney), CC0 1.0 – opengameart.org"
+                .into(),
+        ),
         Block::Gap,
         Block::Head("Schrift".into()),
         Block::Bullet("Bitmapschrift aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen".into()),

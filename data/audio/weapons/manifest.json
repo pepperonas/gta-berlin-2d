@@ -1,0 +1,45 @@
+{
+  "_hinweis": "Erzeugt von tools/audio/build_weapon_sounds.py – nicht von Hand ändern.",
+  "quelle": "The Free Firearm Sound Library (Prepared SFX Library), https://opengameart.org/content/the-free-firearm-sound-library",
+  "lizenz": "CC0 1.0 – „Our team holds CC0 NO RIGHTS RESERVED for this library. It may be used without royalty or credit.“",
+  "urheber": "Ben Jaszczak, Brian Nelson, Kevin Heras, Matthew Nanney",
+  "quelle_sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+  "samplerate": 48000,
+  "waffen": {
+    "pistol": {
+      "vorbild": "Walther PPQ, 9 mm",
+      "dateien": [
+        "pistol_1.wav",
+        "pistol_2.wav",
+        "pistol_3.wav"
+      ],
+      "nah": "Walther PPQ/X_39P.wav",
+      "mittel": "Walther PPQ/X_31P.wav",
+      "mittel_db": -4.0,
+      "knall_s": null
+    },
+    "smg": {
+      "vorbild": "Carl Gustav M45 („Swedish K“), 9 mm",
+      "dateien": [
+        "smg_1.wav",
+        "smg_2.wav",
+        "smg_3.wav"
+      ],
+      "nah": "Carl Gustav M45/G_31P.wav",
+      "mittel": "Carl Gustav M45/G_20P.wav",
+      "mittel_db": -6.0,
+      "knall_s": 0.085
+    },
+    "shotgun": {
+      "vorbild": "Benelli Nova, Pump-Action, Kaliber 12",
+      "dateien": [
+        "shotgun_1.wav",
+        "shotgun_2.wav"
+      ],
+      "nah": "Nova/O_21P.wav",
+      "mittel": "Nova/O_17P.wav",
+      "mittel_db": -3.0,
+      "knall_s": null
+    }
+  }
+}
