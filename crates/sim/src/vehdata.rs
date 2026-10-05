@@ -308,6 +308,8 @@ pub struct Vehicle {
     pub recuperation_g: f64,
     pub drift: DriftDef,
     pub two_wheel: bool,
+    /// Sattelzug bzw. Gelenkbus: zweiter Körper am Gelenk
+    pub hitch: Option<Hitch>,
     pub max_lean: f64,
     pub wheelie_control: bool,
     /// Zielwerte (Rohschlüssel wie `0_100`, `vmax`, `brems_100`, `quer_g`)
@@ -510,6 +512,61 @@ fn empty_full(v: &Value, path: &str) -> Result<(f64, f64)> {
         return Ok((x, x));
     }
     Ok((num(&v["leer"], path)?, num(&v["voll"], path)?))
+}
+
+/// Gelenk eines Sattelzugs (Königszapfen) bzw. Gelenkbusses (Drehgelenk). Längen in m.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hitch {
+    /// Sattelzug (sonst Gelenkbus)
+    pub semi: bool,
+    /// Gelenk hinter der Hinterachse des Zugfahrzeugs (Königszapfen liegt leicht davor: negativ)
+    pub e: f64,
+    /// Gelenk bis Achse des Aufliegers bzw. Nachläufers
+    pub d: f64,
+    /// Länge Zugfahrzeug bzw. Vorderwagen und Auflieger bzw. Nachläufer
+    pub front_len: f64,
+    pub trailer_len: f64,
+    /// Auflieger ragt so weit vor das Gelenk (Sattel: Bug vor dem Königszapfen)
+    pub overhang: f64,
+    /// größter Knickwinkel (rad); beim Sattelzug ab hier eingeknickt
+    pub max_angle: f64,
+}
+impl Hitch {
+    /// Massenanteil des Anhängers bei Gesamtmasse `m` (Sattelzugmaschine rund 8 t, Nachläufer 38 %).
+    pub fn trailer_share(&self, m: f64) -> f64 {
+        if self.semi {
+            (1. - 8000. / m.max(9000.)).clamp(0.1, 0.85)
+        } else {
+            0.38
+        }
+    }
+}
+fn parse_hitch(g: &Value) -> Option<Hitch> {
+    let typ = g["typ"].as_str()?;
+    let f = |k: &str, d: f64| g[k].as_f64().unwrap_or(d);
+    Some(if typ == "sattel" {
+        Hitch {
+            semi: true,
+            e: -0.4,
+            d: f("zapfen_bis_achse", 7.7),
+            front_len: f("zugmaschine_l", 6.),
+            trailer_len: f("auflieger_l", 13.6),
+            overhang: 1.2,
+            max_angle: 80f64.to_radians(),
+        }
+    } else {
+        let front = f("vorderwagen_l", 10.9);
+        let rear = f("nachlaeufer_l", 7.2);
+        Hitch {
+            semi: false,
+            e: 2.3,
+            d: rear * 0.7,
+            front_len: front,
+            trailer_len: rear,
+            overhang: -0.4,
+            max_angle: f("knick_max_grad", 50.).to_radians(),
+        }
+    })
 }
 
 /// Gemeinsamer Datenbestand des Spiels (eingebettet, einmal geladen).
@@ -1036,6 +1093,7 @@ impl VehicleDb {
                 rear_grip: 0.65,
             },
             two_wheel,
+            hitch: parse_hitch(&m["gelenk"]),
             max_lean: m["max_schraeglage"].as_f64().unwrap_or(40.).to_radians(),
             wheelie_control: m["wheelie_control"].as_bool().unwrap_or(false),
             targets,

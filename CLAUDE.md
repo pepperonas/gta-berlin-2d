@@ -47,6 +47,9 @@ Phase 4: per-wheel grip — `sim/surface.rs` (pure mix of `surfaces.json` ids) +
 rails, puddles, curbs, winter tyres) → `car.env` → `vphys::Env.wheel` [FL, FR, RL, RR].
 Phase 5: two-wheelers run `sim/twowheel.rs` (lean model, falls → `World::throw_rider`); every player vehicle with a
 data record uses vphys (`car::vphys_vehicle` maps bicycle/escooter kinds), `dynamics.rs` is only a fallback.
+Phase 6: masses from data in `collide_cars` (`Car::mass`), rollover via `vphys::tip_limit` (min of force and v·r),
+rigs via `Vehicle.hitch` + `State.art` (`car::trailer_pose` draws the trailer); data-only vehicles spawn with
+`World::spawn_data_vehicle` / console `auto <id>`.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

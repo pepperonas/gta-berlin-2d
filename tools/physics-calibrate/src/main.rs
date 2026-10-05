@@ -255,7 +255,7 @@ fn calibrate_one(v: &Vehicle, feel: &Feel) -> Outcome {
             ),
             "vmax" if a > t && edge(cal.cw_a, CWA) => "Leistung zu groß für das Ziel, auch mit cwA +15 %".into(),
             "quer_g" if a > t && heavy(v) => {
-                "Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6".into()
+                "Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP".into()
             }
             "quer_g" if a > t => {
                 "Reifenhaftung zu groß, auch mit μ −10 % (Untersteuern/ESP-Eingriff begrenzen real, Phase 3)".into()

@@ -1118,10 +1118,27 @@ pub fn atlas() -> (Vec<u8>, u32, u32) {
 
 /// Index eines Modells im Atlas
 pub fn model_index(model: &str) -> usize {
+    let model = sprite_model(model);
     models()
         .iter()
         .position(|(m, _, _)| *m == model)
         .unwrap_or(2)
+}
+
+/// Bild für ein Modell: eigenes, sonst nach Klasse des Datensatzes (Sattelzug → Lkw, Gelenkbus → Bus).
+pub fn sprite_model(model: &str) -> &str {
+    if models().iter().any(|(m, _, _)| *m == model) {
+        return model;
+    }
+    match berlin_sim::vehdata::shared()
+        .get(model)
+        .map(|v| v.class.as_str())
+    {
+        Some("lkw" | "lkw_sattel") => "truck",
+        Some("bus" | "bus_gelenk") => "bus",
+        Some("transporter" | "van") => "delivery",
+        _ => "limousine",
+    }
 }
 
 #[cfg(test)]

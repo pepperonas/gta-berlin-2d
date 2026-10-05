@@ -8,6 +8,17 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Rust-Portierung, Fahrphysik Phase 6: schwere Fahrzeuge.
+  - Massen im Zusammenstoß kommen aus den Fahrzeugdaten: ein voller Müllwagen schiebt einen Kleinwagen weg und
+    verliert dabei kaum Tempo. Lkw und Busse fahren mit zufälliger, je Fahrzeug fester Beladung.
+  - Kippen: Spur, Schwerpunkthöhe und Wankweg ergeben die Kippgrenze (beladener Sattelzug rund 0,35 g,
+    Doppeldecker rund 0,4 g; leer deutlich stabiler). Darüber heben die Innenräder sichtbar ab, weiter darüber
+    kippt das Fahrzeug um und ist hin. Die Wankstabilisierung (mit ESP) bremst Lkw und Busse vorher ab.
+  - Sattelzug und Gelenkbus fahren als Gespann: Der Auflieger folgt mit Nachlauf und schneidet Kurven. Blockiert
+    die Hinterachse der Zugmaschine bei Tempo, schiebt der Auflieger und das Gespann knickt ein; der Gelenkbus hat
+    eine Knickwinkelbegrenzung.
+  - Konsole `auto sattelzug_40t` (bzw. `gelenkbus`, `doppeldecker` …) stellt Fahrzeuge aus den Fahrzeugdaten
+    hin; `begrenzer aus` schaltet den 89-km/h-Begrenzer schwerer Lkw ab.
 - Native Rust-Portierung, Fahrphysik Phase 5: Zweiräder (Fahrrad, E-Scooter, Roller, Motorrad) fahren über ein
   eigenes Schräglagenmodell. Die Lenkung legt das Rad mit begrenzter Rate in die Kurve (höchstens bis zur
   Bodenfreiheit). Zu viel Schräglage für die Haftung lässt es wegrutschen. Der Fahrer fliegt dann ab, landet

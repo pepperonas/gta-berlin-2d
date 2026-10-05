@@ -528,6 +528,13 @@ pub const COMMANDS: &[Command] = &[
         args: &[],
     },
     Command {
+        name: "begrenzer",
+        aliases: &["limiter", "tempobegrenzer"],
+        help: "Tempobegrenzer schwerer Lkw (89 km/h) an/aus",
+        cheat: false,
+        args: &[arg("an|aus", true, ONOFF)],
+    },
+    Command {
         name: "esp",
         aliases: &["asr", "fahrhilfen"],
         help: "ASR/ESP im Auto an/aus (aus: Heckantrieb driftet)",
@@ -796,6 +803,13 @@ fn values_of(v: Values) -> Vec<Item> {
             .iter()
             .map(|(m, _)| item(m, berlin_sim::carmodels::spec_of(m).label))
             .chain(KIND_LABEL.iter().map(|(k, l)| item(k, l)))
+            .chain(
+                berlin_sim::vehdata::shared()
+                    .vehicles
+                    .iter()
+                    .filter(|d| berlin_sim::carmodels::spec(&d.id).is_none())
+                    .map(|d| item(&d.id, &d.name)),
+            )
             .collect(),
     }
 }
@@ -1152,6 +1166,16 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             }
             None => err("esp an|aus"),
         },
+        "begrenzer" => match on_off(a0, w.truck_limiter) {
+            Some(_) if !berlin_sim::vehdata::game_feel().truck_limiter_tunable => {
+                err("Begrenzer ist nicht abschaltbar (feel.json)")
+            }
+            Some(on) => {
+                w.truck_limiter = on;
+                ok(format!("Lkw-Begrenzer {}", if on { "an" } else { "aus" }))
+            }
+            None => err("begrenzer an|aus"),
+        },
         "gott" => match on_off(a0, w.god) {
             Some(on) => {
                 w.god = on;
@@ -1175,6 +1199,18 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                         vehicle_name(m),
                         spec_line(m)
                     )),
+                    None => err("Kein Platz für ein Fahrzeug"),
+                };
+            }
+            // Fahrzeug aus den Fahrzeugdaten (Sattelzug, Gelenkbus, Doppeldecker …)
+            if let Some(d) = v.as_ref().and_then(|v| {
+                berlin_sim::vehdata::shared()
+                    .vehicles
+                    .iter()
+                    .find(|d| norm(&d.id) == *v || norm(&d.name) == *v)
+            }) {
+                return match w.spawn_data_vehicle(&d.id) {
+                    Some(_) => ok(format!("{} ({}) steht bereit", d.name, d.id)),
                     None => err("Kein Platz für ein Fahrzeug"),
                 };
             }

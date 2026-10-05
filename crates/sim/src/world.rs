@@ -202,6 +202,8 @@ pub struct World {
     pub esp: bool,
     /// ESP voll statt sportlich (Fahrphysik `vphys`; aus = `esp` false)
     pub esp_full: bool,
+    /// Tempobegrenzer schwerer Lkw (abschaltbar, wenn `feel.lkw_begrenzer_tunebar`)
+    pub truck_limiter: bool,
     pub abs: bool,
     pub notice: Option<Notice>,
     /// Name und Technik nach dem Einsteigen (Auto-ID, Sekunden)
@@ -339,6 +341,7 @@ impl World {
             knocked: Knocked::new(),
             esp: true,
             esp_full: crate::vehdata::game_feel().esp_default == "voll",
+            truck_limiter: true,
             abs: true,
             notice: None,
             veh_info: None,
@@ -1146,6 +1149,26 @@ impl World {
     /// Aufnahmen (`--fahrzeugschau`): je ein Fahrzeug jeder Art auf der nächsten Fahrspur hintereinander, stehend,
     /// Paketwagen mit Warnblinker, Müllauto bei der Arbeit, Einsatzfahrzeuge mit Blaulicht.
     /// Fahrzeug neben der Figur abstellen (Befehlszeile `auto`): Art aus `carmodels::KINDS`, optional ein Pkw-Modell.
+    /// Fahrzeug aus den Fahrzeugdaten (z. B. `sattelzug_40t`) neben der Spielfigur abstellen: Art nach Klasse,
+    /// Maße aus den Daten (beim Gespann nur das Zugfahrzeug; der Anhänger hängt am Gelenk).
+    pub fn spawn_data_vehicle(&mut self, id: &str) -> Option<u32> {
+        let v = crate::vehdata::shared().get(id)?;
+        let kind = data_kind(v);
+        let len = v.hitch.as_ref().map_or(v.length, |h| h.front_len);
+        let a = self.player.angle;
+        let (x, y) = (self.player.x + a.cos() * 80., self.player.y + a.sin() * 80.);
+        let cid = self.new_car_id();
+        let (hw, hh) = (len * 5., v.width * 5.);
+        let (sx, sy, angle) = self.open_spot(x, y, Some((cid, hw, hh)))?;
+        let color = CAR_COLORS[(cid as usize) % CAR_COLORS.len()];
+        let mut c = Car::new(cid, sx, sy, angle, color, Role::Parked, kind);
+        c.model = Some(v.id.as_str());
+        (c.hw, c.hh) = (hw, hh);
+        c.level.lvl = self.player.level.lvl;
+        self.cars.push(c);
+        Some(cid)
+    }
+
     pub fn spawn_vehicle(&mut self, kind: &str, model: Option<&'static str>) -> Option<u32> {
         let k = crate::carmodels::kind(kind);
         let a = self.player.angle;
@@ -1204,19 +1227,25 @@ impl World {
             return;
         };
         let kinds = [
-            "car",
-            "truck",
-            "delivery",
-            "garbage",
-            "police",
-            "ambulance",
-            "motorcycle",
-            "scooter",
+            // Gespanne aus den Fahrzeugdaten, leicht geknickt
+            ("truck", Some("sattelzug_40t")),
+            ("bus", Some("gelenkbus")),
+            ("car", None),
+            ("truck", None),
+            ("delivery", None),
+            ("garbage", None),
+            ("police", None),
+            ("ambulance", None),
+            ("motorcycle", None),
+            ("scooter", None),
         ];
         let (mut lane, mut s) = (hit.lane, 40.);
-        for kind in kinds {
+        for (kind, model) in kinds {
             let k = crate::carmodels::kind(kind);
-            s += k.l / 2.;
+            let data = model.and_then(|m| crate::vehdata::shared().get(m));
+            // ganze Länge des Gespanns
+            let len = data.map_or(k.l, |v| v.length * 10.);
+            s += len / 2.;
             // über das Spurende hinaus auf der geradesten Folgespur weiter
             while let Some(len) = self.lanes.lane(lane).map(|l| l.len).filter(|&len| s > len) {
                 let next = self.lanes.next(&self.city, lane, false);
@@ -1239,8 +1268,21 @@ impl World {
                 c.hazard = kind == "delivery";
                 c.work = kind == "garbage";
                 c.blue = matches!(kind, "police" | "ambulance");
+                if let Some(v) = data {
+                    c.model = Some(v.id.as_str());
+                    let front = v.hitch.as_ref().map_or(v.length, |h| h.front_len);
+                    (c.hw, c.hh) = (front * 5., v.width * 5.);
+                    // Zugfahrzeug nach vorn, damit der Anhänger auf dem Platz des Gespanns steht
+                    let shift = (v.length - front) * 5.;
+                    let (sa, ca) = c.angle.sin_cos();
+                    (c.x, c.y) = (c.x + ca * shift, c.y + sa * shift);
+                    c.phys = Some(Box::new(crate::vphys::State {
+                        art: 0.25,
+                        ..Default::default()
+                    }));
+                }
             }
-            s += k.l / 2. + 14.;
+            s += len / 2. + 14.;
         }
     }
 
@@ -2768,7 +2810,7 @@ impl World {
                     t: 1.6,
                 });
             }
-            let (esp, esp_full, abs) = (self.esp, self.esp_full, self.abs);
+            let (esp, esp_full, abs, lim) = (self.esp, self.esp_full, self.abs, self.truck_limiter);
             let c = &mut self.cars[i];
             if c.wrecked {
                 c.controls = Default::default();
@@ -2783,6 +2825,7 @@ impl World {
             }
             c.esp = esp;
             c.esp_full = esp_full;
+            c.no_limiter = !lim;
             c.abs = abs;
             if c.horn && !c.horn_was {
                 self.events.push(Event::Horn {
@@ -2883,7 +2926,53 @@ impl World {
             }
             let c = &mut self.cars[i];
             let fallen_was = c.phys.as_ref().is_some_and(|s| s.fallen.is_some());
+            let rolled_was = c.phys.as_ref().is_some_and(|s| s.rolled);
+            let jack_was = c.phys.as_ref().is_some_and(|s| s.jackknifed);
             step_car(c, dt, Some(ground));
+            // umgekippt: das Fahrzeug ist hin
+            if !rolled_was && c.phys.as_ref().is_some_and(|s| s.rolled) && !c.wrecked {
+                c.health = 0.;
+                c.wrecked = true;
+                let (x, y, id) = (c.x, c.y, c.id);
+                let player = c.driver == Some(crate::car::Driver::Player);
+                self.events.push(Event::Crash {
+                    x,
+                    y,
+                    strength: 1.,
+                    car: id,
+                });
+                self.events.push(Event::Wreck {
+                    x,
+                    y,
+                    car: id,
+                    player,
+                });
+                if player {
+                    self.notice = Some(Notice {
+                        text: "Umgekippt!".into(),
+                        t: 2.,
+                    });
+                }
+            }
+            // Sattelzug eingeknickt: Hinweis einmal je Vorfall
+            let c = &self.cars[i];
+            if !jack_was
+                && c.driver == Some(crate::car::Driver::Player)
+                && c.phys.as_ref().is_some_and(|s| s.jackknifed)
+            {
+                self.notice = Some(Notice {
+                    text: "Eingeknickt!".into(),
+                    t: 2.,
+                });
+                let (x, y, id) = (c.x, c.y, c.id);
+                self.events.push(Event::Crash {
+                    x,
+                    y,
+                    strength: 0.6,
+                    car: id,
+                });
+            }
+            let c = &mut self.cars[i];
             if !fallen_was
                 && c.driver == Some(crate::car::Driver::Player)
                 && let Some(why) = c.phys.as_ref().and_then(|s| s.fallen)
@@ -3574,5 +3663,18 @@ pub fn groove_risk(heading: f64, track: f64, wet: f64) -> f64 {
         (1. - cross / lim) * (0.35 + 0.65 * wet.clamp(0., 1.))
     } else {
         0.
+    }
+}
+
+/// Fahrzeugart im Spiel für einen Datensatz (Größe, Stimme, Spurwahl der Art).
+pub fn data_kind(v: &crate::vehdata::Vehicle) -> &'static str {
+    match v.class.as_str() {
+        _ if v.two_wheel && v.id.starts_with("fahrrad") || v.id == "rennrad" => "bicycle",
+        _ if v.two_wheel && v.id.starts_with("escooter") => "escooter",
+        _ if v.two_wheel && v.id.starts_with("roller") => "scooter",
+        _ if v.two_wheel => "motorcycle",
+        "lkw" | "lkw_sattel" => "truck",
+        "bus" | "bus_gelenk" => "bus",
+        _ => "car",
     }
 }

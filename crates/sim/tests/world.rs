@@ -2283,3 +2283,58 @@ fn rail_groove_risk_depends_on_angle_and_wet() {
     // Gleis in Gegenrichtung zählt genauso
     assert!((groove_risk(deg(0.), deg(180.), 1.) - groove_risk(deg(0.), deg(0.), 1.)).abs() < 1e-9);
 }
+
+/// Fahrphysik Phase 6: Sattelzug aus den Fahrzeugdaten – Auflieger folgt mit Knickwinkel, Masse aus den Daten.
+#[test]
+fn semi_trailer_spawns_from_data_and_its_trailer_follows() {
+    let mut w = world(8);
+    w.cars.clear();
+    w.peds.clear();
+    w.car_target = 0;
+    w.ped_target = 0;
+    let id = w
+        .spawn_data_vehicle("sattelzug_40t")
+        .expect("Platz für den Sattelzug");
+    let c = w.car(id).unwrap();
+    assert_eq!(c.kind, "truck");
+    assert!((c.hw - 30.).abs() < 1e-9, "Zugmaschine 6 m: {}", c.hw);
+    assert!(c.mass() > 15000., "{}", c.mass());
+    // Auflieger steht gerade dahinter
+    let (tx, ty, ta, thw, _) = berlin_sim::car::trailer_pose(c).unwrap();
+    assert!((ta - c.angle).abs() < 1e-9);
+    let back = (c.x - tx) * c.angle.cos() + (c.y - ty) * c.angle.sin();
+    assert!(back > thw * 0.5, "Auflieger hinter der Zugmaschine: {back}");
+    (w.player.x, w.player.y) = (c.x - c.angle.sin() * 25., c.y + c.angle.cos() * 25.);
+    run(
+        &mut w,
+        1,
+        Input {
+            enter_exit: true,
+            ..idle()
+        },
+    );
+    assert_eq!(w.player.in_car, Some(id));
+    run(
+        &mut w,
+        240,
+        Input {
+            throttle: 0.5,
+            steer: 0.8,
+            ..idle()
+        },
+    );
+    let c = w.car(id).unwrap();
+    let s = c.phys.as_ref().expect("Fahrphysik");
+    assert!(s.art.abs() > 0.05, "Knickwinkel {}", s.art);
+    assert!(!s.rolled && !s.jackknifed);
+    let (_, _, ta, _, _) = berlin_sim::car::trailer_pose(c).unwrap();
+    assert!((ta - c.angle - s.art).abs() < 1e-9);
+}
+
+#[test]
+fn every_data_vehicle_maps_to_a_game_kind() {
+    for v in &berlin_sim::vehdata::shared().vehicles {
+        let k = berlin_sim::world::data_kind(v);
+        assert_eq!(berlin_sim::carmodels::kind(k).name, k, "{}", v.id);
+    }
+}

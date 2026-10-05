@@ -868,6 +868,12 @@ pub fn ps_of(s: &Spec) -> i64 {
 }
 /// „Oberbaum Furia“
 pub fn vehicle_name(model: &str) -> String {
+    // Fahrzeuge nur aus den Fahrzeugdaten (Sattelzug, Gelenkbus …) tragen ihren Namen dort
+    if spec(model).is_none()
+        && let Some(v) = crate::vehdata::shared().get(model)
+    {
+        return v.name.clone();
+    }
     let (_, make, typ) = NAMES
         .iter()
         .find(|(k, ..)| *k == model)
@@ -877,6 +883,22 @@ pub fn vehicle_name(model: &str) -> String {
 }
 /// „Sportwagen · Mittelmotor · RWD · 435 PS“
 pub fn spec_line(model: &str) -> String {
+    if spec(model).is_none()
+        && let Some(v) = crate::vehdata::shared().get(model)
+    {
+        let drive = match v.drive {
+            crate::vehdata::Drive::Fwd => "FWD",
+            crate::vehdata::Drive::Rwd => "RWD",
+            crate::vehdata::Drive::Awd => "AWD",
+        };
+        let (m, _) = v.loaded(0.);
+        return format!(
+            "{} · {drive} · {} PS · {:.1} t",
+            v.class.replace('_', " "),
+            (v.engine.watts / 1000. * 1.36).round(),
+            m / 1000.
+        );
+    }
     let s = spec_of(model);
     if s.two_wheel {
         let line = match model {

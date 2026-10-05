@@ -73,11 +73,10 @@
     "wirkungsgrad": 1.0
   },
   "doppeldecker": {
-    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
-    "_ok": false,
+    "_ok": true,
     "bremskraft": 0.685195732116699,
     "cwA": 1.0,
-    "mu": 0.9,
+    "mu": 1.1,
     "schalt": 1.5,
     "uebersetzung": 1.6,
     "wirkungsgrad": 0.97
@@ -93,11 +92,11 @@
     "wirkungsgrad": 1.0
   },
   "e_bus": {
-    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_grund": "quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP",
     "_ok": false,
     "bremskraft": 0.6787084579467773,
     "cwA": 1.0,
-    "mu": 1.03,
+    "mu": 0.9400000000000001,
     "schalt": 1.0,
     "uebersetzung": 1.0,
     "wirkungsgrad": 1.03
@@ -205,16 +204,17 @@
     "wirkungsgrad": 1.0
   },
   "gelaendewagen": {
-    "_ok": true,
+    "_grund": "brems_100: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg; quer_g: Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt)",
+    "_ok": false,
     "bremskraft": 1.6,
     "cwA": 1.0,
-    "mu": 0.9900000000000001,
+    "mu": 0.9,
     "schalt": 1.0,
     "uebersetzung": 1.6,
     "wirkungsgrad": 1.03
   },
   "gelenkbus": {
-    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_grund": "quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP",
     "_ok": false,
     "bremskraft": 0.6902982711791992,
     "cwA": 1.0,
@@ -308,9 +308,9 @@
   },
   "kastenwagen_35t": {
     "_ok": true,
-    "bremskraft": 1.6,
+    "bremskraft": 0.7317815780639649,
     "cwA": 0.8851202011108398,
-    "mu": 0.9,
+    "mu": 0.9600000000000001,
     "schalt": 1.5,
     "uebersetzung": 0.4,
     "wirkungsgrad": 0.97
@@ -424,11 +424,10 @@
     "wirkungsgrad": 1.0
   },
   "lkw_75t": {
-    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
-    "_ok": false,
-    "bremskraft": 0.578122138977051,
+    "_ok": true,
+    "bremskraft": 0.5729986190795897,
     "cwA": 1.0,
-    "mu": 0.9,
+    "mu": 1.1,
     "schalt": 0.5,
     "uebersetzung": 1.6,
     "wirkungsgrad": 1.03
@@ -461,7 +460,7 @@
     "wirkungsgrad": 1.03
   },
   "muellwagen": {
-    "_grund": "brems_50: Bremsweg kürzer als das Ziel, auch mit Bremskraft −50 %; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_grund": "brems_50: Bremsweg kürzer als das Ziel, auch mit Bremskraft −50 %",
     "_ok": false,
     "bremskraft": 0.5,
     "cwA": 1.0,
@@ -608,7 +607,7 @@
     "wirkungsgrad": 0.97
   },
   "sattelzug_40t": {
-    "_grund": "0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_grund": "0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest",
     "_ok": false,
     "bremskraft": 0.5,
     "cwA": 1.0,
@@ -672,7 +671,7 @@
     "wirkungsgrad": 1.0
   },
   "stadtbus": {
-    "_grund": "quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6",
+    "_grund": "quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP",
     "_ok": false,
     "bremskraft": 0.7155927658081054,
     "cwA": 1.0,
@@ -776,9 +775,9 @@
   },
   "transporter_kasten": {
     "_ok": true,
-    "bremskraft": 1.6,
-    "cwA": 0.9135725021362304,
-    "mu": 0.9600000000000001,
+    "bremskraft": 1.1447935104370117,
+    "cwA": 0.9135507583618164,
+    "mu": 1.0,
     "schalt": 1.5,
     "uebersetzung": 1.6,
     "wirkungsgrad": 1.03

@@ -1663,3 +1663,26 @@ Das Spielerauto fährt seit Phase 3 über `vphys`, sofern sein Modell einen Date
 - Darstellung: in Schräglage schmaler und zur Kurveninnenseite verschoben (Fahrer weiter als Rahmen), im Wheelie
   kürzer. `dynamics.rs` ist nur noch Rückfall für Modelle ohne Datensatz.
 
+## Fahrphysik Phase 6: schwere Fahrzeuge (05.10.2026)
+
+- **Massen im Stoß:** `Car::mass()` aus dem Datensatz samt Zuladung (`Car::cargo_load()`: Lkw/Bus je Fahrzeug fest
+  aus der Nummer, sonst 0; ohne Datensatz aus der Größe geschätzt). `collide_cars` trennt und stößt nach
+  `mb/(ma+mb)` bzw. `ma/(ma+mb)` – gleiche Massen ergeben wie bisher je die Hälfte. Schaden nach der eigenen
+  Geschwindigkeitsänderung.
+- **Kippen** (`vphys`): `tip_limit = g·Spur/(2h) / (1 + ROLL_COMPLIANCE·Wankwinkel je g)`; maßgeblich ist das
+  Minimum aus Kraftbilanz `ay_f` und Zentripetalbeschleunigung `ay_c = v·r` (die Kraftbilanz überschätzt bei
+  Schritttempo durch die kinematische Überblendung, v·r beim Rutschen). Darüber wächst `State.tip`, ab 1
+  `rolled` (liegt, rutscht aus; im Spiel Wrack + „Umgekippt!“). Bordsteinstoß senkt die Grenze (`TIP_CURB`).
+  Wankstabilisierung (`RSC_SHARE` 75 %) bremst Lkw/Busse mit ESP.
+- **Gespann:** `Vehicle.hitch` (`gelenk` in den Daten: Sattel = Königszapfen, Drehgelenk = Gelenkbus).
+  `State.art` folgt `trailer_follow` (θ̇₂ = (v·sin ψ − e·r·cos ψ)/d). Beim Bremsen schiebt der Auflieger über
+  das Gelenk ein Giermoment ein – stark nur bei blockierter Hinterachse der Zugmaschine (`JACK_PUSH` vs.
+  `JACK_PUSH_GRIP`), beim Gelenkbus gedämpft. Sattelzug eingeknickt (`jackknifed`) ab `JACK_ANGLE` 0,55 rad über
+  4 m/s; Gelenkbus am Knickwinkel-Anschlag geklemmt. `car::trailer_pose` liefert die Lage des Anhängers in
+  Spielkoordinaten, `play.rs` zeichnet ihn als zweiten Körper.
+- **Begrenzer:** `Input.no_limiter` (Konsole `begrenzer an|aus`, nur Lkw, nur wenn `feel.lkw_begrenzer_tunebar`).
+- **Spiel:** `World::spawn_data_vehicle(id)` (Konsole `auto <datensatz>`), `world::data_kind`,
+  `carart::sprite_model` (Bild nach Klasse); Fahrzeugschau zeigt Sattelzug und Gelenkbus geknickt.
+- **Grenzen:** KI-Gespanne fahren mit geradem Anhänger (KI bleibt beim Arcade-Modell), der Anhänger hat noch keine
+  eigene Kollision, und die Zugmaschine nutzt das Lkw-Bild (kein eigenes Sattelzugmaschinen-Bild).
+

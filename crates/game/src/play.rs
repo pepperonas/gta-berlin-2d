@@ -1275,7 +1275,8 @@ fn body_shift(c: &berlin_sim::car::Car) -> (f32, f32) {
         const PX_PER_DEG: f64 = 0.8;
         let g = berlin_sim::vehdata::G;
         let pitch = -d.ax / g * v.chassis.pitch * PX_PER_DEG + (s.susp[0] - s.susp[1]) * 100.;
-        let roll = -d.ay / g * v.chassis.roll * PX_PER_DEG;
+        // beim Kippen hebt sich die Innenseite: der Aufbau wandert sichtbar nach außen
+        let roll = -d.ay / g * v.chassis.roll * PX_PER_DEG - d.ay.signum() * s.tip * 5.;
         return (pitch.clamp(-6., 6.) as f32, roll.clamp(-6., 6.) as f32);
     }
     let k = berlin_sim::carmodels::spec_of(c.model_name()).h * 0.35;
@@ -2585,6 +2586,48 @@ impl Game for Play {
                 .dyn_state
                 .as_ref()
                 .map_or(c.controls.steer * 0.45, |d| d.delta) as f32;
+            // Gespann: Anhänger hinter dem Zugfahrzeug, am Gelenk um den Knickwinkel gedreht
+            if let Some((tx, ty, ta, thw, thh)) = berlin_sim::car::trailer_pose(c) {
+                let (tx, ty, ta) = (tx as f32, ty as f32, ta as f32);
+                let (tfx, tfy) = (ta.cos(), ta.sin());
+                let (thw, thh) = (thw as f32, thh as f32);
+                out.push(Body {
+                    center: [tx + 2., ty + 3.],
+                    half: [thw + 1., thh + 1.],
+                    angle: ta,
+                    shape: 0.,
+                    depth: depth + 0.0004,
+                    color: [0., 0., 0., 0.28],
+                });
+                out.push(Body {
+                    center: [tx, ty],
+                    half: [thw, thh],
+                    angle: ta,
+                    shape: 0.,
+                    depth: depth + 0.00005,
+                    color: shade(rgba(tint, 1.), 0.85),
+                });
+                // Dachfläche (Plane bzw. Busdach) etwas heller, mit Längsfugen
+                out.push(Body {
+                    center: [tx, ty],
+                    half: [thw - 2., thh - 2.5],
+                    angle: ta,
+                    shape: 0.,
+                    depth: depth + 0.00004,
+                    color: shade(rgba(tint, 1.), 1.08),
+                });
+                for k in [-0.33f32, 0.33] {
+                    out.push(Body {
+                        center: [tx + tfx * thw * k, ty + tfy * thw * k],
+                        half: [0.6, thh - 3.],
+                        angle: ta,
+                        shape: 0.,
+                        depth: depth + 0.00003,
+                        color: shade(rgba(tint, 1.), 0.7),
+                    });
+                }
+            }
+            let model = crate::carart::sprite_model(model);
             let blen = crate::carart::body_length(model, 2. * hw);
             let inset = crate::carart::shape(model).inset;
             let (wx, wy) = ((hw - 8.).min(blen / 2. - 6.), hh - inset - 1.2);

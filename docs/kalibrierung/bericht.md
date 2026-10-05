@@ -2,7 +2,7 @@
 
 Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener Asphalt, `realismus = 1`, `grip_global = 1`; LKW und Busse voll beladen, sonst leer. Toleranzen: 0-X ±7 %, Vmax ±3 %, Bremsweg ±5 %, Querbeschleunigung ±0,05 g. Stellschrauben nur innerhalb der erlaubten Grenzen (cwA ±15 %, μ ±10 %, Übersetzung, Schaltzeit, Wirkungsgrad ±3 %, Bremskraft); Masse, Leistung und Drehmoment unverändert. Verläufe im 100-ms-Takt: `docs/kalibrierung/csv/<id>.csv`.
 
-**183 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 7 s).
+**185 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 7 s).
 
 | Fahrzeug | Test | Ziel | Ist | Abweichung | | Stellschrauben |
 |---|---|---|---|---|---|---|
@@ -74,17 +74,18 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 |  | Bremsweg 100 km/h | 36.0 m | 36.3 m | +0.7 % | ✓ |  |
 |  | Querbeschl. | 0.90 g | 0.91 g | +0.01 g | ✓ |  |
 |  | Vmax | 230 km/h | 232 km/h | +0.8 % | ✓ |  |
-| **Grunewald Kommandant 500** (gelaendewagen) | 0–100 km/h | 5.4 s | 5.6 s | +4.3 % | ✓ | μ -1 %, Bremskraft +60 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
-|  | Bremsweg 100 km/h | 40.0 m | 40.4 m | +0.9 % | ✓ |  |
-|  | Querbeschl. | 0.80 g | 0.81 g | +0.01 g | ✓ |  |
+| **Grunewald Kommandant 500** (gelaendewagen) | 0–100 km/h | 5.4 s | 5.7 s | +5.7 % | ✓ | μ -10 %, Bremskraft +60 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
+|  | Bremsweg 100 km/h | 40.0 m | 44.1 m | +10.2 % | ✗ |  |
+|  | Querbeschl. | 0.80 g | 0.69 g | -0.11 g | ✗ |  |
 |  | Vmax | 210 km/h | 210 km/h | -0.0 % | ✓ |  |
-| **Spree Kasten 6** (transporter_kasten) | 0–100 km/h | 11.4 s | 11.3 s | -0.4 % | ✓ | cwA -9 %, μ -4 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad +3 % |
-|  | Bremsweg 100 km/h | 40.0 m | 41.3 m | +3.3 % | ✓ |  |
-|  | Querbeschl. | 0.75 g | 0.79 g | +0.04 g | ✓ |  |
-|  | Vmax | 182 km/h | 182 km/h | +0.0 % | ✓ |  |
-| **Spree Großraum 317** (kastenwagen_35t) | 0–100 km/h | 15.0 s | 14.0 s | -6.7 % | ✓ | cwA -11 %, μ -10 %, Bremskraft +60 %, Übersetzung ×0.40, Schaltzeit ×1.50, Wirkungsgrad -3 % |
-|  | Bremsweg 100 km/h | 42.0 m | 43.8 m | +4.3 % | ✓ |  |
-|  | Querbeschl. | 0.70 g | 0.74 g | +0.04 g | ✓ |  |
+| | *Grund:* brems_100: Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg; quer_g: Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt) | | | | | |
+| **Spree Kasten 6** (transporter_kasten) | 0–100 km/h | 11.4 s | 11.3 s | -1.0 % | ✓ | cwA -9 %, Bremskraft +14 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad +3 % |
+|  | Bremsweg 100 km/h | 40.0 m | 40.0 m | +0.0 % | ✓ |  |
+|  | Querbeschl. | 0.75 g | 0.74 g | -0.01 g | ✓ |  |
+|  | Vmax | 182 km/h | 182 km/h | -0.0 % | ✓ |  |
+| **Spree Großraum 317** (kastenwagen_35t) | 0–100 km/h | 15.0 s | 14.0 s | -6.7 % | ✓ | cwA -11 %, μ -4 %, Bremskraft -27 %, Übersetzung ×0.40, Schaltzeit ×1.50, Wirkungsgrad -3 % |
+|  | Bremsweg 100 km/h | 42.0 m | 42.0 m | -0.0 % | ✓ |  |
+|  | Querbeschl. | 0.70 g | 0.72 g | +0.02 g | ✓ |  |
 |  | Vmax | 160 km/h | 160 km/h | -0.0 % | ✓ |  |
 | **Voltwerk Kiez 3** (e_kompakt) | 0–100 km/h | 7.3 s | 7.7 s | +5.4 % | ✓ | μ +4 %, Bremskraft +60 %, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 35.0 m | 35.7 m | +1.9 % | ✓ |  |
@@ -152,41 +153,39 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 |  | Bremsweg 100 km/h | 45.0 m | 46.1 m | +2.4 % | ✓ |  |
 |  | Querbeschl. | 0.75 g | 0.78 g | +0.03 g | ✓ |  |
 |  | Vmax | 143 km/h | 143 km/h | -0.0 % | ✓ |  |
-| **Oberlausitz L75 Verteiler** (lkw_75t) | 0–80 km/h | 22.0 s | 22.2 s | +0.9 % | ✓ | μ -10 %, Bremskraft -42 %, Übersetzung ×1.60, Schaltzeit ×0.50, Wirkungsgrad +3 % |
-|  | Bremsweg 80 km/h | 48.0 m | 48.0 m | +0.0 % | ✓ |  |
-|  | Querbeschl. | 0.55 g | 0.61 g | +0.06 g | ✗ |  |
+| **Oberlausitz L75 Verteiler** (lkw_75t) | 0–80 km/h | 22.0 s | 22.1 s | +0.5 % | ✓ | μ +10 %, Bremskraft -43 %, Übersetzung ×1.60, Schaltzeit ×0.50, Wirkungsgrad +3 % |
+|  | Bremsweg 80 km/h | 48.0 m | 48.0 m | -0.0 % | ✓ |  |
+|  | Querbeschl. | 0.55 g | 0.56 g | +0.01 g | ✓ |  |
 |  | Vmax | 89 km/h | 89 km/h | +0.1 % | ✓ |  |
-| | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Oberlausitz Fernlast 48** (sattelzug_40t) | 0–80 km/h | 40.0 s | 49.1 s | +22.7 % | ✗ | μ -10 %, Bremskraft -50 %, Übersetzung ×1.50, Schaltzeit ×0.50, Wirkungsgrad +3 % |
 |  | Bremsweg 80 km/h | 56.0 m | 55.0 m | -1.8 % | ✓ |  |
-|  | Querbeschl. | 0.35 g | 0.54 g | +0.19 g | ✗ |  |
+|  | Querbeschl. | 0.35 g | 0.35 g | +0.00 g | ✓ |  |
 |  | Vmax | 89 km/h | 89 km/h | +0.1 % | ✓ |  |
-| | *Grund:* 0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
+| | *Grund:* 0_80: zu langsam: Ideal mit konstanter Spitzenleistung 39.4 s, Drehmomentverlauf/Schaltpausen kosten den Rest | | | | | |
 | **Kiezwerk Presse 26** (muellwagen) | 0–50 km/h | 20.0 s | 19.1 s | -4.4 % | ✓ | μ -10 %, Bremskraft -50 %, Übersetzung ×1.45, Schaltzeit ×1.50, Wirkungsgrad -3 % |
 |  | Bremsweg 50 km/h | 24.0 m | 22.1 m | -8.1 % | ✗ |  |
-|  | Querbeschl. | 0.40 g | 0.54 g | +0.14 g | ✗ |  |
+|  | Querbeschl. | 0.40 g | 0.45 g | +0.05 g | ✓ |  |
 |  | Vmax | 85 km/h | 85 km/h | +0.1 % | ✓ |  |
-| | *Grund:* brems_50: Bremsweg kürzer als das Ziel, auch mit Bremskraft −50 %; quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
+| | *Grund:* brems_50: Bremsweg kürzer als das Ziel, auch mit Bremskraft −50 % | | | | | |
 | **Kiezwerk Stadtbus 12** (stadtbus) | 0–50 km/h | 15.0 s | 14.7 s | -2.3 % | ✓ | μ -7 %, Bremskraft -28 %, Übersetzung ×1.60, Schaltzeit ×1.50 |
 |  | Bremsweg 50 km/h | 27.0 m | 27.0 m | +0.0 % | ✓ |  |
 |  | Querbeschl. | 0.45 g | 0.60 g | +0.15 g | ✗ |  |
 |  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
-| | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
-| **Kiezwerk Doppelstock** (doppeldecker) | 0–50 km/h | 18.0 s | 17.2 s | -4.6 % | ✓ | μ -10 %, Bremskraft -31 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad -3 % |
+| | *Grund:* quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP | | | | | |
+| **Kiezwerk Doppelstock** (doppeldecker) | 0–50 km/h | 18.0 s | 17.2 s | -4.6 % | ✓ | μ +10 %, Bremskraft -31 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad -3 % |
 |  | Bremsweg 50 km/h | 28.0 m | 28.0 m | +0.0 % | ✓ |  |
-|  | Querbeschl. | 0.40 g | 0.55 g | +0.15 g | ✗ |  |
+|  | Querbeschl. | 0.40 g | 0.44 g | +0.04 g | ✓ |  |
 |  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
-| | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
 | **Kiezwerk Gelenk 18** (gelenkbus) | 0–50 km/h | 17.0 s | 18.0 s | +6.0 % | ✓ | μ -10 %, Bremskraft -31 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 50 km/h | 28.0 m | 28.0 m | -0.0 % | ✓ |  |
 |  | Querbeschl. | 0.45 g | 0.55 g | +0.10 g | ✗ |  |
 |  | Vmax | 80 km/h | 80 km/h | +0.2 % | ✓ |  |
-| | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
-| **Kiezwerk E-Stadtbus 12** (e_bus) | 0–50 km/h | 12.0 s | 12.1 s | +0.5 % | ✓ | μ +3 %, Bremskraft -32 %, Wirkungsgrad +3 % |
+| | *Grund:* quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP | | | | | |
+| **Kiezwerk E-Stadtbus 12** (e_bus) | 0–50 km/h | 12.0 s | 12.1 s | +0.5 % | ✓ | μ -6 %, Bremskraft -32 %, Wirkungsgrad +3 % |
 |  | Bremsweg 50 km/h | 26.0 m | 26.0 m | -0.0 % | ✓ |  |
-|  | Querbeschl. | 0.45 g | 0.66 g | +0.21 g | ✗ |  |
+|  | Querbeschl. | 0.45 g | 0.58 g | +0.13 g | ✗ |  |
 |  | Vmax | 80 km/h | 79 km/h | -0.6 % | ✓ |  |
-| | *Grund:* quer_g: Nutzfahrzeug: real begrenzen Kippgrenze und Wankstabilisierung (RSC) die Querbeschleunigung, Modell folgt in Phase 6 | | | | | |
+| | *Grund:* quer_g: Nutzfahrzeug: rutscht vor dem Kippen; im Spiel begrenzt die Wankstabilisierung (RSC, mit ESP) auf 75 % der Kippgrenze, gemessen wird ohne ESP | | | | | |
 | **Lausitz Kolibri** (zweitakter) | Vmax | 107 km/h | 107 km/h | -0.5 % | ✓ | – |
 | **Havel Piccolo** (kleinwagen) | Vmax | 170 km/h | 170 km/h | -0.2 % | ✓ | – |
 | **Spree Ronda** (kompakt) | Vmax | 210 km/h | 210 km/h | -0.2 % | ✓ | – |

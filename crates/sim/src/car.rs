@@ -94,6 +94,8 @@ pub struct Car {
     pub season_tire: Option<&'static str>,
     pub esp: bool,
     pub esp_full: bool,
+    /// Lkw-Begrenzer abgeschaltet (Konsole `begrenzer aus`)
+    pub no_limiter: bool,
     pub abs: bool,
     pub traction: Traction,
     pub aqua: f64,
@@ -155,6 +157,7 @@ impl Car {
             season_tire: None,
             esp: true,
             esp_full: false,
+            no_limiter: false,
             abs: true,
             traction: DRY,
             aqua: 0.,
@@ -183,6 +186,27 @@ impl Car {
     }
     pub fn lvl(&self) -> i8 {
         self.level.lvl
+    }
+    /// Zuladung 0…1: Lkw und Busse fahren zufällig beladen (fest je Fahrzeug), alles andere leer.
+    pub fn cargo_load(&self) -> f64 {
+        match data_vehicle(self) {
+            Some(v)
+                if matches!(
+                    v.class.as_str(),
+                    "lkw" | "lkw_sattel" | "bus" | "bus_gelenk"
+                ) =>
+            {
+                crate::math::hash01(self.id as f64 * 3.71 + 0.5)
+            }
+            _ => 0.,
+        }
+    }
+    /// Masse (kg) aus den Fahrzeugdaten samt Zuladung; ohne Datensatz aus der Größe geschätzt.
+    pub fn mass(&self) -> f64 {
+        match data_vehicle(self) {
+            Some(v) => v.loaded(self.cargo_load()).0,
+            None => (self.hw * self.hh * 4. * 0.9).max(80.),
+        }
     }
     /// Modell (Fahrverhalten, Name): fest, nach Art oder aus der Nummer.
     pub fn model_name(&self) -> &'static str {
@@ -343,6 +367,40 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     }
 }
 
+/// Anhänger eines Gespanns (Sattelauflieger, Nachläufer) in Spielkoordinaten: Mittelpunkt, Winkel, halbe Länge
+/// und halbe Breite (px). Der Knickwinkel kommt aus der Fahrphysik, ohne sie hängt der Anhänger gerade.
+pub fn trailer_pose(car: &Car) -> Option<(f64, f64, f64, f64, f64)> {
+    let v = data_vehicle(car)?;
+    let hc = v.hitch.as_ref()?;
+    // Gelenk: e hinter der Hinterachse (Königszapfen leicht davor); die Achsen liegen grob mittig im Wagen
+    let hitch = (-v.wheelbase / 2. - hc.e) * 10.;
+    let (fy, fx) = car.angle.sin_cos();
+    let (hx, hy) = (car.x + fx * hitch, car.y + fy * hitch);
+    // vphys: Knickwinkel gegen den Uhrzeigersinn, Spielwinkel im Uhrzeigersinn
+    let art = car.phys.as_ref().map_or(0., |s| s.art);
+    let a2 = car.angle + art;
+    let half = hc.trailer_len * 5.;
+    // Mittelpunkt des Anhängers: vom Gelenk um (halbe Länge − Überhang vor dem Gelenk) nach hinten
+    let back = half - hc.overhang * 10.;
+    Some((
+        hx - a2.cos() * back,
+        hy - a2.sin() * back,
+        a2,
+        half,
+        v.width * 5.,
+    ))
+}
+
+/// Datensatz eines Fahrzeugs (auch für Wracks und KI; ohne Winterreifen).
+pub fn data_vehicle(car: &Car) -> Option<&'static crate::vehdata::Vehicle> {
+    let id = match car.kind {
+        "bicycle" => "fahrrad_city",
+        "escooter" => "escooter",
+        _ => car.model_name(),
+    };
+    crate::vehdata::game_vehicle(id)
+}
+
 /// Datensatz für den Fahrphysik-Kern (vierrädrig, mit Daten; Winterreifen, wenn die Welt sie gewählt hat).
 pub fn vphys_vehicle(car: &Car) -> Option<&'static crate::vehdata::Vehicle> {
     if car.wrecked {
@@ -373,7 +431,9 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     let vf = car.vx * ca + car.vy * sa;
     let vr = -car.vx * sa + car.vy * ca;
     let env_set = car.env.take();
+    let load = car.cargo_load();
     let s = car.phys.get_or_insert_with(Default::default);
+    s.load = load;
     (s.x, s.y, s.yaw) = (0., 0., 0.);
     s.vx = vf / PX;
     s.vy = -vr / PX;
@@ -409,6 +469,9 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
         sprint: ctl.sprint,
         esp: Some(esp),
         no_abs: !car.abs,
+        no_limiter: car.no_limiter
+            && matches!(v.class.as_str(), "lkw" | "lkw_sattel")
+            && feel.truck_limiter_tunable,
     };
     step(v, feel, s, &inp, &env, dt);
     // zurück ins Spielsystem
@@ -558,26 +621,30 @@ pub fn collide_car_world(
     }
 }
 
-/// Auto gegen Auto: halbe Trennung je Seite, elastischer Stoß, Schaden für beide.
+/// Auto gegen Auto: Trennung und Stoß nach den Massen aus den Fahrzeugdaten (ein Sattelzug schiebt einen
+/// Kleinwagen weg), Schaden nach der eigenen Geschwindigkeitsänderung.
 pub fn collide_cars(a: &mut Car, b: &mut Car, events: &mut Vec<Event>) {
     let Some(m) = obb_vs_obb(&a.obb(), &b.obb()) else {
         return;
     };
-    a.x += m.nx * m.depth / 2.;
-    a.y += m.ny * m.depth / 2.;
-    b.x -= m.nx * m.depth / 2.;
-    b.y -= m.ny * m.depth / 2.;
+    let (ma, mb) = (a.mass(), b.mass());
+    // Anteil, den jedes Auto ausweicht bzw. an Geschwindigkeit ändert (gleiche Massen: je die Hälfte)
+    let (ka, kb) = (mb / (ma + mb), ma / (ma + mb));
+    a.x += m.nx * m.depth * ka;
+    a.y += m.ny * m.depth * ka;
+    b.x -= m.nx * m.depth * kb;
+    b.y -= m.ny * m.depth * kb;
     let vn = (a.vx - b.vx) * m.nx + (a.vy - b.vy) * m.ny;
     if vn >= 0. {
         return;
     }
-    let j = -(1. + RESTITUTION) * vn / 2.;
-    a.vx += j * m.nx;
-    a.vy += j * m.ny;
-    b.vx -= j * m.nx;
-    b.vy -= j * m.ny;
-    damage(a, -vn * 0.8, events);
-    damage(b, -vn * 0.8, events);
+    let j = -(1. + RESTITUTION) * vn;
+    a.vx += j * ka * m.nx;
+    a.vy += j * ka * m.ny;
+    b.vx -= j * kb * m.nx;
+    b.vy -= j * kb * m.ny;
+    damage(a, -vn * 0.8 * 2. * ka, events);
+    damage(b, -vn * 0.8 * 2. * kb, events);
 }
 
 #[cfg(test)]
@@ -587,6 +654,34 @@ mod tests {
 
     fn car() -> Car {
         Car::new(1, 0., 0., 0., 0xff0000, Role::Traffic, "car")
+    }
+
+    #[test]
+    fn heavy_trucks_push_small_cars_away() {
+        let mut truck = Car::new(1, 0., 0., 0., 0, Role::Traffic, "garbage");
+        let mut small = Car::new(2, 0., 0., 0., 0, Role::Traffic, "car");
+        small.model = Some("kleinwagen");
+        let (lw, sw) = (truck.hw, small.hw);
+        small.x = lw + sw - 4.;
+        truck.vx = 100.;
+        assert!(
+            truck.mass() > small.mass() * 8.,
+            "{} {}",
+            truck.mass(),
+            small.mass()
+        );
+        let mut ev = Vec::new();
+        collide_cars(&mut truck, &mut small, &mut ev);
+        // der Müllwagen verliert kaum Tempo, der Kleinwagen fliegt davon
+        assert!(truck.vx > 85., "{}", truck.vx);
+        assert!(small.vx > 100., "{}", small.vx);
+        // gleiche Autos: wie bisher je die Hälfte
+        let (mut a, mut b) = (car(), car());
+        b.x = a.hw * 2. - 4.;
+        b.id = 1;
+        a.vx = 100.;
+        collide_cars(&mut a, &mut b, &mut ev);
+        assert!((a.vx + b.vx - 100.).abs() < 1e-6);
     }
 
     #[test]
@@ -649,8 +744,11 @@ mod tests {
 
     #[test]
     fn car_against_car_is_symmetric() {
+        // gleiches Modell = gleiche Masse
         let mut a = car();
         let mut b = Car::new(2, 40., 0., 0., 0, Role::Traffic, "car");
+        a.model = Some("kompakt");
+        b.model = Some("kompakt");
         a.vx = 200.;
         let mut ev = Vec::new();
         collide_cars(&mut a, &mut b, &mut ev);

@@ -66,6 +66,24 @@ pub const PAX_RESET: f64 = 0.2;
 pub const BUMP_H: f64 = 0.012;
 pub const BUMP_L: f64 = 0.35;
 pub const BUMP_ZETA: f64 = 0.3;
+/// Kippen: Wankweg verschiebt den Schwerpunkt nach außen – `ROLL_COMPLIANCE` je rad Wanken pro g (Federn,
+/// Reifen, Rahmen, Sattelkupplung); Kippfortschritt je Überschreitung (1/s), Abklingen (1/s), Bordsteinstoß senkt
+/// die Kippgrenze auf diesen Anteil
+pub const ROLL_COMPLIANCE: f64 = 4.;
+pub const TIP_RATE: f64 = 6.;
+pub const TIP_RECOVER: f64 = 2.;
+pub const TIP_CURB: f64 = 0.8;
+/// Wankstabilisierung (RSC, Teil des ESP bei Lkw und Bussen): greift ab diesem Anteil der Kippgrenze ein
+pub const RSC_SHARE: f64 = 0.75;
+/// Einknicken: Anteil der Auflieger-Trägheit, der beim Bremsen schiebt – mit blockierter Hinterachse der
+/// Zugmaschine (kein Seitenhalt) bzw. sonst (der Auflieger bremst selbst mit); beim Gelenkbus dämpft die
+/// Knickschutz-Hydraulik zusätzlich
+pub const JACK_PUSH: f64 = 0.35;
+pub const JACK_PUSH_GRIP: f64 = 0.03;
+pub const JACK_DAMP_BUS: f64 = 0.3;
+/// Sattelzug gilt als eingeknickt, wenn der Knickwinkel bei Tempo über diesen Wert läuft (rad, m/s)
+pub const JACK_ANGLE: f64 = 0.55;
+pub const JACK_SPEED: f64 = 4.;
 /// Aquaplaning: Wasserhöhe, ab der es droht (mm); Beginn bei diesem Anteil von v_ap; verbleibende Haftung
 pub const AQUA_WATER_MM: f64 = 2.5;
 pub const AQUA_ONSET: f64 = 0.75;
@@ -91,6 +109,8 @@ pub struct Input {
     pub esp: Option<Esp>,
     /// ABS abgeschaltet (Konsole)
     pub no_abs: bool,
+    /// Tempobegrenzer abgeschaltet (Lkw, wenn das Spielgefühl es erlaubt)
+    pub no_limiter: bool,
 }
 
 /// Untergrund an einer Achse.
@@ -215,6 +235,15 @@ pub struct State {
     pub curb_hits: u32,
     /// Profiltiefe als Faktor (neu 1, abgefahren 0,8; 0 = neu)
     pub tread: f64,
+    /// Kippen: Fortschritt 0…1 (die kurveninneren Räder heben ab), umgekippt
+    pub tip: f64,
+    pub rolled: bool,
+    /// Zentripetalbeschleunigung v·r (m/s²), gefiltert mit dem Fahrwerk – fürs Kippen neben der Kraftbilanz
+    pub ay_c: f64,
+    /// Knickwinkel zwischen Zugfahrzeug und Auflieger/Nachläufer (rad, gegen den Uhrzeigersinn: Zugfahrzeug links
+    /// vom Anhänger positiv); Sattelzug eingeknickt
+    pub art: f64,
+    pub jackknifed: bool,
     /// Zweirad: Schräglage (rad, positiv = nach links), Nickwinkel (rad, Wheelie positiv, Stoppie negativ),
     /// gestürzt (Ursache), Erschöpfung vom Sprinten (0 frisch … 1 leer), Schiene schon geprüft
     pub lean: f64,
@@ -347,7 +376,7 @@ pub(crate) fn drive_force(v: &Vehicle, s: &mut State, inp: &Input, speed: f64, d
     // Begrenzer
     // (regelt um den Grenzwert herum, ±0,15 m/s – ein früheres Ausblenden ließ Roller bei 44,5 statt 45 km/h
     // hängen)
-    match v.limiter {
+    match v.limiter.filter(|_| !inp.no_limiter) {
         Some(l) => f * ((l + 0.15 - speed) / 0.3).clamp(0., 1.),
         None => f,
     }
@@ -486,8 +515,44 @@ fn road_height(x: f64, rough: f64) -> f64 {
     (h(i) + (h(i + 1.) - h(i)) * t) * BUMP_H * rough
 }
 
+/// Knickwinkel einen Schritt weiter (Kinematik des Gespanns): der Anhänger dreht mit
+/// θ̇₂ = (v·sin ψ − e·r·cos ψ)/d, ψ = θ₁ − θ₂. `v` Tempo des Zugfahrzeugs (m/s), `r` seine Gierrate (rad/s).
+pub fn trailer_follow(art: f64, v: f64, r: f64, e: f64, d: f64, dt: f64) -> f64 {
+    let rate2 = (v * art.sin() - e * r * art.cos()) / d.max(0.5);
+    art + (r - rate2) * dt
+}
+
+/// Querbeschleunigung (m/s²), bei der ein Fahrzeug mit Schwerpunkthöhe `h` kippt: statische Stabilität
+/// Spur/(2h), gemindert durch den Wankweg.
+pub fn tip_limit(v: &Vehicle, h: f64) -> f64 {
+    if v.track <= 0. {
+        return f64::INFINITY;
+    }
+    G * v.track / (2. * h) / (1. + ROLL_COMPLIANCE * v.chassis.roll.to_radians())
+}
+
 fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: f64) {
     let (m, h) = v.loaded(s.load);
+    // umgekippt: liegt auf der Seite und rutscht aus; eingeknickt: der Auflieger blockiert das Gespann
+    if s.jackknifed && s.vx.hypot(s.vy) < 0.3 {
+        s.jackknifed = false;
+    }
+    if s.rolled || s.jackknifed {
+        let dv = 0.6 * v.tire.mu * G * dt;
+        let sp = s.vx.hypot(s.vy);
+        if sp > dv {
+            s.vx -= s.vx / sp * dv;
+            s.vy -= s.vy / sp * dv;
+        } else {
+            (s.vx, s.vy) = (0., 0.);
+        }
+        s.r *= (-2. * dt).exp();
+        let (sy, cy) = s.yaw.sin_cos();
+        s.x += (s.vx * cy - s.vy * sy) * dt;
+        s.y += (s.vx * sy + s.vy * cy) * dt;
+        s.yaw += s.r * dt;
+        return;
+    }
     let (a, b) = v.axle_distances();
     let l = v.wheelbase;
     let iz = v.iz * m / v.mass_empty;
@@ -833,6 +898,35 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
             }
         }
     }
+    // Wankstabilisierung (RSC) schwerer Fahrzeuge: nahe der Kippgrenze Gas weg und bremsen
+    if esp != Esp::Off
+        && matches!(
+            v.class.as_str(),
+            "lkw" | "lkw_sattel" | "bus" | "bus_gelenk"
+        )
+        && speed > 3.
+    {
+        let near = s.ay_c.abs().min(s.ay_f.abs()) / (tip_limit(v, h) * RSC_SHARE);
+        if near > 1. {
+            fxb -= m * G * ((near - 1.) * 2.).min(0.3) * dir;
+            s.esp_active = true;
+        }
+    }
+    // Gespann: der Auflieger schiebt beim Bremsen über das Gelenk – geknickt dreht das Zugfahrzeug weiter ein
+    // (blockierte Hinterachse ohne Seitenhalt: Einknicken)
+    if let Some(hc) = &v.hitch {
+        let decel = (-s.ax_f * dir).max(0.);
+        if decel > 0.5 {
+            let push = if s.locked[1] {
+                JACK_PUSH
+            } else {
+                JACK_PUSH_GRIP
+            };
+            let f =
+                m * hc.trailer_share(m) * decel * push * if hc.semi { 1. } else { JACK_DAMP_BUS };
+            mz += (b + hc.e) * f * s.art.sin();
+        }
+    }
     // Lenk-Assist (Spielgefühl): wer nicht gegenlenkt, dem dämpft er das Ausbrechen leicht
     if feel.steer_assist > 0. && speed > 5. && s.beta().abs() > ASSIST_BETA && inp.steer * s.r >= 0.
     {
@@ -881,6 +975,37 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let tau = v.chassis.tau.max(0.02);
     s.ax_f += (ax - s.ax_f) * (dt / tau).min(1.);
     s.ay_f += (ay - s.ay_f) * (dt / tau).min(1.);
+    // Knickwinkel; der Gelenkbus hat eine Knickwinkelbegrenzung, der Sattelzug knickt darüber ein
+    if let Some(hc) = &v.hitch {
+        s.art = trailer_follow(s.art, s.vx, s.r, hc.e, hc.d, dt);
+        // eingeknickt nur in Fahrt; beim Rangieren darf der Sattelzug weit knicken, bis zum Anschlag
+        if hc.semi && s.art.abs() > JACK_ANGLE && vx.hypot(vy) > JACK_SPEED {
+            s.jackknifed = true;
+        }
+        if s.art.abs() > hc.max_angle {
+            s.art = hc.max_angle * s.art.signum();
+        }
+    }
+    // Kippen: über der Kippgrenze heben die inneren Räder ab, weiter darüber kippt es
+    s.ay_c += (vx * r - s.ay_c) * (dt / tau).min(1.);
+    let lim = tip_limit(v, h)
+        * if s.hop.iter().any(|&t| t > 0.) {
+            TIP_CURB
+        } else {
+            1.
+        };
+    // die Kraftbilanz überschätzt bei Schritttempo (kinematische Überblendung), v·r beim Rutschen (Gieren ohne
+    // Seitenkraft) – maßgeblich ist der kleinere Wert
+    let ay_tip = s.ay_c.abs().min(s.ay_f.abs());
+    let ratio = ay_tip / lim;
+    if ratio > 1. {
+        s.tip += (ratio - 1.) * TIP_RATE * dt + dt;
+        if s.tip >= 1. {
+            s.rolled = true;
+        }
+    } else {
+        s.tip = (s.tip - TIP_RECOVER * dt).max(0.);
+    }
     s.vx = vx;
     s.vy = vy;
     s.r = r;
@@ -1505,5 +1630,137 @@ mod tests {
         let static_f = low.mass_empty * G * low.front;
         assert!(fz_low < static_f * 0.3, "{fz_low}");
         assert!(fz_high < high.mass_empty * G * high.front * 0.3);
+    }
+
+    #[test]
+    fn semi_trailer_cuts_the_corner_and_straightens_out() {
+        let db = db();
+        let v = db.get("sattelzug_40t").unwrap();
+        assert!(v.hitch.as_ref().is_some_and(|h| h.semi));
+        let mut s = State {
+            vx: 4.,
+            load: 1.,
+            ..Default::default()
+        };
+        // enge Kurve links bei Schritttempo: der Auflieger hängt nach (Knickwinkel positiv, deutlich)
+        run(
+            v,
+            &mut s,
+            Input {
+                throttle: 0.4,
+                steer: 1.,
+                ..Default::default()
+            },
+            8.,
+        );
+        assert!(s.art > 0.3 && s.art < 1.4, "{}", s.art);
+        assert!(!s.jackknifed);
+        // geradeaus: der Auflieger zieht sich gerade
+        run(
+            v,
+            &mut s,
+            Input {
+                throttle: 0.4,
+                ..Default::default()
+            },
+            20.,
+        );
+        assert!(s.art.abs() < 0.05, "{}", s.art);
+    }
+
+    #[test]
+    fn locked_tractor_rear_axle_jackknifes_abs_does_not() {
+        let db = db();
+        let base = db.get("sattelzug_40t").unwrap().clone();
+        let brake = |v: &Vehicle, handbrake: bool| {
+            let mut s = State {
+                vx: 60. / 3.6,
+                load: 1.,
+                gear: 8,
+                art: 0.08,
+                ..Default::default()
+            };
+            let feel = Feel::simulation();
+            let inp = Input {
+                brake: 1.,
+                handbrake,
+                steer: 0.1,
+                esp: Some(Esp::Off),
+                ..Default::default()
+            };
+            for _ in 0..(8. * HZ) as usize {
+                step(v, &feel, &mut s, &inp, &Env::default(), STEP);
+                if s.jackknifed {
+                    break;
+                }
+            }
+            s
+        };
+        assert!(
+            brake(&base, true).jackknifed,
+            "blockierte Hinterachse knickt ein"
+        );
+        let ok = brake(&base, false);
+        assert!(!ok.jackknifed && ok.art.abs() < 0.5, "{}", ok.art);
+    }
+
+    #[test]
+    fn articulated_bus_stays_within_its_articulation_limit() {
+        let db = db();
+        let v = db.get("gelenkbus").unwrap();
+        let hc = v.hitch.as_ref().unwrap();
+        assert!(!hc.semi);
+        let mut s = State {
+            vx: 50. / 3.6,
+            art: 0.1,
+            ..Default::default()
+        };
+        run(
+            v,
+            &mut s,
+            Input {
+                brake: 1.,
+                handbrake: true,
+                steer: 0.4,
+                esp: Some(Esp::Off),
+                ..Default::default()
+            },
+            6.,
+        );
+        assert!(s.art.abs() <= hc.max_angle + 1e-9 && !s.jackknifed);
+    }
+
+    #[test]
+    fn loaded_semi_tips_at_about_a_third_of_a_g_cars_never() {
+        let db = db();
+        let semi = db.get("sattelzug_40t").unwrap();
+        let (_, h_full) = semi.loaded(1.);
+        let (_, h_empty) = semi.loaded(0.);
+        let full = tip_limit(semi, h_full) / G;
+        assert!((full - 0.35).abs() < 0.03, "{full}");
+        assert!(tip_limit(semi, h_empty) / G > full * 1.4, "leer stabiler");
+        let dd = db.get("doppeldecker").unwrap();
+        assert!((tip_limit(dd, dd.loaded(1.).1) / G - 0.42).abs() < 0.05);
+        let car = db.get("kompakt_benzin").unwrap();
+        assert!(tip_limit(car, car.loaded(0.).1) / G > 1.1);
+        // über der Grenze: es kippt
+        let mut s = State {
+            vx: 20.,
+            load: 1.,
+            gear: 9,
+            ..Default::default()
+        };
+        run(
+            semi,
+            &mut s,
+            Input {
+                throttle: 0.4,
+                steer: 1.,
+                esp: Some(Esp::Off),
+                ..Default::default()
+            },
+            4.,
+        );
+        assert!(s.rolled, "tip {}", s.tip);
     }
 }
