@@ -177,6 +177,31 @@ Bild in voller Auflösung. Die Reihenfolge der Schritte nach Aufwand und Aussage
 Messgrößen für alle Schritte: Bildrate (Median, p95), längstes Bild, Ruckler beim schnellen Fahren (Kachelnachladen),
 Speicher, Eingabelatenz des Controllers.
 
+#### Recherche zu Schritt 3 (05.10.2026): Rust/wgpu als UWP-Spiel im Developer Mode
+
+Geprüft in den Quellen von wgpu 29, cpal 0.18 und gilrs 0.11 (Cargo-Registry) sowie in Microsoft- und Projektdokumentation:
+
+| Baustein | Befund | Bewertung |
+|---|---|---|
+| DirectX auf der Series S | UWP bekommt DX12 mit **Feature Level 11.0** (App- wie Spielmodus), Shader Model 5.1–6.4; im App-Modus gibt es DX12 im Developer Mode nur über **WARP** (Software) – Spielmodus ist Pflicht. Empfohlene Auflösung Series S: 2560 × 1440. | passt |
+| wgpu-DX12 | `wgpu-hal/src/dx12/adapter.rs` legt das Gerät mit **D3D_FEATURE_LEVEL_11_0** an (fragt bis 12_2 ab). Oberflächen: HWND, DirectComposition-Visual, Surface-Handle und **XAML-`SwapChainPanel`** (`SurfaceTargetUnsafe::SwapChainPanel`); **kein `CoreWindow`**. | trägt, wenn die Hülle ein `SwapChainPanel` liefert |
+| Fenster/Eingabe | winit hat keinen UWP-Weg. Die Engine braucht einen Betrieb ohne winit: die Hülle treibt die Bilder (Render-Schleife), reicht Größe und Tasten durch. | Umbau nötig (`engine/lib.rs App`) |
+| Rust-Ziel | `x86_64-uwp-windows-msvc`: Tier 3, **std wird unterstützt**, aber nur mit Nightly und `-Z build-std=std,panic_abort`; ein `pc-windows-msvc`-Build kann Win32-Funktionen importieren, die es im Xbox-Betriebssystem nicht gibt (DLL lädt dann nicht). | machbar, Nightly festpinnen |
+| Controller | gilrs nutzt unter Windows standardmäßig **Windows.Gaming.Input** (`wgi`) – genau die UWP-API. | passt voraussichtlich |
+| Ton | cpal 0.18 öffnet das Standardgerät über `ActivateAudioInterfaceAsync` (UWP-tauglich), nutzt daneben aber `IMMDeviceEnumerator` (in UWP eingeschränkt). | prüfen; Rückfall wäre XAudio2 |
+| Speicher | Spielmodus 5 GB; das Spiel braucht auf dem Mac 827 MB (mit Grafikspeicher). | passt |
+| Dateien | Kacheln liegen im Paket (lesbar), Spielstand/Einstellungen müssen nach `ApplicationData.LocalFolder` statt ins Benutzerverzeichnis. | kleiner Umbau |
+
+Vorbilder: **Cemu-UWP** (XboxEmuPorts) läuft auf der Series S im Developer Mode mit einem nativen Renderer in einem XAML-
+`SwapChainPanel` (dort D3D11 FL 11.0, D3D12 nur experimentell) und hält sich an rund 5 GB; **firstuwp-rs** zeigt eine reine
+Rust-UWP-App mit XAML. Ein Rust/wgpu-Spiel auf der Xbox ist nirgends belegt (ein Ruffle-UWP-Versuch ist ohne Ergebnis).
+
+Vorgeschlagene Reihenfolge für Schritt 3: (a) leere C#- oder C++/WinRT-XAML-Hülle mit `SwapChainPanel`, Spielmodus;
+(b) Rust als `cdylib` für `x86_64-uwp-windows-msvc` (Nightly, build-std) mit einer Funktion, die den Panel-Zeiger nimmt und
+mit wgpu ein farbiges Bild zeichnet – Machbarkeit auf echter Konsole; (c) Engine ohne winit (Hülle treibt Bilder und
+Eingaben); (d) Ton prüfen; (e) Pfade, Paket, Messung. Braucht einen Windows-Rechner mit Visual Studio und dem Windows SDK
+22621 oder neuer.
+
 ## Referenzen
 
 - [winit ApplicationHandler](https://docs.rs/winit/0.30.13/winit/application/trait.ApplicationHandler.html)
