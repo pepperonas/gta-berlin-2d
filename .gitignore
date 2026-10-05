@@ -22,3 +22,10 @@ tools/audio/.cache/
 # Grafik-Testszenen: verlustfreie Aufnahmen nur lokal (eingecheckt sind die WebP-Fassungen)
 docs/images/native/grafik/*/png/
 tools/gfx/.cache/
+
+# Rust-Probe für die Xbox: DLL wird gebaut, Visual-Studio-Ausgaben
+xbox/RustProbe/RustProbe/berlin_probe.dll
+xbox/RustProbe/RustProbe/bin/
+xbox/RustProbe/RustProbe/obj/
+xbox/RustProbe/.vs/
+xbox/RustProbe/RustProbe/AppPackages/

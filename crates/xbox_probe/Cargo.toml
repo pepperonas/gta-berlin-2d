@@ -1,0 +1,22 @@
+[package]
+name = "berlin-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Machbarkeits- und Lastprobe für die Xbox (UWP, SwapChainPanel, wgpu-DX12) und dieselbe Last auf dem Mac"
+
+[lib]
+name = "berlin_probe"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+bytemuck.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+libloading = "0.8"
+
+[dev-dependencies]
+winit.workspace = true

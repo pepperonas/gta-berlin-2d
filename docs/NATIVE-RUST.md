@@ -196,6 +196,9 @@ Vorbilder: **Cemu-UWP** (XboxEmuPorts) läuft auf der Series S im Developer Mode
 `SwapChainPanel` (dort D3D11 FL 11.0, D3D12 nur experimentell) und hält sich an rund 5 GB; **firstuwp-rs** zeigt eine reine
 Rust-UWP-App mit XAML. Ein Rust/wgpu-Spiel auf der Xbox ist nirgends belegt (ein Ruffle-UWP-Versuch ist ohne Ergebnis).
 
+**Umsetzung von (a) und (b) liegt bereit (05.10.2026):** `crates/xbox_probe` + `xbox/RustProbe` (Anleitung
+`xbox/RustProbe/README.md`), noch nicht auf Windows gebaut.
+
 Vorgeschlagene Reihenfolge für Schritt 3: (a) leere C#- oder C++/WinRT-XAML-Hülle mit `SwapChainPanel`, Spielmodus;
 (b) Rust als `cdylib` für `x86_64-uwp-windows-msvc` (Nightly, build-std) mit einer Funktion, die den Panel-Zeiger nimmt und
 mit wgpu ein farbiges Bild zeichnet – Machbarkeit auf echter Konsole; (c) Engine ohne winit (Hülle treibt Bilder und

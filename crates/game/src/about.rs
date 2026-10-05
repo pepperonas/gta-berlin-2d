@@ -731,23 +731,20 @@ mod tests {
         // Jedes fremde Paket aus Cargo.lock steht mit Version in thirdparty.tsv und umgekehrt – sonst:
         // node tools/thirdparty.mjs
         let lock = include_str!("../../../Cargo.lock");
-        let ours = [
-            "berlin-audio",
-            "berlin-engine",
-            "gta-berlin",
-            "berlin-map-loader",
-            "berlin-sim",
-            "physics-calibrate",
-        ];
+        // eigene Pakete (Arbeitsbereich) haben in Cargo.lock keine `source`-Zeile – so bleibt die Liste ohne Pflege
         let mut locked: Vec<(String, String)> = Vec::new();
-        let mut name = None;
-        for l in lock.lines() {
-            if let Some(n) = l.strip_prefix("name = ") {
-                name = Some(n.trim_matches('"').to_owned());
-            } else if let (Some(v), Some(n)) = (l.strip_prefix("version = "), name.take())
-                && !ours.contains(&n.as_str())
-            {
-                locked.push((n, v.trim_matches('"').to_owned()));
+        for block in lock.split("[[package]]").skip(1) {
+            let field = |k: &str| {
+                block
+                    .lines()
+                    .find_map(|l| l.strip_prefix(k))
+                    .map(|v| v.trim_matches('"').to_owned())
+            };
+            if field("source = ").is_none() {
+                continue;
+            }
+            if let (Some(n), Some(v)) = (field("name = "), field("version = ")) {
+                locked.push((n, v));
             }
         }
         let mut listed: Vec<(String, String)> = packages()

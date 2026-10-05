@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/audio", "crates/engine", "crates/game", "crates/map_loader", "crates/sim", "tools/physics-calibrate"]
+members = ["crates/audio", "crates/engine", "crates/game", "crates/map_loader", "crates/sim", "crates/xbox_probe", "tools/physics-calibrate"]
 default-members = ["crates/game"]
 resolver = "3"
 

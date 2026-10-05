@@ -189,6 +189,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "berlin-probe"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "libloading",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "berlin-sim"
 version = "0.1.0"
 dependencies = [

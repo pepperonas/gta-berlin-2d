@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Xbox-Machbarkeitsprobe: `crates/xbox_probe` (Rust-DLL `berlin_probe`, wgpu-DX12 in ein XAML-`SwapChainPanel`) und die
+  UWP-Hülle `xbox/RustProbe` (C#). Die Probe meldet Schritt für Schritt, ob die System-DLLs im Sandkasten laden, welcher
+  DX12-Adapter da ist und ob die Oberfläche entsteht, und misst danach eine dem Spiel nachgebildete Last (8 Schichten in
+  2560 × 1440, mit/ohne 4× MSAA). Dieselbe Last läuft auf dem Mac (`cargo run --release -p berlin-probe --example mac`;
+  M1 Pro 4,5–5,3 ms) – das Verhältnis überträgt die Spielmessungen auf die Konsole. Bauen in der Windows-VM:
+  `xbox\RustProbe\build-probe.ps1`, Anleitung in `xbox/RustProbe/README.md`. Noch nicht auf Windows gebaut.
 - Grafik-Überarbeitung, Phase 4 (native Fassung): **Dächer und Fassaden aus Texturen** (CC0, ambientCG) –
   Ziegel, Schiefer, Blech, Kiesdach; Putz, Klinker und Beton (Plattenbau mit Plattenfugen). Welche Fassade ein Haus
   bekommt, folgt dem Wandmaterial aus OSM bzw. dem Fassadenstil. **Fenster** haben Rahmen, steinerne Fensterbank,
