@@ -3458,7 +3458,7 @@ impl World {
             } else if k.moto {
                 1.45 - (c.speed() / 500.).clamp(0., 1.) * 0.45
             } else {
-                1. - (c.speed() / 330.).clamp(0., 1.) * 0.28
+                camera_zoom_for(c.speed(), crate::vehdata::game_feel().camera_zoom_by_speed)
             };
         }
         // im Drift zieht die Kamera leicht nach
@@ -3710,17 +3710,28 @@ pub fn esp_label(esp: bool, full: bool) -> &'static str {
     }
 }
 
-/// Sturzgefahr (0…1), wenn ein Zweirad mit Kurs `heading` ein Gleis mit Richtung `track` quert: unter 25° steigt
-/// sie mit flacherem Winkel und mit der Nässe.
+/// Sturzwahrscheinlichkeit (0…1), wenn ein Zweirad mit Kurs `heading` ein Gleis mit Richtung `track` quert: unter
+/// 25° steigt sie mit flacherem Winkel und mit der Nässe; flach und nass ist der Sturz sicher.
 pub fn groove_risk(heading: f64, track: f64, wet: f64) -> f64 {
     let d = (heading - track).rem_euclid(std::f64::consts::PI);
     let cross = d.min(std::f64::consts::PI - d);
     let lim = 25f64.to_radians();
     if cross < lim {
-        (1. - cross / lim) * (0.35 + 0.65 * wet.clamp(0., 1.))
+        ((1. - cross / lim) * (0.35 + 0.65 * wet.clamp(0., 1.)) * 2.).min(1.)
     } else {
         0.
     }
+}
+
+/// Kamera-Zoom im Auto nach Tempo (px/s): bis 330 px/s (~120 km/h) von 1 auf 0,72, darüber (wenn
+/// `kamera_zoom_nach_tempo`) weiter bis 0,45 bei 1000 px/s (~360 km/h), damit man bei Hypercar-Tempo noch sieht,
+/// wohin es geht.
+pub fn camera_zoom_for(speed: f64, by_speed: bool) -> f64 {
+    let base = 1. - (speed / 330.).clamp(0., 1.) * 0.28;
+    if !by_speed || speed <= 330. {
+        return base;
+    }
+    0.72 - ((speed - 330.) / 670.).clamp(0., 1.) * 0.27
 }
 
 /// Geschwindigkeitsänderung durch einen Zusammenstoß (px/s), ab der ein laufender Drift verworfen wird

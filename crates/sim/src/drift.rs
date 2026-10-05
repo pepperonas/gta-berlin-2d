@@ -61,6 +61,8 @@ pub const ENTRY_BETA: f64 = 0.15;
 pub const ENTRY_MAX: f64 = 0.7;
 /// Zielwinkel-Grundwert (rad)
 pub const BASE_ANGLE: f64 = 15. * std::f64::consts::PI / 180.;
+/// darunter gilt das Gas als weg (Ziel 0°, Ausleitung)
+pub const LIFT: f64 = 0.1;
 /// Ausleitung: Winkel (rad) und Haltezeit (s), Mindesttempo (m/s), Rückblende der Haftung (s)
 pub const EXIT_BETA: f64 = 6. * std::f64::consts::PI / 180.;
 pub const EXIT_HOLD: f64 = 0.2;
@@ -377,7 +379,12 @@ impl Drift {
         let gain = LEVEL[(c.level as usize).min(2)]
             * (0.5 + 0.5 * c.ability)
             * if c.ice { ICE_GAIN } else { 1. };
-        self.target = (BASE_ANGLE + c.throttle.clamp(0., 1.) * (max - BASE_ANGLE).max(0.)).min(max);
+        // Gas weg (< 10 %): Ziel 0°, der Assist richtet das Auto gerade – das leitet aus
+        self.target = if c.throttle < LIFT {
+            0.
+        } else {
+            (BASE_ANGLE + c.throttle.clamp(0., 1.) * (max - BASE_ANGLE).max(0.)).min(max)
+        };
         if gain > 0. && self.phase == Phase::Drift {
             // Heck draußen auf der Kurvenaußenseite: in einer Linkskurve (side +1) ist β negativ
             let tgt = -self.side * self.target;
@@ -475,7 +482,16 @@ mod tests {
             },
             0.01,
         );
-        assert!((d.target - BASE_ANGLE).abs() < 1e-9);
+        assert_eq!(d.target, 0., "Gas weg: geraderichten");
+        d.update(
+            &Ctx {
+                beta: -0.4,
+                throttle: 0.1,
+                ..ctx()
+            },
+            0.01,
+        );
+        assert!((d.target - (BASE_ANGLE + 0.1 * (55f64.to_radians() - BASE_ANGLE))).abs() < 1e-9);
         d.update(
             &Ctx {
                 beta: -0.4,

@@ -57,6 +57,15 @@ pub const KIN: [f64; 2] = [3., 6.];
 pub const LOWSIDE_MARGIN: f64 = 1.03;
 /// Nickwinkel (rad): Wheelie-Control hält hier; ohne Kontrolle überschlägt es sich ab `FLIP`
 pub const WHEELIE_CONTROL: f64 = 0.17;
+/// Wheelie-Control hält das Vorderrad knapp in der Luft: über diesem Nickwinkel (rad) nimmt sie den Antrieb auf
+/// diesen Anteil der Kippgrenze zurück
+pub const WC_HOLD: f64 = 0.08;
+pub const WC_TRIM: f64 = 0.8;
+/// … und solange das Vorderrad schon in der Luft ist, auf so viel (langsames, kontrolliertes Anheben)
+pub const WC_LIFT: f64 = 1.08;
+/// nach einem Wheelie hält sie das Vorderrad so lange (s) mit diesem Anteil am Boden
+pub const WC_COOL: f64 = 0.8;
+pub const WC_DOWN: f64 = 0.97;
 pub const FLIP: f64 = 0.8;
 /// Nickrate je g Überschuss (rad/s) und Zurückfallen (rad/s)
 pub const PITCH_RATE: f64 = 2.5;
@@ -72,6 +81,8 @@ pub const SLIDE_YAW: f64 = 0.6;
 /// Kleines Rad (Radius in m): am Bordstein ab diesem Tempo (m/s) Sturz, darunter harter Halt
 pub const SMALL_WHEEL: f64 = 0.2;
 pub const CURB_FALL_V: f64 = 3.;
+/// großes Rad: frontal gegen den Bordstein ab diesem Tempo (m/s, ~23 km/h) Sturz, darunter rollt es hinauf
+pub const CURB_FALL_BIG: f64 = 6.5;
 /// gestürztes Zweirad rutscht mit diesem Anteil der Haftung
 pub const SLIDE_MU: f64 = 0.45;
 
@@ -157,6 +168,9 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
                 return;
             }
             s.vx = 0.;
+        } else if speed > CURB_FALL_BIG && env.wheel[0].curb > 0.08 {
+            fall(s, Fall::Curb);
+            return;
         } else {
             s.vx -= (0.3 * env.wheel[0].curb * speed).min(speed * 0.2);
             s.pitch += 0.05;
@@ -196,13 +210,29 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let mut f_drive = f_drive.min(drive_cap.max(0.));
     // Wheelie: über g·l_h/h hebt das Vorderrad; Wheelie-Control hält knapp an der Grenze
     let a_wheelie = G * b / h;
+    // Wheelie-Control: hebt das Vorderrad über `WC_HOLD`, nimmt sie Leistung bis unter die Kippgrenze zurück – das
+    // Rad kommt sanft herunter, kurze Wheelies statt Fahrt an der Grenze
+    if v.wheelie_control {
+        if s.pitch > WC_HOLD {
+            s.wc_t = WC_COOL;
+        }
+        let k = if s.wc_t > 0. {
+            // nach einem Anheben: herunterholen und kurz unten halten
+            if s.pitch > 0. { WC_TRIM } else { WC_DOWN }
+        } else if s.pitch > 0. {
+            WC_LIFT
+        } else {
+            f64::INFINITY
+        };
+        f_drive = f_drive.min(a_wheelie * k * m * df + f_drag + f_roll);
+        s.wc_t = (s.wc_t - dt).max(0.);
+    }
     let a_drive = (f_drive - f_drag - f_roll) / (m * df);
     if a_drive > a_wheelie {
         let excess = (a_drive - a_wheelie) / G;
         s.pitch += excess * PITCH_RATE * dt;
-        if v.wheelie_control && s.pitch > WHEELIE_CONTROL {
-            s.pitch = WHEELIE_CONTROL;
-            f_drive = (a_wheelie * m * df + f_drag + f_roll).min(f_drive);
+        if v.wheelie_control {
+            s.pitch = s.pitch.min(WHEELIE_CONTROL);
         }
     } else if s.pitch > 0. {
         s.pitch = (s.pitch - PITCH_BACK * dt).max(0.);

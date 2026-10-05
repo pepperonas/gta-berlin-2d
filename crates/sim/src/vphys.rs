@@ -88,6 +88,8 @@ pub const JACK_SPEED: f64 = 4.;
 pub const AQUA_WATER_MM: f64 = 2.5;
 pub const AQUA_ONSET: f64 = 0.75;
 pub const AQUA_REST: f64 = 0.1;
+/// Anteil der Wasserhöhe, den die Hinterachse noch vorfindet
+pub const REAR_WATER: f64 = 0.15;
 /// Bordstein: so lange (s) entlastet ein Aufprall bei 10 m/s die Achse, Restlast in der Zeit, Tempoverlust
 /// je m/s Tempo und m Bordsteinhöhe
 pub const CURB_HOP_S: f64 = 0.1;
@@ -253,6 +255,8 @@ pub struct State {
     pub pitch: f64,
     pub fallen: Option<crate::twowheel::Fall>,
     pub exertion: f64,
+    /// Wheelie-Control: Zeit, die sie das Vorderrad nach einem Anheben unten hält (s)
+    pub wc_t: f64,
     pub tired: bool,
     pub groove_seen: bool,
 }
@@ -696,7 +700,8 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         s.fz[i * 2] = wheels[0];
         s.fz[i * 2 + 1] = wheels[1];
         // Aquaplaning je Achse (Wasser im Mittel der beiden Räder)
-        let water = env.axle(i, |g| g.water_mm);
+        // die Vorderräder verdrängen das Wasser, die Hinterräder laufen in der geräumten Spur
+        let water = env.axle(i, |g| g.water_mm) * if i == 1 { REAR_WATER } else { 1. };
         let aq = aquaplaning_grip(speed, v_ap, water);
         let aq = 1. - (1. - aq) * feel.aqua();
         s.aqua[i] = ((1. - aq) / (1. - AQUA_REST)).clamp(0., 1.);

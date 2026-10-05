@@ -2,7 +2,7 @@
 
 Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener Asphalt, `realismus = 1`, `grip_global = 1`; LKW und Busse voll beladen, sonst leer. Toleranzen: 0-X ±7 %, Vmax ±3 %, Bremsweg ±5 %, Querbeschleunigung ±0,05 g. Stellschrauben nur innerhalb der erlaubten Grenzen (cwA ±15 %, μ ±10 %, Übersetzung, Schaltzeit, Wirkungsgrad ±3 %, Bremskraft); Masse, Leistung und Drehmoment unverändert. Verläufe im 100-ms-Takt: `docs/kalibrierung/csv/<id>.csv`.
 
-**185 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 7 s).
+**184 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 7 s).
 
 | Fahrzeug | Test | Ziel | Ist | Abweichung | | Stellschrauben |
 |---|---|---|---|---|---|---|
@@ -26,12 +26,13 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 |  | Bremsweg 50 km/h | 12.0 m | 12.0 m | +0.0 % | ✓ |  |
 |  | Vmax | 45 km/h | 45 km/h | +0.4 % | ✓ |  |
 | | *Grund:* 0_45: zu schnell: auch mit längster Übersetzung | | | | | |
-| **Tegel Nackt 700** (motorrad_naked) | 0–100 km/h | 3.9 s | 4.0 s | +3.2 % | ✓ | cwA -15 %, μ -6 %, Bremskraft -10 %, Übersetzung ×1.60, Schaltzeit ×1.25, Wirkungsgrad +3 % |
-|  | Bremsweg 100 km/h | 40.0 m | 40.0 m | +0.0 % | ✓ |  |
-|  | Vmax | 214 km/h | 212 km/h | -0.8 % | ✓ |  |
-| **Tegel RR 1000** (superbike) | 0–100 km/h | 3.1 s | 2.9 s | -5.1 % | ✓ | μ +10 %, Bremskraft +60 %, Übersetzung ×0.70, Wirkungsgrad -3 % |
-|  | Bremsweg 100 km/h | 36.0 m | 37.2 m | +3.2 % | ✓ |  |
+| **Tegel Nackt 700** (motorrad_naked) | 0–100 km/h | 3.9 s | 3.9 s | -0.0 % | ✓ | cwA -15 %, μ -6 %, Bremskraft -10 %, Übersetzung ×1.30, Schaltzeit ×1.25 |
+|  | Bremsweg 100 km/h | 40.0 m | 40.0 m | -0.0 % | ✓ |  |
+|  | Vmax | 214 km/h | 210 km/h | -2.1 % | ✓ |  |
+| **Tegel RR 1000** (superbike) | 0–100 km/h | 3.1 s | 2.6 s | -14.8 % | ✗ | μ +10 %, Bremskraft +60 % |
+|  | Bremsweg 100 km/h | 36.0 m | 37.4 m | +3.8 % | ✓ |  |
 |  | Vmax | 299 km/h | 299 km/h | -0.1 % | ✓ |  |
+| | *Grund:* 0_100: zu schnell: die Kippgrenze g·l_h/h = 1.07 g erlaubt mehr; eine längere Übersetzung nähme den Wheelie beim Ampelstart (Akzeptanzszene 13 hat Vorrang) | | | | | |
 | **Havelland Fatline** (cruiser) | 0–100 km/h | 4.4 s | 4.7 s | +6.3 % | ✓ | cwA +15 %, μ -8 %, Bremskraft -10 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 44.0 m | 44.0 m | -0.0 % | ✓ |  |
 |  | Vmax | 180 km/h | 189 km/h | +5.3 % | ✗ |  |

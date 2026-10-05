@@ -198,9 +198,17 @@ fn calibrate_one(v: &Vehicle, feel: &Feel) -> Outcome {
         if !ak.is_empty() {
             let mut best = (score(v, &measure(v, &cal, feel, &ak), &ak), cal);
             let gears = v.gearbox.ratios.len() > 1;
+            // Wheelie-Control: nie länger übersetzen – sonst erreicht der erste Gang die Kippgrenze nicht mehr und das
+            // Motorrad macht beim Ampelstart keinen Wheelie (Akzeptanzszene 13 hat Vorrang vor der 0–100-Zeit)
+            let floor = if v.two_wheel && v.wheelie_control {
+                1.
+            } else {
+                0.
+            };
             let gear_steps: Vec<f64> = if gears {
                 (0..=24)
                     .map(|i| GEAR.0 + (GEAR.1 - GEAR.0) * i as f64 / 24.)
+                    .filter(|&g| g >= floor)
                     .collect()
             } else {
                 vec![1.]
@@ -284,6 +292,15 @@ fn calibrate_one(v: &Vehicle, feel: &Feel) -> Outcome {
             }
             k if k.starts_with("0_") && muscle(v) => {
                 "Ziel beschreibt einen Alltagsantritt, der Test fährt Sprint (Kraftgrenze der Kurve muskel)".into()
+            }
+            k if k.starts_with("0_") && v.two_wheel && v.wheelie_control => {
+                let (_, b) = v.axle_distances();
+                let (_, h) = v.loaded(v.calib_load);
+                format!(
+                    "zu schnell: die Kippgrenze g·l_h/h = {:.2} g erlaubt mehr; eine längere Übersetzung nähme den \
+                     Wheelie beim Ampelstart (Akzeptanzszene 13 hat Vorrang)",
+                    b / h
+                )
             }
             k if k.starts_with("0_") => "zu schnell: auch mit längster Übersetzung".into(),
             _ => "außerhalb der Toleranz".into(),

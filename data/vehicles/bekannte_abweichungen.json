@@ -5,6 +5,7 @@
  "rennrad/vmax": "Leistung reicht auch mit cwA −15 % nicht (Fahrwiderstände bei 55 km/h größer als 1200 W × Wirkungsgrad)",
  "escooter_performance/brems_50": "Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
  "roller_45/0_45": "zu schnell: auch mit längster Übersetzung",
+ "superbike/0_100": "zu schnell: die Kippgrenze g·l_h/h = 1.07 g erlaubt mehr; eine längere Übersetzung nähme den Wheelie beim Ampelstart (Akzeptanzszene 13 hat Vorrang)",
  "cruiser/vmax": "Leistung zu groß für das Ziel, auch mit cwA +15 %",
  "gelaendewagen/brems_100": "Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
  "gelaendewagen/quer_g": "Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt)",
