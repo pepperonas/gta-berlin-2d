@@ -16,3 +16,4 @@ web/data/bars.json
 # Native Rust builds
 /target/
 
+tools/audio/__pycache__/

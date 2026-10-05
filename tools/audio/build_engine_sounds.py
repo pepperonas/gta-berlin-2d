@@ -46,7 +46,7 @@ XFADE_S = 0.025
 # Der Leerlauf wird nicht geglättet: dort ist die Tonhöhe ohnehin fast konstant, die Verfolgung aber unsicher.
 LOOPS = [
     ("idle", 0.35, 0.95, [236.9, 453.8], False),
-    ("r2700", 1.35, 1.75, [], True),
+    ("r2600", 1.30, 1.62, [], True),
     ("r3300", 1.80, 2.32, [], True),
     ("r4900", 2.64, 2.88, [], True),
     ("r6000", 2.98, 3.22, [], True),

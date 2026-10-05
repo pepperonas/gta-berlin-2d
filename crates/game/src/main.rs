@@ -65,6 +65,7 @@ fn main() -> Result<()> {
     let mut commands: Vec<String> = Vec::new();
     let mut audio_wav: Option<std::path::PathBuf> = None;
     let mut audio_secs = 20.;
+    let mut audio_vehicle: Option<String> = None;
     let mut audio_scene = String::from("auto");
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -164,6 +165,16 @@ fn main() -> Result<()> {
                     ["auto", "ubahn"].contains(&audio_scene.as_str()),
                     "--audio-szene erwartet auto oder ubahn"
                 );
+            }
+            "--audio-fahrzeug" => {
+                let id = args
+                    .next()
+                    .context("Fahrzeug-id für --audio-fahrzeug fehlt")?;
+                ensure!(
+                    berlin_sim::vehdata::game_vehicle(&id).is_some(),
+                    "--audio-fahrzeug: unbekanntes Fahrzeug {id}"
+                );
+                audio_vehicle = Some(id);
             }
             "--audio-seconds" => {
                 audio_secs = args.next().context("Sekunden fehlen")?.parse()?;
@@ -277,7 +288,13 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         if audio_scene == "ubahn" {
             return render_audio_ubahn(&options.data_root, seed, audio_secs, &path);
         }
-        return render_audio(&options.data_root, seed, audio_secs, &path);
+        return render_audio(
+            &options.data_root,
+            seed,
+            audio_secs,
+            &path,
+            audio_vehicle.as_deref(),
+        );
     }
     if let Some(secs) = check_sim {
         return check_simulation(&options.data_root, seed, secs);
@@ -478,6 +495,7 @@ fn render_audio(
     seed: u32,
     secs: f64,
     path: &std::path::Path,
+    vehicle: Option<&str>,
 ) -> Result<()> {
     use berlin_audio::synth::Synth;
     use berlin_sim::city::{City, DiskSource};
@@ -507,6 +525,10 @@ fn render_audio(
     let (a, b) = (lane.pts[0], lane.pts[1]);
     if let Some(c) = w.cars.iter_mut().find(|c| c.id == pc) {
         (c.x, c.y, c.angle) = (a.0, a.1, (b.1 - a.1).atan2(b.0 - a.0));
+        // anderes Fahrzeug (Datensatz), z. B. ein Sportwagen mit Motor aus Aufnahmen
+        if let Some(v) = vehicle.and_then(berlin_sim::vehdata::game_vehicle) {
+            c.model = Some(v.id.as_str());
+        }
     }
     w.cars
         .retain(|c| c.id == pc || (c.x - a.0).hypot(c.y - a.1) > 300.);
@@ -539,8 +561,17 @@ fn render_audio(
         };
         if k % 60 == 0 {
             let e = listener.engine();
+            let v = &listener.engine_view;
+            let sample = if v.profile.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " · Samples {} {:4.0} U/min Gang {} Gas {:.2}",
+                    v.profile, v.out.rpm, v.out.gear, v.out.throttle
+                )
+            };
             eprintln!(
-                "{t:4.1} s · {:3.0} km/h · {:4.0} U/min · Gang {} · Zündton {:3.0} Hz",
+                "{t:4.1} s · {:3.0} km/h · {:4.0} U/min · Gang {} · Zündton {:3.0} Hz{sample}",
                 w.car(pc).map(|c| c.speed() * 0.36).unwrap_or(0.),
                 e.rpm,
                 e.gear,

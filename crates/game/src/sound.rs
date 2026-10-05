@@ -1,24 +1,71 @@
 //! Klang je Simulationsschritt: aus der Welt die Parameter für den Synthesizer (wie `main.js` in der Browserfassung).
+use berlin_audio::sampler::EngineFrame;
 use berlin_audio::synth::{Frame, Sfx, Vehicle};
 use berlin_sim::ambience::ambience_at;
+use berlin_sim::car::Car;
+use berlin_sim::enginesound::{
+    EngineSound, Profile, SoundInput, SoundOut, config as sound_config, profile_for, select_voices,
+    spatial,
+};
 use berlin_sim::events::Event;
 use berlin_sim::soundscape::{
     EngineState, Voices, footstep_kind, step_engine, steps_between, tire_state,
 };
 use berlin_sim::world::World;
+use std::collections::HashMap;
 
 /// Hörweite für Ereignisklänge (px): weiter weg verklingt ein Unfall oder eine Hupe.
 const EVENT_HEAR: f64 = 1400.;
+
+/// Eingaben des Motorsound-Debug-Panels: ersetzen Drehzahl, Gas, Gang und Profil des eigenen Motors.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EngineOverride {
+    pub rpm: f64,
+    pub throttle: f64,
+    pub gear: usize,
+    /// Index in `enginesound::config().all_profiles()`
+    pub profile: usize,
+}
+
+/// Was der eigene Sample-Motor zuletzt gespielt hat (für das Debug-Panel).
+#[derive(Debug, Clone, Default)]
+pub struct EngineView {
+    pub profile: String,
+    pub out: SoundOut,
+    pub voices: usize,
+}
 
 #[derive(Default)]
 pub struct Listener {
     voices: Voices,
     engine: EngineState,
     engine_car: Option<u32>,
+    /// Motoren aus Aufnahmen: eigener und fremde Zustände
+    sample_own: Option<EngineSound>,
+    sample_npc: HashMap<u32, (EngineSound, f64)>,
+    pub engine_override: Option<EngineOverride>,
+    pub reference: Option<std::sync::Arc<[f32]>>,
+    pub engine_view: EngineView,
     prev_step: f64,
     thunder_t: Option<f64>,
     clock: Option<f64>,
     rail: crate::railaudio::RailAudio,
+}
+
+/// Eingaben für den Sample-Motor eines Autos: Drehzahl und Gang aus der Fahrphysik, sonst virtuelles Getriebe.
+fn sound_input(c: &Car) -> SoundInput {
+    let v = berlin_sim::car::vphys_vehicle(c);
+    let phys = c.phys.as_deref();
+    SoundInput {
+        rpm: phys.map(|p| p.rpm),
+        gear: phys.map(|p| p.gear),
+        limiter: v.map(|v| v.engine.n_max).filter(|n| *n > 0.),
+        throttle: if c.wrecked { 0. } else { c.controls.throttle },
+        speed: c.speed() / 10.,
+        slip: phys.map_or(if c.spin > 0. { 0.6 } else { 0. }, |p| {
+            p.slip[0].abs().max(p.slip[1].abs()).min(1.)
+        }),
+    }
 }
 
 impl Listener {
@@ -117,20 +164,60 @@ impl Listener {
         // eigenes Fahrzeug
         let (wet, snow) = (w.weather.wet, w.weather.snow);
         let pc = w.player_car().cloned();
+        let mix = &sound_config().mix;
+        f.engine_mix = mix.engine as f32;
+        f.reference = self.reference.clone();
+        let mut own: Option<EngineFrame> = None;
         if let Some(c) = &pc {
-            if self.engine_car != Some(c.id) {
+            let fresh = self.engine_car != Some(c.id);
+            if fresh {
                 self.engine = EngineState::default();
                 self.engine_car = Some(c.id);
+                self.sample_own = None;
             }
             step_engine(&mut self.engine, c, dt);
             let ground = w.city.surface_at(c.x, c.y, Some(c.lvl()));
             let tires = tire_state(ground, wet, snow, c);
             let open = c.kind_info().bike || c.kind_info().moto;
+            // Sportwagen mit Profil: Motor aus Aufnahmen statt Synthese (Reifen und Wind bleiben)
+            let profile = if self.engine_override.is_none() {
+                profile_for(c)
+            } else {
+                None
+            };
+            if let Some(p) = profile {
+                let st = self
+                    .sample_own
+                    .get_or_insert_with(|| EngineSound::new(c.id));
+                let mut out = st.step(p, sound_config().bank(&p.bank), &sound_input(c), dt, false);
+                // Anlassen beim Einsteigen in ein stehendes Auto
+                if fresh
+                    && c.speed() < 10.
+                    && let Some(s) = EngineSound::start_shot(sound_config().bank(&p.bank), p)
+                {
+                    out.shots.push(s);
+                }
+                self.engine_view = EngineView {
+                    profile: p.name.clone(),
+                    out: out.clone(),
+                    voices: 0,
+                };
+                own = Some(EngineFrame {
+                    id: c.id,
+                    player: true,
+                    out,
+                    gain: if open { 1. } else { 0.85 },
+                    pan: 0.,
+                    rate: 1.,
+                    // im geschlossenen Auto dämpft die Karosserie die Höhen
+                    lowpass: if open { 16000. } else { 6500. },
+                });
+            }
             f.vehicle = Vehicle {
                 active: true,
                 in_car: !open,
                 rain: w.sky.p.rain as f32,
-                engine: (!c.kind_info().bike).then_some(self.engine),
+                engine: (!c.kind_info().bike && own.is_none()).then_some(self.engine),
                 tires: Some(tires),
             };
             self.prev_step = w.player.step;
@@ -149,10 +236,92 @@ impl Listener {
                 ));
             }
         }
+        // Debug-Panel: eigener Motor mit fest eingestellten Werten, auch zu Fuß
+        if let Some(o) = self.engine_override {
+            let all = sound_config().all_profiles();
+            let p: &Profile = all[o.profile.min(all.len() - 1)];
+            let st = self.sample_own.get_or_insert_with(|| EngineSound::new(1));
+            let inp = SoundInput {
+                rpm: Some(o.rpm),
+                gear: Some(o.gear.max(1)),
+                limiter: Some(p.begrenzer),
+                throttle: o.throttle,
+                speed: 20.,
+                slip: 0.,
+            };
+            let out = st.step(p, sound_config().bank(&p.bank), &inp, dt, false);
+            self.engine_view = EngineView {
+                profile: p.name.clone(),
+                out: out.clone(),
+                voices: 0,
+            };
+            own = Some(EngineFrame {
+                id: u32::MAX,
+                player: true,
+                out,
+                gain: 1.,
+                pan: 0.,
+                rate: 1.,
+                lowpass: 16000.,
+            });
+        }
         let (lvx, lvy) = pc.as_ref().map(|c| (c.vx, c.vy)).unwrap_or((0., 0.));
+        // fremde Sportwagen mit Profil: Sample-Stimmen (die lautesten, das Spielerauto hat Vorrang)
+        let own_id = pc.as_ref().map(|c| c.id);
+        let mut cands = Vec::new();
+        for c in &w.cars {
+            if Some(c.id) == own_id || c.wrecked || c.driver.is_none() {
+                continue;
+            }
+            let (dx, dy) = (c.x - cx, c.y - cy);
+            let d = dx.hypot(dy);
+            if d >= mix.hoerweite_px {
+                continue;
+            }
+            let Some(p) = profile_for(c) else {
+                continue;
+            };
+            let dd = d.max(1.);
+            let closing = -((c.vx - lvx) * dx / dd + (c.vy - lvy) * dy / dd);
+            let sp = spatial(mix, d, dx, closing);
+            cands.push((sp.gain, (c.id, p, sp, sound_input(c))));
+        }
+        let picked = select_voices(None, cands, mix.stimmen - usize::from(own.is_some()));
+        let mut sampled: Vec<u32> = Vec::new();
+        for (id, p, sp, inp) in picked {
+            let (st, at) = self
+                .sample_npc
+                .entry(id)
+                .or_insert_with(|| (EngineSound::new(id), w.time));
+            let step = (w.time - *at).clamp(1. / 120., 0.25);
+            *at = w.time;
+            let out = st.step(p, sound_config().bank(&p.bank), &inp, step, sp.lod);
+            sampled.push(id);
+            f.engines.push(EngineFrame {
+                id,
+                player: false,
+                out,
+                gain: sp.gain as f32,
+                pan: sp.pan as f32,
+                rate: sp.rate as f32,
+                lowpass: sp.lowpass as f32,
+            });
+        }
+        if self.sample_npc.len() > 64 {
+            let live: Vec<u32> = w.cars.iter().map(|c| c.id).collect();
+            self.sample_npc.retain(|id, _| live.contains(id));
+        }
+        self.engine_view.voices = f.engines.len() + usize::from(own.is_some());
+        if let Some(o) = own {
+            f.engines.insert(0, o);
+        }
         f.voices = self
             .voices
-            .near(w, (cx, cy, lvx, lvy), 4, 500., pc.as_ref().map(|c| c.id));
+            .near(w, (cx, cy, lvx, lvy), 12, 500., own_id)
+            .into_iter()
+            .filter(|v| w.car(v.id).is_none_or(|c| profile_for(c).is_none()))
+            .take(4)
+            .collect();
         // Donner: Einschläge seit dem letzten Bild (aus Seed und Zeit, wie der Blitz im Bild)
         let t0 = self.thunder_t.unwrap_or(w.time);
         for (loud, near) in
@@ -225,6 +394,65 @@ mod tests {
         );
         assert!(f.ambience.in_car && f.ambience.muffle > 0.6);
         assert!(f.voices.len() <= 4 && f.voices.iter().all(|v| v.id != pc && v.gain >= 0.));
+    }
+
+    #[test]
+    fn sports_cars_play_samples_instead_of_synthesis() {
+        let root = berlin_map_loader::default_data_root();
+        let city = City::open(&root, Box::new(DiskSource::new(root.clone()))).unwrap();
+        let mut w = World::new(city, 5, 22, 55);
+        let mut l = Listener::default();
+        let pc = w.player_car_id.unwrap();
+        let v = berlin_sim::vehdata::game_vehicle("supercar_awd").unwrap();
+        let (x, y) = {
+            let c = w.cars.iter_mut().find(|c| c.id == pc).unwrap();
+            c.model = Some(v.id.as_str());
+            (c.x, c.y)
+        };
+        (w.player.x, w.player.y) = (x + 15., y);
+        w.update(
+            &Input {
+                enter_exit: true,
+                ..Default::default()
+            },
+            DT,
+        );
+        let f = l.frame(&mut w, DT);
+        assert!(f.vehicle.active && f.vehicle.engine.is_none() && f.vehicle.tires.is_some());
+        let own = &f.engines[0];
+        assert!(own.player && own.id == pc);
+        assert!(own.out.layers.iter().any(|x| x.gain > 0.1));
+        // beim Einsteigen in den stehenden Wagen: Anlassen
+        let bank = sound_config().bank("v10");
+        assert!(
+            own.out
+                .shots
+                .iter()
+                .any(|s| bank.shots[s.0].kind == berlin_sim::enginesound::ShotKind::Start)
+        );
+        assert!(f.engine_mix > 0.);
+        assert!(f.engines.len() <= sound_config().mix.stimmen);
+        assert_eq!(l.engine_view.profile, "supercar");
+        // Gas: die Drehzahl der Fahrphysik kommt im Klang an
+        for _ in 0..90 {
+            w.update(
+                &Input {
+                    throttle: 1.,
+                    ..Default::default()
+                },
+                DT,
+            );
+            l.frame(&mut w, DT);
+        }
+        let phys = w
+            .car(pc)
+            .and_then(|c| c.phys.as_ref().map(|p| p.rpm))
+            .unwrap();
+        assert!(
+            (l.engine_view.out.rpm - phys).abs() < phys * 0.2,
+            "{} vs {phys}",
+            l.engine_view.out.rpm
+        );
     }
 
     #[test]

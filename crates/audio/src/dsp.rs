@@ -165,6 +165,7 @@ pub enum FilterType {
     Bandpass,
     Peaking,
     Lowshelf,
+    Highshelf,
 }
 
 /// Biquad nach der Web-Audio-Spezifikation (Lowpass/Highpass: Q in dB; Bandpass/Peaking: Güte; Shelf/Peak: Gain in dB).
@@ -245,6 +246,18 @@ impl Biquad {
                     (a_gain + 1.) + (a_gain - 1.) * cw + sa,
                     -2. * ((a_gain - 1.) + (a_gain + 1.) * cw),
                     (a_gain + 1.) + (a_gain - 1.) * cw - sa,
+                )
+            }
+            FilterType::Highshelf => {
+                let alpha = sw / 2. * 2f32.sqrt(); // S = 1
+                let sa = 2. * a_gain.sqrt() * alpha;
+                (
+                    a_gain * ((a_gain + 1.) + (a_gain - 1.) * cw + sa),
+                    -2. * a_gain * ((a_gain - 1.) + (a_gain + 1.) * cw),
+                    a_gain * ((a_gain + 1.) + (a_gain - 1.) * cw - sa),
+                    (a_gain + 1.) - (a_gain - 1.) * cw + sa,
+                    2. * ((a_gain - 1.) - (a_gain + 1.) * cw),
+                    (a_gain + 1.) - (a_gain - 1.) * cw - sa,
                 )
             }
         };
@@ -521,6 +534,19 @@ mod tests {
             tone(40., &mut ls) > 1.4
                 && (tone(8000., &mut Biquad::new(FilterType::Lowshelf, 220., 0.)) - 1.).abs()
                     < 0.05
+        );
+        // Höhen-Shelf: oben angehoben bzw. abgesenkt, unten unverändert
+        let mut hs = Biquad::new(FilterType::Highshelf, 3000., 0.);
+        hs.set(3000., 0., 6.);
+        let up = tone(12000., &mut hs);
+        let mut hs = Biquad::new(FilterType::Highshelf, 3000., 0.);
+        hs.set(3000., 0., 6.);
+        let low = tone(100., &mut hs);
+        let mut cut = Biquad::new(FilterType::Highshelf, 3000., 0.);
+        cut.set(3000., 0., -6.);
+        assert!(
+            up > 1.8 && (low - 1.).abs() < 0.05 && tone(12000., &mut cut) < 0.6,
+            "{up} {low}"
         );
     }
 

@@ -14,6 +14,7 @@ pub mod combat;
 pub mod daylight;
 pub mod drift;
 pub mod dynamics;
+pub mod enginesound;
 pub mod enginevoice;
 pub mod events;
 pub mod figure;

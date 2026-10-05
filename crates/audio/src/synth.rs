@@ -7,6 +7,7 @@
 use crate::dsp::{
     Biquad, Compressor, Env, FilterType, Noise, Osc, Reverb, Smooth, Table, Wave, pan, shape,
 };
+use crate::sampler::{EngineFrame, SampleBank, SamplerVoice, bank_v10};
 use berlin_sim::ambience::Mix;
 use berlin_sim::enginevoice::{Voice, engine_spectrum};
 use berlin_sim::railsound::{RailMix, TrainLayers};
@@ -15,6 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const MASTER: f32 = 0.55;
+/// Pegel der Motor-Samples relativ zum Synthese-Motor (eingemessen mit `--audio-wav`, docs/audio.md)
+pub const SAMPLE_LEVEL: f32 = 0.38;
+/// so viele Sample-Motorstimmen hält der Synthesizer bereit (die Auswahl trifft das Spiel)
+pub const SAMPLE_VOICES: usize = 10;
 const BLOCK: usize = 32;
 
 /// Zustand des selbst gefahrenen Fahrzeugs (oder `active = false` zu Fuß).
@@ -83,6 +88,12 @@ pub struct Frame {
     pub sfx: Vec<Sfx>,
     /// S-/U-Bahn: eigener Zug, Zug am Bahnsteig, Nachhall
     pub rail: RailMix,
+    /// Motoren aus Aufnahmen (Spielerauto und Verkehr); diese Autos fehlen in `vehicle.engine` bzw. `voices`
+    pub engines: Vec<EngineFrame>,
+    /// Pegel des Mischpult-Kanals „engine“
+    pub engine_mix: f32,
+    /// A/B-Vergleich: solange gesetzt, läuft die Referenzaufnahme (in Schleife) statt der Motor-Samples
+    pub reference: Option<Arc<[f32]>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,6 +325,10 @@ pub struct Synth {
     pass: TrainVoice,
     hall: Reverb,
     hall_g: Smooth,
+    /// Motoren aus Aufnahmen und der Mischpult-Kanal „engine“
+    samplers: Vec<SamplerVoice>,
+    engine_ch: Smooth,
+    reference: Option<(Arc<[f32]>, f64)>,
 }
 
 fn layer(kind: FilterType, f: f32, q: f32, seed: &mut u32) -> NoiseLayer {
@@ -441,6 +456,11 @@ impl Synth {
             pass: TrainVoice::new(&mut seed),
             hall: Reverb::new(sr),
             hall_g: Smooth::new(0.),
+            samplers: (0..SAMPLE_VOICES)
+                .map(|_| SamplerVoice::new(bank_v10()))
+                .collect(),
+            engine_ch: Smooth::new(1.),
+            reference: None,
         }
     }
 
@@ -474,6 +494,7 @@ impl Synth {
         self.set_voices(&f.voices);
         self.set_ambience(&f.ambience);
         self.set_rail(&f.rail);
+        self.set_engines(f);
         for s in &f.sfx {
             self.play(*s);
         }
@@ -675,6 +696,40 @@ impl Synth {
             0.4,
         );
         set(&mut e.roof_low.gain, 0.06 * (r - 0.3).max(0.), 0.4);
+    }
+
+    /// Motoren aus Aufnahmen: feste Zuordnung Fahrzeug → Stimme (wie bei den Synthese-Stimmen).
+    fn set_engines(&mut self, f: &Frame) {
+        let sr = self.sr;
+        let ch = if f.reference.is_some() {
+            0.
+        } else {
+            f.engine_mix
+        };
+        self.engine_ch.set(ch, 0.05, sr);
+        match (&f.reference, &self.reference) {
+            (Some(r), None) => self.reference = Some((r.clone(), 0.)),
+            (None, Some(_)) => self.reference = None,
+            _ => {}
+        }
+        for v in &mut self.samplers {
+            if v.id.is_some_and(|id| !f.engines.iter().any(|e| e.id == id)) {
+                v.release(sr);
+            }
+        }
+        for e in &f.engines {
+            let slot = match self.samplers.iter().position(|v| v.id == Some(e.id)) {
+                Some(i) => Some(i),
+                None => self
+                    .samplers
+                    .iter()
+                    .position(|v| v.silent())
+                    .or_else(|| self.samplers.iter().position(|v| v.id.is_none())),
+            };
+            if let Some(i) = slot {
+                self.samplers[i].apply(e, sr);
+            }
+        }
     }
 
     /// Fremde Fahrzeuge: feste Zuordnung Auto → Stimme, damit nichts springt.
@@ -1195,6 +1250,7 @@ impl Synth {
     /// Stereo-Abtastwerte erzeugen (verschachtelt links/rechts).
     pub fn render(&mut self, out: &mut [f32]) {
         let sr = self.sr;
+        let bank: &SampleBank = bank_v10();
         let dt = 1. / sr as f64;
         for frame in out.chunks_mut(2) {
             let block = self.tick.is_multiple_of(BLOCK);
@@ -1245,8 +1301,33 @@ impl Synth {
             let vib = e.vib.next(sr, 0.) * 25.;
             eng += (e.sq[0].next(sr, vib) + e.sq[1].next(sr, vib)) * e.sqg.tick();
             eng *= e.bus.tick();
-            // --- draußen: fremde Autos (Panorama), Umgebung
+            // --- Motoren aus Aufnahmen (Kanal „engine“): das eigene Auto direkt, fremde draußen mit Panorama
             let (mut ol, mut or) = (0f32, 0f32);
+            let ech = self.engine_ch.tick() * SAMPLE_LEVEL;
+            for v in &mut self.samplers {
+                if v.silent() {
+                    continue;
+                }
+                let x = v.next(bank, sr, block) * ech;
+                let p = v.pan();
+                if v.player {
+                    eng += x;
+                } else {
+                    let (pl, pr) = pan(p);
+                    ol += x * pl;
+                    or += x * pr;
+                }
+            }
+            if let Some((r, pos)) = &mut self.reference {
+                // A/B: Referenz auf den Pegel der Loops gebracht (−12 → −18 LUFS)
+                let i = *pos as usize % r.len();
+                eng += r[i] * 0.5 * SAMPLE_LEVEL;
+                *pos += (48000. / sr) as f64;
+                if *pos >= r.len() as f64 {
+                    *pos -= r.len() as f64;
+                }
+            }
+            // --- draußen: fremde Autos (Panorama), Umgebung
             for s in &mut self.cars {
                 let ff = s.f_f.tick();
                 if block {

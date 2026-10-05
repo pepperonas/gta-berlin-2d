@@ -37,34 +37,34 @@
       "drift_cent": null
     },
     {
-      "datei": "on_r2700.wav",
-      "rpm": 2739,
+      "datei": "on_r2600.wav",
+      "rpm": 2672,
       "last": "on",
-      "samples": 17909,
+      "samples": 13953,
       "loop_start": 0,
-      "loop_ende": 17909,
-      "grundton_hz": 112.57,
+      "loop_ende": 13953,
+      "grundton_hz": 110.08,
       "quelle_s": [
-        1.35,
-        1.75
+        1.3,
+        1.62
       ],
       "gain_db": 0.0,
-      "drift_cent": 19.1
+      "drift_cent": 27.6
     },
     {
-      "datei": "off_r2700.wav",
-      "rpm": 2739,
+      "datei": "off_r2600.wav",
+      "rpm": 2672,
       "last": "off",
-      "samples": 17909,
+      "samples": 13953,
       "loop_start": 0,
-      "loop_ende": 17909,
-      "grundton_hz": 112.57,
+      "loop_ende": 13953,
+      "grundton_hz": 110.08,
       "quelle_s": [
-        1.35,
-        1.75
+        1.3,
+        1.62
       ],
       "gain_db": -7.0,
-      "drift_cent": 19.1
+      "drift_cent": 27.6
     },
     {
       "datei": "on_r3300.wav",
