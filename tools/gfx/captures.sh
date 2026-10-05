@@ -3,13 +3,16 @@
 # Bildzeiten (CPU-Arbeit, GPU per Zeitstempel; Median und P95) je Szene, Zoom und Grafikmodus.
 #
 #   tools/gfx/captures.sh PHASE                 # z. B. 00-basis
-#   MODI="hd pixel" tools/gfx/captures.sh 01-architektur
+#   MODI="hd hd:niedrig pixel" tools/gfx/captures.sh 01-architektur   # Modus[:Qualität]
 #   SZENEN="block boulevard" ZOOMS=1.2 tools/gfx/captures.sh 02-boden
 #
 # Ergebnis: docs/images/native/grafik/PHASE/<szene>-z<zoom>-<modus>.webp (eingecheckt, WebP q85) und
 # …/png/ (verlustfrei, nicht eingecheckt) sowie die Messwerte in docs/images/native/grafik/metrics.json
-# (Schlüssel Phase → Modus → Szene → Zoom). Modus „basis“ = Stand vor der Überarbeitung (ohne --grafik).
+# (Schlüssel Phase → Modus → Szene → Zoom). Modus „basis“ = Stand vor der Überarbeitung (ohne --grafik); mit
+# Qualität heißt der Modus z. B. „hd_niedrig“. Die Läufe rücken genau einen Simulationsschritt je Bild vor – gleiche
+# Szene, gleiches Bild; Unterschiede zwischen Phasen sind damit reine Darstellung.
 set -euo pipefail
+export LC_ALL=C
 cd "$(dirname "$0")/../.."
 phase=${1:?Phase fehlt, z. B. 00-basis}
 modi=${MODI:-basis}
@@ -41,10 +44,16 @@ for entry in "${scenes[@]}"; do
   args=${entry#*|}
   if [[ -n "$want" && " $want " != *" $name "* ]]; then continue; fi
   for zoom in $zooms; do
-    for mode in $modi; do
+    for spec in $modi; do
+      mode=${spec%%:*}
       extra=()
       [[ "$mode" != basis ]] && extra=(--grafik "$mode")
-      tag="$name-z$zoom-$mode"
+      tagmode=$mode
+      if [[ "$spec" == *:* ]]; then
+        extra+=(--qualitaet "${spec#*:}")
+        tagmode="${mode}_${spec#*:}"
+      fi
+      tag="$name-z$zoom-$tagmode"
       echo "== $tag"
       # shellcheck disable=SC2086
       "$bin" --new --stumm --seed 7 --bars aus $args --zoom "$zoom" --fenster 2560x1440 \

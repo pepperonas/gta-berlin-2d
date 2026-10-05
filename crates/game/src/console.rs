@@ -299,6 +299,9 @@ pub enum Action {
     Money(f64),
     /// Bar-Feed: Datei setzen, `neu` laden, `aus`
     Bars(Option<String>),
+    /// Grafikmodus setzen (`None` = umschalten)
+    Graphics(Option<berlin_engine::graphics::GraphicsMode>),
+    Quality(berlin_engine::graphics::Quality),
 }
 
 /// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`, `motorsound`); gehören dem Spiel, nicht der Welt.
@@ -581,6 +584,28 @@ pub const COMMANDS: &[Command] = &[
         help: "Motorsound-Anzeige an/aus (Regler für Drehzahl, Gas, Gang, Profil; A/B mit der Referenz)",
         cheat: false,
         args: &[arg("an|aus", true, ONOFF)],
+    },
+    Command {
+        name: "grafik",
+        aliases: &["graphics"],
+        help: "Grafik HD oder Pixel (ohne Wert: umschalten)",
+        cheat: false,
+        args: &[arg(
+            "hd|pixel",
+            true,
+            Values::Fixed(&[("hd", ""), ("pixel", "")]),
+        )],
+    },
+    Command {
+        name: "qualitaet",
+        aliases: &["qualität", "quality"],
+        help: "Grafikqualität (Kantenglättung)",
+        cheat: false,
+        args: &[arg(
+            "niedrig|mittel|hoch",
+            false,
+            Values::Fixed(&[("niedrig", ""), ("mittel", ""), ("hoch", "")]),
+        )],
     },
     Command {
         name: "fps",
@@ -1301,6 +1326,26 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 ))
             }
             None => err("motorsound an|aus"),
+        },
+        "grafik" => match a0 {
+            None => {
+                ctx.actions.push(Action::Graphics(None));
+                ok("Grafik umgeschaltet")
+            }
+            Some(t) => match berlin_engine::graphics::GraphicsMode::parse(t) {
+                Some(m) => {
+                    ctx.actions.push(Action::Graphics(Some(m)));
+                    ok(format!("Grafik: {}", m.label()))
+                }
+                None => err("grafik hd|pixel"),
+            },
+        },
+        "qualitaet" => match a0.and_then(berlin_engine::graphics::Quality::parse) {
+            Some(q) => {
+                ctx.actions.push(Action::Quality(q));
+                ok(format!("Qualität: {}", q.key()))
+            }
+            None => err("qualitaet niedrig|mittel|hoch"),
         },
         "fps" => match on_off(a0, ctx.debug.fps) {
             Some(on) => {

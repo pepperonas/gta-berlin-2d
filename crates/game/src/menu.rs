@@ -25,6 +25,8 @@ pub enum Action {
     Next,
     Retry,
     Free,
+    /// Grafik HD / Pixel umschalten (Beschriftung zeigt den aktuellen Modus)
+    Graphics,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,6 +156,28 @@ const fn item(action: Action, label: &'static str) -> Item {
     }
 }
 
+const GRAPHICS_HD: &str = "Grafik: HD";
+const GRAPHICS_PIXEL: &str = "Grafik: Pixel";
+
+impl Menu {
+    /// Beschriftung des Grafik-Eintrags an den aktuellen Modus anpassen.
+    pub fn with_graphics(mut self, mode: berlin_engine::graphics::GraphicsMode) -> Self {
+        self.set_graphics(mode);
+        self
+    }
+    pub fn set_graphics(&mut self, mode: berlin_engine::graphics::GraphicsMode) {
+        use berlin_engine::graphics::GraphicsMode;
+        for it in &mut self.items {
+            if it.action == Action::Graphics {
+                it.label = match mode {
+                    GraphicsMode::Hd => GRAPHICS_HD,
+                    GraphicsMode::Pixel => GRAPHICS_PIXEL,
+                };
+            }
+        }
+    }
+}
+
 pub fn title_menu(has_save: bool) -> Menu {
     let mut m = Menu::new(vec![
         Item {
@@ -162,6 +186,7 @@ pub fn title_menu(has_save: bool) -> Menu {
         },
         item(Action::New, "Neues Spiel"),
         item(Action::Controls, "Steuerung"),
+        item(Action::Graphics, GRAPHICS_HD),
         item(Action::Stats, "Statistik"),
         item(Action::About, "Über das Spiel"),
         item(Action::Quit, "Beenden"),
@@ -176,6 +201,7 @@ pub fn pause_menu() -> Menu {
         item(Action::Save, "Spiel speichern"),
         item(Action::Restart, "Mission neu starten"),
         item(Action::Controls, "Steuerung"),
+        item(Action::Graphics, GRAPHICS_HD),
         item(Action::Stats, "Statistik"),
         item(Action::About, "Über das Spiel"),
         item(Action::Title, "Zum Hauptmenü"),

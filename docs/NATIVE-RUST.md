@@ -1866,3 +1866,30 @@ Vorbereitung der Grafik-Überarbeitung (HD als Standard, Pixel-Modus als Filter)
 Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Regen und Schnee sind am teuersten (P95 bis
 8,8 ms). Tabelle im Design-Dokument.
 
+## Grafik HD/Pixel: Phase 1 – Render-Architektur und Umschalter (05.10.2026)
+
+- **Einstellung:** `berlin_engine::graphics::{GraphicsMode, Quality, GraphicsSettings}` (Standard HD + Hoch). Das Spiel
+  liefert sie über `Game::graphics()`; der Renderer baut Pipelines und Szenenziele nur neu, wenn sich die Abtastzahl
+  ändert (`GraphicsSettings::msaa()`: Hoch/Mittel 4, Niedrig und Pixel 1). `settings.json` trägt `"grafik"` und
+  `"qualitaet"` (`play::graphics_from_json`, Unbekanntes = Standard). Bedienung: Aktion „Grafik: HD / Pixel“ (F8,
+  frei belegbar), Menüeintrag im Titel- und Pausenmenü, Konsole `grafik [hd|pixel]` / `qualitaet …`, CLI
+  `--grafik`/`--qualitaet` (nur für diesen Start, ohne zu speichern).
+- **Ablauf je Bild:** Schattenmaske und Lichtkarte wie bisher (1×) → **Szenendurchgang** in `Rgba16Float` mit
+  `samples` Abtastungen und Auflösung in ein einfaches `Rgba16Float` (`scenepass.rs`: `ScenePipes`, `SceneTargets`;
+  die Vollbild-Composites aus `lightpass::composites` hängen am Szenenziel; Abtastungen und Tiefe werden nicht
+  gespeichert, auf Kachel-GPUs bleiben sie im Kachelspeicher) → **Nachbearbeitung + HUD** in einem Durchgang aufs
+  Ausgabebild: `post_fs` liest das Szenenbild per `textureLoad`, wendet die frühere `grade_fs`-Rechnung als Faktor an
+  (statt MULTIPLY-Mischung) und klemmt auf 0…1; danach HUD und Minikarte mit eigener 1×-Tiefe und eigener
+  Kachel-Pipeline (`map_pipeline`, Ausgabeformat).
+- **Bildgleichheit:** Das Float-Ziel klemmt Zwischenwerte nicht mehr (das sRGB-Ziel tat es); Bodies und Bloom klemmen
+  ihre Ausgabe deshalb selbst. Vergleich mit der Baseline (`tools/gfx/diff.sh`, Toleranz 2 %): Niedrig ≤ 0,25 % der
+  Bildpunkte (Rest: Uhrminute/ein Fahrzeug durch das Nachladen der Kacheln im Hintergrund), Hoch 0,1–1,8 % – nur
+  Kanten (Differenzbilder geprüft). Der U-Bahnhof liegt im Bildraum über der Stadt (HUD) und bleibt unverändert.
+- **Kosten (GPU-Median, 2560 × 1440, M1 Pro):** Hoch gegenüber Baseline +0,1 bis +0,5 ms (Boulevard 3,76 → 4,20 ms,
+  Häuserblock 4,30 → 4,48, Regennacht 7,05 → 6,77, Schnee 6,79 → 6,67); CPU unverändert (1,1–2,0 ms).
+- **Reproduzierbare Aufnahmen:** Smoke-Läufe rücken genau einen Simulationsschritt je Bild vor; zwei Läufe ergeben
+  dasselbe Bild. Ausnahme: die Kacheln laden in einem eigenen Faden – selten (U-Bahnhof, etwa jeder dritte Lauf)
+  verschiebt das den Zustand um einige Schritte. Mit `--fenster` zählt ein Bild auch ohne Swapchain-Bild (verdecktes
+  Fenster). `tools/gfx/captures.sh` kennt `MODI="hd hd:niedrig pixel"` (Modus[:Qualität]).
+- **Pixel-Modus:** bis Phase 8 Platzhalter (wie HD, 1 Abtastung).
+

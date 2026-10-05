@@ -33,38 +33,41 @@ kommen vom Spiel über `Game::graphics()`.
 - [x] `tools/gfx/captures.sh`, Baseline `docs/images/native/grafik/00-basis/` + `metrics.json`
 - [x] Spec und Plan
 
-## Phase 1 – Render-Architektur und Umschalter (≈ 1,5 Tage)
+## Phase 1 – Render-Architektur und Umschalter ✅ (05.10.2026)
 
 **Dateien:** `engine/src/{lib.rs,renderer.rs,lightpass.rs,lighting.wgsl}`, neu `engine/src/graphics.rs` (Modus,
 Qualität, Ziele), `game/src/{play.rs,menu.rs,bindings.rs,console.rs,main.rs}`, `tools/gfx/diff.sh`.
 
-- [ ] **1.1 Typen:** `berlin_engine::graphics::{GraphicsMode, Quality, GraphicsSettings}` (Hd/Pixel, Niedrig/Mittel/
+- [x] **1.1 Typen:** `berlin_engine::graphics::{GraphicsMode, Quality, GraphicsSettings}` (Hd/Pixel, Niedrig/Mittel/
       Hoch, `msaa()` = 1/4/4, Standard Hd + Hoch); `Game::graphics() -> GraphicsSettings` mit Standard-Rumpf.
       Test: Standardwerte, `msaa()`.
-- [ ] **1.2 Einstellungen:** `settings.json` bekommt `"grafik": "hd"|"pixel"` und `"qualitaet": "niedrig"|"mittel"|"hoch"`;
+- [x] **1.2 Einstellungen:** `settings.json` bekommt `"grafik": "hd"|"pixel"` und `"qualitaet": "niedrig"|"mittel"|"hoch"`;
       fehlend/unbekannt → Standard. Tests: Roundtrip, alte Datei ohne Felder, Unsinnswerte.
-- [ ] **1.3 Bedienung:** Aktion `Action::GraphicsMode` (Standard **F8**, Pad ohne), Konsole `grafik [hd|pixel]`
+- [x] **1.3 Bedienung:** Aktion `Action::GraphicsMode` (Standard **F8**, Pad ohne), Konsole `grafik [hd|pixel]`
       (ohne Argument: umschalten) und `qualitaet [niedrig|mittel|hoch]`, CLI `--grafik hd|pixel` und
       `--qualitaet …` (überschreibt die Datei nicht), Menüpunkt „Grafik: HD / Pixel“ in Titel- und Pausenmenü
       (← → bzw. Klick schaltet um, wie das Steuerschema). Speichern bei jeder Änderung. Tests: Belegungstabelle ohne
       Doppelbelegung, Konsole, Menü-Eintrag vorhanden.
-- [ ] **1.4 HD-Ziele:** `Rgba16Float`-Farbziel mit `sample_count = msaa`, multisampled `Depth32Float`, Resolve-Ziel
+- [x] **1.4 HD-Ziele:** `Rgba16Float`-Farbziel mit `sample_count = msaa`, multisampled `Depth32Float`, Resolve-Ziel
       `Rgba16Float`; alle Szenen-Pipelines (`pipeline`, `window_pipeline`, `sprite`, `body`, `silhouette`, `effect`,
       Composites aus `lightpass`) mit Zielformat `Rgba16Float` und `MultisampleState { count: msaa }`; bei Wechsel der
       Qualität neu bauen. Schattenmaske/Lichtkarte bleiben 1× (werden nur gesampelt).
-- [ ] **1.5 Post-Pass:** `post_fs` (Vollbild-Dreieck, Quelle = Resolve-Ziel): `grade_fs`-Rechnung hierher verlegen
+- [x] **1.5 Post-Pass:** `post_fs` (Vollbild-Dreieck, Quelle = Resolve-Ziel): `grade_fs`-Rechnung hierher verlegen
       (statt MULTIPLY-Blend jetzt Multiplikation im Shader), Ergebnis auf 0…1 klemmen; schreibt ins Swapchain-Bild.
       Kritische Szenen-Shader (Bloom/SCREEN) klemmen ihre Ausgabe, damit Phase 1 bildgleich bleibt.
-- [ ] **1.6 HUD + Minikarte:** HUD-Durchgang aufs Swapchain-Bild mit eigener 1×-Tiefe; Kachel-Pipeline-Variante
+- [x] **1.6 HUD + Minikarte:** HUD-Durchgang aufs Swapchain-Bild mit eigener 1×-Tiefe; Kachel-Pipeline-Variante
       `map_pipeline` (Swapchain-Format, 1×) für die Minikarte.
-- [ ] **1.7 Aufnahme:** `capture()` zeichnet Szene + Post + HUD wie `render()` (gemeinsame Funktion), liest das finale
+- [x] **1.7 Aufnahme:** `capture()` zeichnet Szene + Post + HUD wie `render()` (gemeinsame Funktion), liest das finale
       Bild. `--fenster` nutzt dasselbe Offscreen-Ziel.
-- [ ] **1.8 Pixel-Platzhalter:** bis Phase 8 zeichnet `Pixel` wie HD mit MSAA 1 (Modus schaltbar, kein Absturz) –
+- [x] **1.8 Pixel-Platzhalter:** bis Phase 8 zeichnet `Pixel` wie HD mit MSAA 1 (Modus schaltbar, kein Absturz) –
       ausdrücklich als Platzhalter dokumentiert.
-- [ ] **1.9 Bildvergleich:** `tools/gfx/diff.sh A B` (ImageMagick `compare`, Fuzz 2 %: Anteil abweichender Pixel und
+- [x] **1.9 Bildvergleich:** `tools/gfx/diff.sh A B` (ImageMagick `compare`, Fuzz 2 %: Anteil abweichender Pixel und
       mittlere Abweichung); Prüfung: Qualität Niedrig (MSAA 1) gegen Baseline < 0,5 % Pixel, Hoch nur an Kanten
       abweichend (Sichtprüfung der Differenzbilder aller 9 Szenen).
-- [ ] **1.10** Messung `MODI="hd" tools/gfx/captures.sh 01-architektur` (+ `QUALITAET=mittel`), Doku, Commit, Push.
+- [x] Abweichungen vom Entwurf: Ergebnis siehe NATIVE-RUST.md „Grafik HD/Pixel: Phase 1“ (Pipelines/Ziele in
+      `engine/src/scenepass.rs`; die Composites hängen am Szenenziel, Schatten-/Lichtkarte bleiben 1×; Aufnahmen
+      laufen schrittgebunden; Mittel = Hoch bis Phase 7).
+- [x] **1.10** Messung `MODI="hd" tools/gfx/captures.sh 01-architektur` (+ `QUALITAET=mittel`), Doku, Commit, Push.
       **STOPP.**
 
 ## Phase 2 – Materialsystem Boden (≈ 2 Tage, Detailplan bei Phasenbeginn)

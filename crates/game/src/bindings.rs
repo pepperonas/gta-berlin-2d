@@ -55,6 +55,8 @@ pub enum Action {
     Clock,
     Weather,
     Mute,
+    /// Grafik HD / Pixel umschalten
+    GraphicsMode,
     /// Entwickler-Anzeige der Fahrphysik (nur Entwickler-Build): ein/aus, Regler wählen und verstellen, Änderungen
     /// ausgeben
     DebugToggle,
@@ -451,6 +453,14 @@ pub const ACTIONS: &[Info] = &[
         "Ton an/aus",
         Both,
         [Some(KeyCode::KeyM), None],
+        None,
+        None,
+    ),
+    info(
+        A::GraphicsMode,
+        "Grafik: HD / Pixel",
+        Both,
+        [Some(KeyCode::F8), None],
         None,
         None,
     ),

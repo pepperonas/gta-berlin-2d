@@ -34,7 +34,7 @@ pub struct Play {
     debug: crate::console::Debug,
     fps: crate::fps::Meter,
     pub screen: Screen,
-    menu: crate::menu::Menu,
+    pub menu: crate::menu::Menu,
     root: std::path::PathBuf,
     /// Bar-Feed (Standard `web/data/bars.json` neben den Kacheln, `--bars DATEI`), `None` = aus
     pub bars_file: Option<std::path::PathBuf>,
@@ -60,6 +60,9 @@ pub struct Play {
     pub about: crate::about::About,
     /// Kamerazoom über die Belegung (Kamera näher/weiter), Faktor auf den Spielzoom
     zoom_user: f32,
+    /// Grafikmodus und Qualität (aktiv) und wie sie in `settings.json` stehen (CLI-Vorgaben werden nicht gespeichert)
+    pub graphics: berlin_engine::graphics::GraphicsSettings,
+    graphics_saved: berlin_engine::graphics::GraphicsSettings,
     /// Fester Kamerazoom für reproduzierbare Aufnahmen (`--zoom` im Spiel); `None` = Kamera folgt dem Spiel
     pub zoom_fix: Option<f32>,
     /// Controller-Vibration: Regeln und die nächste abzuholende
@@ -136,13 +139,38 @@ pub struct Play {
 fn settings_path(st: &FileStorage) -> std::path::PathBuf {
     st.path.with_file_name("settings.json")
 }
-fn read_settings(st: &FileStorage) -> (bool, crate::bindings::Bindings) {
+fn read_settings(
+    st: &FileStorage,
+) -> (
+    bool,
+    crate::bindings::Bindings,
+    berlin_engine::graphics::GraphicsSettings,
+) {
     let v = std::fs::read(settings_path(st))
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
         .unwrap_or_default();
     let diablo = v["controls"].as_str().is_none_or(|c| c != "classic");
-    (diablo, crate::bindings::Bindings::from_json(&v["bindings"]))
+    (
+        diablo,
+        crate::bindings::Bindings::from_json(&v["bindings"]),
+        graphics_from_json(&v),
+    )
+}
+/// `"grafik"` und `"qualitaet"` aus `settings.json`; Fehlendes oder Unbekanntes = Standard (HD, hoch).
+pub fn graphics_from_json(v: &serde_json::Value) -> berlin_engine::graphics::GraphicsSettings {
+    use berlin_engine::graphics::{GraphicsMode, GraphicsSettings, Quality};
+    let d = GraphicsSettings::default();
+    GraphicsSettings {
+        mode: v["grafik"]
+            .as_str()
+            .and_then(GraphicsMode::parse)
+            .unwrap_or(d.mode),
+        quality: v["qualitaet"]
+            .as_str()
+            .and_then(Quality::parse)
+            .unwrap_or(d.quality),
+    }
 }
 
 /// Statistikdatei neben dem Spielstand: `{"total": …, "saved": …}`.
@@ -383,7 +411,7 @@ impl Play {
             .as_ref()
             .is_some_and(|st| read_save(st as &dyn Storage).is_some());
         let (stats_total, stats_saved) = save.as_ref().map(read_stats).unwrap_or_default();
-        let (diablo, bindings) = save.as_ref().map(read_settings).unwrap_or_default();
+        let (diablo, bindings, graphics) = save.as_ref().map(read_settings).unwrap_or_default();
         let diablo = save.is_none() || diablo;
         let stats = if start == Start::Continue && screen == Screen::Playing && has_save {
             stats_saved.clone()
@@ -429,7 +457,7 @@ impl Play {
             listener: Default::default(),
             auto_enter: false,
             screen,
-            menu: crate::menu::title_menu(has_save),
+            menu: crate::menu::title_menu(has_save).with_graphics(graphics.mode),
             root: root.to_path_buf(),
             bars_live: None,
             bars_file: root
@@ -451,6 +479,8 @@ impl Play {
             bindmenu: Default::default(),
             about: Default::default(),
             zoom_user: 1.,
+            graphics,
+            graphics_saved: graphics,
             zoom_fix: None,
             rumbler: Default::default(),
             rumble_out: None,
@@ -799,6 +829,19 @@ impl Play {
                     };
                     self.console.log.push((msg, ok, now));
                 }
+                Action::Graphics(None) => self.toggle_graphics(),
+                Action::Graphics(Some(mode)) => {
+                    self.set_graphics(berlin_engine::graphics::GraphicsSettings {
+                        mode,
+                        ..self.graphics
+                    })
+                }
+                Action::Quality(quality) => {
+                    self.set_graphics(berlin_engine::graphics::GraphicsSettings {
+                        quality,
+                        ..self.graphics
+                    })
+                }
             }
         }
     }
@@ -864,6 +907,8 @@ impl Play {
             let v = serde_json::json!({
                 "controls": if self.diablo { "diablo" } else { "classic" },
                 "bindings": self.bindings.to_json(),
+                "grafik": self.graphics_saved.mode.key(),
+                "qualitaet": self.graphics_saved.quality.key(),
             });
             if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
                 eprintln!("Einstellungen nicht gespeichert: {e}");
@@ -872,7 +917,24 @@ impl Play {
     }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
-        self.menu = crate::menu::pause_menu();
+        self.menu = crate::menu::pause_menu().with_graphics(self.graphics.mode);
+    }
+    /// Grafik wählen (Menü, Taste, Konsole): sofort wirksam, gespeichert, als Meldung bestätigt. `--grafik` setzt
+    /// `self.graphics` direkt und schreibt nichts.
+    pub fn set_graphics(&mut self, g: berlin_engine::graphics::GraphicsSettings) {
+        self.graphics = g;
+        self.graphics_saved = g;
+        self.menu.set_graphics(g.mode);
+        self.write_settings();
+        self.world.notice = Some(berlin_sim::world::Notice {
+            text: format!("Grafik: {} · Qualität {}", g.mode.label(), g.quality.key()),
+            t: 1.6,
+        });
+    }
+    fn toggle_graphics(&mut self) {
+        let mut g = self.graphics;
+        g.mode = g.mode.toggled();
+        self.set_graphics(g);
     }
     fn ui_sound(&self) {
         if let Some(a) = &self.audio {
@@ -893,7 +955,7 @@ impl Play {
             .any(|i| i.action == crate::menu::Action::Resume);
         self.screen = Screen::Paused;
         if !keep {
-            self.menu = crate::menu::pause_menu();
+            self.menu = crate::menu::pause_menu().with_graphics(self.graphics.mode);
         }
     }
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
@@ -1052,6 +1114,7 @@ impl Play {
                             self.screen = Screen::Controls(true)
                         }
                         Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(true),
+                        Some(Pick::Choose(Action::Graphics)) => self.toggle_graphics(),
                         Some(Pick::Choose(Action::About)) => {
                             self.ui_sound();
                             self.about = Default::default();
@@ -1104,6 +1167,7 @@ impl Play {
                     }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
                     Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(false),
+                    Some(Pick::Choose(Action::Graphics)) => self.toggle_graphics(),
                     Some(Pick::Choose(Action::About)) => {
                         self.about = Default::default();
                         self.screen = Screen::About(false)
@@ -1111,7 +1175,8 @@ impl Play {
                     Some(Pick::Choose(Action::Title)) => {
                         self.write_stats();
                         self.screen = Screen::Title;
-                        self.menu = crate::menu::title_menu(self.has_save());
+                        self.menu = crate::menu::title_menu(self.has_save())
+                            .with_graphics(self.graphics.mode);
                     }
                     _ => {}
                 }
@@ -2430,6 +2495,9 @@ impl Game for Play {
                 });
             }
         }
+        if bind.pressed(keys, Bind::GraphicsMode) {
+            self.toggle_graphics();
+        }
         if bind.pressed(keys, Bind::Mute)
             && let Some(a) = &self.audio
         {
@@ -3519,6 +3587,9 @@ impl Game for Play {
             );
         }
     }
+    fn graphics(&self) -> berlin_engine::graphics::GraphicsSettings {
+        self.graphics
+    }
     fn lighting(&self) -> Option<Lighting> {
         let mut l = lighting_of(&world_light(&self.world));
         l.fog = self.world.sky.p.fog as f32;
@@ -3971,6 +4042,88 @@ mod tests {
         assert!(eve.shadow[0] > 0.5 && eve.shadow_len > noon.shadow_len);
     }
     #[test]
+    fn graphics_settings_from_json() {
+        use berlin_engine::graphics::{GraphicsMode, GraphicsSettings, Quality};
+        let g = |v| graphics_from_json(&v);
+        assert_eq!(g(serde_json::json!({})), GraphicsSettings::default());
+        assert_eq!(
+            g(serde_json::json!({"grafik": "pixel", "qualitaet": "mittel"})),
+            GraphicsSettings {
+                mode: GraphicsMode::Pixel,
+                quality: Quality::Mittel
+            }
+        );
+        // Unsinn: Standard je Feld
+        assert_eq!(
+            g(serde_json::json!({"grafik": 3, "qualitaet": "ultra"})),
+            GraphicsSettings::default()
+        );
+    }
+
+    #[test]
+    fn graphics_switch_by_menu_key_and_console_is_saved() {
+        use berlin_engine::graphics::{GraphicsMode, Quality};
+        let dir = std::env::temp_dir().join(format!("gta-berlin-grafik-{}", std::process::id()));
+        let path = dir.join("save.json");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let root = berlin_map_loader::default_data_root();
+        let mut p =
+            Play::new(&root, 4, Some(FileStorage::new(&path)), false, Start::Title).unwrap();
+        assert_eq!(p.graphics.mode, GraphicsMode::Hd, "HD ist Standard");
+        let none = HashSet::new();
+        let press = |p: &mut Play, k: Option<KeyCode>| {
+            let pressed: HashSet<KeyCode> = k.into_iter().collect();
+            p.step(
+                &Keys {
+                    held: &none,
+                    pressed: &pressed,
+                    pad: Pad::default(),
+                    pad_pressed: Pad::default(),
+                    mouse: Default::default(),
+                    typed: "",
+                },
+                DT,
+            );
+        };
+        // Titelmenü: Neues Spiel → Steuerung → Grafik
+        let g = p
+            .menu
+            .items
+            .iter()
+            .position(|i| i.action == crate::menu::Action::Graphics)
+            .expect("Grafik im Titelmenü");
+        assert_eq!(p.menu.items[g].label, "Grafik: HD");
+        while p.menu.index != g {
+            press(&mut p, Some(KeyCode::ArrowDown));
+        }
+        press(&mut p, Some(KeyCode::Enter));
+        assert_eq!(p.graphics.mode, GraphicsMode::Pixel);
+        assert_eq!(p.menu.items[g].label, "Grafik: Pixel");
+        let stored = || read_settings(&FileStorage::new(&path)).2;
+        assert_eq!(stored().mode, GraphicsMode::Pixel, "in settings.json");
+        // Konsole
+        assert!(p.run_command("grafik hd").ok);
+        assert!(p.run_command("qualitaet mittel").ok);
+        assert!(!p.run_command("qualitaet ultra").ok);
+        assert_eq!(
+            (p.graphics.mode, p.graphics.quality),
+            (GraphicsMode::Hd, Quality::Mittel)
+        );
+        assert_eq!(stored().quality, Quality::Mittel);
+        // Taste (F8) im Spiel
+        p.screen = Screen::Playing;
+        press(&mut p, Some(KeyCode::F8));
+        assert_eq!(p.graphics.mode, GraphicsMode::Pixel);
+        assert_eq!(stored().mode, GraphicsMode::Pixel);
+        // ein neuer Start liest die Einstellung
+        let q = Play::new(&root, 4, Some(FileStorage::new(&path)), false, Start::Title).unwrap();
+        assert_eq!(q.graphics.mode, GraphicsMode::Pixel);
+        assert_eq!(q.menu.items[g].label, "Grafik: Pixel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn screens_title_pause_save_and_continue() {
         let dir = std::env::temp_dir().join(format!("gta-berlin-screens-{}", std::process::id()));
         let path = dir.join("save.json");
@@ -4046,8 +4199,8 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
-        // „Über das Spiel“ aus der Pause und zurück in die Pause
-        for _ in 0..5 {
+        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Steuerung, Grafik)
+        for _ in 0..6 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
         press(&mut p, Some(KeyCode::Enter));
@@ -4067,7 +4220,8 @@ mod tests {
         assert_eq!(p.screen, Screen::Controls(true));
         press(&mut p, Some(KeyCode::Escape));
         assert_eq!(p.screen, Screen::Title);
-        // Statistik: Spielzeit des Spiels ist gezählt und liegt in der Datei
+        // Statistik (unter dem Grafik-Eintrag): Spielzeit des Spiels ist gezählt und liegt in der Datei
+        press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::Enter));
         assert_eq!(p.screen, Screen::Stats(true));

@@ -19,11 +19,6 @@ pub(crate) struct LightPass {
     pub shadow: wgpu::RenderPipeline,
     pub tree_shadow: wgpu::RenderPipeline,
     pub light: wgpu::RenderPipeline,
-    pub shadow_composite: wgpu::RenderPipeline,
-    pub light_composite: wgpu::RenderPipeline,
-    pub ambient_composite: wgpu::RenderPipeline,
-    pub grade: wgpu::RenderPipeline,
-    pub bloom: wgpu::RenderPipeline,
     pub mask: Target,
     pub lightmap: Target,
     sampler: wgpu::Sampler,
@@ -32,12 +27,20 @@ pub(crate) struct LightPass {
     pub light_count: u32,
 }
 
+/// Auftragen auf das Szenenbild (Vollbild-Dreiecke im Hauptdurchgang): hängen am Format und an der Abtastzahl
+/// des Szenenziels und werden mit ihm neu gebaut.
+pub(crate) struct Composites {
+    pub shadow: wgpu::RenderPipeline,
+    pub light: wgpu::RenderPipeline,
+    pub ambient: wgpu::RenderPipeline,
+    pub bloom: wgpu::RenderPipeline,
+}
+
 pub(crate) struct Ctx<'a> {
     pub device: &'a wgpu::Device,
     pub layout: &'a wgpu::PipelineLayout,
     pub atlas_layout: &'a wgpu::BindGroupLayout,
     pub shader: &'a wgpu::ShaderModule,
-    pub surface: wgpu::TextureFormat,
 }
 
 const MAX: wgpu::BlendState = wgpu::BlendState {
@@ -112,6 +115,7 @@ impl Ctx<'_> {
         format: wgpu::TextureFormat,
         blend: wgpu::BlendState,
         depth: Option<wgpu::DepthStencilState>,
+        samples: u32,
     ) -> wgpu::RenderPipeline {
         self.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -135,7 +139,10 @@ impl Ctx<'_> {
                 }),
                 primitive: Default::default(),
                 depth_stencil: depth,
-                multisample: Default::default(),
+                multisample: wgpu::MultisampleState {
+                    count: samples,
+                    ..Default::default()
+                },
                 multiview_mask: None,
                 cache: None,
             })
@@ -184,6 +191,39 @@ impl Ctx<'_> {
     }
 }
 
+/// Auftragen über die vorhandene Tiefe (s. Moduldoku) ins Szenenziel `format` mit `samples` Abtastungen.
+pub(crate) fn composites(cx: &Ctx, format: wgpu::TextureFormat, samples: u32) -> Composites {
+    use wgpu::CompareFunction::{Always, GreaterEqual, Less};
+    let full = |label, fs, blend, compare| {
+        cx.pipeline(
+            label,
+            "full_vs",
+            fs,
+            &[],
+            format,
+            blend,
+            Some(depth_test(compare)),
+            samples,
+        )
+    };
+    Composites {
+        shadow: full(
+            "Schatten auftragen",
+            "shadow_composite_fs",
+            wgpu::BlendState::ALPHA_BLENDING,
+            Less,
+        ),
+        light: full("Lichtkarte auftragen", "light_composite_fs", MULTIPLY, Less),
+        ambient: full(
+            "Umgebungslicht auf Dächern",
+            "ambient_composite_fs",
+            MULTIPLY,
+            GreaterEqual,
+        ),
+        bloom: full("Bloom", "bloom_fs", SCREEN, Always),
+    }
+}
+
 impl LightPass {
     pub fn new(cx: &Ctx, sprite_layout: wgpu::VertexBufferLayout, w: u32, h: u32) -> Self {
         let shadow_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32,2=>Float32];
@@ -206,7 +246,6 @@ impl LightPass {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
-        use wgpu::CompareFunction::{GreaterEqual, Less};
         Self {
             shadow: cx.pipeline(
                 "Schattenmaske Häuser",
@@ -216,6 +255,7 @@ impl LightPass {
                 MASK_FORMAT,
                 MAX,
                 None,
+                1,
             ),
             tree_shadow: cx.pipeline(
                 "Schattenmaske Bäume",
@@ -225,6 +265,7 @@ impl LightPass {
                 MASK_FORMAT,
                 MAX,
                 None,
+                1,
             ),
             light: cx.pipeline(
                 "Lichtquellen",
@@ -234,51 +275,7 @@ impl LightPass {
                 LIGHT_FORMAT,
                 ADD,
                 None,
-            ),
-            shadow_composite: cx.pipeline(
-                "Schatten auftragen",
-                "full_vs",
-                "shadow_composite_fs",
-                &[],
-                cx.surface,
-                wgpu::BlendState::ALPHA_BLENDING,
-                Some(depth_test(Less)),
-            ),
-            light_composite: cx.pipeline(
-                "Lichtkarte auftragen",
-                "full_vs",
-                "light_composite_fs",
-                &[],
-                cx.surface,
-                MULTIPLY,
-                Some(depth_test(Less)),
-            ),
-            ambient_composite: cx.pipeline(
-                "Umgebungslicht auf Dächern",
-                "full_vs",
-                "ambient_composite_fs",
-                &[],
-                cx.surface,
-                MULTIPLY,
-                Some(depth_test(GreaterEqual)),
-            ),
-            grade: cx.pipeline(
-                "Farbabstimmung und Vignette",
-                "full_vs",
-                "grade_fs",
-                &[],
-                cx.surface,
-                MULTIPLY,
-                Some(depth_test(wgpu::CompareFunction::Always)),
-            ),
-            bloom: cx.pipeline(
-                "Bloom",
-                "full_vs",
-                "bloom_fs",
-                &[],
-                cx.surface,
-                SCREEN,
-                Some(depth_test(wgpu::CompareFunction::Always)),
+                1,
             ),
             mask: cx.target(&sampler, "Schattenmaske", MASK_FORMAT, w, h),
             lightmap: cx.target(

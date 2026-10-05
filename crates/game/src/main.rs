@@ -51,6 +51,8 @@ fn main() -> Result<()> {
     let mut check_map = false;
     let mut free = false;
     let mut zoom_set = false;
+    let mut grafik: Option<berlin_engine::graphics::GraphicsMode> = None;
+    let mut qualitaet: Option<berlin_engine::graphics::Quality> = None;
     let mut new_game = false;
     let mut resume = false;
     let mut screen: Option<String> = None;
@@ -145,6 +147,21 @@ fn main() -> Result<()> {
                     "--fenster: 320x240 bis 7680x4320"
                 );
                 options.window = Some((w, h));
+            }
+            "--grafik" | "--graphics" => {
+                let v = args.next().context("--grafik erwartet hd oder pixel")?;
+                grafik = Some(
+                    berlin_engine::graphics::GraphicsMode::parse(&v)
+                        .with_context(|| format!("--grafik erwartet hd oder pixel, nicht {v}"))?,
+                );
+            }
+            "--qualitaet" | "--quality" => {
+                let v = args
+                    .next()
+                    .context("--qualitaet erwartet niedrig, mittel oder hoch")?;
+                qualitaet = Some(berlin_engine::graphics::Quality::parse(&v).with_context(
+                    || format!("--qualitaet erwartet niedrig, mittel oder hoch, nicht {v}"),
+                )?);
             }
             "--check-map" => check_map = true,
             "--stumm" | "--mute" => sound = false,
@@ -272,7 +289,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen) · im Spiel springen --position/--geo dorthin, --zoom hält die Kamera fest · --messung: Bildzeiten (CPU, GPU) als JSON"
                 );
@@ -454,6 +471,14 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     }
     if zoom_set {
         play.zoom_fix = Some(options.zoom);
+    }
+    // nur für diesen Start (settings.json bleibt, wie sie ist)
+    if let Some(m) = grafik {
+        play.graphics.mode = m;
+        play.menu.set_graphics(m);
+    }
+    if let Some(q) = qualitaet {
+        play.graphics.quality = q;
     }
     berlin_engine::run_with(options, Some(Box::new(play)))
 }

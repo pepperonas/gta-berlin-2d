@@ -1,10 +1,12 @@
 mod atlas;
 pub mod camera;
 mod gputime;
+pub mod graphics;
 pub mod hud;
 mod lightpass;
 pub mod pad;
 mod renderer;
+mod scenepass;
 use anyhow::Result;
 use berlin_map_loader::{
     format::Index,
@@ -166,6 +168,10 @@ pub trait Game {
     fn status(&self) -> String;
     /// Ist die Spielwelt geladen (für Smoke-Tests)?
     fn ready(&self) -> bool;
+    /// Grafikmodus und Qualitätsstufe (einmal je Bild abgefragt; der Renderer baut nur bei Änderung neu).
+    fn graphics(&self) -> graphics::GraphicsSettings {
+        graphics::GraphicsSettings::default()
+    }
     /// Licht des Bildes (Tageszeit); `None` = Licht aus den Optionen.
     fn lighting(&self) -> Option<Lighting> {
         None
@@ -433,7 +439,14 @@ impl ApplicationHandler for App {
                 if let Some(game) = self.game.as_mut() {
                     // fester Simulationsschritt; kurze Tastendrücke gelten bis zum nächsten Schritt
                     let step = game.step_seconds();
-                    self.accumulator = (self.accumulator + dt as f64).min(step * 5.);
+                    // Smoke-Test und Aufnahme: genau ein Schritt je Bild – die Welt hängt dann nur an der Bildzahl,
+                    // nicht an der Uhr, und Aufnahmen lassen sich Bild für Bild vergleichen
+                    let advance = if self.smoke_frames.is_some() {
+                        step
+                    } else {
+                        dt as f64
+                    };
+                    self.accumulator = (self.accumulator + advance).min(step * 5.);
                     let viewport = renderer.viewport();
                     // Smoke-Test und Aufnahme: keine Eingaben (Tasten, die zufällig ins Fenster gehen, verfälschten
                     // sonst das Bild)
@@ -500,6 +513,7 @@ impl ApplicationHandler for App {
                     self.bodies.clear();
                     game.effects(&mut self.bodies);
                     renderer.set_effects(&self.bodies);
+                    renderer.set_graphics(game.graphics());
                     renderer.set_lighting(game.lighting().unwrap_or(self.lighting));
                     self.lights.clear();
                     game.lights(&mut self.lights);

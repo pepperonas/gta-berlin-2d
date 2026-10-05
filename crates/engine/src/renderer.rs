@@ -2,14 +2,16 @@ use crate::{
     Body, LightSource, Lighting, atlas,
     camera::Camera,
     gputime::GpuTimer,
+    graphics::GraphicsSettings,
     hud::{self, HudItem, MapInset},
     lightpass,
+    scenepass::{self, ScenePipes, SceneTargets},
 };
 use anyhow::{Context, Result};
 use berlin_map_loader::{
     format::TileKey,
     geom::Bounds,
-    mesh::{Mesh, ShadowVertex, Sprite, Vertex},
+    mesh::{Mesh, ShadowVertex},
     overview::{OverlayMesh, OverlayVertex},
     stream::Snapshot,
 };
@@ -33,14 +35,18 @@ pub(crate) struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pipeline: wgpu::RenderPipeline,
-    window_pipeline: wgpu::RenderPipeline,
-    sprite_pipeline: wgpu::RenderPipeline,
-    body_pipeline: wgpu::RenderPipeline,
-    silhouette_pipeline: wgpu::RenderPipeline,
+    /// Szenendurchgang (HD-Pfad): Pipelines und Ziele, je nach Abtastzahl der Qualitätsstufe
+    pipes: ScenePipes,
+    targets: SceneTargets,
+    graphics: GraphicsSettings,
+    /// Minikarte: Kacheln direkt ins Ausgabebild (Ausgabeformat, ohne Kantenglättung)
+    map_pipeline: wgpu::RenderPipeline,
+    /// Nachbearbeitung: Szenenbild → Ausgabebild (Farbabstimmung, Vignette)
+    post_pipeline: wgpu::RenderPipeline,
+    /// Tiefe des HUD-Durchgangs (Minikarte), eine Abtastung
+    hud_depth: wgpu::TextureView,
     silhouettes: Option<wgpu::Buffer>,
     silhouette_count: u32,
-    effect_pipeline: wgpu::RenderPipeline,
     effects: Option<wgpu::Buffer>,
     effect_count: u32,
     bodies: Option<wgpu::Buffer>,
@@ -52,7 +58,6 @@ pub(crate) struct Renderer {
     /// Fahrzeugbilder (vom Spiel einmal geliefert; bis dahin leer)
     vehicle_bind: wgpu::BindGroup,
     atlas_sampler: wgpu::Sampler,
-    depth: wgpu::TextureView,
     tiles: BTreeMap<TileKey, GpuTile>,
     /// Zeichengröße (Fenster oder fest, `--fenster`)
     size: PhysicalSize<u32>,
@@ -187,130 +192,6 @@ impl Renderer {
             bind_group_layouts: &[Some(&camera_layout), Some(&atlas_layout)],
             immediate_size: 0,
         });
-        let attrs = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x3,2=>Float32x3,3=>Float32x2,4=>Float32x2,5=>Float32,6=>Float32];
-        let sprite_attrs = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x2,2=>Float32,3=>Float32x3,4=>Float32,5=>Float32];
-        let body_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Float32,3=>Float32,4=>Float32,5=>Float32x4];
-        let depth_state = wgpu::DepthStencilState {
-            format: wgpu::TextureFormat::Depth32Float,
-            depth_write_enabled: Some(true),
-            depth_compare: Some(wgpu::CompareFunction::LessEqual),
-            stencil: Default::default(),
-            bias: Default::default(),
-        };
-        let make_pipeline = |label,
-                             vs,
-                             fs,
-                             stride,
-                             step_mode,
-                             attributes: &[wgpu::VertexAttribute],
-                             blend,
-                             write: bool,
-                             compare: wgpu::CompareFunction| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some(vs),
-                    compilation_options: Default::default(),
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: stride,
-                        step_mode,
-                        attributes,
-                    }],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(fs),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: config.format,
-                        blend,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: Default::default(),
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    depth_write_enabled: Some(write),
-                    depth_compare: Some(compare),
-                    ..depth_state.clone()
-                }),
-                multisample: Default::default(),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let pipeline = make_pipeline(
-            "Berlin indexed meshes",
-            "vs",
-            "fs",
-            size_of::<Vertex>() as u64,
-            wgpu::VertexStepMode::Vertex,
-            &attrs,
-            None,
-            true,
-            wgpu::CompareFunction::LessEqual,
-        );
-        // erleuchtete Fenster: dieselben Fassaden nach dem Licht, ohne Tiefe zu schreiben
-        let window_pipeline = make_pipeline(
-            "Berlin lit windows",
-            "vs",
-            "window_fs",
-            size_of::<Vertex>() as u64,
-            wgpu::VertexStepMode::Vertex,
-            &attrs,
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
-            wgpu::CompareFunction::LessEqual,
-        );
-        let sprite_pipeline = make_pipeline(
-            "Berlin instanced atlas",
-            "sprite_vs",
-            "sprite_fs",
-            size_of::<Sprite>() as u64,
-            wgpu::VertexStepMode::Instance,
-            &sprite_attrs,
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            true,
-            wgpu::CompareFunction::LessEqual,
-        );
-        let body_pipeline = make_pipeline(
-            "Berlin instanced bodies",
-            "body_vs",
-            "body_fs",
-            size_of::<Body>() as u64,
-            wgpu::VertexStepMode::Instance,
-            &body_attrs,
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            true,
-            wgpu::CompareFunction::LessEqual,
-        );
-        // Silhouetten: dieselben Körper, aber nur wo Näheres davor liegt (Tiefe größer als gespeichert)
-        let silhouette_pipeline = make_pipeline(
-            "Berlin silhouettes",
-            "body_vs",
-            "silhouette_fs",
-            size_of::<Body>() as u64,
-            wgpu::VertexStepMode::Instance,
-            &body_attrs,
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
-            wgpu::CompareFunction::Greater,
-        );
-        // Durchscheinende Effekte (Qualm, Gischt, Leuchtspuren, Mündungsfeuer): nach Licht und Silhouetten, mit
-        // Tiefentest (Dächer bleiben davor), aber ohne Tiefe zu schreiben – sonst zählten sie als Verdeckung und
-        // der Silhouetten-Durchgang zeichnete das Auto unter einer Reifenwolke als Umriss.
-        let effect_pipeline = make_pipeline(
-            "Berlin effects",
-            "body_vs",
-            "body_fs",
-            size_of::<Body>() as u64,
-            wgpu::VertexStepMode::Instance,
-            &body_attrs,
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
-            wgpu::CompareFunction::LessEqual,
-        );
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera / sun"),
             size: UNIFORM_BYTES,
@@ -392,7 +273,6 @@ impl Renderer {
         });
         let vehicle_bind =
             vehicle_atlas_bind(&device, &queue, &atlas_layout, &sampler, &[0; 4], 1, 1);
-        let depth = depth_view(&device, size);
         let hud_attrs = wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Float32,3=>Float32,4=>Float32x4,5=>Float32x4];
         let hud_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("HUD"),
@@ -514,22 +394,42 @@ impl Renderer {
                 },
             ],
         });
-        let light = lightpass::LightPass::new(
-            &lightpass::Ctx {
-                device: &device,
-                layout: &layout,
-                atlas_layout: &atlas_layout,
-                shader: &shader,
-                surface: config.format,
-            },
-            wgpu::VertexBufferLayout {
-                array_stride: size_of::<Sprite>() as u64,
-                step_mode: wgpu::VertexStepMode::Instance,
-                attributes: &sprite_attrs,
-            },
-            size.width,
-            size.height,
+        let cx = lightpass::Ctx {
+            device: &device,
+            layout: &layout,
+            atlas_layout: &atlas_layout,
+            shader: &shader,
+        };
+        let light =
+            lightpass::LightPass::new(&cx, scenepass::sprite_layout(), size.width, size.height);
+        let graphics = GraphicsSettings::default();
+        let pipes = ScenePipes::new(&cx, graphics.msaa());
+        let targets = SceneTargets::new(&device, &atlas_layout, &sampler, size, graphics.msaa());
+        let map_pipeline = scenepass::pipeline(
+            &cx,
+            "Minikarte",
+            "vs",
+            "fs",
+            &[scenepass::mesh_layout()],
+            config.format,
+            1,
+            None,
+            true,
+            wgpu::CompareFunction::LessEqual,
         );
+        let post_pipeline = scenepass::pipeline(
+            &cx,
+            "Nachbearbeitung",
+            "full_vs",
+            "post_fs",
+            &[],
+            config.format,
+            1,
+            None,
+            false,
+            wgpu::CompareFunction::Always,
+        );
+        let hud_depth = depth_view(&device, size);
         let offscreen = fixed.map(|f| offscreen_view(&device, config.format, f));
         let gpu = if measure {
             GpuTimer::new(&device, &queue)
@@ -543,14 +443,14 @@ impl Renderer {
             device,
             queue,
             config,
-            pipeline,
-            window_pipeline,
-            sprite_pipeline,
-            body_pipeline,
-            silhouette_pipeline,
+            pipes,
+            targets,
+            graphics,
+            map_pipeline,
+            post_pipeline,
+            hud_depth,
             silhouettes: None,
             silhouette_count: 0,
-            effect_pipeline,
             effects: None,
             effect_count: 0,
             bodies: None,
@@ -561,7 +461,6 @@ impl Renderer {
             atlas_bind,
             vehicle_bind,
             atlas_sampler: sampler,
-            depth,
             tiles: BTreeMap::new(),
             size,
             fixed,
@@ -712,6 +611,32 @@ impl Renderer {
             "Effect instances",
         );
     }
+    /// Grafikmodus und Qualität; Pipelines und Szenenziele nur neu, wenn sich die Abtastzahl ändert.
+    pub fn set_graphics(&mut self, graphics: GraphicsSettings) {
+        if graphics == self.graphics {
+            return;
+        }
+        let samples = graphics.msaa();
+        self.graphics = graphics;
+        if samples != self.pipes.samples {
+            self.pipes = ScenePipes::new(&self.ctx(), samples);
+            self.targets = SceneTargets::new(
+                &self.device,
+                &self.atlas_layout,
+                &self.atlas_sampler,
+                self.size,
+                samples,
+            );
+        }
+    }
+    fn ctx(&self) -> lightpass::Ctx<'_> {
+        lightpass::Ctx {
+            device: &self.device,
+            layout: &self.layout,
+            atlas_layout: &self.atlas_layout,
+            shader: &self.shader,
+        }
+    }
     pub fn set_lighting(&mut self, lighting: Lighting) {
         self.lighting = lighting;
     }
@@ -790,7 +715,14 @@ impl Renderer {
         let size = self.fixed.unwrap_or(window);
         self.size = size;
         if self.drawable() {
-            self.depth = depth_view(&self.device, size);
+            self.hud_depth = depth_view(&self.device, size);
+            self.targets = SceneTargets::new(
+                &self.device,
+                &self.atlas_layout,
+                &self.atlas_sampler,
+                size,
+                self.pipes.samples,
+            );
             if let Some(f) = self.fixed {
                 self.offscreen = Some(offscreen_view(&self.device, self.config.format, f));
             }
@@ -799,7 +731,6 @@ impl Renderer {
                 layout: &self.layout,
                 atlas_layout: &self.atlas_layout,
                 shader: &self.shader,
-                surface: self.config.format,
             };
             self.light.resize(&cx, size.width, size.height);
         }
@@ -899,9 +830,9 @@ impl Renderer {
             label: Some("Berlin frame"),
             timestamp_writes: if shadows || night { None } else { stamp(true) },
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
+                view: &self.targets.color,
                 depth_slice: None,
-                resolve_target: None,
+                resolve_target: self.targets.resolve.as_ref(),
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
                         r: 0.14,
@@ -909,14 +840,20 @@ impl Renderer {
                         b: 0.12,
                         a: 1.,
                     }),
-                    store: wgpu::StoreOp::Store,
+                    // mit Kantenglättung zählt nur das aufgelöste Bild (auf Kachel-GPUs bleibt die Abtastung so im
+                    // Kachelspeicher)
+                    store: if self.targets.resolve.is_some() {
+                        wgpu::StoreOp::Discard
+                    } else {
+                        wgpu::StoreOp::Store
+                    },
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth,
+                view: &self.targets.depth,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.),
-                    store: wgpu::StoreOp::Store,
+                    store: wgpu::StoreOp::Discard,
                 }),
                 stencil_ops: None,
             }),
@@ -924,7 +861,7 @@ impl Renderer {
         });
         pass.set_bind_group(0, &self.bind, &[]);
         pass.set_bind_group(1, &self.atlas_bind, &[]);
-        pass.set_pipeline(&self.pipeline);
+        pass.set_pipeline(&self.pipes.tiles);
         for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
             if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
                 pass.set_vertex_buffer(0, vertices.slice(..));
@@ -933,12 +870,12 @@ impl Renderer {
             }
         }
         if shadows {
-            pass.set_pipeline(&self.light.shadow_composite);
+            pass.set_pipeline(&self.pipes.comp.shadow);
             pass.set_bind_group(1, &self.light.mask.bind, &[]);
             pass.draw(0..3, 0..1);
             pass.set_bind_group(1, &self.atlas_bind, &[]);
         }
-        pass.set_pipeline(&self.sprite_pipeline);
+        pass.set_pipeline(&self.pipes.sprites);
         for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
             if let Some(sprites) = &tile.sprites {
                 pass.set_vertex_buffer(0, sprites.slice(..));
@@ -947,24 +884,24 @@ impl Renderer {
         }
         if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
             pass.set_bind_group(1, &self.vehicle_bind, &[]);
-            pass.set_pipeline(&self.body_pipeline);
+            pass.set_pipeline(&self.pipes.bodies);
             pass.set_vertex_buffer(0, bodies.slice(..));
             pass.draw(0..6, 0..self.body_count);
         }
         if night {
-            pass.set_pipeline(&self.light.light_composite);
+            pass.set_pipeline(&self.pipes.comp.light);
             pass.set_bind_group(1, &self.light.lightmap.bind, &[]);
             pass.draw(0..3, 0..1);
-            pass.set_pipeline(&self.light.ambient_composite);
+            pass.set_pipeline(&self.pipes.comp.ambient);
             pass.draw(0..3, 0..1);
             if self.lighting.dark > 0.3 {
-                pass.set_pipeline(&self.light.bloom);
+                pass.set_pipeline(&self.pipes.comp.bloom);
                 pass.draw(0..3, 0..1);
             }
         }
         let m = self.lighting.minutes.rem_euclid(1440.);
         if self.lighting.windows > 0.001 || !(330. ..=1380.).contains(&m) {
-            pass.set_pipeline(&self.window_pipeline);
+            pass.set_pipeline(&self.pipes.windows);
             pass.set_bind_group(1, &self.atlas_bind, &[]);
             for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
                 if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
@@ -980,34 +917,32 @@ impl Renderer {
             .filter(|_| self.silhouette_count > 0)
         {
             pass.set_bind_group(1, &self.vehicle_bind, &[]);
-            pass.set_pipeline(&self.silhouette_pipeline);
+            pass.set_pipeline(&self.pipes.silhouettes);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.silhouette_count);
         }
         if let Some(buffer) = self.effects.as_ref().filter(|_| self.effect_count > 0) {
             pass.set_bind_group(1, &self.vehicle_bind, &[]);
-            pass.set_pipeline(&self.effect_pipeline);
+            pass.set_pipeline(&self.pipes.effects);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.effect_count);
         }
-        pass.set_pipeline(&self.light.grade);
-        pass.draw(0..3, 0..1);
         drop(pass);
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("HUD"),
+            label: Some("Nachbearbeitung und HUD"),
             timestamp_writes: stamp(false),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth,
+                view: &self.hud_depth,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.),
                     store: wgpu::StoreOp::Store,
@@ -1016,6 +951,11 @@ impl Renderer {
             }),
             ..Default::default()
         });
+        // 4a) Szenenbild ins Ausgabebild (Farbabstimmung, Vignette)
+        pass.set_bind_group(0, &self.bind, &[]);
+        pass.set_bind_group(1, &self.targets.post, &[]);
+        pass.set_pipeline(&self.post_pipeline);
+        pass.draw(0..3, 0..1);
         let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
             return;
         };
@@ -1053,7 +993,7 @@ impl Renderer {
                         pass.draw_indexed(0..*n, 0, 0..1);
                     }
                 } else {
-                    pass.set_pipeline(&self.pipeline);
+                    pass.set_pipeline(&self.map_pipeline);
                     for tile in self.tiles.values().filter(|t| t.bounds.intersects(area)) {
                         if let (Some(v), Some(i)) = (&tile.vertices, &tile.indices) {
                             pass.set_vertex_buffer(0, v.slice(..));
@@ -1166,23 +1106,29 @@ impl Renderer {
             return Ok(false);
         }
         let t0 = std::time::Instant::now();
+        // Mit fester Zeichengröße entsteht das Bild abseits des Fensters: ein verdecktes oder minimiertes Fenster
+        // (kein Swapchain-Bild) hält Messung und Aufnahme dann nicht auf.
+        let fixed = self.offscreen.is_some();
         let (frame, suboptimal) = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
-            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
+            wgpu::CurrentSurfaceTexture::Success(frame) => (Some(frame), false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (Some(frame), true),
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
-                return Ok(false);
+                (None, false)
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.resize(self.window.inner_size());
-                return Ok(false);
+                (None, false)
             }
             wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface = self.instance.create_surface(self.window.clone())?;
                 self.resize(self.window.inner_size());
-                return Ok(false);
+                (None, false)
             }
             wgpu::CurrentSurfaceTexture::Validation => anyhow::bail!("Surface-Validierungsfehler"),
         };
+        if frame.is_none() && !fixed {
+            return Ok(false);
+        }
         self.acquire_ms = t0.elapsed().as_secs_f32() * 1000.;
         let l = self.lighting;
         let mut uniform = camera.uniform(self.viewport()).to_vec();
@@ -1194,27 +1140,33 @@ impl Renderer {
         uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
         self.queue
             .write_buffer(&self.uniform, 0, bytemuck::cast_slice(&uniform));
-        let view = frame.texture.create_view(&Default::default());
+        let view = frame
+            .as_ref()
+            .map(|f| f.texture.create_view(&Default::default()));
         let mut encoder = self.device.create_command_encoder(&Default::default());
         let timestamps = self.gpu.as_mut().and_then(GpuTimer::begin);
-        if let Some(target) = &self.offscreen {
-            // feste Zeichengröße: Bild abseits, das Fenster bleibt dunkel
-            self.draw_scene(&mut encoder, target, camera, timestamps);
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Fenster (feste Zeichengröße)"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-        } else {
-            self.draw_scene(&mut encoder, &view, camera, timestamps);
+        match (&self.offscreen, &view) {
+            (Some(target), view) => {
+                // feste Zeichengröße: Bild abseits, das Fenster bleibt dunkel
+                self.draw_scene(&mut encoder, target, camera, timestamps);
+                if let Some(view) = view {
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Fenster (feste Zeichengröße)"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        ..Default::default()
+                    });
+                }
+            }
+            (None, Some(view)) => self.draw_scene(&mut encoder, view, camera, timestamps),
+            (None, None) => unreachable!("ohne Swapchain-Bild oben schon beendet"),
         }
         if let Some(g) = &self.gpu {
             g.resolve(&mut encoder);
@@ -1223,8 +1175,10 @@ impl Renderer {
         if let Some(g) = &mut self.gpu {
             g.after_submit(&self.device);
         }
-        self.window.pre_present_notify();
-        frame.present();
+        if let Some(frame) = frame {
+            self.window.pre_present_notify();
+            frame.present();
+        }
         if suboptimal {
             self.resize(self.window.inner_size());
         }

@@ -362,14 +362,14 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
         let k = clamp(1.0 - q * q, 0.0, 1.0);
         let alpha = k * k * in.color.a;
         if alpha < 0.004 { discard; }
-        return vec4(linear_color(in.color.rgb), alpha);
+        return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), alpha);
     }
     if in.shape >= 4.0 {
         let q = in.local / in.extent;
         var inside: bool;
         if in.shape == 5.0 { inside = dot(q, q) <= 1.0; } else { inside = max(abs(q.x), abs(q.y)) <= 1.0; }
         if !inside || in.color.a < 0.004 { discard; }
-        return vec4(linear_color(in.color.rgb), in.color.a);
+        return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), in.color.a);
     }
     if in.shape == 1.0 {
         let q = in.local / in.extent;
@@ -385,5 +385,5 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     let aa = max(fwidth(d), 0.0001);
     let alpha = clamp(0.5 - d / aa, 0.0, 1.0) * in.color.a;
     if alpha < 0.01 { discard; }
-    return vec4(linear_color(in.color.rgb), alpha);
+    return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), alpha);
 }

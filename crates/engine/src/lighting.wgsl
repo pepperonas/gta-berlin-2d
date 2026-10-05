@@ -110,28 +110,36 @@ struct FullOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f
     return vec4(linear_color(camera.ambient.rgb), 1.0);
 }
 
-// Farbabstimmung und Vignette (lighting.js drawGrade, grime.js drawVignette) als ein Vollbild-Durchgang, der das
-// Bild multipliziert: warmer Verlauf von oben links (Wärme params.w, in der Dämmerung am stärksten), kühler von unten
-// (nachts stärker), dunkler Rand. Soft-Light bei 2–6 % Deckkraft ist praktisch eine Tönung: Faktor 1 + a·(2c − 1),
-// auf das hellste Glied normiert (ein Ziel ohne HDR kann nicht aufhellen). Die Vignettenfarbe ist fast schwarz,
-// darum genügt Abdunkeln.
-@fragment fn grade_fs(in: FullOut) -> @location(0) vec4<f32> {
+// Farbabstimmung und Vignette (lighting.js drawGrade, grime.js drawVignette) als Faktor auf das fertige Szenenbild:
+// warmer Verlauf von oben links (Wärme params.w, in der Dämmerung am stärksten), kühler von unten (nachts stärker),
+// dunkler Rand. Soft-Light bei 2–6 % Deckkraft ist praktisch eine Tönung: Faktor 1 + a·(2c − 1), auf das hellste
+// Glied normiert (die Abstimmung soll nur tönen, nicht aufhellen). Die Vignettenfarbe ist fast schwarz, darum genügt
+// Abdunkeln.
+fn grade_factor(uv: vec2<f32>) -> vec3<f32> {
     let aspect = camera.viewport.x / max(camera.viewport.y, 1.0);
-    let q = vec2(in.uv.x * aspect, in.uv.y);
+    let q = vec2(uv.x * aspect, uv.y);
     let dir = vec2(0.7 * aspect, 1.0);
     let t = clamp(dot(q, dir) / dot(dir, dir), 0.0, 1.0);
     let warm_a = camera.params.w * (1.0 - t);
-    let cool_a = (0.015 + camera.ambient.w * 0.035) * in.uv.y;
+    let cool_a = (0.015 + camera.ambient.w * 0.035) * uv.y;
     let warm = vec3(1.0, 0.851, 0.616);
     let cool = vec3(0.318, 0.475, 0.6);
     var f = (vec3(1.0) + warm_a * (2.0 * warm - 1.0)) * (vec3(1.0) + cool_a * (2.0 * cool - 1.0));
     f = f / max(1.0, max(f.r, max(f.g, f.b)));
     // Vignette: ab 45 % der kürzeren Seite bis in die Ecken auf 17 %
-    let c = (in.uv - 0.5) * vec2(aspect, 1.0);
+    let c = (uv - 0.5) * vec2(aspect, 1.0);
     let r0 = 0.45 * min(aspect, 1.0);
     let r1 = length(vec2(aspect, 1.0)) * 0.5;
     let v = 0.17 * clamp((length(c) - r0) / (r1 - r0), 0.0, 1.0);
-    return vec4(pow(f, vec3(2.2)) * (1.0 - v), 1.0);
+    return pow(f, vec3(2.2)) * (1.0 - v);
+}
+
+// Nachbearbeitung: Szenenbild (linear, Rgba16Float, aufgelöst) ins Ausgabebild. Ein Bildpunkt je Bildpunkt
+// (gleiche Größe), daher textureLoad statt Filtern. Phase 1 der Grafik-Überarbeitung: nur Farbabstimmung und
+// Klemmen auf 0…1 – bildgleich zum früheren Zeichnen direkt ins sRGB-Ziel.
+@fragment fn post_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
+    return vec4(clamp(c * grade_factor(in.uv), vec3(0.0), vec3(1.0)), 1.0);
 }
 
 // Bloom (lighting.js drawBloom): helle Stellen der Lichtkarte überstrahlen. Quelle wie brightness(0,55) contrast(5),
@@ -150,5 +158,5 @@ fn bloom_src(uv: vec2<f32>) -> vec3<f32> {
         sum += bloom_src(in.uv + d * px) * 0.08;
         sum += bloom_src(in.uv + d * px * 2.2) * 0.0533;
     }
-    return vec4(sum * strength, 1.0);
+    return vec4(clamp(sum * strength, vec3(0.0), vec3(1.0)), 1.0);
 }

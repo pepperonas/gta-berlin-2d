@@ -8,6 +8,16 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 1 (native Fassung): **Grafikmodus HD (Standard) / Pixel** und **Qualität
+  niedrig/mittel/hoch**, umschaltbar mit F8, im Titel- und Pausenmenü („Grafik: HD“), per Konsole (`grafik`,
+  `qualitaet`) und CLI (`--grafik`, `--qualitaet`, gilt nur für den Start); gespeichert in `settings.json`. Die Szene
+  entsteht jetzt in einem linearen Float-Ziel (`Rgba16Float`) mit 4× Kantenglättung (Hoch/Mittel) und kommt über eine
+  Nachbearbeitung (Farbabstimmung, Vignette) ins Bild; HUD und Minikarte danach wie bisher. Der Pixel-Modus ist bis
+  Phase 8 ein Platzhalter (zeichnet wie HD ohne Kantenglättung). Gemessen (M1 Pro, 2560 × 1440): Niedrig weicht in
+  keiner Szene um mehr als 0,25 % der Bildpunkte von der Baseline ab, Hoch nur an Kanten (0,1–1,8 %), GPU +0,1 bis
+  +0,5 ms.
+- Aufnahmen und Smoke-Tests rücken genau einen Simulationsschritt je Bild vor (statt nach der Uhr): gleiche Szene,
+  gleiches Bild. Mit `--fenster` zählt ein Bild auch, wenn das Fenster verdeckt ist.
 - Grafik-Überarbeitung, Phase 0 (Bestandsaufnahme): Messwerkzeug für reproduzierbare Testszenen. `--fenster BxH`
   zeichnet in fester Größe abseits des Fensters (Aufnahmen 2560 × 1440 auch auf kleineren Bildschirmen),
   `--messung DATEI.json` schreibt Median und P95 der CPU-Arbeit und der GPU-Zeit (Zeitstempel-Abfragen, nur beim
