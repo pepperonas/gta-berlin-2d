@@ -1,0 +1,260 @@
+{
+  "bank": "r4",
+  "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
+  "quelle": [
+    {
+      "freesound": 162499,
+      "sha256": "32976ff8599b600b3045d5db7f3336f8236134e959d13a27d372fd246db1f0a3",
+      "titel": "Acceleration Sweep - 4062",
+      "url": "https://freesound.org/s/162499/",
+      "beginn_s": 0.0
+    },
+    {
+      "freesound": 162504,
+      "sha256": "e7a6972d3ac0b7d38254af36dff5e306aa0458f3ac1e92845cdf469eae76fd37",
+      "titel": "17_MedSweep_D6",
+      "url": "https://freesound.org/s/162504/",
+      "beginn_s": 4.765
+    },
+    {
+      "freesound": 162516,
+      "sha256": "f2ace5576d090a92369bb5f82ed579be94783da5c300ce0cad18282e4c054c09",
+      "titel": "21_500_4062",
+      "url": "https://freesound.org/s/162516/",
+      "beginn_s": 15.489
+    },
+    {
+      "freesound": 162526,
+      "sha256": "44f14083114a59b7522c5bd63a1b2175bfabf2d506c21d314d218790bf1a021e",
+      "titel": "23_StartBig_4062",
+      "url": "https://freesound.org/s/162526/",
+      "beginn_s": 24.239
+    }
+  ],
+  "quelle_sha256": "2cc9c2efa73d43444605ba93af2cb2aa34e2bd96040d603ff3ee1d1ab9cdc9b9",
+  "lizenz": "CC0 1.0",
+  "urheber": "Chippy569",
+  "samplerate": 48000,
+  "drehzahl_annahme": "Reihenvierzylinder (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 30; Prüfstand, kein Doppler",
+  "loops": [
+    {
+      "datei": "on_idle.wav",
+      "rpm": 1024,
+      "last": "on",
+      "samples": 36558,
+      "loop_start": 0,
+      "loop_ende": 36558,
+      "grundton_hz": 34.14,
+      "quelle_s": [
+        18.4890625,
+        19.2890625
+      ],
+      "gain_db": 0.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "off_idle.wav",
+      "rpm": 1024,
+      "last": "off",
+      "samples": 36558,
+      "loop_start": 0,
+      "loop_ende": 36558,
+      "grundton_hz": 34.14,
+      "quelle_s": [
+        18.4890625,
+        19.2890625
+      ],
+      "gain_db": -7.0,
+      "drift_cent": null
+    },
+    {
+      "datei": "on_r2000.wav",
+      "rpm": 2070,
+      "last": "on",
+      "samples": 8348,
+      "loop_start": 0,
+      "loop_ende": 8348,
+      "grundton_hz": 69.0,
+      "quelle_s": [
+        1.15,
+        1.35
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 9.9
+    },
+    {
+      "datei": "on_r3300.wav",
+      "rpm": 3422,
+      "last": "on",
+      "samples": 5891,
+      "loop_start": 0,
+      "loop_ende": 5891,
+      "grundton_hz": 114.07,
+      "quelle_s": [
+        1.95,
+        2.1
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 24.7
+    },
+    {
+      "datei": "on_r4300.wav",
+      "rpm": 4296,
+      "last": "on",
+      "samples": 7374,
+      "loop_start": 0,
+      "loop_ende": 7374,
+      "grundton_hz": 143.21,
+      "quelle_s": [
+        2.4,
+        2.58
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 13.6
+    },
+    {
+      "datei": "on_r5300.wav",
+      "rpm": 5322,
+      "last": "on",
+      "samples": 6764,
+      "loop_start": 0,
+      "loop_ende": 6764,
+      "grundton_hz": 177.41,
+      "quelle_s": [
+        2.95,
+        3.12
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 28.2
+    },
+    {
+      "datei": "on_r6300.wav",
+      "rpm": 6267,
+      "last": "on",
+      "samples": 7353,
+      "loop_start": 0,
+      "loop_ende": 7353,
+      "grundton_hz": 208.89,
+      "quelle_s": [
+        3.42,
+        3.6
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 12.9
+    },
+    {
+      "datei": "on_r7000.wav",
+      "rpm": 7027,
+      "last": "on",
+      "samples": 7377,
+      "loop_start": 0,
+      "loop_ende": 7377,
+      "grundton_hz": 234.24,
+      "quelle_s": [
+        3.92,
+        4.1
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 5.2
+    },
+    {
+      "datei": "off_r1500.wav",
+      "rpm": 1483,
+      "last": "off",
+      "samples": 12619,
+      "loop_start": 0,
+      "loop_ende": 12619,
+      "grundton_hz": 49.45,
+      "quelle_s": [
+        11.965104166666666,
+        12.265104166666667
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 18.4
+    },
+    {
+      "datei": "off_r2800.wav",
+      "rpm": 2768,
+      "last": "off",
+      "samples": 17687,
+      "loop_start": 0,
+      "loop_ende": 17687,
+      "grundton_hz": 92.27,
+      "quelle_s": [
+        9.715104166666666,
+        10.115104166666665
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 11.0
+    },
+    {
+      "datei": "off_r3800.wav",
+      "rpm": 3717,
+      "last": "off",
+      "samples": 17819,
+      "loop_start": 0,
+      "loop_ende": 17819,
+      "grundton_hz": 123.91,
+      "quelle_s": [
+        8.315104166666666,
+        8.715104166666666
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 10.1
+    },
+    {
+      "datei": "off_r5000.wav",
+      "rpm": 4939,
+      "last": "off",
+      "samples": 17784,
+      "loop_start": 0,
+      "loop_ende": 17784,
+      "grundton_hz": 164.64,
+      "quelle_s": [
+        6.815104166666666,
+        7.215104166666666
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 23.3
+    },
+    {
+      "datei": "off_r6400.wav",
+      "rpm": 6511,
+      "last": "off",
+      "samples": 17915,
+      "loop_start": 0,
+      "loop_ende": 17915,
+      "grundton_hz": 217.02,
+      "quelle_s": [
+        5.215104166666666,
+        5.615104166666666
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 24.2
+    }
+  ],
+  "einzel": [
+    {
+      "datei": "start.wav",
+      "art": "start",
+      "samples": 72000,
+      "quelle_s": [
+        24.3390625,
+        25.8390625
+      ],
+      "gain_db": 0.0,
+      "rpm": 1992
+    }
+  ],
+  "referenz": "reference.wav",
+  "referenz_auszug_s": [
+    [
+      0.0,
+      4.27
+    ],
+    [
+      4.765104166666666,
+      13.265104166666667
+    ]
+  ]
+}

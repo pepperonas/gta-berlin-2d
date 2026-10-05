@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Motorsound-Profile (docs/audio.md). Sportwagen und Supercars nutzen die Sample-Bank 'v10', Hypercars die Bank 'v12' (data/audio/engine/<bank>/manifest.json); die Profile färben und verstimmen sie. Felder eines Presets lassen sich je Fahrzeug unter 'fahrzeuge' überschreiben.",
+  "_hinweis": "Motorsound-Profile (docs/audio.md). Bänke: 'v10' (Sportwagen, Supercars), 'v12' (Hypercars), 'r4' (Vierzylinder); die Profile färben und verstimmen sie. Felder eines Presets lassen sich je Fahrzeug unter 'fahrzeuge' überschreiben.",
   "mix": {
     "_hinweis": "engine = eigener Mischpult-Kanal der Motor-Samples (Spielerauto und Verkehr), stimmen = höchstens so viele Sample-Motoren gleichzeitig (das Spielerauto zählt mit und hat immer Vorrang), lod_px = ab dieser Entfernung nur noch ein Loop ohne Überblendung, hoerweite_px = Grenze der Hörbarkeit fremder Autos, doppler = Stärke des Dopplereffekts (1 = physikalisch).",
     "engine": 1.0,
@@ -11,20 +11,27 @@
     "tiefpass_fern_hz": 900.0
   },
   "zuordnung": {
-    "_hinweis": "Fahrzeugklasse (vehicles.json 'klasse') → Preset. Elektromotoren sind immer ausgenommen, Vier- und Dreizylinder stehen in 'ausgenommen' und behalten ihren Synthese-Klang.",
+    "_hinweis": "Fahrzeug → Preset: zuerst Überschreibung je Fahrzeug ('fahrzeuge'), dann Motortyp ('typen', null = Synthese), dann Klasse ('klassen'). Elektromotoren und 'ausgenommen' behalten immer den Synthese-Klang. Diesel, Zweitakter, luftgekühlter Boxer und V2 haben noch keine Bank.",
     "klassen": {
       "sport": "sport",
       "supercar": "supercar",
-      "hypercar": "hypercar"
+      "hypercar": "hypercar",
+      "pkw_klein": "kompakt",
+      "pkw_kompakt": "kompakt",
+      "pkw_mittel": "kompakt",
+      "suv": "kompakt"
     },
     "ausgenommen": [
-      "roadster",
-      "leichtcoupe",
-      "leichtbau",
-      "rallye",
-      "drift_coupe",
       "hypercar_elektro"
-    ]
+    ],
+    "typen": {
+      "diesel": null,
+      "diesel_sauger": null,
+      "diesel_lkw": null,
+      "zweitakt": null,
+      "boxer_luft": null,
+      "v2_drehmoment": null
+    }
   },
   "presets": {
     "sport": {
@@ -32,7 +39,15 @@
       "bank": "v10",
       "leerlauf": 900.0,
       "begrenzer": 7600.0,
-      "gaenge": [40.0, 66.0, 92.0, 120.0, 150.0, 185.0, 225.0],
+      "gaenge": [
+        40.0,
+        66.0,
+        92.0,
+        120.0,
+        150.0,
+        185.0,
+        225.0
+      ],
       "schalt_hoch": 0.93,
       "schalt_hoch_teillast": 0.55,
       "schalt_runter": 0.38,
@@ -54,7 +69,15 @@
       "bank": "v10",
       "leerlauf": 1000.0,
       "begrenzer": 8500.0,
-      "gaenge": [52.0, 82.0, 112.0, 142.0, 176.0, 212.0, 252.0],
+      "gaenge": [
+        52.0,
+        82.0,
+        112.0,
+        142.0,
+        176.0,
+        212.0,
+        252.0
+      ],
       "schalt_hoch": 0.95,
       "schalt_hoch_teillast": 0.55,
       "schalt_runter": 0.4,
@@ -76,7 +99,15 @@
       "bank": "v12",
       "leerlauf": 1150.0,
       "begrenzer": 9000.0,
-      "gaenge": [62.0, 98.0, 138.0, 180.0, 224.0, 272.0, 330.0],
+      "gaenge": [
+        62.0,
+        98.0,
+        138.0,
+        180.0,
+        224.0,
+        272.0,
+        330.0
+      ],
       "schalt_hoch": 0.96,
       "schalt_hoch_teillast": 0.6,
       "schalt_runter": 0.42,
@@ -92,16 +123,116 @@
       "gas_glaettung_s": 0.04,
       "begrenzer_hz": 17.0,
       "start": true
+    },
+    "kompakt": {
+      "_hinweis": "Alltags-Vierzylinder (Klein-, Kompakt-, Mittelklasse, SUV): Reihenvierzylinder vom Prüfstand (Bank r4), etwas gedeckt, keine Fehlzündungen.",
+      "bank": "r4",
+      "leerlauf": 850.0,
+      "begrenzer": 6300.0,
+      "gaenge": [
+        30.0,
+        52.0,
+        76.0,
+        100.0,
+        128.0,
+        160.0,
+        195.0
+      ],
+      "schalt_hoch": 0.8,
+      "schalt_hoch_teillast": 0.45,
+      "schalt_runter": 0.3,
+      "pitch": 1.0,
+      "tiefpass_hz": 6500.0,
+      "low_shelf_db": 1.0,
+      "high_shelf_db": -2.0,
+      "saettigung": 0.08,
+      "pop_chance": 0.0,
+      "pop_gain": 0.0,
+      "lautstaerke": 0.75,
+      "drehzahl_glaettung_s": 0.08,
+      "gas_glaettung_s": 0.07,
+      "begrenzer_hz": 10.0,
+      "start": true
+    },
+    "sport4": {
+      "_hinweis": "Vierzylinder-Sportler (Roadster, Leichtbau, Rallye, Drift-Coupé): derselbe 16V offen und rau, dreht hoch.",
+      "bank": "r4",
+      "leerlauf": 950.0,
+      "begrenzer": 7400.0,
+      "gaenge": [
+        42.0,
+        68.0,
+        95.0,
+        122.0,
+        152.0,
+        186.0,
+        222.0
+      ],
+      "schalt_hoch": 0.94,
+      "schalt_hoch_teillast": 0.55,
+      "schalt_runter": 0.38,
+      "pitch": 1.0,
+      "tiefpass_hz": 11000.0,
+      "low_shelf_db": 0.0,
+      "high_shelf_db": 1.5,
+      "saettigung": 0.22,
+      "pop_chance": 0.0,
+      "pop_gain": 0.0,
+      "lautstaerke": 0.9,
+      "drehzahl_glaettung_s": 0.05,
+      "gas_glaettung_s": 0.05,
+      "begrenzer_hz": 13.0,
+      "start": true
     }
   },
   "fahrzeuge": {
     "_hinweis": "Überschreibungen je Fahrzeug-id (vehicles.json); 'preset' wählt die Grundlage, alle anderen Felder wie in den Presets.",
-    "sportwagen_s": { "pitch": 0.94, "high_shelf_db": -1.5 },
-    "turbo_s": { "pitch": 0.86, "tiefpass_hz": 4200.0, "pop_chance": 0.15 },
-    "supercar_rwd": { "pitch": 0.95, "saettigung": 0.35, "pop_chance": 0.65 },
-    "hypercar": { "begrenzer": 7100.0, "pitch": 0.94, "low_shelf_db": 2.0, "lautstaerke": 0.86 },
-    "heckcoupe": { "pitch": 0.97 },
-    "gtcoupe": { "pitch": 0.84, "low_shelf_db": 4.0, "high_shelf_db": -4.0 },
-    "coupe": { "pitch": 0.92, "saettigung": 0.1 }
+    "sportwagen_s": {
+      "pitch": 0.94,
+      "high_shelf_db": -1.5
+    },
+    "turbo_s": {
+      "pitch": 0.86,
+      "tiefpass_hz": 4200.0,
+      "pop_chance": 0.15
+    },
+    "supercar_rwd": {
+      "pitch": 0.95,
+      "saettigung": 0.35,
+      "pop_chance": 0.65
+    },
+    "hypercar": {
+      "begrenzer": 7100.0,
+      "pitch": 0.94,
+      "low_shelf_db": 2.0,
+      "lautstaerke": 0.86
+    },
+    "heckcoupe": {
+      "pitch": 0.97
+    },
+    "gtcoupe": {
+      "pitch": 0.84,
+      "low_shelf_db": 4.0,
+      "high_shelf_db": -4.0
+    },
+    "coupe": {
+      "pitch": 0.92,
+      "saettigung": 0.1
+    },
+    "roadster": {
+      "preset": "sport4"
+    },
+    "leichtcoupe": {
+      "preset": "sport4"
+    },
+    "leichtbau": {
+      "preset": "sport4"
+    },
+    "rallye": {
+      "preset": "sport4"
+    },
+    "drift_coupe": {
+      "preset": "sport4"
+    }
   }
 }

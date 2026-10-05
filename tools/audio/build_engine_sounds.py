@@ -119,7 +119,79 @@ V12 = {
     # Referenz für A/B: Zug, Ausrollen und Fehlzündungen statt der ganzen 169 s (sonst 16 MB WAV)
     "referenz": [(20.5, 31.5), (79.5, 89.5), (98.5, 105.0), (137.0, 139.5)],
 }
-BANKS = {"v10": V10, "v12": V12}
+# r4 – Mercedes-Benz 190E 2.3-16V (Reihenvierzylinder) am Prüfstand, Chippy569 „Kickstarter Dyno Session“ (CC0,
+# Mikrofon DPA 4062 über dem Scheinwerfer, steht – kein Doppler). Vierzylinder-Viertakt: hellste Linie = Zündfrequenz
+# (Drehzahl/60 × 2) → Drehzahl = f0 × 30; bestätigt an den Festdrehzahlen 2500 (81 Hz) und 6500 (210 Hz, darüber
+# die Kurbelwellendrehung 105 Hz und ihre Vielfachen). Teile: Lastzug 68→236 Hz (Teil 0), Ausrollen 233→36 Hz
+# (Teil 1), Leerlauf 34 Hz (Teil 2), Start (Teil 3). Zeiten als (Teil, s).
+R4 = {
+    "teile": [
+        {"freesound": 162499, "sha256": "32976ff8599b600b3045d5db7f3336f8236134e959d13a27d372fd246db1f0a3",
+         "titel": "Acceleration Sweep - 4062"},
+        {"freesound": 162504, "sha256": "e7a6972d3ac0b7d38254af36dff5e306aa0458f3ac1e92845cdf469eae76fd37",
+         "titel": "17_MedSweep_D6"},
+        {"freesound": 162516, "sha256": "f2ace5576d090a92369bb5f82ed579be94783da5c300ce0cad18282e4c054c09",
+         "titel": "21_500_4062"},
+        {"freesound": 162526, "sha256": "44f14083114a59b7522c5bd63a1b2175bfabf2d506c21d314d218790bf1a021e",
+         "titel": "23_StartBig_4062"},
+    ],
+    "lizenz": "CC0 1.0",
+    "urheber": "Chippy569",
+    "rpm_per_hz": 30.0,
+    "annahme": "Reihenvierzylinder (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 30; Prüfstand, kein Doppler",
+    "verfolgung": "linie",
+    "doppler": False,
+    "loops": [
+        ("idle", (2, 3.0), (2, 3.8), 34.0, False),
+        ("r2000", (0, 1.15), (0, 1.35), 67.0),
+        ("r3300", (0, 1.95), (0, 2.1), 114.0),
+        ("r4300", (0, 2.40), (0, 2.58), 143.0),
+        ("r5300", (0, 2.95), (0, 3.12), 177.0),
+        ("r6300", (0, 3.42), (0, 3.60), 210.0),
+        ("r7000", (0, 3.92), (0, 4.10), 232.0),
+    ],
+    "schub": [
+        ("r1500", (1, 7.20), (1, 7.50), 51.0),
+        ("r2800", (1, 4.95), (1, 5.35), 95.0),
+        ("r3800", (1, 3.55), (1, 3.95), 128.0),
+        ("r5000", (1, 2.05), (1, 2.45), 167.0),
+        ("r6400", (1, 0.45), (1, 0.85), 216.0),
+    ],
+    "schub_abgeleitet": ["idle"],
+    "einzel": [
+        ("start", "start", (3, 0.10), (3, 1.60), (0.002, 0.25), ("peak", -1.0)),
+    ],
+    "referenz": [((0, 0.0), (0, 4.27)), ((1, 0.0), (1, 8.5))],
+}
+BANKS = {"v10": V10, "v12": V12, "r4": R4}
+GAP_S = 0.5
+
+
+def compose(name: str, teile: list) -> tuple[np.ndarray, list[float]]:
+    """Freesound-Teile (tools/audio/.cache/sfx, sonst laden; Prüfsumme) zu einer Zeitachse, mit Lücken dazwischen."""
+    cache = ROOT / "tools/audio/.cache/sfx"
+    cache.mkdir(parents=True, exist_ok=True)
+    parts, offsets, t = [], [], 0.0
+    for teil in teile:
+        sid = teil["freesound"]
+        hits = list(cache.glob(f"fs_{sid}.*"))
+        if not hits:
+            sys.path.insert(0, str(Path(__file__).parent))
+            import freesound as fs
+
+            meta = fs.info(sid)
+            path = cache / f"fs_{sid}.{meta['type']}"
+            path.write_bytes(fs.download(sid))
+        else:
+            path = hits[0]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != teil["sha256"]:
+            sys.exit(f"{name}: Prüfsumme von Freesound {sid} stimmt nicht ({digest})")
+        y = decode(path)
+        offsets.append(t)
+        parts += [y, np.zeros(int(GAP_S * SR))]
+        t += len(y) / SR + GAP_S
+    return np.concatenate(parts), offsets
 
 
 def decode(src: Path) -> np.ndarray:
@@ -296,15 +368,40 @@ def derive_off(loop: np.ndarray) -> np.ndarray:
     return off
 
 
+def resolve(cfg: dict, offsets: list[float]) -> dict:
+    """Zeiten der Form (Teil, s) auf die zusammengesetzte Zeitachse umrechnen."""
+    def tt(v):
+        return offsets[v[0]] + v[1] if isinstance(v, tuple) else v
+
+    out = dict(cfg)
+    out["loops"] = [(r[0], tt(r[1]), tt(r[2]), *r[3:]) for r in cfg["loops"]]
+    out["schub"] = [(r[0], tt(r[1]), tt(r[2]), *r[3:]) for r in cfg["schub"]]
+    out["einzel"] = [(r[0], r[1], tt(r[2]), tt(r[3]), *r[4:]) for r in cfg["einzel"]]
+    if cfg["referenz"] is not None:
+        out["referenz"] = [(tt(a), tt(b)) for a, b in cfg["referenz"]]
+    return out
+
+
 def build(name: str, cfg: dict) -> list:
-    src_path = ROOT / cfg["src"]
     out = ROOT / "data/audio/engine" / name
-    if not src_path.exists():
-        sys.exit(f"Referenz fehlt: {src_path}")
+    if "teile" in cfg:
+        y, offsets = compose(name, cfg["teile"])
+        cfg = resolve(cfg, offsets)
+        quelle = [
+            {**t, "url": f"https://freesound.org/s/{t['freesound']}/", "beginn_s": round(o, 3)}
+            for t, o in zip(cfg["teile"], offsets)
+        ]
+        sha = hashlib.sha256(b"".join(t["sha256"].encode() for t in cfg["teile"])).hexdigest()
+    else:
+        src_path = ROOT / cfg["src"]
+        if not src_path.exists():
+            sys.exit(f"Referenz fehlt: {src_path}")
+        y = decode(src_path)
+        quelle = cfg["src"]
+        sha = hashlib.sha256(src_path.read_bytes()).hexdigest()
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("*.wav"):
         old.unlink()
-    y = decode(src_path)
     linie = cfg["verfolgung"] == "linie"
     rph = cfg["rpm_per_hz"]
     dop = doppler if cfg["doppler"] else (lambda t: 1.0)
@@ -313,8 +410,9 @@ def build(name: str, cfg: dict) -> list:
     manifest = {
         "bank": name,
         "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
-        "quelle": cfg["src"],
-        "quelle_sha256": hashlib.sha256(src_path.read_bytes()).hexdigest(),
+        "quelle": quelle,
+        "quelle_sha256": sha,
+        **({"lizenz": cfg["lizenz"], "urheber": cfg["urheber"]} if "lizenz" in cfg else {}),
         "samplerate": SR,
         "drehzahl_annahme": cfg["annahme"],
         "loops": [],
@@ -340,10 +438,13 @@ def build(name: str, cfg: dict) -> list:
 
     for row in cfg["loops"]:
         if linie:
-            lname, t0, t1, f_seed = row
+            # optional fünfter Wert: glätten (Leerlauf nicht – er schwankt von Natur aus, die Verfolgung ist dort
+            # unsicher, wie beim V10)
+            lname, t0, t1, f_seed, *rest = row
+            sweep = rest[0] if rest else True
             t_l, f_l = line_track(y, t0, t1, f_seed)
-            coef = smooth_track(t_l, f_l, t0, t1, True)
-            notches, sweep = [], True
+            coef = smooth_track(t_l, f_l, t0, t1, sweep)
+            notches = []
         else:
             lname, t0, t1, notches, sweep = row
             coef = smooth_track(t_tr, f_tr, t0, t1, sweep)

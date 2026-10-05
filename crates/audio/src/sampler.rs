@@ -125,10 +125,28 @@ pub fn sfx_samples_on() -> bool {
     *ON.get_or_init(|| std::env::var("GTA_SFX_SAMPLES").map_or(true, |v| v != "0"))
 }
 
+/// Reihenvierzylinder (Mercedes 190E 2.3-16V am Prüfstand, Freesound/Chippy569, CC0)
+const R4: &[(&str, &[u8])] = bank_files!("r4":
+    "on_idle.wav",
+    "on_r2000.wav",
+    "on_r3300.wav",
+    "on_r4300.wav",
+    "on_r5300.wav",
+    "on_r6300.wav",
+    "on_r7000.wav",
+    "off_idle.wav",
+    "off_r1500.wav",
+    "off_r2800.wav",
+    "off_r3800.wav",
+    "off_r5000.wav",
+    "off_r6400.wav",
+    "start.wav",
+);
 /// Dateiliste einer Bank nach Namen.
 fn files_of(name: &str) -> &'static [(&'static str, &'static [u8])] {
     match name {
         "v12" => V12,
+        "r4" => R4,
         _ => V10,
     }
 }

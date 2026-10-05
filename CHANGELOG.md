@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Vierzylinder klingen nach einem echten Motor – neue Sample-Bank `r4` aus einer Prüfstands-Session
+  eines Mercedes 190E 2.3-16V (Freesound, CC0): Last- und echte Schub-Loops, Leerlauf, Anlassen. Klein-, Kompakt-,
+  Mittelklasse und SUV sowie die Vierzylinder-Sportler (Roadster, Rallye, Drift-Coupé …) nutzen sie; der Motortyp
+  entscheidet vor der Klasse, Diesel bleiben vorerst synthetisch.
+
 - Native Fassung: U-/S-Bahn, Straßenbahn und Glocken aus echten Aufnahmen – Fahrgeräusch und Grollen einer echten
   U-Bahn-Fahrt, Tunnelwind, Bremsquietschen, Schienenstöße, Druckluft, die Berliner Abfertigung („Zurückbleiben
   bitte“ mit Türwarnton), die Straßenbahnklingel vom Alexanderplatz und echte Kirchenglocken. Der Fahrmotor und die

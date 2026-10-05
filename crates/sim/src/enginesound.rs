@@ -19,6 +19,7 @@ use std::f64::consts::FRAC_PI_2;
 const PROFILES: &str = include_str!("../../../data/audio/engine_profiles.json");
 const BANK_V10: &str = include_str!("../../../data/audio/engine/v10/manifest.json");
 const BANK_V12: &str = include_str!("../../../data/audio/engine/v12/manifest.json");
+const BANK_R4: &str = include_str!("../../../data/audio/engine/r4/manifest.json");
 
 /// Tonhöhe eines Loops: tiefer klingt verwaschen, höher nach Spielzeug.
 pub const PITCH_MIN: f64 = 0.7;
@@ -168,6 +169,7 @@ pub struct Config {
     pub presets: Vec<Profile>,
     vehicles: HashMap<String, Profile>,
     classes: HashMap<String, String>,
+    types: HashMap<String, Option<String>>,
     excluded: Vec<String>,
     banks: Vec<Bank>,
 }
@@ -200,7 +202,9 @@ impl Config {
             "sport" => 0,
             "supercar" => 1,
             "hypercar" => 2,
-            _ => 3,
+            "sport4" => 3,
+            "kompakt" => 4,
+            _ => 5,
         });
         let classes: HashMap<String, String> = j["zuordnung"]["klassen"]
             .as_object()
@@ -208,6 +212,16 @@ impl Config {
             .iter()
             .map(|(k, v)| (k.clone(), v.as_str().expect("preset").into()))
             .collect();
+        // Motortyp → Preset (null = Synthese); Vorrang vor der Klasse
+        let types: HashMap<String, Option<String>> = j["zuordnung"]["typen"]
+            .as_object()
+            .map(|o| {
+                o.iter()
+                    .filter(|(k, _)| !k.starts_with('_'))
+                    .map(|(k, v)| (k.clone(), v.as_str().map(str::to_owned)))
+                    .collect()
+            })
+            .unwrap_or_default();
         let excluded = j["zuordnung"]["ausgenommen"]
             .as_array()
             .expect("ausgenommen")
@@ -239,6 +253,7 @@ impl Config {
             presets,
             vehicles,
             classes,
+            types,
             excluded,
             banks,
         }
@@ -255,14 +270,19 @@ impl Config {
     pub fn banks(&self) -> &[Bank] {
         &self.banks
     }
-    /// Profil eines Fahrzeugdatensatzes: Klasse → Preset, Überschreibung je id; Elektro und Ausnahmen: keins.
+    /// Profil eines Fahrzeugdatensatzes: Überschreibung je id, sonst Motortyp, sonst Klasse; Elektro und
+    /// Ausnahmen: keins.
     pub fn profile_for_vehicle(&self, v: &crate::vehdata::Vehicle) -> Option<&Profile> {
         if self.excluded.contains(&v.id) || v.engine.kind.contains("elektro") {
             return None;
         }
-        self.vehicles
-            .get(&v.id)
-            .or_else(|| self.classes.get(&v.class).and_then(|p| self.preset(p)))
+        if let Some(p) = self.vehicles.get(&v.id) {
+            return Some(p);
+        }
+        if let Some(t) = self.types.get(&v.engine.kind) {
+            return t.as_deref().and_then(|p| self.preset(p));
+        }
+        self.classes.get(&v.class).and_then(|p| self.preset(p))
     }
     /// Alle Profile für die Auswahl im Debug-Panel: Presets, dann Fahrzeuge mit Überschreibung (sortiert).
     pub fn all_profiles(&self) -> Vec<&Profile> {
@@ -274,7 +294,7 @@ impl Config {
 
 pub fn config() -> &'static Config {
     static C: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
-    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10, BANK_V12]))
+    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10, BANK_V12, BANK_R4]))
 }
 
 /// Motor-Samples an? `GTA_ENGINE_SAMPLES=0` schaltet zum Gegenhören auf den Synthese-Klang zurück.
@@ -689,14 +709,14 @@ mod tests {
                 .iter()
                 .map(|p| p.name.as_str())
                 .collect::<Vec<_>>(),
-            ["sport", "supercar", "hypercar"]
+            ["sport", "supercar", "hypercar", "sport4", "kompakt"]
         );
         assert_eq!(
             c.banks()
                 .iter()
                 .map(|b| b.name.as_str())
                 .collect::<Vec<_>>(),
-            ["v10", "v12"]
+            ["v10", "v12", "r4"]
         );
         for b in c.banks() {
             assert!(b.on.len() >= 4 && b.off.len() >= 4, "{}", b.name);
@@ -708,10 +728,23 @@ mod tests {
                     assert!(r > 1. && r <= 2.3, "{}: Lücke {r}", b.name);
                 }
             }
-            for k in [ShotKind::Blip, ShotKind::Pop] {
-                assert!(!b.shots_of(k).is_empty(), "{}: {k:?}", b.name);
+        }
+        // wer knallen darf, braucht echte Fehlzündungen; Gasstöße gibt es nur, wo die Aufnahme welche hat
+        for p in &c.presets {
+            if p.pop_chance > 0. {
+                assert!(
+                    !c.bank(&p.bank).shots_of(ShotKind::Pop).is_empty(),
+                    "{}",
+                    p.name
+                );
             }
         }
+        for name in ["v10", "v12"] {
+            assert!(!c.bank(name).shots_of(ShotKind::Blip).is_empty(), "{name}");
+        }
+        // der Vierzylinder hat Start, aber weder Gasstoß noch Fehlzündung (Prüfstand, Alltagsmotor)
+        let r4 = c.bank("r4");
+        assert!(!r4.shots_of(ShotKind::Start).is_empty() && r4.shots_of(ShotKind::Pop).is_empty());
         // v10 hat Start und Schalten aus der Aufnahme, der Prüfstand (v12) nicht
         let v10 = c.bank("v10");
         assert!(
@@ -731,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    fn only_six_plus_cylinder_combustion_sports_cars_get_samples() {
+    fn combustion_engines_get_their_bank_diesel_and_electric_stay_synth() {
         let c = config();
         let get = |id: &str| {
             let v = crate::vehdata::game_vehicle(id).unwrap_or_else(|| panic!("{id}"));
@@ -744,16 +777,28 @@ mod tests {
         );
         assert_eq!(get("hypercar").as_deref(), Some("hypercar/hypercar"));
         assert_eq!(get("sportwagen_s").as_deref(), Some("sport/sportwagen_s"));
+        // Vierzylinder: Alltag über die Klasse, Sportler über die Überschreibung – beide Bank r4
+        assert_eq!(get("kompakt").as_deref(), Some("kompakt"));
+        assert_eq!(get("kleinwagen").as_deref(), Some("kompakt"));
+        for id in ["roadster", "leichtcoupe", "rallye", "drift_coupe"] {
+            assert_eq!(get(id), Some(format!("sport4/{id}")), "{id}");
+            assert_eq!(
+                c.profile_for_vehicle(crate::vehdata::game_vehicle(id).unwrap())
+                    .unwrap()
+                    .bank,
+                "r4"
+            );
+        }
+        // Motortyp vor Klasse: der Diesel-Kombi bleibt Synthese, obwohl seine Klasse Vierzylinder-Benziner hat
+        assert_eq!(get("kombi").as_deref(), Some("kompakt"));
+        assert_eq!(get("familienkombi"), None, "Diesel");
         for id in [
             "hypercar_elektro",
-            "roadster",
-            "leichtcoupe",
-            "rallye",
-            "drift_coupe",
+            "e_kompakt",
+            "transporter_kasten",
+            "stadtbus",
+            "trabant",
         ] {
-            assert_eq!(get(id), None, "{id}");
-        }
-        for id in ["kompakt_benzin", "transporter_kasten", "stadtbus"] {
             if crate::vehdata::game_vehicle(id).is_some() {
                 assert_eq!(get(id), None, "{id}");
             }

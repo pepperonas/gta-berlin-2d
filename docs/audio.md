@@ -391,3 +391,27 @@ aus Titel und Ablauf geschlossen – bitte gegenhören.
 **Bahnsteuerung:** `TrainLoops` je Zug (eigener Zug, Zug am Bahnsteig, versetzt gestartet); mit Aufnahmen bekommt
 `TrainVoice` nur noch die Motorschicht. Glockenschläge sind verzögerte Einzelklänge (`Synth::sample_at`).
 Test `rail_loops_match_the_synth_layers` (Pegel ×1,2, Fahrmotor unverändert).
+
+### Phase 7a: Vierzylinder-Bank `r4`
+
+Quelle: Chippy569, „Kickstarter Dyno Session“ (Freesound, **CC0**) – ein **Mercedes-Benz 190E 2.3-16V**
+(Reihenvierzylinder) am Rollenprüfstand, Mikrofon über dem Scheinwerfer (steht, kein Doppler). Vier Teile werden
+zu einer Zeitachse zusammengesetzt (`build_engine_sounds.py`, `teile`, Zeiten als `(Teil, s)`):
+
+| Teil | Freesound | Inhalt | verwendet |
+|---|---|---|---|
+| 0 | 162499 „Acceleration Sweep - 4062“ | Lastzug, Linie 68 → 236 Hz | Last-Loops 2070–7030 1/min |
+| 1 | 162504 „17_MedSweep_D6“ | Ausrollen, 233 → 36 Hz | echte Schub-Loops 1480–6510 1/min |
+| 2 | 162516 „21_500_4062“ | Leerlauf, stetig 34 Hz | Leerlauf (≈ 1020 1/min, kalter 16V) |
+| 3 | 162526 „23_StartBig_4062“ | Anlassen | Start |
+
+**Drehzahl-Annahme:** Viertakt-Vierzylinder, hellste Linie = Zündfrequenz → Drehzahl = f0 × 30. Bestätigt an den
+Festdrehzahl-Aufnahmen derselben Session: „2500“ zeigt 81 Hz (2430 1/min), „6500“ zeigt 210 Hz und darüber die
+Kurbelwellendrehung 105 Hz mit ihren Vielfachen. Der Leerlauf wird wie beim V10 nicht geglättet (er schwankt von
+Natur aus, die Verfolgung bei 34 Hz ist unsicher); r3300 aus dem Fenster mit 25 statt 49 Cent Drift. Kein Gasstoß,
+keine Fehlzündungen (Prüfstand, Alltagsmotor).
+
+**Zuordnung (neu: Motortyp):** `zuordnung.typen` ordnet Motortypen zu und hat Vorrang vor der Klasse (`null` =
+Synthese). Klein-, Kompakt-, Mittelklasse und SUV → Preset `kompakt`; die Vierzylinder-Sportler (Roadster,
+Leichtcoupé, Leichtbau, Rallye, Drift-Coupé, bisher ausgenommen) → `sport4`. Diesel, Zweitakter, luftgekühlter Boxer
+und V2 behalten den Synthese-Klang, auch wenn ihre Klasse sonst den Vierzylinder bekäme (Diesel-Kombi).
