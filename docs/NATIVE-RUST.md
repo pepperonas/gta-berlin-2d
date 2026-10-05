@@ -2062,3 +2062,26 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
 - **Xbox:** Der Mac-Kachel-GPU kostet 4× MSAA fast nichts, einer Immediate-Mode-GPU wie der Series S kostet es
   Bandbreite. Für die Konsole ist „Mittel ohne MSAA“ (Bloom ½, weiche Schatten) die naheliegende Stufe – erst
   festlegen, wenn die Probe Zahlen liefert.
+
+## Grafik HD/Pixel: Phase 8 – Pixel-Modus (06.10.2026)
+
+- **Kleines Ziel:** `graphics::pixel_factor(h)` = rund(h / 270), mindestens 2 (1080p → 4, 1440p → 5, 720p → 3).
+  `Renderer::scene_size` teilt die Zeichengröße abgerundet; `rebuild_targets` baut Szenenziele, Pixel-Gruppe und –
+  im Pixel-Modus auf doppelte bzw. einfache Szenengröße verkleinert – Schattenmaske und Lichtkarte.
+- **Zwei Kameras:** `uniform`/`bind` (volle Größe) für Post, HUD, Vorschau; `scene_uniform`/`scene_bind` für
+  Schatten, Lichtkarte, Szene und Bloom. Im Pixel-Modus Maßstab / k, Bildgröße klein, Mitte auf das
+  Bildpunktraster gerastet (`round(p·s)/s`). Im HD-Pfad sind beide gleich – Aufnahme bildpunktgenau wie Phase 7.
+- **Palette (`engine/palette.rs`, reine Funktionen, getestet):** `parse`/`shipped` (32–48 Farben, `dither` 0…1),
+  `oklab`, `nearest` (Abstand in OKLab), `build_lut` (32³-Farbtabelle, sRGB-Eingang → Palettenfarbe), `bayer4`;
+  `shader_constants` stellt `PIXEL_DITHER`, `PIXEL_LUT` und die Bayer-Matrix voran (eine Quelle, Test).
+  Die Palette (43 Farben) ist von Hand aus `buildcolors.rs`/`mesh.rs` abgeleitet, plus Nacht- und Lichttöne.
+- **Zwei Durchgänge (`scenepass::PixelPass`):** `pixel_quant_fs` je kleinem Bildpunkt (Farbabstimmung, Kontur,
+  Streuung, Farbtabelle → `SceneTargets.pix`, Rgba8), dann `pixel_post_fs` ins Ausgabebild (ganzzahlig vergrößern,
+  mittig, schwarzer Rand). Erste Fassung rechnete alles je Bildschirmpunkt und war 0,7–0,9 ms langsamer als die
+  Ausgangsfassung; aufgeteilt ist sie schneller (s. u.). Gruppe 3: Tiefe (Bindung 2) und Farbtabelle (3D, Bindung 3).
+- **Kontur:** Tiefe ist im Pixel-Modus lesbar (eine Abtastung, `StoreOp::Store`); ein Nachbar mit Tiefe < 0,8 und
+  mehr als 0,04 näher → Bildpunkt zu 70 % dunkel (Dächer, Kronen, Autos, Figuren gegen den Boden).
+- **HD-Effekte aus:** `post_level` 0 (kein HDR-Bloom, keine weiche Schattenkante, Lichtkarte bis 1,0), kein MSAA.
+- **Kosten (abwechselnd gemessen, je dreimal, 2560 × 1440, gegen einen Build der Grafik-Phase 0):** Häuserblock
+  3,54 ms statt 4,03 ms, Boulevard 2,85 ms statt 3,51 ms. Bildvergleich: alle neun Szenen bei Zoom 1,2 und 2,6 unter
+  `docs/images/native/grafik/08-pixel/`.

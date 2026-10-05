@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 8 (native Fassung): **Pixel-Modus** (F8, Menü, Konsole `grafik pixel`). Die Szene
+  entsteht in grober Auflösung (ein Bildpunkt = 4 Bildschirmpunkte bei 1080p, 5 bei 1440p) und wird ganzzahlig
+  vergrößert, Rest als schwarzer Rand. Feste Palette mit 43 Farben (`data/gfx/palette.json`), Bayer-Streuung
+  (Stärke in derselben Datei), dunkle Konturen an Dächern, Kronen, Autos und Figuren, Kamera rastet auf das
+  Bildpunktraster (keine flimmernden Kanten beim Fahren). HD-Effekte (Bloom, weiche Schatten, Kantenglättung) sind
+  aus. Schneller als die Darstellung vor der Überarbeitung (Häuserblock 3,5 statt 4,0 ms, Boulevard 2,9 statt 3,5 ms).
 - Grafik-Überarbeitung, Phase 7 (native Fassung): **Licht und Nachbearbeitung**. Tonemapping nach AgX (Belichtung
   so gewählt, dass Mitteltöne bleiben; Spitzlichter laufen weich aus statt hart abzuschneiden), **Bloom aus dem
   HDR-Bild** (Schwelle → ½ → ¼, nachts stärker – Fenster, Laternen und Scheinwerfer glühen), Laternenlicht darf über

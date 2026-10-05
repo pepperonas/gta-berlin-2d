@@ -1818,5 +1818,261 @@
     }
    }
   }
+ },
+ "08-pixel": {
+  "pixel": {
+   "autos": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.187,
+      "p95_ms": 1.335
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 1.713,
+      "p95_ms": 1.983
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.192,
+      "p95_ms": 1.409
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 1.703,
+      "p95_ms": 1.857
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "bahnhof": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.517,
+      "p95_ms": 1.762
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 4.321,
+      "p95_ms": 4.549
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.502,
+      "p95_ms": 1.755
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 3.829,
+      "p95_ms": 4.028
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "block": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.783,
+      "p95_ms": 2.26
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 3.854,
+      "p95_ms": 4.264
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.785,
+      "p95_ms": 2.453
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 3.544,
+      "p95_ms": 3.875
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "boulevard": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.973,
+      "p95_ms": 5.355
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.914,
+      "p95_ms": 3.176
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.578,
+      "p95_ms": 5.816
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.905,
+      "p95_ms": 3.406
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "leute": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.639,
+      "p95_ms": 1.87
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.708,
+      "p95_ms": 3.337
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.726,
+      "p95_ms": 1.871
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.683,
+      "p95_ms": 3.208
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "park": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.46,
+      "p95_ms": 2.884
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 3.431,
+      "p95_ms": 3.836
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.763,
+      "p95_ms": 5.199
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.743,
+      "p95_ms": 3.395
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "regennacht": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.915,
+      "p95_ms": 2.379
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 5.281,
+      "p95_ms": 5.944
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 3.369,
+      "p95_ms": 5.773
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 4.05,
+      "p95_ms": 4.508
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "schnee": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.97,
+      "p95_ms": 4.378
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 4.942,
+      "p95_ms": 5.173
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.994,
+      "p95_ms": 2.338
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 4.397,
+      "p95_ms": 5.169
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "spree": {
+    "1.2": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.744,
+      "p95_ms": 7.383
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 2.192,
+      "p95_ms": 2.555
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    },
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 1.72,
+      "p95_ms": 2.876
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 1.925,
+      "p95_ms": 2.216
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   }
+  }
  }
 }

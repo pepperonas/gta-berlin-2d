@@ -173,7 +173,13 @@ Ursprünglicher Entwurf:
 - Tonemapping (Vorschlag AgX) im Post-Pass, Grade neu abgestimmt; Bloom aus der HDR-Szene (Downsample-Kette ½/¼);
   Schattenmaske gefiltert; nasse Straßen über Roughness; alles hinter Qualitätsstufen; Niederschlag-Kosten prüfen.
 
-## Phase 8 – Pixel-Modus (≈ 2 Tage)
+## Phase 8 – Pixel-Modus ✅ (06.10.2026)
+
+Umgesetzt wie entworfen (kleines Ziel, Tiefe als Textur, Kamera-Einrasten, Kontur, 43-Farben-Palette mit 32³-LUT,
+Bayer 4×4, ganzzahliges Vergrößern mit Rand, HD-Effekte aus); Palette/LUT/Quantisierung in `engine/palette.rs`
+getestet. Zusätzlich: Quantisieren in Szenengröße, nur das Vergrößern in voller Größe (sonst langsamer als vorher).
+
+Ursprünglicher Entwurf:
 
 - Kleines Ziel (Standard: Bildpunkt = 3–4 Bildschirmpunkte bei 1080p), Tiefe als Textur, Kamera-Einrasten im Uniform,
   Kontur-Pass über Tiefensprünge, LUT 32–48 Farben (handkuratiert aus `buildcolors.rs` und `mesh.rs`, Datei

@@ -8,6 +8,7 @@ mod lightpass;
 mod materials;
 pub use materials::MANIFEST as MATERIAL_MANIFEST;
 pub mod pad;
+mod palette;
 mod renderer;
 mod scenepass;
 pub mod vehatlas;

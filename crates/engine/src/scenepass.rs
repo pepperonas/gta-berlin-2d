@@ -8,6 +8,8 @@ use winit::dpi::PhysicalSize;
 
 /// Format des Szenenziels: linear, mit Reserve über 1 (ab Phase 7 HDR).
 pub(crate) const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+/// Quantisiertes Bild des Pixel-Modus (Palettenwerte, sRGB-kodiert gespeichert)
+pub(crate) const PIXEL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub(crate) const MESH_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x3,2=>Float32x3,3=>Float32x2,4=>Float32x2,5=>Float32,6=>Float32];
@@ -235,6 +237,9 @@ pub(crate) struct SceneTargets {
     pub quarter: wgpu::TextureView,
     pub half_bind: wgpu::BindGroup,
     pub quarter_bind: wgpu::BindGroup,
+    /// Pixel-Modus: fertig quantisiertes Bild (sRGB-Werte der Palette) in Szenengröße
+    pub pix: wgpu::TextureView,
+    pub pix_bind: wgpu::BindGroup,
 }
 
 impl SceneTargets {
@@ -296,15 +301,168 @@ impl SceneTargets {
         let (w, h) = (size.width.max(2), size.height.max(2));
         let half = make_sized("Bloom ½", SCENE_FORMAT, 1, sampled, w / 2, h / 2);
         let quarter = make_sized("Bloom ¼", SCENE_FORMAT, 1, sampled, w / 4, h / 4);
+        let pix = make("Pixelbild", PIXEL_FORMAT, 1, sampled);
         Self {
             color,
             resolve,
-            depth: make("Szenentiefe", DEPTH_FORMAT, samples, attach),
+            // eine Abtastung: Tiefe auch lesbar (Konturen im Pixel-Modus)
+            depth: make(
+                "Szenentiefe",
+                DEPTH_FORMAT,
+                samples,
+                if samples == 1 { sampled } else { attach },
+            ),
             post: bind("Nachbearbeitung", &image),
             half_bind: bind("Bloom ½", &half),
             quarter_bind: bind("Bloom ¼", &quarter),
+            pix_bind: bind("Pixelbild", &pix),
             half,
             quarter,
+            pix,
         }
+    }
+}
+
+/// Pixel-Modus (Phase 8): Konturen an Tiefensprüngen, Bayer-Streuung und Farbtabelle der Palette (`palette.rs`) je
+/// kleinem Bildpunkt, danach ganzzahlig vergrößert und mit Rand ins Ausgabebild (der teure Teil läuft nur auf 1/k²
+/// der Bildpunkte). Gruppe 3: Tiefe (Bindung 2) und
+/// Farbtabelle (Bindung 3) – andere Bindungen als der Bloom derselben Gruppe im HD-Post.
+pub(crate) struct PixelPass {
+    pub layout: wgpu::BindGroupLayout,
+    /// je kleinem Bildpunkt: Kontur, Streuung, Palette → `SceneTargets.pix`
+    pub quant: wgpu::RenderPipeline,
+    /// ins Ausgabebild: nur noch ganzzahlig vergrößern und Rand
+    pub pipeline: wgpu::RenderPipeline,
+    lut: wgpu::TextureView,
+}
+impl PixelPass {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        cx: &lightpass::Ctx,
+        camera_layout: &wgpu::BindGroupLayout,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Pixel-Modus"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let n = crate::palette::LUT as u32;
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Palette (Farbtabelle)"),
+            size: wgpu::Extent3d {
+                width: n,
+                height: n,
+                depth_or_array_layers: n,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &crate::palette::build_lut(&crate::palette::shipped()),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(n * 4),
+                rows_per_image: Some(n),
+            },
+            wgpu::Extent3d {
+                width: n,
+                height: n,
+                depth_or_array_layers: n,
+            },
+        );
+        let pipe_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Pixel-Nachbearbeitung"),
+            bind_group_layouts: &[
+                Some(camera_layout),
+                Some(cx.atlas_layout),
+                None,
+                Some(&layout),
+            ],
+            immediate_size: 0,
+        });
+        let pipeline = pipeline(
+            &lightpass::Ctx {
+                layout: &pipe_layout,
+                ..*cx
+            },
+            "Pixel-Nachbearbeitung",
+            "full_vs",
+            "pixel_post_fs",
+            &[],
+            format,
+            1,
+            None,
+            false,
+            wgpu::CompareFunction::Always,
+        );
+        let quant = lightpass::Ctx {
+            layout: &pipe_layout,
+            ..*cx
+        }
+        .pipeline(
+            "Pixel: Palette",
+            "full_vs",
+            "pixel_quant_fs",
+            &[],
+            PIXEL_FORMAT,
+            wgpu::BlendState::REPLACE,
+            None,
+            1,
+        );
+        Self {
+            layout,
+            quant,
+            pipeline,
+            lut: texture.create_view(&Default::default()),
+        }
+    }
+    /// Gruppe 3 zur Tiefe des aktuellen Szenenziels (nur mit einer Abtastung lesbar).
+    pub fn bind(&self, device: &wgpu::Device, depth: &wgpu::TextureView) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Pixel-Modus"),
+            layout: &self.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.lut),
+                },
+            ],
+        })
     }
 }

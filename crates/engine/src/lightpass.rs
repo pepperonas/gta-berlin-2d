@@ -36,6 +36,7 @@ pub(crate) struct Composites {
     pub bloom: wgpu::RenderPipeline,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Ctx<'a> {
     pub device: &'a wgpu::Device,
     pub layout: &'a wgpu::PipelineLayout,

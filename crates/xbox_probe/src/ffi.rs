@@ -119,7 +119,11 @@ pub unsafe extern "C" fn probe_start(
         } {
             Ok(surface) => {
                 steps.push("Oberfläche am SwapChainPanel: angelegt".into());
-                checkpoint(&dir, &steps, "Adapter, Gerät und Last aufbauen (Probe::new)");
+                checkpoint(
+                    &dir,
+                    &steps,
+                    "Adapter, Gerät und Last aufbauen (Probe::new)",
+                );
                 Probe::new(&instance, surface, width, height, steps.clone())
             }
             Err(e) => Err(anyhow::anyhow!("Oberfläche: {e}")),

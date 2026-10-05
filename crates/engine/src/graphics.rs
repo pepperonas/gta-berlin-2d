@@ -93,6 +93,12 @@ impl GraphicsSettings {
     }
 }
 
+/// Größe eines Bildpunkts im Pixel-Modus (Bildschirmpunkte je Bildpunkt): rund 270 Zeilen, also 4 bei 1080p,
+/// 5 bei 1440p, 3 bei 720p, nie unter 2.
+pub fn pixel_factor(height: u32) -> u32 {
+    ((height as f32 / 270.).round() as u32).max(2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,6 +116,14 @@ mod tests {
         assert_eq!(l(GraphicsMode::Hd, Quality::Mittel), 1);
         assert_eq!(l(GraphicsMode::Hd, Quality::Niedrig), 0);
         assert_eq!(l(GraphicsMode::Pixel, Quality::Hoch), 0);
+    }
+    #[test]
+    fn pixel_size_follows_the_screen() {
+        assert_eq!(pixel_factor(1080), 4);
+        assert_eq!(pixel_factor(1440), 5);
+        assert_eq!(pixel_factor(720), 3);
+        assert_eq!(pixel_factor(2160), 8);
+        assert_eq!(pixel_factor(200), 2);
     }
     #[test]
     fn names_round_trip() {

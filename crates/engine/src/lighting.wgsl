@@ -267,3 +267,47 @@ fn bloom_src(uv: vec2<f32>) -> vec3<f32> {
     }
     return vec4(clamp(sum * strength, vec3(0.0), vec3(1.0)), 1.0);
 }
+
+// --- Pixel-Modus (Phase 8) ----------------------------------------------------------------------------------------
+// Das kleine Szenenbild (Gruppe 1) ganzzahlig vergrößert und mittig mit schwarzem Rand ins Ausgabebild; je Bildpunkt
+// Kontur an Tiefensprüngen (eine näher liegende Kante daneben: Dach, Krone, Auto über dem Boden), Farbabstimmung,
+// Bayer-4×4-Streuung und die Farbtabelle der Palette (palette.rs). camera = volle Ausgabegröße.
+@group(3) @binding(2) var pixel_depth: texture_depth_2d;
+@group(3) @binding(3) var pixel_lut: texture_3d<f32>;
+fn srgb_encode(c: vec3<f32>) -> vec3<f32> {
+    return select(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c > vec3(0.0031308));
+}
+// BAYER4 stellt palette.rs voran (−0,5…0,5, zeilenweise)
+fn bayer4(p: vec2<i32>) -> f32 {
+    var m = BAYER4;
+    return m[(p.y & 3) * 4 + (p.x & 3)];
+}
+// je kleinem Bildpunkt (Ziel = Szenengröße): Farbabstimmung, Kontur, Streuung, Palette; Ausgabe sRGB-Werte
+@fragment fn pixel_quant_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let dims = vec2<i32>(textureDimensions(atlas));
+    let q = vec2<i32>(floor(in.position.xy));
+    let c = textureLoad(atlas, q, 0).rgb * grade_factor((vec2<f32>(q) + 0.5) / vec2<f32>(dims));
+    var s = srgb_encode(clamp(c, vec3(0.0), vec3(1.0)));
+    // Kontur: ein Nachbar liegt deutlich näher (Tiefe = Lage; Boden 0,85–0,98, Dächer/Kronen ~0,45)
+    let d0 = textureLoad(pixel_depth, q, 0);
+    var edge = false;
+    let n = array<vec2<i32>, 4>(vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1));
+    for (var i = 0; i < 4; i++) {
+        let dn = textureLoad(pixel_depth, clamp(q + n[i], vec2(0), dims - 1), 0);
+        if dn < 0.8 && d0 - dn > 0.04 { edge = true; }
+    }
+    if edge { s = mix(s, vec3(0.05, 0.06, 0.09), 0.7); }
+    // Streuung um eine Palettenstufe (≈ 1/7 des Tonumfangs) · Stärke
+    s += bayer4(q) * PIXEL_DITHER / 7.0;
+    let idx = vec3<i32>(clamp(floor(s * PIXEL_LUT), vec3(0.0), vec3(PIXEL_LUT - 1.0)));
+    return vec4(textureLoad(pixel_lut, idx, 0).rgb, 1.0);
+}
+// ins Ausgabebild: ganzzahlig vergrößert, mittig, schwarzer Rand (Gruppe 1 = quantisiertes Bild)
+@fragment fn pixel_post_fs(in: FullOut) -> @location(0) vec4<f32> {
+    let fd = vec2<f32>(textureDimensions(atlas));
+    let k = max(floor(min(camera.viewport.x / fd.x, camera.viewport.y / fd.y)), 1.0);
+    let off = floor((camera.viewport - fd * k) * 0.5);
+    let p = floor((in.position.xy - off) / k);
+    if p.x < 0.0 || p.y < 0.0 || p.x >= fd.x || p.y >= fd.y { return vec4(0.0, 0.0, 0.0, 1.0); }
+    return vec4(linear_color(textureLoad(atlas, vec2<i32>(p), 0).rgb), 1.0);
+}

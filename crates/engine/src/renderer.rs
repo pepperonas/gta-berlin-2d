@@ -2,7 +2,7 @@ use crate::{
     Body, LightSource, Lighting, atlas,
     camera::Camera,
     gputime::GpuTimer,
-    graphics::GraphicsSettings,
+    graphics::{self, GraphicsMode, GraphicsSettings},
     hud::{self, HudItem, MapInset},
     lightpass, materials,
     scenepass::{self, ScenePipes, SceneTargets},
@@ -44,6 +44,13 @@ pub(crate) struct Renderer {
     /// Nachbearbeitung: Szenenbild → Ausgabebild (Farbabstimmung, Vignette)
     post_pipeline: wgpu::RenderPipeline,
     bloom: scenepass::Bloom,
+    /// Pixel-Modus: Nachbearbeitung und ihre Gruppe 3 (Tiefe + Farbtabelle; nur bei einer Abtastung)
+    pixel: scenepass::PixelPass,
+    pixel_bind: Option<wgpu::BindGroup>,
+    /// Kamera der Szene: im Pixel-Modus kleines Ziel, gröberer Maßstab, Lage auf das Bildpunktraster gerastet;
+    /// Nachbearbeitung und HUD behalten `uniform`/`bind` (volle Größe)
+    scene_uniform: wgpu::Buffer,
+    scene_bind: wgpu::BindGroup,
     /// Tiefe des HUD-Durchgangs (Minikarte), eine Abtastung
     hud_depth: wgpu::TextureView,
     silhouettes: Option<wgpu::Buffer>,
@@ -202,6 +209,20 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: uniform.as_entire_binding(),
+            }],
+        });
+        let scene_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Kamera der Szene"),
+            size: UNIFORM_BYTES,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let scene_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Kamera der Szene"),
+            layout: &camera_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: scene_uniform.as_entire_binding(),
             }],
         });
         let map_uniform = device.create_buffer(&wgpu::BufferDescriptor {
@@ -449,6 +470,7 @@ impl Renderer {
             immediate_size: 0,
         });
         let bloom = scenepass::Bloom::new(&cx);
+        let pixel = scenepass::PixelPass::new(&device, &queue, &cx, &camera_layout, config.format);
         let post_pipeline = scenepass::pipeline(
             &lightpass::Ctx {
                 layout: &post_layout,
@@ -505,6 +527,10 @@ impl Renderer {
             map_pipeline,
             post_pipeline,
             bloom,
+            pixel_bind: None,
+            pixel,
+            scene_uniform,
+            scene_bind,
             hud_depth,
             silhouettes: None,
             silhouette_count: 0,
@@ -677,6 +703,7 @@ impl Renderer {
             return;
         }
         let samples = graphics.msaa();
+        let mode_changed = graphics.mode != self.graphics.mode;
         self.graphics = graphics;
         if samples != self.pipes.samples {
             let cx = self.ctx();
@@ -685,14 +712,45 @@ impl Renderer {
                 ..cx
             };
             self.pipes = ScenePipes::new(&cx, &tile_cx, samples);
-            self.targets = SceneTargets::new(
-                &self.device,
-                &self.atlas_layout,
-                &self.atlas_sampler,
-                self.size,
-                samples,
-            );
         }
+        if samples != self.pipes.samples || mode_changed || self.pixel_bind.is_none() {
+            self.rebuild_targets();
+        }
+    }
+    /// Größe des Szenenziels: volle Zeichengröße, im Pixel-Modus geteilt durch die Bildpunktgröße (abgerundet, der
+    /// Rest wird Rand).
+    fn scene_size(&self) -> PhysicalSize<u32> {
+        if self.graphics.mode != GraphicsMode::Pixel {
+            return self.size;
+        }
+        let k = graphics::pixel_factor(self.size.height);
+        PhysicalSize::new((self.size.width / k).max(1), (self.size.height / k).max(1))
+    }
+    fn rebuild_targets(&mut self) {
+        self.targets = SceneTargets::new(
+            &self.device,
+            &self.atlas_layout,
+            &self.atlas_sampler,
+            self.scene_size(),
+            self.pipes.samples,
+        );
+        self.pixel_bind =
+            (self.pipes.samples == 1).then(|| self.pixel.bind(&self.device, &self.targets.depth));
+        // Schattenmaske und Lichtkarte: im HD-Pfad volle bzw. halbe Zeichengröße; im Pixel-Modus reicht die
+        // doppelte bzw. einfache Größe des kleinen Szenenziels (spart ~95 % der Bildpunkte)
+        let (w, h) = if self.graphics.mode == GraphicsMode::Pixel {
+            let s = self.scene_size();
+            (s.width * 2, s.height * 2)
+        } else {
+            (self.size.width, self.size.height)
+        };
+        let cx = lightpass::Ctx {
+            device: &self.device,
+            layout: &self.layout,
+            atlas_layout: &self.atlas_layout,
+            shader: &self.shader,
+        };
+        self.light.resize(&cx, w, h);
     }
     fn ctx(&self) -> lightpass::Ctx<'_> {
         lightpass::Ctx {
@@ -781,13 +839,7 @@ impl Renderer {
         self.size = size;
         if self.drawable() {
             self.hud_depth = depth_view(&self.device, size);
-            self.targets = SceneTargets::new(
-                &self.device,
-                &self.atlas_layout,
-                &self.atlas_sampler,
-                size,
-                self.pipes.samples,
-            );
+            self.rebuild_targets();
             if let Some(f) = self.fixed {
                 let view = offscreen_view(&self.device, self.config.format, f);
                 if let Some((_, bind)) = &mut self.preview {
@@ -796,13 +848,6 @@ impl Renderer {
                 }
                 self.offscreen = Some(view);
             }
-            let cx = lightpass::Ctx {
-                device: &self.device,
-                layout: &self.layout,
-                atlas_layout: &self.atlas_layout,
-                shader: &self.shader,
-            };
-            self.light.resize(&cx, size.width, size.height);
         }
     }
     fn draw_scene(
@@ -842,7 +887,7 @@ impl Renderer {
                 })],
                 ..Default::default()
             });
-            pass.set_bind_group(0, &self.bind, &[]);
+            pass.set_bind_group(0, &self.scene_bind, &[]);
             pass.set_bind_group(1, &self.atlas_bind, &[]);
             pass.set_pipeline(&self.light.shadow);
             for tile in self.tiles.values().filter(|t| t.bounds.intersects(casters)) {
@@ -888,13 +933,14 @@ impl Renderer {
                 .as_ref()
                 .filter(|_| self.light.light_count > 0)
             {
-                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_bind_group(0, &self.scene_bind, &[]);
                 pass.set_bind_group(1, &self.atlas_bind, &[]);
                 pass.set_pipeline(&self.light.light);
                 pass.set_vertex_buffer(0, lights.slice(..));
                 pass.draw(0..6, 0..self.light.light_count);
             }
         }
+        let pixel_post = self.graphics.mode == GraphicsMode::Pixel && self.pixel_bind.is_some();
         // 3) Bild: Karte, Schatten auf den Boden, Bäume/Decals, bewegte Objekte, dann das Licht
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Berlin frame"),
@@ -923,13 +969,18 @@ impl Renderer {
                 view: &self.targets.depth,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.),
-                    store: wgpu::StoreOp::Discard,
+                    // der Pixel-Modus liest die Tiefe für die Konturen
+                    store: if pixel_post {
+                        wgpu::StoreOp::Store
+                    } else {
+                        wgpu::StoreOp::Discard
+                    },
                 }),
                 stencil_ops: None,
             }),
             ..Default::default()
         });
-        pass.set_bind_group(0, &self.bind, &[]);
+        pass.set_bind_group(0, &self.scene_bind, &[]);
         pass.set_bind_group(1, &self.atlas_bind, &[]);
         pass.set_bind_group(2, &self.materials, &[]);
         pass.set_pipeline(&self.pipes.tiles);
@@ -1019,7 +1070,7 @@ impl Renderer {
                     })],
                     ..Default::default()
                 });
-                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_bind_group(0, &self.scene_bind, &[]);
                 pass.set_bind_group(1, src, &[]);
                 pass.set_pipeline(pipe);
                 pass.draw(0..3, 0..1);
@@ -1043,6 +1094,27 @@ impl Renderer {
                     wgpu::LoadOp::Load,
                 );
             }
+        }
+        // 3c) Pixel-Modus: Palette je kleinem Bildpunkt
+        if let Some(bind) = self.pixel_bind.as_ref().filter(|_| pixel_post) {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Pixel: Palette"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.targets.pix,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            pass.set_bind_group(0, &self.bind, &[]);
+            pass.set_bind_group(1, &self.targets.post, &[]);
+            pass.set_bind_group(3, bind, &[]);
+            pass.set_pipeline(&self.pixel.quant);
+            pass.draw(0..3, 0..1);
         }
         // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1069,9 +1141,18 @@ impl Renderer {
         });
         // 4a) Szenenbild ins Ausgabebild (Farbabstimmung, Vignette)
         pass.set_bind_group(0, &self.bind, &[]);
-        pass.set_bind_group(1, &self.targets.post, &[]);
-        pass.set_bind_group(3, &self.targets.half_bind, &[]);
-        pass.set_pipeline(&self.post_pipeline);
+        match self.pixel_bind.as_ref().filter(|_| pixel_post) {
+            Some(bind) => {
+                pass.set_bind_group(1, &self.targets.pix_bind, &[]);
+                pass.set_bind_group(3, bind, &[]);
+                pass.set_pipeline(&self.pixel.pipeline);
+            }
+            None => {
+                pass.set_bind_group(1, &self.targets.post, &[]);
+                pass.set_bind_group(3, &self.targets.half_bind, &[]);
+                pass.set_pipeline(&self.post_pipeline);
+            }
+        }
         pass.draw(0..3, 0..1);
         let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
             return;
@@ -1262,6 +1343,24 @@ impl Renderer {
         uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
         self.queue
             .write_buffer(&self.uniform, 0, bytemuck::cast_slice(&uniform));
+        // Szene: im Pixel-Modus kleines Ziel, Maßstab / k, Mitte auf das Bildpunktraster gerastet (sonst flimmern
+        // Kanten beim Fahren um einen Bildpunkt hin und her)
+        if self.graphics.mode == GraphicsMode::Pixel {
+            let small = self.scene_size();
+            let k = self.size.width as f32 / small.width as f32;
+            let k = k
+                .min(self.size.height as f32 / small.height as f32)
+                .floor()
+                .max(1.);
+            uniform[2] /= k;
+            let s = uniform[2];
+            uniform[0] = (uniform[0] * s).round() / s;
+            uniform[1] = (uniform[1] * s).round() / s;
+            uniform[4] = small.width as f32;
+            uniform[5] = small.height as f32;
+        }
+        self.queue
+            .write_buffer(&self.scene_uniform, 0, bytemuck::cast_slice(&uniform));
         let view = frame
             .as_ref()
             .map(|f| f.texture.create_view(&Default::default()));
@@ -1324,6 +1423,7 @@ pub(crate) fn shader_source() -> String {
         atlas::shader_constants().as_str(),
         crate::facade::shader_constants().as_str(),
         crate::vehatlas::shader_constants().as_str(),
+        crate::palette::shader_constants().as_str(),
         include_str!("scene.wgsl"),
         include_str!("lighting.wgsl"),
         include_str!("hud.wgsl"),
