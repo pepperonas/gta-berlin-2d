@@ -2,6 +2,13 @@
   "_hinweis": "Erzeugt von tools/audio/build_sfx.py aus tools/audio/sfx_recipes.json – nicht von Hand ändern.",
   "samplerate": 48000,
   "klaenge": {
+    "air_hiss": {
+      "zweck": "Druckluft: Bremse löst, Türen arbeiten",
+      "dateien": [
+        "air_hiss_1.wav"
+      ],
+      "quelle": "fs_457294"
+    },
     "amb_bar": {
       "zweck": "Kneipe: Stimmen, Gläser, Lachen (Schleife)",
       "dateien": [
@@ -72,6 +79,15 @@
       ],
       "quelle": "fs_438876"
     },
+    "bell": {
+      "zweck": "Kirchenglocke: ein Schlag",
+      "dateien": [
+        "bell_1.wav",
+        "bell_2.wav",
+        "bell_3.wav"
+      ],
+      "quelle": "fs_458297"
+    },
     "carjack": {
       "zweck": "Fahrer herausziehen",
       "dateien": [
@@ -103,6 +119,13 @@
       "weitere_quellen": [
         "fs_807437"
       ]
+    },
+    "depart": {
+      "zweck": "Abfertigung Berliner U-Bahn: „Zurückbleiben bitte“, dann Türwarnton",
+      "dateien": [
+        "depart_1.wav"
+      ],
+      "quelle": "fs_242495"
     },
     "door": {
       "zweck": "Autotür (ein- und aussteigen)",
@@ -213,6 +236,17 @@
         "punch_5.wav"
       ],
       "quelle": "kenney_impact"
+    },
+    "rail_joint": {
+      "zweck": "Schienenstoß unter einer Achse",
+      "dateien": [
+        "rail_joint_1.wav",
+        "rail_joint_2.wav",
+        "rail_joint_3.wav",
+        "rail_joint_4.wav",
+        "rail_joint_5.wav"
+      ],
+      "quelle": "fs_207134"
     },
     "rain_roof": {
       "zweck": "Regen aufs Autodach, innen (Schleife)",
@@ -398,6 +432,27 @@
         "tire_wet_1.wav"
       ],
       "quelle": "fs_464988"
+    },
+    "train_roll": {
+      "zweck": "U-/S-Bahn: Fahrgeräusch im Wagen (Schleife)",
+      "dateien": [
+        "train_roll_1.wav"
+      ],
+      "quelle": "fs_213891"
+    },
+    "train_rumble": {
+      "zweck": "Bahn: tiefes Grollen (Schleife, auch Hochbahn draußen)",
+      "dateien": [
+        "train_rumble_1.wav"
+      ],
+      "quelle": "fs_213891"
+    },
+    "tram_bell": {
+      "zweck": "Straßenbahnklingel (Berlin, Alexanderplatz)",
+      "dateien": [
+        "tram_bell_1.wav"
+      ],
+      "quelle": "fs_543825"
     },
     "ui": {
       "zweck": "Menü: Auswahl, Bestätigen",
@@ -682,6 +737,42 @@
       "seite": "https://freesound.org/people/Samot_Ekschotz/sounds/375999/",
       "lizenz": "CC0 1.0",
       "urheber": "Samot_Ekschotz"
+    },
+    "fs_213891": {
+      "titel": "London Underground: full train journey through tunnel",
+      "seite": "https://freesound.org/people/peridactyloptrix/sounds/213891/",
+      "lizenz": "CC0 1.0",
+      "urheber": "peridactyloptrix"
+    },
+    "fs_207134": {
+      "titel": "TravellingOnMetroTrain.wav",
+      "seite": "https://freesound.org/people/ahill86/sounds/207134/",
+      "lizenz": "CC0 1.0",
+      "urheber": "ahill86"
+    },
+    "fs_457294": {
+      "titel": "Air (or steam) pressure release",
+      "seite": "https://freesound.org/people/brunoboselli/sounds/457294/",
+      "lizenz": "CC0 1.0",
+      "urheber": "brunoboselli"
+    },
+    "fs_242495": {
+      "titel": "Berlin metro Brandenburger Tor Zurueckbleiben bitte .wav",
+      "seite": "https://freesound.org/people/uair01/sounds/242495/",
+      "lizenz": "CC BY 3.0",
+      "urheber": "uair01"
+    },
+    "fs_543825": {
+      "titel": "FXSaSc Berlin Tram Train Ring Bell Alexanderplatz.wav",
+      "seite": "https://freesound.org/people/Profispiesser/sounds/543825/",
+      "lizenz": "CC0 1.0",
+      "urheber": "Profispiesser"
+    },
+    "fs_458297": {
+      "titel": "12 Noon Hour Bell Strike.mp3",
+      "seite": "https://freesound.org/people/theblockofsound235/sounds/458297/",
+      "lizenz": "CC BY 4.0",
+      "urheber": "theblockofsound235"
     }
   }
 }

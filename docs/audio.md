@@ -363,3 +363,31 @@ Böen machen den Wind lauter und heller (Tempo 0,9–1,15) und lassen ab mittler
 **Pegel:** gegen die Synthese ×1,2, gemessen wie im Spiel (Mix bei jedem Bild angewendet – die Synthese plant
 Zwitschern und Beats pro Bild, ein einmaliges `apply` ergab dort 0). Regen und Starkregen sowie Wind und Pfeifen
 überlagern sich und sind gemeinsam aufgelöst (Test `ambience_loops_match_the_synth_layers`).
+
+### Phase 5: Bahn und Glocken
+
+| Klang | Freesound-Quelle | Lizenz |
+|---|---|---|
+| Fahrgeräusch im Wagen (`TrainLayers::roll`, Tempo aus `roll_f`) | peridactyloptrix „London Underground: full train journey through tunnel“ | CC0 |
+| Grollen (`rumble`, Tiefpass 220 Hz; auch `Mix::rumble` draußen) | dieselbe Aufnahme, anderes Stück | CC0 |
+| Tunnelwind (`wind`) | Fahrtwind-Schleife aus Phase 3 | CC BY 4.0 |
+| Bremsquietschen (`squeal`) | Reifenquietschen aus Phase 3, 2,3-fach schneller (≈ 2,8 kHz) | CC0 |
+| Schienenstoß | ahill86 „TravellingOnMetroTrain“ – fünf Stöße, je ~13 dB über dem Fahrgeräusch | CC0 |
+| Druckluft | brunoboselli „Air (or steam) pressure release“ | CC0 |
+| Abfertigung | uair01 „Berlin metro Brandenburger Tor Zurueckbleiben bitte“: Ansage (1,6–3,2 s), dann Türwarnton (3671 Hz) | CC BY 3.0 |
+| Straßenbahnklingel | Profispiesser „Berlin Tram Train Ring Bell Alexanderplatz“ | CC0 |
+| Kirchenglocke (je Schlag, Abstand 2,1 s) | theblockofsound235 „12 Noon Hour Bell Strike“ | CC BY 4.0 |
+
+**Bewusst Synthese geblieben:** der **Fahrmotor** (Umrichter-Heulen, `motor_f` 95–1900 Hz – eine Aufnahme lässt sich
+über Faktor 20 nicht stimmen, ohne zu brummen oder zu zwitschern; der reine elektrische Ton ist ohnehin ein
+Sinus-Sweep) und die **Türgongs** (`GongOpen/GongClose` – elektronische Zweiklänge; es fand sich kein Berliner
+Gong unter freier Lizenz).
+
+**Analyse der Abfertigung (nicht abgehört):** pyin zeigt bei 1,75–3,0 s eine Männerstimme mit Sprachmelodie
+(f0 164–243 Hz), bei 11,0–13,8 s einen Dauerton bei 3671 Hz (pyin meldet 333 Hz = 3671/11, eine Unterharmonische),
+um 16 s das Schließen der Türen, ab 21,7 s das Anfahren. Ob die Stimme wirklich „Zurückbleiben bitte“ sagt, ist
+aus Titel und Ablauf geschlossen – bitte gegenhören.
+
+**Bahnsteuerung:** `TrainLoops` je Zug (eigener Zug, Zug am Bahnsteig, versetzt gestartet); mit Aufnahmen bekommt
+`TrainVoice` nur noch die Motorschicht. Glockenschläge sind verzögerte Einzelklänge (`Synth::sample_at`).
+Test `rail_loops_match_the_synth_layers` (Pegel ×1,2, Fahrmotor unverändert).

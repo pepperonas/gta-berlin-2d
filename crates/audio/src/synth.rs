@@ -31,7 +31,7 @@ pub const GUN_CHOKE_AGE: f64 = 0.03;
 /// Pegel eingemessen auf Zielwerte (Test `sfx_samples_match_the_synth_loudness`): Schritte so laut wie der frühere
 /// harte Synthese-Schritt (Gras leiser – die Synthese war dort fast unhörbar), alles andere 20 % über der Synthese; der
 /// Fehlschlag-Jingle so laut wie der Erfolg (die Synthese war dort leiser); Hupe und Autodiebstahl lauter (der
-/// Synthese-Klang war dünn).
+/// Synthese-Klang war dünn), die Abfertigungsansage verständlich (über den drei Pieptönen der Synthese).
 #[derive(Debug, Clone, Copy)]
 pub struct SfxSpec {
     pub name: &'static str,
@@ -97,6 +97,17 @@ pub const AMB_BAR: f32 = 0.0422;
 pub const AMB_CLUB: f32 = 0.288;
 pub const THUNDER_NEAR: SfxSpec = spec("thunder_near", 0.218, 0.08, false);
 pub const THUNDER_FAR: SfxSpec = spec("thunder_far", 0.0732, 0.1, false);
+/// Bahn aus Aufnahmen: Pegel je Schicht (Test `rail_loops_match_the_synth_layers`)
+pub const RAIL_ROLL: f32 = 0.112;
+pub const RAIL_RUMBLE: f32 = 0.121;
+pub const RAIL_WIND: f32 = 0.0436;
+pub const RAIL_SQUEAL: f32 = 0.072;
+pub const AMB_RUMBLE: f32 = 0.0673;
+pub const RAIL_JOINT: SfxSpec = spec("rail_joint", 0.0164, 0.1, false);
+pub const AIR_HISS: SfxSpec = spec("air_hiss", 0.125, 0.05, false);
+pub const DEPART: SfxSpec = spec("depart", 0.0611, 0., false);
+pub const TRAM_BELL: SfxSpec = spec("tram_bell", 0.235, 0., true);
+pub const BELL: SfxSpec = spec("bell", 0.244, 0.01, true);
 /// Martinshorn-Schleife: Pegel bei voller Nähe (`Mix::siren` = 1)
 pub const SIREN_LEVEL: f32 = 0.217;
 /// Choke-Gruppe für Samples ohne Choke
@@ -312,6 +323,8 @@ struct SamplePlay {
     lp_k: f32,
     lp: f32,
     dest: Dest,
+    /// Wartezeit vor dem Einsatz (s)
+    delay: f64,
 }
 
 /// Endlos laufende Aufnahme (Martinshorn, später Umgebung): nahtlos gebaute Schleife, geglätteter Pegel.
@@ -399,6 +412,44 @@ impl TireLoops {
     }
 }
 
+/// Bahn aus Aufnahmen: Fahrgeräusch, Grollen, Tunnelwind, Bremsquietschen. Der Fahrmotor (Umrichter-Heulen,
+/// 95–1900 Hz) bleibt Synthese – eine Aufnahme lässt sich nicht über Faktor 20 stimmen.
+struct TrainLoops {
+    roll: LoopLayer,
+    rumble: LoopLayer,
+    wind: LoopLayer,
+    squeal: LoopLayer,
+}
+impl TrainLoops {
+    fn new(offset: f64) -> Option<Self> {
+        Some(Self {
+            roll: LoopLayer::new("train_roll")?.offset(offset),
+            rumble: LoopLayer::new("train_rumble")?.offset(offset),
+            wind: LoopLayer::new("drive_wind")?.offset(0.3 + offset),
+            squeal: LoopLayer::new("tire_squeal")?,
+        })
+    }
+    /// Pegel aus denselben Schichten wie `TrainVoice::set`, Tempo des Fahrgeräuschs aus seiner Tonhöhe.
+    fn set(&mut self, l: &TrainLayers, sr: f32, k: f32, on: bool) {
+        let g = |v: f64, lvl: f32| if on { lvl * k * v as f32 } else { 0. };
+        let roll_rate = (l.roll_f as f32 / 620.).clamp(0.6, 1.4);
+        self.roll.set(g(l.roll, RAIL_ROLL), roll_rate, 0.12, sr);
+        self.rumble.set(
+            g(l.rumble, RAIL_RUMBLE),
+            0.85 + 0.3 * l.roll as f32,
+            0.15,
+            sr,
+        );
+        self.wind
+            .set(g(l.wind, RAIL_WIND), 0.8 + 0.4 * l.wind as f32, 0.25, sr);
+        // Bremsquietschen: Reifenquietschen 2,3-fach schneller ≈ 2,8 kHz (Lage echter Bahnbremsen)
+        self.squeal.set(g(l.squeal, RAIL_SQUEAL), 2.3, 0.08, sr);
+    }
+    fn next(&mut self, sr: f32) -> f32 {
+        self.roll.next(sr) + self.rumble.next(sr) + self.wind.next(sr) + self.squeal.next(sr)
+    }
+}
+
 struct EngineVoice {
     bus: Smooth,
     o1: Osc,
@@ -474,6 +525,8 @@ struct Ambience {
     siren_g: Smooth,
     /// Martinshorn aus der Aufnahme (statt `siren`, wenn Samples an sind)
     siren_loop: Option<LoopLayer>,
+    /// Grollen der Bahnen aus der Aufnahme (statt `rumble`)
+    rumble_loop: Option<LoopLayer>,
     next_chirp: f64,
     drops: f64,
     last: f64,
@@ -561,6 +614,9 @@ pub struct Synth {
     plays: Vec<SamplePlay>,
     /// Reifen, Fahrtwind, Regen aufs Dach aus Aufnahmen
     tire_loops: Option<TireLoops>,
+    /// Bahn aus Aufnahmen: eigener Zug, Zug am Bahnsteig
+    ride_loops: Option<TrainLoops>,
+    pass_loops: Option<TrainLoops>,
     /// Klang-Samples statt Synthese (`GTA_SFX_SAMPLES=0` = aus)
     pub use_samples: bool,
 }
@@ -654,6 +710,7 @@ impl Synth {
             siren: Osc::new(Wave::Triangle, 440.),
             siren_g: Smooth::new(0.),
             siren_loop: LoopLayer::new("siren"),
+            rumble_loop: LoopLayer::new("train_rumble").map(|l| l.offset(0.7)),
             loops: AmbLoops::new(),
             next_chirp: 0.,
             drops: 0.,
@@ -699,6 +756,8 @@ impl Synth {
             reference: None,
             plays: Vec::new(),
             tire_loops: TireLoops::new(),
+            ride_loops: TrainLoops::new(0.),
+            pass_loops: TrainLoops::new(0.5),
             use_samples: sfx_samples_on(),
         }
     }
@@ -1102,8 +1161,27 @@ impl Synth {
 
     fn set_rail(&mut self, r: &RailMix) {
         let sr = self.sr;
-        self.ride.set(&r.ride, sr, 0.8);
-        self.pass.set(&r.pass, sr, 1.2);
+        let on = self.use_samples && self.ride_loops.is_some();
+        // mit Aufnahmen bleibt von der Synthese nur der Fahrmotor
+        let synth = |l: &TrainLayers| {
+            if on {
+                TrainLayers {
+                    motor: l.motor,
+                    motor_f: l.motor_f,
+                    ..TrainLayers::default()
+                }
+            } else {
+                *l
+            }
+        };
+        self.ride.set(&synth(&r.ride), sr, 0.8);
+        self.pass.set(&synth(&r.pass), sr, 1.2);
+        if let Some(t) = &mut self.ride_loops {
+            t.set(&r.ride, sr, 0.8, on);
+        }
+        if let Some(t) = &mut self.pass_loops {
+            t.set(&r.pass, sr, 1.2, on);
+        }
         self.pass.pan.set(r.pass_pan as f32 * 0.8, 0.2, sr);
         self.hall_g.set(r.hall as f32, 0.5, sr);
     }
@@ -1115,7 +1193,23 @@ impl Synth {
         set(&mut a.hum.gain, 0.018 * m.hum);
         set(&mut a.traffic.gain, 0.05 * m.traffic);
         set(&mut a.water.gain, 0.012 * m.water);
-        set(&mut a.rumble.gain, 0.16 * m.rumble);
+        let rumble_loop = self.use_samples && a.rumble_loop.is_some();
+        set(
+            &mut a.rumble.gain,
+            if rumble_loop { 0. } else { 0.16 * m.rumble },
+        );
+        if let Some(l) = &mut a.rumble_loop {
+            l.set(
+                if rumble_loop {
+                    AMB_RUMBLE * m.rumble as f32
+                } else {
+                    0.
+                },
+                1.,
+                0.6,
+                sr,
+            );
+        }
         let rain = m.rain;
         set(
             &mut a.rain.gain,
@@ -1398,6 +1492,10 @@ impl Synth {
     /// bei `distance` dunkler mit sinkendem `k`. Falsch, wenn es keine Aufnahme gibt bzw. Samples aus sind – dann
     /// spielt der Aufrufer den Synthese-Klang.
     fn sample(&mut self, sp: SfxSpec, k: f32, dest: Dest) -> bool {
+        self.sample_at(sp, k, dest, 0.)
+    }
+    /// Wie `sample`, aber erst nach `delay` Sekunden (Glockenschläge in Folge).
+    fn sample_at(&mut self, sp: SfxSpec, k: f32, dest: Dest, delay: f32) -> bool {
         if !self.use_samples {
             return false;
         }
@@ -1422,6 +1520,7 @@ impl Synth {
             rate: rate * 48000. / self.sr as f64,
             gain: sp.level * k,
             group: NO_CHOKE,
+            delay: delay as f64,
             age: 0.,
             release: false,
             lp_k,
@@ -1533,6 +1632,7 @@ impl Synth {
                     lp_k,
                     lp: 0.,
                     dest: Dest::Master,
+                    delay: 0.,
                 });
                 // nie mehr als ein paar Dutzend gleichzeitig (Dauerfeuer vieler Schützen)
                 if self.plays.len() > 24 {
@@ -1557,15 +1657,18 @@ impl Synth {
                 self.tone(659., 0.35, Sine, 0.1, 0., 0., 0., M);
                 self.tone(880., 0.45, Sine, 0.1, 0.28, 0., 0., M);
             }
+            Sfx::RailJoint(k) if self.sample(RAIL_JOINT, k, M) => {}
             Sfx::RailJoint(k) => {
                 // „ta“: dumpfer Schlag (Rad fällt in die Lücke) und kurzes metallisches Klicken
                 self.burst(0.09, 160., 0.16 * k, Lowpass, 1.2, 0., 0.002, M);
                 self.burst(0.03, 1700., 0.035 * k, Bandpass, 2.5, 0., 0.001, M);
             }
+            Sfx::AirHiss(k) if self.sample(AIR_HISS, k, M) => {}
             Sfx::AirHiss(k) => {
                 self.burst(1.1, 3200., 0.045 * k, Highpass, 0.7, 0., 0.03, M);
                 self.burst(0.35, 900., 0.03 * k, Bandpass, 0.8, 0., 0.005, M);
             }
+            Sfx::DepartBeep(k) if self.sample(DEPART, k, M) => {}
             Sfx::DepartBeep(k) => {
                 for i in 0..3 {
                     self.tone(1175., 0.16, Sine, 0.045 * k, i as f32 * 0.28, 0., 0., M);
@@ -1574,6 +1677,12 @@ impl Synth {
             Sfx::GongClose => {
                 self.tone(880., 0.3, Sine, 0.1, 0., 0., 0., M);
                 self.tone(659., 0.4, Sine, 0.1, 0.24, 0., 0., M);
+            }
+            Sfx::Bells(n, k) if self.use_samples && !sfx_bank(BELL.name).is_empty() => {
+                // Glockenschläge im Abstand wie bisher (2,1 s), jeder Schlag eine eigene Aufnahme
+                for i in 0..n.min(12) {
+                    self.sample_at(BELL, k, Dest::Outside, i as f32 * 2.1);
+                }
             }
             Sfx::Bells(n, k) => {
                 for i in 0..n.min(12) {
@@ -1588,6 +1697,7 @@ impl Synth {
                     }
                 }
             }
+            Sfx::TramBell(k) if self.sample(TRAM_BELL, k, M) => {}
             Sfx::TramBell(k) => {
                 for at in [0., 0.22] {
                     self.tone(1568., 0.5, Sine, 0.08 * k, at, 0., 0., M);
@@ -1811,7 +1921,8 @@ impl Synth {
                 + a.whistle.next(sr, block)
                 + a.rumble.next(sr, block)
                 + a.siren.next(sr, 0.) * a.siren_g.tick()
-                + a.siren_loop.as_mut().map_or(0., |l| l.next(sr));
+                + a.siren_loop.as_mut().map_or(0., |l| l.next(sr))
+                + a.rumble_loop.as_mut().map_or(0., |l| l.next(sr));
             let (mut bab_l, mut music_l) = (0., 0.);
             let amb = if let Some(l) = &mut a.loops {
                 bab_l = l.bar.next(sr);
@@ -1836,8 +1947,10 @@ impl Synth {
             ol += bab * bl;
             or += bab * br;
             // --- S-/U-Bahn: eigener Zug mittig, Zug am Bahnsteig aus seiner Richtung (beide direkt, nicht gedämpft)
-            let ride = self.ride.next(sr, block);
-            let pv = self.pass.next(sr, block);
+            let ride =
+                self.ride.next(sr, block) + self.ride_loops.as_mut().map_or(0., |t| t.next(sr));
+            let pv =
+                self.pass.next(sr, block) + self.pass_loops.as_mut().map_or(0., |t| t.next(sr));
             let (pl, pr) = pan(self.pass.pan.tick());
             // --- Einzelklänge
             let (mut ml, mut mr) = (eng + ride + pv * pl, eng + ride + pv * pr);
@@ -1890,6 +2003,10 @@ impl Synth {
             // Schuss-Aufnahmen (mittig; der Pegel trägt schon die Entfernung)
             let choke = (-1. / (GUN_CHOKE_TC * sr)).exp();
             for p in &mut self.plays {
+                if p.delay > 0. {
+                    p.delay -= dt;
+                    continue;
+                }
                 let i = p.pos as usize;
                 if i + 1 >= p.buf.len() {
                     continue;
@@ -2012,6 +2129,10 @@ mod tests {
             (Sfx::Knock(1.), "knock", 0.0307),
             (Sfx::Splash(1.), "splash", 0.0192),
             (Sfx::Carjack, "carjack", 0.02),
+            (Sfx::RailJoint(1.), "rail_joint", 0.0024),
+            (Sfx::AirHiss(1.), "air_hiss", 0.0154),
+            (Sfx::DepartBeep(1.), "depart", 0.015),
+            (Sfx::TramBell(1.), "tram_bell", 0.0328),
             (Sfx::Ui, "ui", 0.0193),
             (Sfx::Tick, "tick", 0.0139),
             (Sfx::Pickup, "pickup", 0.0289),
@@ -2378,6 +2499,7 @@ mod tests {
             ("birds", Mix { birds: 1., ..z }),
             ("bar", Mix { bar: 1., ..z }),
             ("club", Mix { music: 1., ..z }),
+            ("rumble", Mix { rumble: 1., ..z }),
         ];
         let mut bad = Vec::new();
         for (name, m) in cases {
@@ -2405,6 +2527,73 @@ mod tests {
                     syn * 1.2
                 ));
             }
+        }
+        assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
+    }
+
+    /// Bahn aus Aufnahmen: Fahrgeräusch, Grollen, Tunnelwind und Bremsquietschen je Schicht etwa so laut wie die
+    /// Synthese (Faktor 1,2); der Fahrmotor bleibt Synthese und klingt in beiden Fällen gleich.
+    #[test]
+    fn rail_loops_match_the_synth_layers() {
+        let level = |samples: bool, l: TrainLayers| {
+            let mut s = Synth::new(SR);
+            s.use_samples = samples;
+            s.apply(&Frame {
+                rail: RailMix {
+                    ride: l,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            render(&mut s, 0.6);
+            rms(&channel(&render(&mut s, 2.), 0))
+        };
+        let z = TrainLayers::default();
+        let cases = [
+            (
+                "roll",
+                TrainLayers {
+                    roll: 1.,
+                    roll_f: 620.,
+                    ..z
+                },
+            ),
+            ("rumble", TrainLayers { rumble: 1., ..z }),
+            ("wind", TrainLayers { wind: 1., ..z }),
+            ("squeal", TrainLayers { squeal: 1., ..z }),
+        ];
+        let mut bad = Vec::new();
+        for (name, l) in cases {
+            let (syn, smp) = (level(false, l), level(true, l));
+            println!(
+                "RAIL {name:7} synth {syn:.4} sample {smp:.4} ziel {:.4}",
+                syn * 1.2
+            );
+            if !(0.8..=1.25).contains(&(smp / (syn * 1.2))) {
+                bad.push(format!("{name}: {smp:.4} statt {:.4}", syn * 1.2));
+            }
+        }
+        let motor = TrainLayers {
+            motor: 1.,
+            motor_f: 400.,
+            ..z
+        };
+        let (a, b) = (level(false, motor), level(true, motor));
+        assert!(
+            (a - b).abs() < a * 0.05,
+            "Fahrmotor bleibt Synthese: {a} gegen {b}"
+        );
+        // Glocken: drei Schläge
+        let bells = |samples: bool| {
+            let mut s = Synth::new(SR);
+            s.use_samples = samples;
+            s.play(Sfx::Bells(3, 1.));
+            rms(&channel(&render(&mut s, 7.), 0))
+        };
+        let (syn, smp) = (bells(false), bells(true));
+        println!("RAIL bells   synth {syn:.4} sample {smp:.4}");
+        if !(0.8..=1.25).contains(&(smp / (syn * 1.2))) {
+            bad.push(format!("Glocken: {smp:.4} statt {:.4}", syn * 1.2));
         }
         assert!(bad.is_empty(), "Pegel daneben: {bad:?}");
     }

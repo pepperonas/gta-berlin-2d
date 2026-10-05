@@ -352,6 +352,54 @@
       "sha256": "6b372ca7b949f935426a8319c29d8b38eb8a823d6ae70c30d0fea709f3380169",
       "lizenz": "CC0 1.0",
       "urheber": "Samot_Ekschotz"
+    },
+    "fs_213891": {
+      "freesound": 213891,
+      "titel": "London Underground: full train journey through tunnel",
+      "seite": "https://freesound.org/people/peridactyloptrix/sounds/213891/",
+      "sha256": "cdf75ec2d335e21e44f7b27dc8554bdb710e031fa46710ebf86ff5e6edaec0d8",
+      "lizenz": "CC0 1.0",
+      "urheber": "peridactyloptrix"
+    },
+    "fs_207134": {
+      "freesound": 207134,
+      "titel": "TravellingOnMetroTrain.wav",
+      "seite": "https://freesound.org/people/ahill86/sounds/207134/",
+      "sha256": "8a6ce84dc5eed90a96ffb9edaf5b1f1f7f33987895efb547ca8e4dc7c32cb1dc",
+      "lizenz": "CC0 1.0",
+      "urheber": "ahill86"
+    },
+    "fs_457294": {
+      "freesound": 457294,
+      "titel": "Air (or steam) pressure release",
+      "seite": "https://freesound.org/people/brunoboselli/sounds/457294/",
+      "sha256": "8d349e8f5042d0bdabf7ee343d2209d14cddd84761689b18fbf7e791d92dec49",
+      "lizenz": "CC0 1.0",
+      "urheber": "brunoboselli"
+    },
+    "fs_242495": {
+      "freesound": 242495,
+      "titel": "Berlin metro Brandenburger Tor Zurueckbleiben bitte .wav",
+      "seite": "https://freesound.org/people/uair01/sounds/242495/",
+      "sha256": "7c0f95403ac2686d38809d90dce0ffccb24e7632da5b1fa2e050df3160b85883",
+      "lizenz": "CC BY 3.0",
+      "urheber": "uair01"
+    },
+    "fs_543825": {
+      "freesound": 543825,
+      "titel": "FXSaSc Berlin Tram Train Ring Bell Alexanderplatz.wav",
+      "seite": "https://freesound.org/people/Profispiesser/sounds/543825/",
+      "sha256": "e4f0a13b1c941b85f3c9e47f4ebfa6aafb1049107a3fdc9e31646342104415fa",
+      "lizenz": "CC0 1.0",
+      "urheber": "Profispiesser"
+    },
+    "fs_458297": {
+      "freesound": 458297,
+      "titel": "12 Noon Hour Bell Strike.mp3",
+      "seite": "https://freesound.org/people/theblockofsound235/sounds/458297/",
+      "sha256": "575f95c0c3b2c4fb0946c5273388b7d932c4ceb1cca0da7e3df3403db80ca7af",
+      "lizenz": "CC BY 4.0",
+      "urheber": "theblockofsound235"
     }
   },
   "klaenge": {
@@ -1155,6 +1203,211 @@
       "fade_s": 2.0,
       "hochpass_hz": 25,
       "tiefpass_hz": 500
+    },
+    "train_roll": {
+      "zweck": "U-/S-Bahn: Fahrgeräusch im Wagen (Schleife)",
+      "quelle": "fs_213891",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_213891",
+            "datei": "*",
+            "at": 0,
+            "von_s": 65.75
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 8,
+      "schleife_blende_s": 0.4,
+      "hochpass_hz": 40
+    },
+    "train_rumble": {
+      "zweck": "Bahn: tiefes Grollen (Schleife, auch Hochbahn draußen)",
+      "quelle": "fs_213891",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_213891",
+            "datei": "*",
+            "at": 0,
+            "von_s": 90.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 8,
+      "schleife_blende_s": 0.4,
+      "hochpass_hz": 20,
+      "tiefpass_hz": 220
+    },
+    "rail_joint": {
+      "zweck": "Schienenstoß unter einer Achse",
+      "quelle": "fs_207134",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_207134",
+            "datei": "*",
+            "at": 0,
+            "von_s": 4.29,
+            "bis_s": 4.5,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207134",
+            "datei": "*",
+            "at": 0,
+            "von_s": 6.03,
+            "bis_s": 6.24,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207134",
+            "datei": "*",
+            "at": 0,
+            "von_s": 8.02,
+            "bis_s": 8.229999999999999,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207134",
+            "datei": "*",
+            "at": 0,
+            "von_s": 12.59,
+            "bis_s": 12.799999999999999,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_207134",
+            "datei": "*",
+            "at": 0,
+            "von_s": 12.76,
+            "bis_s": 12.969999999999999,
+            "db": 0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 0.2,
+      "fade_s": 0.08,
+      "hochpass_hz": 40
+    },
+    "air_hiss": {
+      "zweck": "Druckluft: Bremse löst, Türen arbeiten",
+      "quelle": "fs_457294",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_457294",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0,
+            "bis_s": 1.6,
+            "db": 0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 1.5,
+      "fade_s": 0.5,
+      "hochpass_hz": 200
+    },
+    "depart": {
+      "zweck": "Abfertigung Berliner U-Bahn: „Zurückbleiben bitte“, dann Türwarnton",
+      "quelle": "fs_242495",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_242495",
+            "datei": "*",
+            "at": 0,
+            "von_s": 1.6,
+            "bis_s": 3.2,
+            "db": 0
+          },
+          {
+            "quelle": "fs_242495",
+            "datei": "*",
+            "at": 1.8,
+            "von_s": 11.0,
+            "bis_s": 13.8,
+            "db": 0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 4.7,
+      "fade_s": 0.15,
+      "hochpass_hz": 120
+    },
+    "tram_bell": {
+      "zweck": "Straßenbahnklingel (Berlin, Alexanderplatz)",
+      "quelle": "fs_543825",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_543825",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0,
+            "bis_s": 1.4,
+            "db": 0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 1.4,
+      "fade_s": 0.4,
+      "hochpass_hz": 200
+    },
+    "bell": {
+      "zweck": "Kirchenglocke: ein Schlag",
+      "quelle": "fs_458297",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_458297",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.03,
+            "bis_s": 3.48,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_458297",
+            "datei": "*",
+            "at": 0,
+            "von_s": 3.51,
+            "bis_s": 6.96,
+            "db": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_458297",
+            "datei": "*",
+            "at": 0,
+            "von_s": 7.23,
+            "bis_s": 10.68,
+            "db": 0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 3.45,
+      "fade_s": 1.0,
+      "hochpass_hz": 60
     }
   }
 }

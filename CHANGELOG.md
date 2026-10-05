@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: U-/S-Bahn, Straßenbahn und Glocken aus echten Aufnahmen – Fahrgeräusch und Grollen einer echten
+  U-Bahn-Fahrt, Tunnelwind, Bremsquietschen, Schienenstöße, Druckluft, die Berliner Abfertigung („Zurückbleiben
+  bitte“ mit Türwarnton), die Straßenbahnklingel vom Alexanderplatz und echte Kirchenglocken. Der Fahrmotor und die
+  Türgongs bleiben synthetisch (elektronische Töne).
+
 - Native Fassung: Stadt und Wetter aus echten Aufnahmen (Freesound, CC0) – Stadtbrummen, Verkehr, Wasser an der
   Kaimauer, Regen und Starkregen, Wind mit pfeifenden Böen, Vögel, Kneipengemurmel, Club-Bass durch die Wand und
   echter Donner (nah mit Krachen, fern als Grollen).
