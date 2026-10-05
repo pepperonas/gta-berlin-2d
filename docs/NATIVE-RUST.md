@@ -1220,17 +1220,24 @@ geladenen Kacheln.
 ## Ladenlicht und Leuchtreklame (04.10.2026)
 
 `game/neon.rs` portiert `render.js shopGlowPoint`/`neonSigns` und `wetfx.js neonText`/`neonColor`/`neonOn`/`drawNeon`.
-- **Schaufensterlicht:** Läden, Supermärkte, Lokale, Cafés, Hotels und Bahnhöfe werfen nachts warmes Licht
-  (70 px, 255/210/150) auf den Gehweg vor sich – der Punkt liegt zwischen POI und nächster Fahrbahn, knapp vor dem
-  Bordstein, und wird je POI zwischengespeichert.
-- **Leuchtreklame** ab der Dämmerung (Deckkraft steigt mit der Dunkelheit): Kneipen, Bars und Clubs mit Namen oder
-  KNEIPE/BAR/CLUB, SPÄTI, DÖNER, PIZZA, IMBISS, HOTEL; Farbe aus sieben Neontönen, etwa jede achte Röhre flackert
-  (aus = matt in der Farbe). Schriftzug im Bildraum mit farbigem Schein, dazu ein farbiges Licht in der Lichtkarte.
-  Höchstens 40 Schilder, die nächsten zuerst; zwei Einträge für dasselbe Lokal ergeben ein Schild.
-- `--bildschirm reklame` stellt die Figur vor die nächste Stelle mit mindestens drei Schriftzügen
-  ([Bild](images/native/reklame.png), Adalbertstraße am Kottbusser Tor, 23 Uhr).
+- **Schaufensterlicht:** Supermärkte, Spätis, Lokale, Imbisse, Cafés, Hotels und Bahnhöfe werfen nachts warmes
+  Licht (70 px, 255/210/150) auf den Gehweg vor sich – der Punkt liegt zwischen POI und nächster Fahrbahn, knapp
+  vor dem Bordstein, und wird je POI zwischengespeichert. Kleine Läden, Dienstleister (Ärzte, Banks …) und Kultur
+  bleiben seit dem 05.10.2026 dunkel (nur Anzeige – die POI-Daten nutzt das Stadtleben weiter).
+- **Schilder am Eingang** (seit 05.10.2026 statt einheitlicher Schriftzüge): Bars, Kneipen, Clubs, Biergärten,
+  Spätis, Imbisse (Döner, Pizza, Currywurst, Eis), Cafés und Hotels; Restaurants nur mit Licht. Jedes Lokal hat aus
+  Ort-Hashes eine eigene Bauart (`neon::Style`), gewichtet nach Art: Röhrenschrift (bei zwei Wörtern zweifarbig),
+  Neon im Rahmen, Leuchtkasten, Glühbirnentafel mit Lauflicht, senkrechtes Nasenschild (≤ 8 Zeichen), Schrift mit
+  Symbol (Cocktailglas, Bierkrug, Tasse, Note, Stern, Pfeil zur Tür) oder Kreidetafel mit Lampe. Dazu acht
+  Röhrenfarben, sechs Kastenfarben, vier Tafelfarben, Größe 0,85–1,3; Namen werden an Wortgrenzen gekürzt.
+  Tagsüber matt auf einer Trägerplatte, ab der Dämmerung leuchtend mit Schein und farbigem Licht in der Lichtkarte;
+  etwa jede achte Röhre flackert. Höchstens 40 Schilder, die nächsten zuerst; zwei Einträge für dasselbe Lokal
+  ergeben ein Schild.
+- `--bildschirm reklame` stellt die Figur an die Stelle mit den meisten Schildern auf 30 m im Umkreis von 2 km
+  ([Bild](images/native/reklame.png), 23 Uhr); `--bildschirm schilder` zeigt alle Bauarten tags und nachts
+  ([Bild](images/native/schilder.png)).
 
-**Validierung:** Unit-Tests für die Schriftzüge je Art, Farben und Flackern. **Abweichung:** die Schrift ist die
+**Validierung:** Unit-Tests für Schriftzüge und gestrichene Arten, Vielfalt der Bauarten und Farben über 300 Orte, Zeichnen jeder Bauart tags und nachts, Kürzen an Wortgrenzen, Flackern. **Abweichung:** die Schrift ist die
 Bitmapschrift des HUD statt einer serifenlosen Systemschrift.
 
 ## Rumpeln der Bahnen und Bahnhofshalle (04.10.2026)

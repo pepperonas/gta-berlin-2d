@@ -244,6 +244,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Native Fassung: weniger POIs, dafür Schilder am Haus. Ärzte, Dienstleister, kleine Läden und Restaurants tragen
+  kein Schild mehr und bleiben nachts dunkel. Bars, Kneipen, Clubs, Spätis, Imbisse, Cafés und Hotels bekommen am
+  Eingang ein eigenes Schild statt eines einheitlichen Schriftzugs: Röhrenschrift, Neonrahmen, Leuchtkasten,
+  Glühbirnentafel mit Lauflicht, senkrechtes Nasenschild, Schrift mit Symbol (Cocktailglas, Bierkrug, Tasse, Note)
+  oder Kreidetafel – je Lokal anders in Bauart, Farbe und Größe. Tagsüber matt, ab der Dämmerung leuchtend.
+  `--bildschirm schilder` zeigt alle Bauarten.
+
 - Fahrphysik-Anzeige auch über die Befehlszeile (Enter): `physik` schaltet sie um, `physik an` / `physik aus`
   setzen sie (Kurzformen `fahrphysik`, `f3`). Das geht in jedem Build, F3 bleibt dem Entwickler-Build vorbehalten.
 

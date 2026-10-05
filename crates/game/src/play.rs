@@ -93,6 +93,8 @@ pub struct Play {
     neon: crate::neon::Neon,
     pub demo_covered: bool,
     pub demo_neon: bool,
+    /// Musterseite aller Schild-Bauarten, tags und nachts (`--bildschirm schilder`)
+    pub sign_lab: bool,
     /// zuletzt mit der Maus gezielt (sonst Controller); Zeiger im HUD für das Fadenkreuz
     mouse_aim: bool,
     cursor: Option<Vec2>,
@@ -251,6 +253,10 @@ impl Play {
             crate::neon::draw(&self.neon, camera, viewport, out);
         }
         self.hud_width = out.width;
+        if self.sign_lab {
+            crate::neon::draw_lab(out, self.world.time);
+            return;
+        }
         match self.screen {
             Screen::Title => {
                 self.title_link = Some(crate::menu::draw_title(
@@ -457,6 +463,7 @@ impl Play {
             neon: Default::default(),
             demo_covered: false,
             demo_neon: false,
+            sign_lab: false,
             mouse_aim: false,
             cursor: None,
             diablo,
@@ -2097,6 +2104,55 @@ fn shade(c: [f32; 4], k: f32) -> [f32; 4] {
     ]
 }
 
+impl Play {
+    /// Schilder im Bild für `hud()` vormerken (auch am Tag), die nächsten zuerst – die Obergrenze soll das Bild
+    /// treffen, nicht den Rand.
+    fn collect_signs(&mut self, neon_k: f32) {
+        self.neon.signs.clear();
+        self.neon.alpha = neon_k;
+        if self.world.in_tunnel_station() {
+            return;
+        }
+        let (cx, cy) = (self.world.camera.x, self.world.camera.y);
+        let view = 2200. / self.world.camera.zoom.max(0.5);
+        let t = self.world.time;
+        let s = self.world.city.scale;
+        let mut pois = self.world.city.pois_near(cx, cy, view + 250.);
+        pois.sort_by(|a, b| {
+            let da = (a.x - cx).hypot(a.y - cy);
+            let db = (b.x - cx).hypot(b.y - cy);
+            da.total_cmp(&db)
+        });
+        for q in pois {
+            if self.neon.signs.len() >= crate::neon::MAX_SIGNS {
+                break;
+            }
+            let Some(spec) = crate::neon::sign_spec(&q) else {
+                continue;
+            };
+            let Some((gx, gy)) = self.neon.glow_point(&mut self.world.city, &q) else {
+                continue;
+            };
+            let (dx, dy) = (q.x - gx, q.y - gy);
+            let d = dx.hypot(dy).max(1.);
+            let (x, y) = (gx + dx / d * 1.6 * s, gy + dy / d * 1.6 * s);
+            // zwei Einträge für dasselbe Lokal: nur ein Schild
+            if self
+                .neon
+                .signs
+                .iter()
+                .any(|o| (o.x - x).hypot(o.y - y) < 3. * s)
+            {
+                continue;
+            }
+            let on = !spec.flicker || crate::neon::neon_on(&q, t);
+            self.neon
+                .signs
+                .push(crate::neon::Sign { x, y, spec, on, t });
+        }
+    }
+}
+
 impl Game for Play {
     fn step_seconds(&self) -> f64 {
         DT
@@ -2240,23 +2296,25 @@ impl Game for Play {
         if self.demo_neon && !w2.loading {
             self.demo_neon = false;
             let (px, py) = (w2.player.x, w2.player.y);
-            let mut pois = w2.city.pois_near(px, py, 6000.);
-            pois.sort_by(|a, b| {
-                (a.x - px)
-                    .hypot(a.y - py)
-                    .total_cmp(&(b.x - px).hypot(b.y - py))
+            let pois: Vec<_> = w2
+                .city
+                .pois_near(px, py, 20000.)
+                .into_iter()
+                .filter(|q| crate::neon::sign_text(q).is_some())
+                .collect();
+            // die Stelle mit den meisten Schildern in 30 m, bei Gleichstand die nächste
+            let dense = |q: &berlin_sim::city::Poi| {
+                pois.iter()
+                    .filter(|o| (o.x - q.x).hypot(o.y - q.y) < 300.)
+                    .count()
+            };
+            let spot = pois.iter().max_by(|a, b| {
+                dense(a).cmp(&dense(b)).then_with(|| {
+                    (b.x - px)
+                        .hypot(b.y - py)
+                        .total_cmp(&(a.x - px).hypot(a.y - py))
+                })
             });
-            // die nächste Stelle mit mindestens drei Schriftzügen in 25 m
-            let spot = pois
-                .iter()
-                .filter(|q| crate::neon::neon_text(q).is_some())
-                .find(|q| {
-                    pois.iter()
-                        .filter(|o| crate::neon::neon_text(o).is_some())
-                        .filter(|o| (o.x - q.x).hypot(o.y - q.y) < 250.)
-                        .count()
-                        >= 3
-                });
             if let Some(q) = spot.cloned()
                 && let Some((gx, gy)) = self.neon.glow_point(&mut w2.city, &q)
             {
@@ -3231,6 +3289,8 @@ impl Game for Play {
             self.street_signs = w.city.signs_near(cx, cy, view);
             self.lamps_lit = l.lamps_on;
         }
+        // Schilder am Eingang: tags matt, ab der Dämmerung leuchtend
+        self.collect_signs(((l.dark as f32 - 0.25) * 3.).clamp(0., 1.));
         let k = l.dark as f32;
         if k <= 0. {
             return;
@@ -3272,63 +3332,24 @@ impl Game for Play {
                 );
             }
         }
-        // Läden, Lokale und Bahnhöfe: warmer Schein aus dem Schaufenster auf den Gehweg; dazu Leuchtreklame
-        let neon_k = ((l.dark as f32 - 0.25) * 3.).clamp(0., 1.);
-        self.neon.signs.clear();
-        self.neon.alpha = neon_k;
+        // Läden, Lokale und Bahnhöfe: warmer Schein aus dem Schaufenster auf den Gehweg; Schilder leuchten
         if !self.world.in_tunnel_station() {
-            let t = self.world.time;
-            // nächste zuerst: die Obergrenze für Schriftzüge soll das Bild treffen, nicht den Rand
             let mut pois = self.world.city.pois_near(cx, cy, view + 250.);
-            pois.sort_by(|a, b| {
-                let da = (a.x - cx).hypot(a.y - cy);
-                let db = (b.x - cx).hypot(b.y - cy);
-                da.total_cmp(&db)
-            });
+            pois.retain(|q| crate::neon::SHOP_GLOW.contains(&q.cat));
             for q in pois {
-                let glow = crate::neon::SHOP_GLOW.contains(&q.cat);
-                let text = if neon_k > 0. {
-                    crate::neon::neon_text(&q)
-                } else {
-                    None
-                };
-                if !glow && text.is_none() {
-                    continue;
-                }
-                let Some((gx, gy)) = self.neon.glow_point(&mut self.world.city, &q) else {
-                    continue;
-                };
-                if glow {
+                if let Some((gx, gy)) = self.neon.glow_point(&mut self.world.city, &q) {
                     push(out, gx, gy, 70., [1., 0.82, 0.59], 0.45 * k);
                 }
-                if let Some(text) = text
-                    && self.neon.signs.len() < crate::neon::MAX_SIGNS
-                {
-                    let (dx, dy) = (q.x - gx, q.y - gy);
-                    let d = dx.hypot(dy).max(1.);
-                    let s = self.world.city.scale;
-                    let color = crate::neon::neon_color(&q);
-                    let on = crate::neon::neon_on(&q, t);
-                    let (x, y) = (gx + dx / d * 1.6 * s, gy + dy / d * 1.6 * s);
-                    // zwei Einträge für dasselbe Lokal: nur ein Schild
-                    if self
-                        .neon
-                        .signs
-                        .iter()
-                        .any(|o| (o.x - x).hypot(o.y - y) < 3. * s)
-                    {
-                        continue;
-                    }
-                    if on {
-                        push(out, x, y + 6., 60., color, 0.6 * neon_k);
-                    }
-                    self.neon.signs.push(crate::neon::Sign {
-                        x,
-                        y,
-                        text,
-                        color,
-                        on,
-                    });
+            }
+            let neon_k = self.neon.alpha;
+            for s in &self.neon.signs {
+                if s.on && neon_k > 0. {
+                    let r = if matches!(s.spec.style, crate::neon::Style::Box) {
+                        80.
+                    } else {
+                        60.
+                    };
+                    push(out, s.x, s.y + 6., r, s.spec.color, 0.6 * neon_k);
                 }
             }
         }
