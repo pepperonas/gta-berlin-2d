@@ -40,6 +40,13 @@ MATERIALS = [
     ("platten", "Concrete010", "Gehwegplatten, Plätze, Brückenflächen", 48),
     ("gras", "Grass001", "Rasen, Parks, Friedhöfe, Kleingärten, Gründächer", 16),
     ("schotter", "Gravel043", "Gleisbett, Sand, unbefestigte Wege", 24),
+    ("ziegel", "RoofingTiles014A", "Ziegeldach", 64),
+    ("schiefer", "RoofingTiles003", "Schieferdach", 64),
+    ("blech", "CorrugatedSteel005", "Blechdach", 64),
+    ("kiesdach", "Gravel040", "Flachdach (Kies, Bitumen)", 16),
+    ("putz", "Plaster003", "Putzfassade", 8),
+    ("klinker", "Bricks085", "Klinkerfassade", 48),
+    ("beton", "Concrete036", "Betonfassade (Plattenbau, Sichtbeton)", 16),
 ]
 
 
@@ -73,6 +80,13 @@ def info(asset: str, offline: bool) -> dict:
 def image(z: zipfile.ZipFile, suffix: str, mode: str) -> Image.Image:
     name = next(n for n in z.namelist() if n.endswith(suffix))
     img = Image.open(io.BytesIO(z.read(name))).convert(mode)
+    # nicht quadratische Vorlagen (Klinker 2:1) übereinander zum Quadrat legen – sie kacheln, also bleibt es nahtlos
+    w, h = img.size
+    if h < w and w % h == 0:
+        square = Image.new(mode, (w, w))
+        for k in range(w // h):
+            square.paste(img, (0, k * h))
+        img = square
     # 1K → 512: genau halbieren (Kastenfilter), die Kachel bleibt nahtlos
     assert img.size == (1024, 1024), f"{name}: {img.size}"
     return img.reduce(2)

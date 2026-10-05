@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 4 (native Fassung): **Dächer und Fassaden aus Texturen** (CC0, ambientCG) –
+  Ziegel, Schiefer, Blech, Kiesdach; Putz, Klinker und Beton (Plattenbau mit Plattenfugen). Welche Fassade ein Haus
+  bekommt, folgt dem Wandmaterial aus OSM bzw. dem Fassadenstil. **Fenster** haben Rahmen, steinerne Fensterbank,
+  Himmelsspiegelung im Glas und bei Wohnhäusern ein Fensterkreuz; sie blenden erst aus, wenn eine Fensterzelle unter
+  etwa sechs Bildpunkte schrumpft. Das Fensterraster ist eine gemeinsame Konstante für Tagesansicht und erleuchtete
+  Fenster (Test). Türen zeigen Bretter, Rahmen und Griff, Schaufenster Sprossen und Spiegelung und leuchten nachts.
+  GPU +0,2 bis +1,0 ms (Boulevard 6,2–6,5 ms).
 - Grafik-Überarbeitung, Phase 3 (native Fassung): **Bordsteine** (30 cm heller Granit mit dunkler Fuge zur Fahrbahn,
   auch an Kreuzungen), dunklerer Randstreifen außen am Gehweg, **ausgefranste Rasenränder** über angrenzendem Boden,
   **Fahrbahnmarkierungen** aus den Kartendaten – Zebrastreifen, Ampel-Furten (Blöcke), markierte Querungen, Haltelinien

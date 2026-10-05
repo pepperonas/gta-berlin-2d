@@ -1,5 +1,6 @@
 mod atlas;
 pub mod camera;
+mod facade;
 mod gputime;
 pub mod graphics;
 pub mod hud;

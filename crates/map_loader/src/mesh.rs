@@ -273,6 +273,23 @@ fn clip_convex(points: &[Vec2], clip: &[Vec2]) -> Vec<Vec2> {
     }
     points
 }
+/// Material-ID einer Fassade (Textur im Shader, `data/gfx/material_map.json`): Putz 11/12, Klinker 18/19, Beton 20/23 –
+/// je Wohnen/Arbeit, weil Arbeitsstätten ihren eigenen Lichttagesgang haben (`window_fs`).
+pub fn facade_material(b: &Building, facade: roofs::Facade, workplace: bool) -> f32 {
+    use crate::citycodes::wall_mat as wm;
+    let lk = unpack_look(b.look);
+    let (home, work) = match lk.wmat {
+        wm::BRICK => (18., 19.),
+        wm::CONCRETE | wm::GLASS | wm::METAL => (20., 23.),
+        _ if matches!(facade, roofs::Facade::Platte | roofs::Facade::Industry) => (20., 23.),
+        _ => (11., 12.),
+    };
+    if workplace { work } else { home }
+}
+/// Fassadendetails: Tür, Schaufenster, Ladenband (`scene.wgsl` zeichnet sie mit eigenen Ortskoordinaten).
+pub const DOOR_MATERIAL: f32 = 13.;
+pub const SHOPWINDOW_MATERIAL: f32 = 21.;
+pub const SHOPSIGN_MATERIAL: f32 = 22.;
 fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
     let style = roofs::roof_style(b, scale);
     let facade = roofs::facade_style(b);
@@ -291,7 +308,7 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
     );
     let wall_surface = Surface {
         color: wall,
-        material: if workplace { 12. } else { 11. },
+        material: facade_material(b, facade, workplace),
         depth: depth + 0.00004,
         normal: Vec3::Z,
     };
@@ -388,6 +405,7 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
     // hebt jeden Punkt über dem Boden um mindestens 18 px, so liegen Tür und Ladenfront dennoch am Fuß der Wand)
     let full_h = (b.height * 0.5).max(18.);
     let frac = |px: f32| (px / full_h).clamp(0., 1.);
+    // uv.x = Abstand vom linken Rand des Details (px), uv.y = Gebäudehöhe (Schrägansicht im Vertex-Shader)
     let wall_quad = |mesh: &mut Mesh,
                      a: Vec2,
                      c: Vec2,
@@ -396,8 +414,10 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
                      z0: f32,
                      z1: f32,
                      color: u32,
-                     d: f32| {
+                     d: f32,
+                     material: f32| {
         let dir = c - a;
+        let len = dir.length();
         let base = mesh.vertices.len() as u32;
         for (u, z) in [(u0, z0), (u1, z0), (u1, z1), (u0, z1)] {
             let p = a + dir * u;
@@ -405,9 +425,9 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
                 point: [p.x, p.y, z],
                 normal: [0., 0., 1.],
                 color: rgb(color),
-                uv: [0., b.height],
+                uv: [(u - u0) * len, b.height],
                 center: b.center.to_array(),
-                material: 13.,
+                material,
                 depth: d,
             });
         }
@@ -439,6 +459,7 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
             top,
             0x3b2a1e,
             door_depth,
+            DOOR_MATERIAL,
         );
     }
     if b.kind == crate::citycodes::building_kind::SPAETI {
@@ -476,6 +497,7 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
                 frac(15.),
                 0x9fd3ff,
                 door_depth,
+                SHOPWINDOW_MATERIAL,
             );
             wall_quad(
                 mesh,
@@ -487,6 +509,7 @@ fn building_mesh(mesh: &mut Mesh, b: &Building, scale: f32) -> Result<()> {
                 frac(27.),
                 0xe03b3b,
                 door_depth,
+                SHOPSIGN_MATERIAL,
             );
         }
     }

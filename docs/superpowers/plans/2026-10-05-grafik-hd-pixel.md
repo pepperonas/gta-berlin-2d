@@ -105,7 +105,16 @@ Ursprünglicher Entwurf:
 - Decal-Atlas 256-px-Zellen mit Mips, Raster als Uniform/Konstante; `sprite_vs` und `tree_shadow_vs` mitziehen; neue
   Decals (Gullis, Flicken, Risse, Ölflecken, Laub).
 
-## Phase 4 – Dächer und Fassaden (≈ 1,5 Tage)
+## Phase 4 – Dächer und Fassaden ✅ (05.10.2026)
+
+Umgesetzt: sieben weitere CC0-Texturen; neue Fassaden-IDs (Klinker 18/19, Beton 20/23 neben Putz 11/12) aus
+`mesh.rs facade_material`; Fassaden und Dächer mit einem Maßstab (`surface_sample`), Wandrelief in der Tangentenbasis
+der Wand; Fensterraster `engine/facade.rs` als WGSL-Konstanten, `window_cell`/`in_glass`/`glass_bar` für `fs` und
+`window_fs`; Ausblenden der Fenster nach Bildpunkten je Zelle statt nach `detail`; Tür 13, Schaufenster 21 und
+Ladenband 22 mit Ortskoordinaten (`local`). Roh-Vorlagen, die nicht quadratisch sind (Klinker 2:1), stapelt das
+Build-Skript zum Quadrat.
+
+Ursprünglicher Entwurf:
 
 - Dachmaterialien 6–9 als Texturen (aus Phase 2), Moos/Ruß bleibt; Fassaden 11/12 Putz/Klinker, Rahmen, Simse;
   **ein** Fensterraster (Rust-Konstante → WGSL), Test Gleichheit `fs`/`window_fs`; Material 13 aufwerten.

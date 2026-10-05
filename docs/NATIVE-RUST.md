@@ -1949,3 +1949,22 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   `preview_fs`); vorher blieb es schwarz.
 - **Kosten (GPU-Median, 2560 × 1440):** +0,2 bis +0,8 ms gegenüber Phase 2 (Boulevard 5,5–5,8 ms, Häuserblock 5,6–5,8 ms).
 
+## Grafik HD/Pixel: Phase 4 – Dächer und Fassaden (05.10.2026)
+
+- **Texturen:** RoofingTiles014A (Ziegel), RoofingTiles003 (Schiefer), CorrugatedSteel005 (Blech), Gravel040
+  (Flachdach), Plaster003 (Putz), Bricks085 (Klinker; 2:1-Vorlage, vom Build-Skript zum Quadrat gestapelt),
+  Concrete036 (Beton) – alle CC0, gleiche Pipeline wie die Bodentexturen.
+- **Material-IDs (`mesh.rs facade_material`):** Putz 11/12, Klinker 18/19, Beton 20/23 (je Wohnen/Arbeit; Arbeit hat
+  den Büro-Lichttagesgang). Klinker aus `wall_mat::BRICK`, Beton aus Beton/Glas/Metall oder Fassadenstil Platte/Industrie,
+  sonst Putz. Tür 13, Schaufenster 21, Ladenband 22 tragen ihren Abstand vom linken Rand in `uv.x`.
+- **Shader:** Fassaden und Dächer nutzen `surface_sample` (ein Maßstab, nicht gedreht – sonst stünden Ziegelreihen und
+  Klinkerverband schräg); das Wandrelief wird in der Tangentenbasis der Wand angesetzt (entlang der Wand, nach oben).
+  `facade_details` zeichnet Glas (Himmelsspiegelung), Rahmen, Fensterbank, Regenspur, bei Wohnhäusern ein Fensterkreuz und
+  beim Plattenbau die Fugen. Ausgeblendet wird nach Bildpunkten je Fensterzelle (voll ab 12 px) – das allgemeine
+  `detail` maß in Kartenmetern und blendete auf den stark gestauchten Wänden zu früh aus (die Fenster wirkten blass).
+- **Ein Fensterraster (`engine/facade.rs`):** Zelle 2,5 × 3,0 m, Scheibe 0,35–0,72 / 0,28–0,80 als WGSL-Konstanten;
+  `fs` und `window_fs` gehen über `window_cell`/`in_glass`/`glass_bar` – nachts brennt Licht genau in der gezeichneten
+  Scheibe, das Fensterkreuz bleibt dunkel. Test: keine Literale des Rasters im Shader, beide Durchgänge über `window_cell`.
+- **Schaufenster** leuchten nachts warm (`window_fs`, Material 21, ab Dunkelheit 0,15).
+- **Kosten (GPU-Median, 2560 × 1440):** +0,2 bis +1,0 ms gegenüber Phase 3 (Boulevard 6,2–6,5 ms, Häuserblock 5,9–6,4 ms).
+

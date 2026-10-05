@@ -276,7 +276,7 @@ fn engine_credits() -> Vec<String> {
         .collect()
 }
 
-/// Bodentexturen aus dem Manifest von tools/gfx/build_materials.py: „Zweck: Vorlage – Urheber, Lizenz (Seite)“.
+/// Boden-, Dach- und Fassadentexturen aus dem Manifest von tools/gfx/build_materials.py: „Zweck: Vorlage – Urheber, Lizenz (Seite)“.
 fn material_credits() -> Vec<String> {
     let man: serde_json::Value =
         serde_json::from_str(berlin_engine::MATERIAL_MANIFEST).unwrap_or_default();
@@ -287,7 +287,7 @@ fn material_credits() -> Vec<String> {
     m.values()
         .map(|v| {
             format!(
-                "Bodentextur {} ({}): {}, {} – {}",
+                "Textur {} ({}): {}, {} – {}",
                 s(v, "quelle"),
                 s(v, "zweck"),
                 s(v, "urheber"),
@@ -678,7 +678,14 @@ mod tests {
     #[test]
     fn ground_textures_are_credited_with_license() {
         let c = material_credits();
-        assert_eq!(c.len(), 5, "{c:?}");
+        let man: serde_json::Value =
+            serde_json::from_str(berlin_engine::MATERIAL_MANIFEST).unwrap();
+        assert_eq!(
+            c.len(),
+            man["materialien"].as_object().unwrap().len(),
+            "{c:?}"
+        );
+        assert!(c.len() >= 12);
         assert!(
             c.iter()
                 .all(|l| l.contains("CC0 1.0") && l.contains("ambientcg.com"))

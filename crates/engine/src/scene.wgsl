@@ -22,6 +22,8 @@ struct Out {
     @location(4) @interpolate(flat) center: vec2<f32>,
     // Lage quer über den Rasenrand (mesh.rs fringe: center.x), anders als center interpoliert
     @location(5) across: f32,
+    // Fassadendetails (Tür, Schaufenster, Ladenband): Meter vom linken Rand, Anteil der Wandhöhe
+    @location(6) local: vec2<f32>,
 };
 fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
     var h = 0.0;
@@ -43,8 +45,11 @@ fn project_h(point: vec3<f32>, center: vec2<f32>, depth: f32, h: f32) -> vec4<f3
 ) -> Out {
     var out: Out;
     out.position = project(point, center, depth);
-    // Fassadendetails (Tür, Ladenfront): z ist der Anteil der projizierten Wandhöhe, uv.y die Gebäudehöhe
-    if material == 13.0 {
+    // Fassadendetails (Tür 13, Schaufenster 21, Ladenband 22): z ist der Anteil der projizierten Wandhöhe, uv.y die
+    // Gebäudehöhe, uv.x der Abstand vom linken Rand des Details
+    let detail_quad = material == 13.0 || material == 21.0 || material == 22.0;
+    out.local = select(vec2(0.0), vec2(uv.x / camera.params.x, point.z), detail_quad);
+    if detail_quad {
         var h = 0.0;
         if camera.params.y < 0.5 { h = max(18.0, uv.y * 0.5) * point.z; }
         out.position = project_h(point, center, depth, h);
@@ -99,8 +104,17 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     var bump = vec2(0.0);
     var occlusion = 1.0;
     var rough = 1.0;
+    let fclass = facade_class(in.material);
+    let roof = in.material >= 6.0 && in.material <= 9.0;
     if pa.x > 0.5 {
-        let g = ground_sample(p, gx, gy, pa, pb);
+        // Fassaden und Dächer: ein Maßstab (Ziegelreihen und Klinkerverband dürfen nicht gedreht werden);
+        // Boden: zwei Maßstäbe gegen sichtbare Kachelung
+        var g: Ground;
+        if fclass > 0u || roof {
+            g = surface_sample(p, gx, gy, pa, pb);
+        } else {
+            g = ground_sample(p, gx, gy, pa, pb);
+        }
         tint = g.tint;
         bump = g.bump;
         occlusion = g.occlusion;
@@ -156,17 +170,97 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
         let glint = select(0.0, clamp(inner, 0.0, 1.0), spark > 0.965) * detail;
         color = color + vec3(0.55, 0.62, 0.66) * glint * 0.5;
     }
-    if in.material == 11.0 || in.material == 12.0 {
-        let window = fract(p / vec2(2.5, 3.0));
-        let glass = window.x > 0.35 && window.x < 0.72 && window.y > 0.28 && window.y < 0.80;
-        color = mix(color, vec3(0.26, 0.32, 0.35), select(0.0, 0.85 * detail, glass));
+    if fclass > 0u {
+        // Fenster ausblenden, wenn eine Rasterzelle unter etwa 6 Bildpunkte schrumpft (sonst Moiré); das allgemeine
+        // `detail` taugt hier nicht, die Schrägansicht staucht Wände stark und es blendete Fenster zu früh aus
+        let cell_px = WINDOW_CELL / max(vec2(length(vec2(gx.x, gy.x)), length(vec2(gx.y, gy.y))), vec2(1e-4));
+        let wdetail = smoothstep(6.0, 12.0, min(cell_px.x, cell_px.y));
+        color = facade_details(color, p, in.material, fclass, wdetail);
     }
-    return vec4(linear_color(lit(color, normalize(in.normal), bump, rough, wet)), 1.0);
+    if in.material == 13.0 || in.material == 21.0 || in.material == 22.0 {
+        color = shop_details(color, in.local, in.material);
+    }
+    var nrm = normalize(in.normal);
+    if fclass > 0u {
+        // Wand: Tangente entlang der Wand (uv.x), Bitangente nach oben (uv.y = Höhe)
+        let t = vec3(-nrm.y, nrm.x, 0.0);
+        nrm = normalize(nrm + t * bump.x + vec3(0.0, 0.0, 1.0) * bump.y);
+    } else {
+        nrm = normalize(nrm + vec3(bump, 0.0));
+    }
+    return vec4(linear_color(lit(color, nrm, rough, wet)), 1.0);
+}
+// Fassadenklasse: 1 = Wohnen (Putz 11, Klinker 18, Beton 20), 2 = Arbeitsstätte (12, 19, 23), 0 = keine Fassade.
+fn facade_class(m: f32) -> u32 {
+    if m == 11.0 || m == 18.0 || m == 20.0 { return 1u; }
+    if m == 12.0 || m == 19.0 || m == 23.0 { return 2u; }
+    return 0u;
+}
+// Lage im Fensterraster (facade.rs): xy = Anteil in der Zelle (x entlang der Wand, y von unten), zw = Zelle.
+fn window_cell(p: vec2<f32>) -> vec4<f32> {
+    let q = p / WINDOW_CELL;
+    return vec4(fract(q), floor(q));
+}
+fn in_glass(st: vec2<f32>) -> bool {
+    return st.x > GLASS_X.x && st.x < GLASS_X.y && st.y > GLASS_Y.x && st.y < GLASS_Y.y;
+}
+// Fensterkreuz der Wohnhäuser: Mittelpfosten und Kämpfer bei 70 % (lz = Lage in der Scheibe 0…1)
+fn glass_bar(st: vec2<f32>) -> bool {
+    let gx = (st.x - GLASS_X.x) / (GLASS_X.y - GLASS_X.x);
+    let gy = (st.y - GLASS_Y.x) / (GLASS_Y.y - GLASS_Y.x);
+    return abs(gx - 0.5) < 0.035 || abs(gy - 0.7) < 0.03;
+}
+// Fenster der Tagesansicht: Scheibe mit Himmelsspiegelung (oben heller), heller Rahmen, Fensterbank aus Stein darunter,
+// bei Wohnhäusern ein Fensterkreuz; Plattenbau mit Plattenfugen am Zellrand. `detail` blendet alles in der Ferne aus
+// (sonst Moiré).
+fn facade_details(base: vec3<f32>, p: vec2<f32>, m: f32, fclass: u32, detail: f32) -> vec3<f32> {
+    var color = base;
+    let w = window_cell(p);
+    let st = w.xy;
+    if m == 20.0 || m == 23.0 {
+        let joint = min(min(st.x, 1.0 - st.x) * WINDOW_CELL.x, min(st.y, 1.0 - st.y) * WINDOW_CELL.y);
+        color *= mix(1.0, 0.7, (1.0 - smoothstep(0.015, 0.04, joint)) * detail);
+    }
+    let fw = vec2(0.07) / WINDOW_CELL;
+    let wide = st.x > GLASS_X.x - fw.x && st.x < GLASS_X.y + fw.x;
+    let sill = wide && st.y > GLASS_Y.x - fw.y * 1.8 && st.y <= GLASS_Y.x;
+    let frame = wide && st.y > GLASS_Y.x && st.y < GLASS_Y.y + fw.y;
+    if sill {
+        color = mix(color, vec3(0.80, 0.78, 0.74), 0.85 * detail);
+    } else if in_glass(st) {
+        let gy = (st.y - GLASS_Y.x) / (GLASS_Y.y - GLASS_Y.x);
+        var g = mix(vec3(0.09, 0.12, 0.16), vec3(0.34, 0.42, 0.50), gy * gy);
+        if fclass == 1u && glass_bar(st) { g = vec3(0.86, 0.85, 0.82); }
+        color = mix(color, g, 0.92 * detail);
+    } else if frame {
+        color = mix(color, vec3(0.88, 0.87, 0.84), 0.85 * detail);
+    } else if st.y < GLASS_Y.x - fw.y * 1.8 && st.y > GLASS_Y.x - fw.y * 6.0 && wide {
+        // Regenspur unter der Fensterbank
+        color *= 1.0 - 0.08 * detail;
+    }
+    return color;
+}
+// Tür (13): senkrechte Bretter mit Rahmen und Griff; Schaufenster (21): Glas mit diagonaler Spiegelung und Sprossen
+// alle 1,2 m; Ladenband (22): leicht glänzende Kante oben. local = (Meter vom linken Rand, Anteil der Wandhöhe).
+fn shop_details(base: vec3<f32>, local: vec2<f32>, m: f32) -> vec3<f32> {
+    let lx = local.x;
+    if m == 13.0 {
+        var c = base * (0.9 + 0.1 * step(0.5, fract(lx / 0.2)));
+        if lx < 0.07 || lx > 1.13 { c = base * 0.55; }
+        if abs(lx - 0.95) < 0.04 { c = vec3(0.75, 0.70, 0.55); }
+        return c;
+    }
+    if m == 21.0 {
+        let streak = smoothstep(0.0, 0.25, fract((lx + local.y * 8.0) * 0.18)) * (1.0 - smoothstep(0.25, 0.5, fract((lx + local.y * 8.0) * 0.18)));
+        var c = mix(vec3(0.18, 0.24, 0.29), vec3(0.55, 0.65, 0.72), streak * 0.8);
+        if abs(fract(lx / 1.2) - 0.5) > 0.465 { c = vec3(0.25, 0.25, 0.27); }
+        return c;
+    }
+    return base * (0.92 + 0.12 * step(0.55, fract(lx / 0.45)));
 }
 // Sonne auf eine (texturierte) Fläche: Grundlicht wie bisher (0,6 + 0,4 · n·Sonne) mit der Reliefnormale, dazu bei
 // Nässe ein Sonnenreflex in Richtung der Kamera (von oben) auf der Struktur der Oberfläche.
-fn lit(color: vec3<f32>, normal: vec3<f32>, bump: vec2<f32>, rough: f32, wet: f32) -> vec3<f32> {
-    let nrm = normalize(normal + vec3(bump, 0.0));
+fn lit(color: vec3<f32>, nrm: vec3<f32>, rough: f32, wet: f32) -> vec3<f32> {
     let sun = normalize(camera.sun.xyz);
     let light = 0.60 + 0.40 * max(0.0, dot(nrm, sun));
     let h = normalize(sun + vec3(0.0, 0.0, 1.0));
@@ -194,6 +288,17 @@ fn ground_sample(p: vec2<f32>, gx: vec2<f32>, gy: vec2<f32>, pa: vec4<f32>, pb: 
     let q = mix(
         textureSampleGrad(mat_nr, mat_sampler, uv1, layer, gx * k1, gy * k1),
         textureSampleGrad(mat_nr, mat_sampler, uv2, layer, rx, ry), w);
+    return finish_sample(d, q, pa, pb);
+}
+// Fassaden und Dächer: ein Maßstab, nicht gedreht.
+fn surface_sample(p: vec2<f32>, gx: vec2<f32>, gy: vec2<f32>, pa: vec4<f32>, pb: vec4<f32>) -> Ground {
+    let layer = i32(pa.x - 0.5);
+    let k = 1.0 / pa.y;
+    let d = textureSampleGrad(mat_detail, mat_sampler, p * k, layer, gx * k, gy * k).rgb * 2.0;
+    let q = textureSampleGrad(mat_nr, mat_sampler, p * k, layer, gx * k, gy * k);
+    return finish_sample(d, q, pa, pb);
+}
+fn finish_sample(d: vec3<f32>, q: vec4<f32>, pa: vec4<f32>, pb: vec4<f32>) -> Ground {
     let lum = dot(d, vec3(0.299, 0.587, 0.114));
     var g: Ground;
     g.tint = mix(vec3(1.0), mix(vec3(lum), d, pa.w), pa.z);
@@ -220,7 +325,7 @@ fn ground_sample(p: vec2<f32>, gx: vec2<f32>, gy: vec2<f32>, pa: vec4<f32>, pb: 
     var color = base * g.tint * g.occlusion;
     let wet = camera.padding2.x;
     color *= 1.0 - 0.3 * wet * (1.0 - 0.5 * g.rough);
-    return vec4(linear_color(lit(color, vec3(0.0, 0.0, 1.0), g.bump, g.rough, wet)), 1.0);
+    return vec4(linear_color(lit(color, normalize(vec3(g.bump, 1.0)), g.rough, wet)), 1.0);
 }
 // Erleuchtete Fenster (windows.js): eigener Durchgang nach dem Licht, damit Glühlampenlicht nachts nicht mit der
 // Umgebung abgedunkelt wird. Gleiche Fassaden, Tiefe LessEqual ohne Schreiben; alles außer brennenden Scheiben wird
@@ -257,15 +362,20 @@ fn office_light(m: f32) -> f32 {
     let minutes = camera.sun.w;
     let m = minutes - floor(minutes / 1440.0) * 1440.0;
     let late = m < 330.0 || m > 1380.0;
-    if (in.material != 11.0 && in.material != 12.0) || camera.params.y > 0.5 || (frac <= 0.001 && !late) {
+    let fclass = facade_class(in.material);
+    // Schaufenster (Späti): nachts hell erleuchtet, tagsüber nichts
+    if in.material == 21.0 && camera.params.y < 0.5 && camera.ambient.w > 0.15 {
+        let fog_k = 1.0 - 0.65 * min(1.0, camera.fog / 1.4);
+        return vec4(linear_color(vec3(1.0, 0.92, 0.74)) * (0.6 + 0.4 * camera.ambient.w) * fog_k, 1.0);
+    }
+    if fclass == 0u || camera.params.y > 0.5 || (frac <= 0.001 && !late) {
         discard;
     }
     let p = in.uv / camera.params.x;
-    let cell_size = vec2(2.5, 3.0);
-    let cell = floor(p / cell_size);
-    let st = fract(p / cell_size);
-    let glass = st.x > 0.35 && st.x < 0.72 && st.y > 0.28 && st.y < 0.80;
-    if !glass { discard; }
+    let w = window_cell(p);
+    let cell = w.zw;
+    let st = w.xy;
+    if !in_glass(st) || (fclass == 1u && glass_bar(st)) { discard; }
     let seed = bitcast<u32>(i32(floor(in.center.x))) * 73856093u ^ bitcast<u32>(i32(floor(in.center.y))) * 19349663u;
     let n = normalize(in.normal.xy + vec2(1e-6, 0.0));
     let face = u32(i32(round(atan2(n.y, n.x) / 6.2831853 * 16.0)) + 16) % 16u;
@@ -277,7 +387,7 @@ fn office_light(m: f32) -> f32 {
     let room = whash(seed, face, row, col, 4u);
     // Arbeitsstätten: abends noch Licht, nachts fast dunkel, tagsüber nur bei Trübe sichtbar (windows.js OFFICE)
     var lit = frac;
-    if in.material == 12.0 {
+    if fclass == 2u {
         lit = office_light(m);
         if m > 420.0 && m < 1140.0 { lit *= 0.7; }
     }
@@ -301,7 +411,7 @@ fn office_light(m: f32) -> f32 {
     else if k >= 0.95 { c = vec3(0.878, 0.592, 0.353); }
     // Vorhang: nur der untere Teil der Scheibe leuchtet
     let curtain = whash(seed, face, row, col, 7u) < 0.22;
-    let gy = (st.y - 0.28) / 0.52;
+    let gy = (st.y - GLASS_Y.x) / (GLASS_Y.y - GLASS_Y.x);
     if curtain && gy > 0.55 { discard; }
     // Nebel schluckt das Fensterlicht (render.js fogK)
     let fog_k = 1.0 - 0.65 * min(1.0, camera.fog / 1.4);

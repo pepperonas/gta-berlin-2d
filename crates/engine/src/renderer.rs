@@ -1260,6 +1260,7 @@ impl Renderer {
 pub(crate) fn shader_source() -> String {
     [
         atlas::shader_constants().as_str(),
+        crate::facade::shader_constants().as_str(),
         include_str!("scene.wgsl"),
         include_str!("lighting.wgsl"),
         include_str!("hud.wgsl"),

@@ -29,6 +29,13 @@ pub(crate) const FILES: &[(&str, &[u8], &[u8])] = &[
     material!("platten"),
     material!("gras"),
     material!("schotter"),
+    material!("ziegel"),
+    material!("schiefer"),
+    material!("blech"),
+    material!("kiesdach"),
+    material!("putz"),
+    material!("klinker"),
+    material!("beton"),
 ];
 
 /// Höchste Material-ID (`mesh.rs`) + 1: Größe des Parameterblocks.

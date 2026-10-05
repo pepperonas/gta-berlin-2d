@@ -91,6 +91,132 @@
    ],
    "hochpass_px": 24,
    "sha256": "bca54835c7c71bea4b4b9f27fbef127d666fa1cf7de16f2b04f0ceb4294e784c"
+  },
+  "ziegel": {
+   "zweck": "Ziegeldach",
+   "quelle": "RoofingTiles014A",
+   "seite": "https://ambientcg.com/view?id=RoofingTiles014A",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    290,
+    290
+   ],
+   "mittel_srgb": [
+    143.23,
+    91.44,
+    67.47
+   ],
+   "hochpass_px": 64,
+   "sha256": "b928f75b476df36417e01b6ab60057cb94f65abd035d7a1eaf7ea884ee0f1521"
+  },
+  "schiefer": {
+   "zweck": "Schieferdach",
+   "quelle": "RoofingTiles003",
+   "seite": "https://ambientcg.com/view?id=RoofingTiles003",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    52.2,
+    54.11,
+    52.08
+   ],
+   "hochpass_px": 64,
+   "sha256": "0fd7342268bf9e5949331a9a8e679762516605f79a3a3e4cabea1dce68ce15c4"
+  },
+  "blech": {
+   "zweck": "Blechdach",
+   "quelle": "CorrugatedSteel005",
+   "seite": "https://ambientcg.com/view?id=CorrugatedSteel005",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    153.45,
+    155.02,
+    157.71
+   ],
+   "hochpass_px": 64,
+   "sha256": "4198faced790c75c551750d323ef384ea1ab353463b2067f44f8e5f5ff2d1a09"
+  },
+  "kiesdach": {
+   "zweck": "Flachdach (Kies, Bitumen)",
+   "quelle": "Gravel040",
+   "seite": "https://ambientcg.com/view?id=Gravel040",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    99.07,
+    99.48,
+    91.83
+   ],
+   "hochpass_px": 16,
+   "sha256": "021c19ca1b6c0eefe3b6b55d33eb3af2d4d74ccb91255762ad3feb528a906c74"
+  },
+  "putz": {
+   "zweck": "Putzfassade",
+   "quelle": "Plaster003",
+   "seite": "https://ambientcg.com/view?id=Plaster003",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    215.17,
+    211.74,
+    208.52
+   ],
+   "hochpass_px": 8,
+   "sha256": "3a47249643273c82c53d8d31c9caef43aec940a4c926cf0c74858a8e96631bf1"
+  },
+  "klinker": {
+   "zweck": "Klinkerfassade",
+   "quelle": "Bricks085",
+   "seite": "https://ambientcg.com/view?id=Bricks085",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    240,
+    120
+   ],
+   "mittel_srgb": [
+    149.41,
+    116.99,
+    99.22
+   ],
+   "hochpass_px": 48,
+   "sha256": "93202c41a65e6932e77c7c42519ee5433b90150427ae726042c616c188e570a0"
+  },
+  "beton": {
+   "zweck": "Betonfassade (Plattenbau, Sichtbeton)",
+   "quelle": "Concrete036",
+   "seite": "https://ambientcg.com/view?id=Concrete036",
+   "urheber": "ambientCG (Lennart Demes)",
+   "lizenz": "CC0 1.0",
+   "vorlage_cm": [
+    0,
+    0
+   ],
+   "mittel_srgb": [
+    152.1,
+    147.75,
+    136.23
+   ],
+   "hochpass_px": 16,
+   "sha256": "fc46d520135bb9c8aec364ea2694a4794facd58bee1c124b3f64f119a9b74603"
   }
  }
 }
