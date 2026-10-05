@@ -32,10 +32,10 @@ pub(crate) const FILES: &[(&str, &[u8], &[u8])] = &[
 ];
 
 /// Höchste Material-ID (`mesh.rs`) + 1: Größe des Parameterblocks.
-pub(crate) const IDS: usize = 16;
+pub(crate) const IDS: usize = 32;
 
 /// Parameter je Material-ID: `a` = (Schicht + 1, 0 = prozedural; Kachel in m; Stärke; Farbanteil),
-/// `b` = (Relief, Umgebungsverdeckung, –, –). 2 × 16 × vec4 = 512 Byte.
+/// `b` = (Relief, Umgebungsverdeckung, –, –). 2 × 32 × vec4 = 1 KiB.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Params {
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(p.a[1][0], 1., "Asphalt = Schicht 0 (+1)");
         assert_eq!(p.a[2][1], 2.4, "Kopfstein: 2,4 m je Kachel");
         assert_eq!(p.a[5][0], 0., "Wasser bleibt prozedural");
-        assert_eq!(size_of::<Params>(), 512);
+        assert_eq!(size_of::<Params>(), 1024);
     }
 
     #[test]

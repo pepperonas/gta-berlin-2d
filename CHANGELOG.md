@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 3 (native Fassung): **Bordsteine** (30 cm heller Granit mit dunkler Fuge zur Fahrbahn,
+  auch an Kreuzungen), dunklerer Randstreifen außen am Gehweg, **ausgefranste Rasenränder** über angrenzendem Boden,
+  **Fahrbahnmarkierungen** aus den Kartendaten – Zebrastreifen, Ampel-Furten (Blöcke), markierte Querungen, Haltelinien
+  vor Ampeln über die zufahrenden Fahrstreifen –, **Fahrradpiktogramme** auf Radfahrstreifen und **Laub** unter
+  Laubbäumen. Der Baum- und Decal-Atlas hat jetzt 256-px-Zellen mit Mip-Stufen (Kronen flimmern beim Herauszoomen
+  nicht mehr); Raster und Zellgröße kommen als Konstanten aus Rust in den Shader. GPU +0,2 bis +0,8 ms.
+- Mit `--fenster` zeigt das Fenster eine verkleinerte Vorschau des abseits gezeichneten Bildes statt Schwarz.
 - Grafik-Überarbeitung, Phase 2 (native Fassung, HD): **Bodenmaterialien aus Texturen** – Asphalt, Kopfsteinpflaster,
   Gehwegplatten, Rasen und Schotter/Gleisbett aus CC0-Vorlagen von ambientCG (gebaut von
   `tools/gfx/build_materials.py`, Danksagung unter „Über das Spiel“). Die Textur bringt Struktur, Relief

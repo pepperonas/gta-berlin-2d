@@ -6,6 +6,7 @@
   "2": {"material": "kopfstein", "kachel_m": 2.4, "staerke": 1.0, "farbe": 0.5, "relief": 1.0, "ao": 0.8},
   "3": {"material": "platten", "kachel_m": 2.8, "staerke": 0.9, "farbe": 0.2, "relief": 0.7, "ao": 0.6},
   "4": {"material": "gras", "kachel_m": 3.0, "staerke": 1.0, "farbe": 0.35, "relief": 0.8, "ao": 0.5},
+  "16": {"material": "gras", "kachel_m": 3.0, "staerke": 1.0, "farbe": 0.35, "relief": 0.8, "ao": 0.5, "_": "Rasenrand (mesh.rs fringe), wie 4"},
   "14": {"material": "gras", "kachel_m": 3.6, "staerke": 0.7, "farbe": 0.2, "relief": 0.5, "ao": 0.2, "_": "Hintergrund (keine Fläche: Vorgärten, Höfe, unkartiertes Land) – ground_fs"},
   "10": {"material": "schotter", "kachel_m": 2.4, "staerke": 1.0, "farbe": 0.5, "relief": 0.8, "ao": 0.6}
  },

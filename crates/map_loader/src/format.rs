@@ -187,6 +187,18 @@ pub enum Feature {
         seed: u32,
         genus: u8,
     },
+    /// Fahrbahnmarkierungen einer Straße (Zebrastreifen, Furten, Haltelinien): weiße Rechtecke auf der Fahrbahn
+    Marks {
+        level: i8,
+        marks: Vec<Mark>,
+    },
+}
+/// Weißes Rechteck auf der Fahrbahn: Mitte, Ausdehnung (entlang, quer) in Kartenpixeln, Richtung (rad).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Mark {
+    pub center: Vec2,
+    pub size: Vec2,
+    pub angle: f32,
 }
 #[derive(Debug, Clone)]
 pub struct Item {
@@ -201,6 +213,11 @@ pub struct Tile {
 #[derive(Deserialize)]
 struct RawVertices {
     xy: Vec<f32>,
+    #[serde(default)]
+    id: Vec<i64>,
+    /// Abstand vom Knoten, an dem die Fahrstreifen beginnen (Kartenpixel)
+    #[serde(default)]
+    trim: Vec<f32>,
 }
 #[derive(Deserialize, Default)]
 struct RawTrees {
@@ -236,6 +253,12 @@ struct RawTile {
     water: Vec<Value>,
     #[serde(default)]
     trees: RawTrees,
+    /// x, y, Kante, Art (0 Zebrastreifen, 1 Ampel-Furt, 2 markiert) je Querung
+    #[serde(default)]
+    crossings: Vec<f64>,
+    /// Knoten (Vertex-Nummern) mit Ampel
+    #[serde(default)]
+    signals: Vec<i64>,
 }
 fn array(v: &Value) -> Result<&[Value]> {
     v.as_array().map(|v| v.as_slice()).context("Array erwartet")
@@ -301,6 +324,8 @@ impl Tile {
         let scale = meta.scale;
         let vertices = undelta(&raw.vertices.xy)?;
         let mut items = Vec::new();
+        // Endknoten je Straße (für Haltelinien an Ampeln)
+        let mut ends: Vec<(usize, usize)> = Vec::new();
         for e in raw.edges {
             let r = row(&e, 10)?;
             let ia = usize::try_from(integer(&r[1])?)?;
@@ -315,6 +340,7 @@ impl Tile {
             let c = |i: usize| -> f32 { cs.get(i).and_then(Value::as_f64).unwrap_or(0.0) as f32 };
             let short = cs.len() == 2;
             let surface = if short { c(1) } else { c(11) } as u8;
+            ends.push((ia, ib));
             items.push(Item {
                 id: Some(FeatureId(0, integer(&r[0])?)),
                 feature: Feature::Road(Road {
@@ -352,6 +378,14 @@ impl Tile {
                 }),
             });
         }
+        items.extend(markings(
+            &items,
+            &ends,
+            &raw.crossings,
+            &raw.signals,
+            &raw.vertices,
+            scale,
+        ));
         for j in raw.junctions {
             let r = row(&j, 6)?;
             let flags = integer(&r[4])? as u32;
@@ -531,5 +565,217 @@ impl Tile {
             });
         }
         Ok(Self { key, items })
+    }
+}
+
+/// Fahrbahnmarkierungen aus Querungen und Ampelknoten (render.js drawCrossings/drawSignals): Zebrastreifen als
+/// Balken in Fahrtrichtung (0,5 m breit, 1 m Abstand, 4 m lang), Furten und markierte Querungen als zwei Querstriche
+/// 4 m auseinander (Ampel-Furt gestrichelt), Haltelinie (0,5 m) am Beginn der Fahrstreifen vor jedem Ampelknoten über
+/// die zufahrenden Fahrstreifen. Nur Straßen bis Klasse 8 (Fahrbahnen).
+fn markings(
+    items: &[Item],
+    ends: &[(usize, usize)],
+    crossings: &[f64],
+    signals: &[i64],
+    vertices: &RawVertices,
+    scale: f32,
+) -> Vec<Item> {
+    use crate::geom::{cum_lengths, point_along_cum, project_on_polyline};
+    let roads: Vec<(&Road, (usize, usize))> = items
+        .iter()
+        .filter_map(|i| match &i.feature {
+            Feature::Road(r) => Some(r),
+            _ => None,
+        })
+        .zip(ends.iter().copied())
+        .filter(|(r, _)| r.class <= 8 && !r.passage)
+        .collect();
+    let mut per_road: std::collections::BTreeMap<usize, Vec<Mark>> = Default::default();
+    let mark = |c: Vec2, along: f32, across: f32, dir: Vec2| Mark {
+        center: c,
+        size: Vec2::new(along, across),
+        angle: dir.y.atan2(dir.x),
+    };
+    for q in crossings.as_chunks::<4>().0 {
+        let (p, eid, kind) = (Vec2::new(q[0] as f32, q[1] as f32), q[2] as i64, q[3] as u8);
+        let Some((k, (r, _))) = roads.iter().enumerate().find(|(_, (r, _))| r.id == eid) else {
+            continue;
+        };
+        let Some(at) = project_on_polyline(&r.points, p) else {
+            continue;
+        };
+        let (d, n) = (at.direction, Vec2::new(-at.direction.y, at.direction.x));
+        let half = r.width * 0.5 - 0.3 * scale;
+        let out = per_road.entry(k).or_default();
+        match kind {
+            0 => {
+                let mut y = -half + 0.25 * scale;
+                while y <= half - 0.25 * scale {
+                    out.push(mark(at.point + n * y, 4. * scale, 0.5 * scale, d));
+                    y += scale;
+                }
+            }
+            _ => {
+                for side in [-1., 1.] {
+                    let c = at.point + d * (side * 2.1 * scale);
+                    if kind == 1 {
+                        // Furt an Ampeln: Blockmarkierung 0,5 × 0,5 m mit 0,2 m Lücke
+                        let mut y = -half + 0.25 * scale;
+                        while y <= half - 0.25 * scale {
+                            out.push(mark(c + n * y, 0.5 * scale, 0.5 * scale, d));
+                            y += 0.7 * scale;
+                        }
+                    } else {
+                        out.push(mark(c, 0.2 * scale, half * 2., d));
+                    }
+                }
+            }
+        }
+    }
+    for &sig in signals {
+        let Some(vi) = vertices.id.iter().position(|&v| v == sig) else {
+            continue;
+        };
+        let trim = vertices.trim.get(vi).copied().unwrap_or(0.).max(3. * scale);
+        for (k, (r, (ia, ib))) in roads.iter().enumerate() {
+            let toward_end = *ib == vi;
+            if !toward_end && *ia != vi {
+                continue;
+            }
+            let lanes = if toward_end { r.forward } else { r.backward };
+            if lanes == 0 {
+                continue;
+            }
+            let cum = cum_lengths(&r.points);
+            let len = *cum.last().unwrap_or(&0.);
+            let back = trim + 0.6 * scale;
+            if len < back + 2. * scale {
+                continue;
+            }
+            let s = if toward_end { len - back } else { back };
+            let Some(at) = point_along_cum(&r.points, &cum, s) else {
+                continue;
+            };
+            // Querschnitt wie street.js laneOffsets: Bord | Parken | Rad | Fahrstreifen; vorwärts rechts der Mitte
+            let x_l = -r.width / 2. + r.park_width[0] + r.cycle[0];
+            let x_r = r.width / 2. - r.park_width[1] - r.cycle[1];
+            let n_lanes = (r.forward + r.backward).max(1) as f32;
+            let lw = (x_r - x_l) / n_lanes;
+            let center = if r.forward > 0 && r.backward > 0 {
+                x_l + r.backward as f32 * lw
+            } else if r.forward > 0 {
+                x_l
+            } else {
+                x_r
+            };
+            let (a, b) = if toward_end {
+                (center, x_r)
+            } else {
+                (x_l, center)
+            };
+            if b - a < 1.5 * scale {
+                continue;
+            }
+            let n = Vec2::new(-at.direction.y, at.direction.x);
+            per_road.entry(k).or_default().push(mark(
+                at.point + n * ((a + b) * 0.5),
+                0.5 * scale,
+                b - a,
+                at.direction,
+            ));
+        }
+    }
+    per_road
+        .into_iter()
+        .map(|(k, marks)| Item {
+            id: None,
+            feature: Feature::Marks {
+                level: roads[k].0.level,
+                marks,
+            },
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod mark_tests {
+    use super::*;
+    fn road(id: i64, fwd: u8, bwd: u8) -> Item {
+        Item {
+            id: None,
+            feature: Feature::Road(Road {
+                id,
+                points: vec![Vec2::new(0., 0.), Vec2::new(400., 0.)],
+                width: 80.,
+                class: 5,
+                level: 0,
+                bridge: false,
+                passage: false,
+                surface: 0,
+                forward: fwd,
+                backward: bwd,
+                park: [0; 2],
+                park_width: [0.; 2],
+                cycle: [0.; 2],
+                track: [0.; 2],
+                fill: 0.,
+            }),
+        }
+    }
+    fn marks(v: &[Item]) -> Vec<Mark> {
+        v.iter()
+            .flat_map(|i| match &i.feature {
+                Feature::Marks { marks, .. } => marks.clone(),
+                _ => vec![],
+            })
+            .collect()
+    }
+    #[test]
+    fn zebra_bars_run_with_the_road_across_its_width() {
+        let items = vec![road(7, 1, 1)];
+        let v = markings(
+            &items,
+            &[(0, 1)],
+            &[200., 3., 7., 0.],
+            &[],
+            &RawVertices {
+                xy: vec![],
+                id: vec![],
+                trim: vec![],
+            },
+            10.,
+        );
+        let m = marks(&v);
+        // 8 m Fahrbahn − 2 × 0,3 m Rand: Balken je Meter
+        assert!((6..=8).contains(&m.len()), "{}", m.len());
+        assert!(
+            m.iter()
+                .all(|b| b.size == Vec2::new(40., 5.) && b.angle.abs() < 1e-6)
+        );
+        assert!(
+            m.iter()
+                .all(|b| (b.center.x - 200.).abs() < 1e-3 && b.center.y.abs() < 40.)
+        );
+    }
+    #[test]
+    fn stop_line_covers_only_the_approaching_lanes() {
+        let items = vec![road(7, 1, 1)];
+        let verts = RawVertices {
+            xy: vec![],
+            id: vec![100, 200],
+            trim: vec![0., 60.],
+        };
+        // Ampel am Ende (Knoten 200 = Index 1): Haltelinie rechts der Mitte, 6,6 m vor dem Knoten
+        let m = marks(&markings(&items, &[(0, 1)], &[], &[200], &verts, 10.));
+        assert_eq!(m.len(), 1);
+        let l = m[0];
+        assert!((l.center.x - (400. - 66.)).abs() < 1e-3, "{l:?}");
+        assert!(
+            l.center.y > 0. && (l.size.y - 40.).abs() < 1e-3,
+            "rechte Hälfte: {l:?}"
+        );
+        // Einbahnstraße weg vom Knoten: keine Haltelinie
+        let one = vec![road(8, 0, 1)];
+        assert!(marks(&markings(&one, &[(0, 1)], &[], &[200], &verts, 10.)).is_empty());
     }
 }

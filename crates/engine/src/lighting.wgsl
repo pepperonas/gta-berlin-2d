@@ -35,8 +35,7 @@ struct TreeShadowOut { @builtin(position) position: vec4<f32>, @location(0) uv: 
     let major = minor * min(3.0, sqrt(1.0 + l * l));
     let world = center + u * q.x * 2.3 * major + p * q.y * 2.3 * minor;
     out.position = project(vec3(world, 0.0), world, 0.5);
-    let uv = vec2(0.5 / 64.0) + (q + 0.5) * (63.0 / 64.0);
-    out.uv = (vec2(cell % 4.0, floor(cell / 4.0)) + uv) / vec2(4.0, 3.0);
+    out.uv = atlas_uv(cell, q);
     return out;
 }
 @fragment fn tree_shadow_fs(in: TreeShadowOut) -> @location(0) vec4<f32> {
@@ -145,6 +144,10 @@ fn grade_factor(uv: vec2<f32>) -> vec3<f32> {
 // Nachbearbeitung: Szenenbild (linear, Rgba16Float, aufgelöst) ins Ausgabebild. Ein Bildpunkt je Bildpunkt
 // (gleiche Größe), daher textureLoad statt Filtern. Phase 1 der Grafik-Überarbeitung: nur Farbabstimmung und
 // Klemmen auf 0…1 – bildgleich zum früheren Zeichnen direkt ins sRGB-Ziel.
+// Vorschau im Fenster bei fester Zeichengröße (`--fenster`): das abseits gezeichnete Bild, verkleinert.
+@fragment fn preview_fs(in: FullOut) -> @location(0) vec4<f32> {
+    return vec4(textureSample(atlas, atlas_sampler, in.uv).rgb, 1.0);
+}
 @fragment fn post_fs(in: FullOut) -> @location(0) vec4<f32> {
     let c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
     return vec4(clamp(c * grade_factor(in.uv), vec3(0.0), vec3(1.0)), 1.0);

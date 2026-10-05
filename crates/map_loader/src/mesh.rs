@@ -614,6 +614,72 @@ fn roofdecor_point_inside(p: Vec2, rings: &[Vec<Vec2>]) -> bool {
     }
     inside
 }
+/// Bordstein zwischen Fahrbahn und Gehweg: 30 cm heller Granit (Körnung der Asphalttextur in hellem Ton), zur Fahrbahn
+/// hin eine dunkle Fuge. Liegt hinter der Fahrbahn und vor dem Gehweg – sichtbar bleibt nur der Rand.
+fn curb(mesh: &mut Mesh, points: &[Vec2], width: f32, depth: f32, scale: f32) {
+    mesh.stroke(
+        points,
+        width + 2. * CURB_M * scale,
+        Surface::ground(0xbdbab2, 1., depth + 0.01),
+    );
+    mesh.stroke(
+        points,
+        width + 2. * 0.05 * scale,
+        Surface::ground(0x3d3b37, 0., depth + 0.005),
+    );
+}
+/// Breite des Bordsteins in Metern.
+pub const CURB_M: f32 = 0.3;
+/// Material-ID des Rasenrands (Streifen entlang von Rasenflächen, ausgefranst; `center.x` = Lage quer 0 außen … 1 innen).
+pub const FRINGE_MATERIAL: f32 = 16.;
+/// Rasenrand: halber Streifen innen, halber außen über dem Nachbarn (Hintergrund, Platz, Sand) – nie über Straßen
+/// und Gehwegen (die liegen weiter vorn).
+fn fringe(
+    mesh: &mut Mesh,
+    polygon: &Polygon,
+    color: u32,
+    depth: f32,
+    half: f32,
+    clip: Option<Bounds>,
+) {
+    for (ring, &outer) in polygon.rings.iter().zip(&polygon.outer) {
+        // Innen der Fläche: links der Laufrichtung bei positivem Umlauf (Außenring), bei Löchern umgekehrt
+        let sign = if (signed_area(ring) > 0.) == outer {
+            1.
+        } else {
+            -1.
+        };
+        for (a, b) in edges(ring) {
+            let d = b - a;
+            if d.length_squared() < 0.01 {
+                continue;
+            }
+            let n = Vec2::new(-d.y, d.x).normalize() * sign;
+            let quad = [a - n * half, b - n * half, b + n * half, a + n * half];
+            let points = clip.map_or_else(|| quad.to_vec(), |c| clip_ring(&quad, c));
+            if points.len() < 3 {
+                continue;
+            }
+            let base = mesh.vertices.len() as u32;
+            for p in &points {
+                let across = (0.5 + (*p - a).dot(n) / (2. * half)).clamp(0., 1.);
+                mesh.vertices.push(Vertex {
+                    point: [p.x, p.y, 0.],
+                    normal: [0., 0., 1.],
+                    color: rgb(color),
+                    uv: p.to_array(),
+                    center: [across, 0.],
+                    material: FRINGE_MATERIAL,
+                    depth,
+                });
+            }
+            for i in 1..points.len() - 1 {
+                mesh.indices
+                    .extend_from_slice(&[base, base + i as u32, base + i as u32 + 1]);
+            }
+        }
+    }
+}
 fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
     if r.passage {
         return;
@@ -626,11 +692,22 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
         0.85
     };
     let sidewalk = if r.class <= 9 { 2. * scale } else { 0. };
+    if sidewalk > 0. {
+        // Randstreifen außen am Gehweg (Kantensteine, Schmutz in der Fuge zum Boden), dahinter
+        mesh.stroke(
+            &r.points,
+            r.width + 2. * sidewalk + 2. * 0.12 * scale,
+            Surface::ground(0x85827a, 3., depth + 0.031),
+        );
+    }
     mesh.stroke(
         &r.points,
         r.width + 2. * sidewalk,
         Surface::ground(0xa8a59d, 3., depth + 0.03),
     );
+    if sidewalk > 0. {
+        curb(mesh, &r.points, r.width, depth, scale);
+    }
     let (color, material) = match r.surface {
         1 => (0x72716b, 2.),
         2 => (0x949087, 3.),
@@ -657,6 +734,34 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
                 0.1 * scale,
                 Surface::ground(0xb7b6a8, 0., depth - 0.0003),
             );
+        }
+    }
+    // Fahrradpiktogramme auf Radfahrstreifen, alle 30 m, in Fahrtrichtung des Streifens
+    for side in 0..2 {
+        let w = r.cycle[side];
+        if w < 0.9 * scale {
+            continue;
+        }
+        let sign = if side == 0 { -1. } else { 1. };
+        let off = sign * (r.width * 0.5 - r.park_width[side] - w * 0.5);
+        let size = (1.6 * scale).min(w * 1.8);
+        let mut s = margin + 6. * scale;
+        while s < length - margin {
+            if let Some(p) = point_along_cum(&r.points, &cum, s) {
+                let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * off;
+                // rechts gefahren: links liegender Streifen zeigt gegen die Zeichenrichtung
+                let angle = p.direction.y.atan2(p.direction.x)
+                    + if side == 0 { std::f32::consts::PI } else { 0. };
+                mesh.sprites.push(Sprite {
+                    point: [pos.x, pos.y, 0.],
+                    size: [size, size],
+                    angle,
+                    color: rgb(0xe3dfc9),
+                    cell: 11.,
+                    depth: depth - 0.0009,
+                });
+            }
+            s += 30. * scale;
         }
     }
     if r.forward > 0 && r.backward > 0 && r.class <= 7 {
@@ -819,6 +924,17 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
                 Surface::ground(color, material, depth),
                 *clip,
             )?;
+            // weicher Rand: Rasen franst über den Nachbarn (Hintergrund, Platz, Sand) aus
+            if material == 4. && *kind != area_kind::BRIDGE {
+                fringe(
+                    &mut mesh,
+                    polygon,
+                    color,
+                    depth - 0.0005,
+                    0.6 * scale,
+                    *clip,
+                );
+            }
         }
         Feature::Road(r) => road_mesh(&mut mesh, r, scale),
         Feature::Junction {
@@ -838,6 +954,16 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
                 *point,
                 *radius + 2. * scale,
                 Surface::ground(0xa8a59d, 3., depth + 0.03),
+            );
+            mesh.circle(
+                *point,
+                *radius + CURB_M * scale,
+                Surface::ground(0xbdbab2, 1., depth + 0.01),
+            );
+            mesh.circle(
+                *point,
+                *radius + 0.05 * scale,
+                Surface::ground(0x3d3b37, 0., depth + 0.005),
             );
             mesh.circle(
                 *point,
@@ -886,6 +1012,25 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
                 }
             }
         }
+        Feature::Marks { level, marks } => {
+            let depth = if *level > 0 {
+                0.68 - *level as f32 * 0.03
+            } else if *level < 0 {
+                0.935
+            } else {
+                0.85
+            };
+            for m in marks {
+                mesh.sprites.push(Sprite {
+                    point: [m.center.x, m.center.y, 0.],
+                    size: m.size.to_array(),
+                    angle: m.angle,
+                    color: rgb(0xe3dfc9),
+                    cell: 7.,
+                    depth: depth - 0.0012,
+                });
+            }
+        }
         Feature::Tree {
             point,
             radius,
@@ -905,6 +1050,23 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
                 cell: if *genus == 16 { 6. } else { 0. },
                 depth: 0.44 - point.y / 500000. * 0.2,
             });
+            // Laub unter etwa jedem dritten Laubbaum (am Boden, vor Straßen und Gehwegen)
+            // (einige 2,6-m-Flecken unter der Krone; ein Blatt misst so 10–15 cm)
+            if *genus != 16 && hash01(seed.wrapping_mul(31).wrapping_add(7)) < 0.4 {
+                for k in 0..4u32 {
+                    let h = |i: u32| hash01(seed.wrapping_add(17 + k * 7 + i)) as f32;
+                    let off =
+                        Vec2::from_angle(h(0) * std::f32::consts::TAU) * radius * 0.7 * h(1).sqrt();
+                    mesh.sprites.push(Sprite {
+                        point: [point.x + off.x, point.y + off.y, 0.],
+                        size: [2.6 * scale, 2.6 * scale],
+                        angle: h(2) * std::f32::consts::TAU,
+                        color: [1.; 3],
+                        cell: 10.,
+                        depth: 0.846,
+                    });
+                }
+            }
         }
     }
     Ok(mesh)
@@ -913,6 +1075,41 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
 mod tests {
     use super::*;
     use crate::geom::point_in_ring;
+    #[test]
+    fn grass_fringe_frays_outwards_whatever_the_winding() {
+        for ring in [
+            vec![
+                Vec2::ZERO,
+                Vec2::new(100., 0.),
+                Vec2::new(100., 100.),
+                Vec2::new(0., 100.),
+            ],
+            vec![
+                Vec2::ZERO,
+                Vec2::new(0., 100.),
+                Vec2::new(100., 100.),
+                Vec2::new(100., 0.),
+            ],
+        ] {
+            let polygon = Polygon {
+                rings: vec![ring.clone()],
+                outer: vec![true],
+            };
+            let mut mesh = Mesh::default();
+            fringe(&mut mesh, &polygon, 0x5d9340, 0.97, 4., None);
+            assert!(!mesh.vertices.is_empty());
+            // je Viereck: Mitte der Außenkante (Lage 0) liegt außen, Mitte der Innenkante (Lage 1) innen
+            for q in mesh.vertices.chunks(4) {
+                let mid = |a: &Vertex, b: &Vertex| {
+                    Vec2::new(a.point[0] + b.point[0], a.point[1] + b.point[1]) * 0.5
+                };
+                assert!((q[0].center[0], q[1].center[0]) == (0., 0.));
+                assert!((q[2].center[0], q[3].center[0]) == (1., 1.));
+                assert!(!point_in_ring(mid(&q[0], &q[1]), &ring), "außen");
+                assert!(point_in_ring(mid(&q[2], &q[3]), &ring), "innen");
+            }
+        }
+    }
     #[test]
     fn disconnected_rings_and_nested_islands_use_even_odd_fill() {
         let square = |lo: f32, hi: f32| {

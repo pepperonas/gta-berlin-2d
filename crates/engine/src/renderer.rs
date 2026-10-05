@@ -64,6 +64,8 @@ pub(crate) struct Renderer {
     /// feste Zeichengröße: das Bild entsteht abseits des Fensters (Messung, Aufnahmen größer als der Bildschirm)
     fixed: Option<PhysicalSize<u32>>,
     offscreen: Option<wgpu::TextureView>,
+    /// Fenstervorschau des abseits gezeichneten Bildes (nur bei fester Zeichengröße)
+    preview: Option<(wgpu::RenderPipeline, wgpu::BindGroup)>,
     scale: f32,
     lighting: Lighting,
     light: lightpass::LightPass,
@@ -146,15 +148,7 @@ impl Renderer {
         surface.configure(&device, &config);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Berlin mesh / atlas shaders"),
-            source: wgpu::ShaderSource::Wgsl(
-                concat!(
-                    include_str!("scene.wgsl"),
-                    include_str!("lighting.wgsl"),
-                    include_str!("hud.wgsl"),
-                    include_str!("overlay.wgsl")
-                )
-                .into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(shader_source().into()),
         });
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Camera layout"),
@@ -230,28 +224,39 @@ impl Renderer {
                 height: atlas::HEIGHT,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: 1,
+            // Mip-Stufen: Kronen und Decals flimmern beim Herauszoomen sonst
+            mip_level_count: atlas::MIPS,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &atlas::pixels(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(atlas::WIDTH * 4),
-                rows_per_image: Some(atlas::HEIGHT),
-            },
-            texture.size(),
-        );
+        for (level, (px, w, h)) in
+            atlas::mips(&atlas::pixels(), atlas::WIDTH, atlas::HEIGHT, atlas::MIPS)
+                .iter()
+                .enumerate()
+        {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                px,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(w * 4),
+                    rows_per_image: Some(*h),
+                },
+                wgpu::Extent3d {
+                    width: *w,
+                    height: *h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
         let view = texture.create_view(&Default::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Atlas sampler"),
@@ -445,6 +450,27 @@ impl Renderer {
         );
         let hud_depth = depth_view(&device, size);
         let offscreen = fixed.map(|f| offscreen_view(&device, config.format, f));
+        let preview = offscreen.as_ref().map(|view| {
+            let cx = lightpass::Ctx {
+                device: &device,
+                layout: &layout,
+                atlas_layout: &atlas_layout,
+                shader: &shader,
+            };
+            (
+                cx.pipeline(
+                    "Fenstervorschau",
+                    "full_vs",
+                    "preview_fs",
+                    &[],
+                    config.format,
+                    wgpu::BlendState::REPLACE,
+                    None,
+                    1,
+                ),
+                preview_bind(&device, &atlas_layout, &sampler, view),
+            )
+        });
         let gpu = if measure {
             GpuTimer::new(&device, &queue)
         } else {
@@ -479,6 +505,7 @@ impl Renderer {
             size,
             fixed,
             offscreen,
+            preview,
             scale,
             lighting,
             light,
@@ -745,7 +772,12 @@ impl Renderer {
                 self.pipes.samples,
             );
             if let Some(f) = self.fixed {
-                self.offscreen = Some(offscreen_view(&self.device, self.config.format, f));
+                let view = offscreen_view(&self.device, self.config.format, f);
+                if let Some((_, bind)) = &mut self.preview {
+                    *bind =
+                        preview_bind(&self.device, &self.atlas_layout, &self.atlas_sampler, &view);
+                }
+                self.offscreen = Some(view);
             }
             let cx = lightpass::Ctx {
                 device: &self.device,
@@ -1175,10 +1207,10 @@ impl Renderer {
         let timestamps = self.gpu.as_mut().and_then(GpuTimer::begin);
         match (&self.offscreen, &view) {
             (Some(target), view) => {
-                // feste Zeichengröße: Bild abseits, das Fenster bleibt dunkel
+                // feste Zeichengröße: Bild abseits, im Fenster eine verkleinerte Vorschau (Seitenverhältnis bleibt)
                 self.draw_scene(&mut encoder, target, camera, timestamps);
                 if let Some(view) = view {
-                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Fenster (feste Zeichengröße)"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view,
@@ -1191,6 +1223,17 @@ impl Renderer {
                         })],
                         ..Default::default()
                     });
+                    if let Some((pipeline, bind)) = &self.preview {
+                        let (ww, wh) = (self.config.width as f32, self.config.height as f32);
+                        let (iw, ih) = (self.size.width as f32, self.size.height as f32);
+                        let k = (ww / iw).min(wh / ih);
+                        let (vw, vh) = (iw * k, ih * k);
+                        pass.set_viewport((ww - vw) * 0.5, (wh - vh) * 0.5, vw, vh, 0., 1.);
+                        pass.set_bind_group(0, &self.bind, &[]);
+                        pass.set_bind_group(1, bind, &[]);
+                        pass.set_pipeline(pipeline);
+                        pass.draw(0..3, 0..1);
+                    }
                 }
             }
             (None, Some(view)) => self.draw_scene(&mut encoder, view, camera, timestamps),
@@ -1213,6 +1256,17 @@ impl Renderer {
         Ok(true)
     }
 }
+/// WGSL aller Durchgänge; davor die Konstanten aus Rust (Atlasraster), damit Shader und CPU nie auseinanderlaufen.
+pub(crate) fn shader_source() -> String {
+    [
+        atlas::shader_constants().as_str(),
+        include_str!("scene.wgsl"),
+        include_str!("lighting.wgsl"),
+        include_str!("hud.wgsl"),
+        include_str!("overlay.wgsl"),
+    ]
+    .concat()
+}
 /// Kamera (32 B) + Sonne + Parameter + Schatten + Umgebungslicht (je 16 B).
 const UNIFORM_BYTES: u64 = 96;
 fn offscreen_view(
@@ -1232,10 +1286,31 @@ fn offscreen_view(
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
         .create_view(&Default::default())
+}
+fn preview_bind(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    view: &wgpu::TextureView,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Fenstervorschau"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+        ],
+    })
 }
 fn depth_view(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
     device
@@ -1373,5 +1448,18 @@ fn upload_bodies(
     }
     if let Some(buffer) = slot {
         queue.write_buffer(buffer, 0, bytemuck::cast_slice(bodies));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn atlas_grid_comes_from_rust_not_from_literals() {
+        let src = super::shader_source();
+        assert!(src.starts_with(&crate::atlas::shader_constants()));
+        for bad in ["64.0", "vec2(4.0,3.0)", "vec2(4.0, 3.0)", "cell % 4.0"] {
+            assert!(!src.contains(bad), "fest verdrahtetes Atlasraster: {bad}");
+        }
+        assert!(src.contains("fn atlas_uv"));
     }
 }

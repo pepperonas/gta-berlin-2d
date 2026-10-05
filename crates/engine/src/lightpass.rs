@@ -106,7 +106,7 @@ fn depth_test(compare: wgpu::CompareFunction) -> wgpu::DepthStencilState {
 
 impl Ctx<'_> {
     #[allow(clippy::too_many_arguments)]
-    fn pipeline(
+    pub(crate) fn pipeline(
         &self,
         label: &str,
         vs: &str,

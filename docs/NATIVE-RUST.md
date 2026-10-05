@@ -1924,3 +1924,28 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
 - **Fallstricke:** `patch` ist in WGSL reserviert; ein Einstiegspunkt (`full_vs`) lässt sich nicht aus einem anderen
   aufrufen (`full_tri`). `tools/gfx/captures.sh` löscht die alte Aufnahme vor jedem Lauf – sonst übersah es Abstürze.
 
+## Grafik HD/Pixel: Phase 3 – Kanten, Übergänge, Markierungen (05.10.2026)
+
+- **Bordstein (`mesh.rs curb`, `CURB_M` = 0,3 m):** zwei Striche hinter der Fahrbahn und vor dem Gehweg – heller Granit
+  (Asphalttextur in hellem Ton) und eine 5-cm-Fuge zur Fahrbahn; an Kreuzungen als Ringe um die Kreuzungsscheibe. Außen
+  am Gehweg ein 12-cm-Randstreifen in dunklerem Ton.
+- **Rasenrand (`fringe`, Material 16):** Streifen entlang jeder Rasenfläche (halb innen, halb außen), knapp vor den
+  Flächen, aber hinter Straßen und Gehwegen; außen per Rauschen ausgefranst (`discard`), am Rand etwas trockener. Die
+  Lage quer (0 außen … 1 innen) steht im Vertexfeld `center.x` und geht als eigene, interpolierte Größe `across` in den
+  Shader – `center` selbst ist flach (je Dreieck konstant), daran scheiterte der erste Versuch. Test: das Ausfransen
+  zeigt bei beiden Umlaufrichtungen nach außen.
+- **Markierungen (`format.rs markings` → `Feature::Marks`):** aus den Kachelfeldern `crossings` (x, y, Kante, Art
+  0 Zebrastreifen / 1 Ampel-Furt / 2 markiert), `signals` (Knoten mit Ampel) und `vertices.trim` (Beginn der
+  Fahrstreifen). Zebrastreifen: Balken 4 × 0,5 m in Fahrtrichtung, 1 m Abstand; Furt: Blöcke 0,5 × 0,5 m; markierte
+  Querung: zwei Querstriche 4 m auseinander; Haltelinie 0,5 m am Beginn der Fahrstreifen nur über die zufahrenden
+  Streifen (Querschnitt wie `street.js laneOffsets`). Gezeichnet als Sprites der weißen Atlaszelle knapp vor der
+  Fahrbahn. Tests für Zebrastreifen und Haltelinie (inkl. Einbahnstraße weg vom Knoten).
+- **Atlas (`engine/atlas.rs`):** 256-px-Zellen, 4 × 4, 5 Mip-Stufen (deckkraftgewichtet), neue Zellen 10 Laub und
+  11 Fahrradpiktogramm. Raster und Zellgröße gehen als WGSL-Konstanten (`shader_constants`, vorangestellt in
+  `renderer::shader_source`) in `atlas_uv`; ein Test verbietet die alten Literale. Der ignorierte Test `dump_decals`
+  schreibt den Atlas als Bild (`GTA_DECAL_DUMP=x.ppm`).
+- **Kontaktschatten** am Gebäudefuß gab es schon (Zelle 9 entlang jeder Wand); sie bleiben, jetzt aus dem feineren Atlas.
+- **Vorschau bei `--fenster`:** das Fenster zeigt das abseits gezeichnete Bild verkleinert (Seitenverhältnis bleibt,
+  `preview_fs`); vorher blieb es schwarz.
+- **Kosten (GPU-Median, 2560 × 1440):** +0,2 bis +0,8 ms gegenüber Phase 2 (Boulevard 5,5–5,8 ms, Häuserblock 5,6–5,8 ms).
+

@@ -10,7 +10,7 @@ struct Camera {
 @group(1) @binding(1) var atlas_sampler: sampler;
 // Bodenmaterialien (materials.rs): Detail (Farbe/Mittelwert um 0,5) und Normale/Rauheit/Umgebungsverdeckung je
 // Schicht; Parameter je Material-ID: a = (Schicht + 1, Kachel m, Stärke, Farbanteil), b = (Relief, AO, –, –).
-struct MatParams { a: array<vec4<f32>, 16>, b: array<vec4<f32>, 16> };
+struct MatParams { a: array<vec4<f32>, 32>, b: array<vec4<f32>, 32> };
 @group(2) @binding(0) var mat_detail: texture_2d_array<f32>;
 @group(2) @binding(1) var mat_nr: texture_2d_array<f32>;
 @group(2) @binding(2) var mat_sampler: sampler;
@@ -20,6 +20,8 @@ struct Out {
     @location(0) color: vec3<f32>, @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>, @location(3) @interpolate(flat) material: f32,
     @location(4) @interpolate(flat) center: vec2<f32>,
+    // Lage quer über den Rasenrand (mesh.rs fringe: center.x), anders als center interpoliert
+    @location(5) across: f32,
 };
 fn project(point: vec3<f32>, center: vec2<f32>, depth: f32) -> vec4<f32> {
     var h = 0.0;
@@ -48,6 +50,7 @@ fn project_h(point: vec3<f32>, center: vec2<f32>, depth: f32, h: f32) -> vec4<f3
         out.position = project_h(point, center, depth, h);
     }
     out.color = color; out.normal = normal; out.uv = uv; out.material = material; out.center = center;
+    out.across = select(1.0, center.x, material == 16.0);
     // Minikarte: Häuser als dunkle Grundrisse (hud.js MINI: #2b2d33), Boden in seinen Farben
     if camera.params.y > 0.5 && point.z > 0.0 { out.color = vec3(0.169, 0.176, 0.2) / 0.78; }
     return out;
@@ -84,7 +87,12 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     let n = noise(floor(p * 12.0));
     var factor = 1.0;
     let detail = 1.0 - smoothstep(0.04, 0.3, max(fwidth(p.x), fwidth(p.y)));
-    let mid = min(u32(in.material + 0.5), 15u);
+    let mid = min(u32(in.material + 0.5), 31u);
+    // Rasenrand (mesh.rs fringe): außen ausgefranst, center.x = Lage quer (0 außen … 1 innen)
+    if in.material == 16.0 {
+        let ragged = vnoise(p * 9.0) * 0.65 + vnoise(p * 23.0 + vec2(5.0, 1.0)) * 0.35;
+        if in.across < ragged * 0.95 { discard; }
+    }
     let pa = mat.a[mid];
     let pb = mat.b[mid];
     var tint = vec3(1.0);
@@ -115,6 +123,8 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     if in.material == 8.0 { factor = mix(1.0, 0.90 + 0.1*sin(p.y*30.0), detail); }
     if in.material == 9.0 || (in.material == 10.0 && pa.x < 0.5) { factor = 0.97 + (n-0.5)*0.10*detail; }
     var color = in.color * factor * tint * occlusion;
+    // am Rasenrand etwas trockener und lichter
+    if in.material == 16.0 { color = mix(color * vec3(1.08, 1.02, 0.86), color, in.across); }
     // Nässe (camera.padding2.x): dunklere, glattere Oberfläche; glatte Stellen (geringe Rauheit) stärker
     let wet = camera.padding2.x * select(0.0, 1.0, pa.x > 0.5);
     color *= 1.0 - 0.3 * wet * (1.0 - 0.5 * rough);
@@ -297,6 +307,12 @@ fn office_light(m: f32) -> f32 {
     let fog_k = 1.0 - 0.65 * min(1.0, camera.fog / 1.4);
     return vec4(linear_color(c * glow) * fog_k, 1.0);
 }
+// Atlaskoordinate einer Zelle (ATLAS_* stellt atlas.rs voran); q ∈ [−0,5; 0,5]². Ein halber Texel Abstand zum
+// Zellrand, damit nicht die Nachbarzelle mitgefiltert wird.
+fn atlas_uv(cell: f32, q: vec2<f32>) -> vec2<f32> {
+    let uv = vec2(0.5 / ATLAS_CELL) + (q + 0.5) * ((ATLAS_CELL - 1.0) / ATLAS_CELL);
+    return (vec2(cell % ATLAS_COLS, floor(cell / ATLAS_COLS)) + uv) / vec2(ATLAS_COLS, ATLAS_ROWS);
+}
 struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32>, @location(1) uv: vec2<f32> };
 @vertex fn sprite_vs(
     @builtin(vertex_index) index: u32,
@@ -309,9 +325,7 @@ struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: v
     var out: SpriteOut;
     out.position = project(vec3(point.xy+offset, point.z), point.xy, depth);
     out.color = color;
-    // Half-texel inset prevents sampling neighboring atlas cells.
-    let uv = vec2(0.5/64.0) + (q+0.5) * (63.0/64.0);
-    out.uv = (vec2(cell % 4.0, floor(cell/4.0)) + uv) / vec2(4.0,3.0);
+    out.uv = atlas_uv(cell, q);
     return out;
 }
 @fragment fn sprite_fs(in: SpriteOut) -> @location(0) vec4<f32> {

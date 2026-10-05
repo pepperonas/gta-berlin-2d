@@ -89,7 +89,15 @@ Ursprünglicher Entwurf:
   Normal Map gegen `camera.sun`, Roughness → Glanz bei Nässe (Wetter-Uniform). Gebrauchsspuren/Moos bleiben Overlay.
   Minikarte (`params.y > 0.5`) unverändert flach. Pixel-Modus: Albedo-Mittelwert statt Textur (entscheidet Phase 8).
 
-## Phase 3 – Kanten, Übergänge, Kontaktschatten (≈ 1,5 Tage)
+## Phase 3 – Kanten, Übergänge, Kontaktschatten ✅ (05.10.2026)
+
+Umgesetzt: Bordstein + Fuge (`mesh.rs curb`, auch als Ringe an Kreuzungen), Randstreifen außen am Gehweg, Rasenrand
+(`fringe`, Material 16, Lage quer als eigene interpolierte Größe `across`), Markierungen als neues Merkmal
+`Feature::Marks` (aus `crossings`/`signals`/`vertices.trim` der Kacheln, `format.rs markings`, gezeichnet mit der weißen
+Atlaszelle), Fahrradpiktogramme, Laub; Atlas 256 px × 4 × 4 mit Mips, `atlas::shader_constants`. Kontaktschatten
+gab es schon (Atlaszelle 9 am Fuß jeder Wand) – mit dem größeren Atlas jetzt glatter, sonst unverändert.
+
+Ursprünglicher Entwurf:
 
 - Bordstein als eigener Streifen in `mesh.rs road_mesh` (zwischen Gehweg-Strich und Fahrbahn, heller, dunkle Fuge).
 - Randverlauf Gras/Erde ↔ befestigt (Alpha/Mischband an Polygonkanten), Kontaktschatten am Gebäudefuß aus den
