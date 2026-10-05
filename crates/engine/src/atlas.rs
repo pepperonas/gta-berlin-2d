@@ -1,7 +1,12 @@
 //! Deterministic procedural sprite atlas; no runtime image files or Canvas work.
 //! Zellen: 0 Laubkrone, 1 Gully, 2 Schachtdeckel, 3 Flicken, 4 Riss, 5 Ölfleck, 6 Nadelkrone, 7 weißes Rechteck
-//! (Markierungen), 8 Ölband, 9 Kontaktschatten, 10 Laub, 11 Fahrradpiktogramm. Raster und Zellgröße gehen als
-//! Konstanten in den Shader (`shader_constants`), nichts ist dort fest verdrahtet.
+//! (Markierungen), 8 Ölband, 9 Kontaktschatten, 10 Laub, 11 Fahrradpiktogramm, 12 Linde, 13 Platane, 14 Kastanie,
+//! 15 Kiefer. Raster und Zellgröße gehen als Konstanten in den Shader (`shader_constants`), nichts ist dort fest
+//! verdrahtet.
+//!
+//! Kronenzellen (`CROWNS`) tragen kein eingemaltes Licht: R = Helligkeit ohne Sonne (Blattwerk, Verdeckung in den
+//! Senken), G/B = Normale der Krone (x, y; ·0,5 + 0,5), A = Deckung. Der Shader (`sprite_fs`) dreht die Normale mit
+//! dem Baum und setzt Licht- und Schattenseite nach dem Sonnenstand.
 use berlin_map_loader::citycodes::hash01;
 pub const CELL: u32 = 256;
 pub const COLS: u32 = 4;
@@ -9,15 +14,215 @@ pub const ROWS: u32 = 4;
 pub const WIDTH: u32 = CELL * COLS;
 pub const HEIGHT: u32 = CELL * ROWS;
 /// belegte Zellen
-pub const CELLS: u32 = 12;
+pub const CELLS: u32 = 16;
+/// Kronenzellen (Licht im Shader): allgemeiner Laubbaum, allgemeiner Nadelbaum, Linde, Platane, Kastanie, Kiefer
+pub const CROWNS: [u32; 6] = [0, 6, 12, 13, 14, 15];
 /// Mip-Stufen: bis 16 px je Zelle (darunter bluten Nachbarzellen ineinander)
 pub const MIPS: u32 = 5;
 
 /// WGSL-Konstanten des Atlas (dem Shader vorangestellt).
 pub fn shader_constants() -> String {
     format!(
-        "const ATLAS_CELL: f32 = {CELL}.0;\nconst ATLAS_COLS: f32 = {COLS}.0;\nconst ATLAS_ROWS: f32 = {ROWS}.0;\n"
+        "const ATLAS_CELL: f32 = {CELL}.0;\nconst ATLAS_COLS: f32 = {COLS}.0;\nconst ATLAS_ROWS: f32 = {ROWS}.0;\n{}",
+        crown_fn()
     )
+}
+fn crown_fn() -> String {
+    let tests: Vec<String> = CROWNS.iter().map(|c| format!("cell == {c}.0")).collect();
+    format!(
+        "fn is_crown(cell: f32) -> bool {{ return {}; }}\n",
+        tests.join(" || ")
+    )
+}
+
+/// Gestalt einer Baumkrone von oben: Umriss (Radius, Zacken), Blattballen (Anzahl, Größe, Streuung), Lücken,
+/// Blattkörnung und Nadelstreifen.
+struct Crown {
+    seed: u32,
+    radius: f32,
+    lobes: u32,
+    lobe_amp: f32,
+    clumps: u32,
+    clump_r: (f32, f32),
+    dome: f32,
+    gaps: f32,
+    grain: f32,
+    needles: f32,
+}
+fn crown_kind(cell: u32) -> Crown {
+    match cell {
+        // allgemeiner Laubbaum (Ahorn, Eiche, …): mittlere Ballen
+        0 => Crown {
+            seed: 11,
+            radius: 0.8,
+            lobes: 7,
+            lobe_amp: 0.06,
+            clumps: 34,
+            clump_r: (0.16, 0.27),
+            dome: 0.55,
+            gaps: 0.05,
+            grain: 22.,
+            needles: 0.,
+        },
+        // allgemeiner Nadelbaum (Fichte, Tanne): sternförmig, spitz, dicht
+        6 => Crown {
+            seed: 23,
+            radius: 0.74,
+            lobes: 9,
+            lobe_amp: 0.16,
+            clumps: 26,
+            clump_r: (0.1, 0.18),
+            dome: 0.9,
+            gaps: 0.0,
+            grain: 30.,
+            needles: 0.8,
+        },
+        // Linde: dicht, gleichmäßig rund, viele kleine Ballen (herzförmige Blätter, feine Körnung)
+        12 => Crown {
+            seed: 37,
+            radius: 0.84,
+            lobes: 5,
+            lobe_amp: 0.035,
+            clumps: 52,
+            clump_r: (0.13, 0.21),
+            dome: 0.6,
+            gaps: 0.0,
+            grain: 28.,
+            needles: 0.,
+        },
+        // Platane: breit, wenige große Ballen, lockere Krone mit Lücken, grobe Blätter
+        13 => Crown {
+            seed: 41,
+            radius: 0.88,
+            lobes: 6,
+            lobe_amp: 0.08,
+            clumps: 18,
+            clump_r: (0.22, 0.34),
+            dome: 0.45,
+            gaps: 0.16,
+            grain: 14.,
+            needles: 0.,
+        },
+        // Kastanie: groß, rund, schwere Ballen, Fingerblätter (sternförmige Körnung)
+        14 => Crown {
+            seed: 53,
+            radius: 0.86,
+            lobes: 8,
+            lobe_amp: 0.05,
+            clumps: 24,
+            clump_r: (0.2, 0.3),
+            dome: 0.7,
+            gaps: 0.03,
+            grain: 18.,
+            needles: 0.,
+        },
+        // Kiefer: unregelmäßig, offene Krone aus Nadelbüscheln mit Lücken
+        _ => Crown {
+            seed: 67,
+            radius: 0.82,
+            lobes: 5,
+            lobe_amp: 0.12,
+            clumps: 36,
+            clump_r: (0.11, 0.2),
+            dome: 0.5,
+            gaps: 0.24,
+            grain: 34.,
+            needles: 1.,
+        },
+    }
+}
+/// Weiches Wertrauschen (bilinear mit Glättung), 0…1, deterministisch aus dem Startwert.
+fn vnoise(x: f32, y: f32, seed: u32) -> f32 {
+    let (ix, iy) = (x.floor(), y.floor());
+    let (fx, fy) = (x - ix, y - iy);
+    let (sx, sy) = (fx * fx * (3. - 2. * fx), fy * fy * (3. - 2. * fy));
+    let at = |dx: f32, dy: f32| {
+        let (a, b) = ((ix + dx) as i32 as u32, (iy + dy) as i32 as u32);
+        hash01(
+            seed.wrapping_mul(2_654_435_761)
+                .wrapping_add(a.wrapping_mul(92_821))
+                .wrapping_add(b.wrapping_mul(68_917)),
+        ) as f32
+    };
+    let top = at(0., 0.) + (at(1., 0.) - at(0., 0.)) * sx;
+    let bot = at(0., 1.) + (at(1., 1.) - at(0., 1.)) * sx;
+    top + (bot - top) * sy
+}
+/// Kronenpixel an (u, v) ∈ [−1, 1]²: (Helligkeit ohne Sonne, Normale x, y, Deckung). Blattballen als Kugeln auf
+/// einer flachen Kuppel; wo kein Ballen liegt, füllt die Kuppel tiefer im Schatten (keine Löcher im Kern), der Rand
+/// entsteht nur aus Ballen (unregelmäßiger Umriss).
+fn crown(c: &Crown, u: f32, v: f32) -> (f32, f32, f32, f32) {
+    let mix = |a: u32, b: u32, k: u32| {
+        a.wrapping_mul(7_368_787)
+            .wrapping_add(b.wrapping_mul(7919))
+            .wrapping_add(k.wrapping_mul(104_729))
+    };
+    let h = |i: u32, k: u32| hash01(mix(c.seed, i, k)) as f32;
+    let a = v.atan2(u);
+    let r = (u * u + v * v).sqrt();
+    let edge = c.radius
+        * (1.
+            + c.lobe_amp
+                * ((a * c.lobes as f32 + h(0, 9) * 6.).sin() * 0.6
+                    + (a * (c.lobes + 3) as f32 + 1.3).cos() * 0.4));
+    let dome_h = |x: f32, y: f32| (1. - (x * x + y * y) / (edge * edge)).max(0.).sqrt() * c.dome;
+    let (mut best, mut n, mut cover) = (f32::MIN, (0f32, 0f32, 1f32), 0f32);
+    for i in 0..c.clumps {
+        let ang = h(i, 1) * std::f32::consts::TAU;
+        let rr = c.clump_r.0 + (c.clump_r.1 - c.clump_r.0) * h(i, 3);
+        let dist = (edge - rr * 0.7).max(0.) * h(i, 2).sqrt();
+        let (cx, cy) = (ang.cos() * dist, ang.sin() * dist);
+        let (dx, dy) = (u - cx, v - cy);
+        let d2 = dx * dx + dy * dy;
+        if d2 >= rr * rr {
+            continue;
+        }
+        let z = (rr * rr - d2).sqrt();
+        let top = dome_h(cx, cy) + z;
+        cover = cover.max(((rr - d2.sqrt()) / rr * 6.).min(1.));
+        if top > best {
+            best = top;
+            n = (dx / rr, dy / rr, z / rr);
+        }
+    }
+    // Kern ohne Ballen: Kuppel, tiefer
+    let core = (((edge * 0.84) - r) * 20.).clamp(0., 1.);
+    let mut depth = 1.;
+    if best == f32::MIN {
+        if core <= 0. {
+            return (0., 0., 0., 0.);
+        }
+        best = dome_h(u, v) * 0.7;
+        n = (0., 0., 1.);
+        depth = 0.78;
+    }
+    let inside = ((edge - r) * 28.).clamp(0., 1.);
+    let dn = (u / edge * 0.7, v / edge * 0.7);
+    let (nx, ny, nz) = (n.0 + dn.0, n.1 + dn.1, n.2);
+    let l = (nx * nx + ny * ny + nz * nz).sqrt();
+    let (nx, ny) = (nx / l, ny / l);
+    // Blattwerk: zwei Oktaven Rauschen, bei Nadeln entlang des Radius gestreckt (Büschel vom Stamm weg)
+    let g = c.grain;
+    let (gu, gv) = if c.needles > 0. {
+        (r * g * 0.35, a * g * 1.6)
+    } else {
+        (u * g, v * g)
+    };
+    let leaf = 0.6 * vnoise(gu, gv, c.seed) + 0.4 * vnoise(gu * 2.3, gv * 2.3, c.seed + 5);
+    let needle = if c.needles > 0. {
+        1. - c.needles * 0.35 * (1. - vnoise(r * 90., a * 70., c.seed + 9)).powi(3)
+    } else {
+        1.
+    };
+    let top = (best / (c.dome + c.clump_r.1)).clamp(0., 1.);
+    let ao = (0.6 + 0.4 * top) * (0.86 + 0.14 * n.2) * depth;
+    let shade = (ao * (0.8 + 0.22 * leaf) * needle).clamp(0., 1.);
+    // Lücken (lockere Kronen): weiche Löcher aus grobem Rauschen, eher am Rand als in der Mitte
+    let holes =
+        0.65 * vnoise(u * 4.5, v * 4.5, c.seed + 3) + 0.35 * vnoise(u * 9.7, v * 9.7, c.seed + 4);
+    let gap = 1. - ((c.gaps * (0.6 + r) - holes) * 6.).clamp(0., 1.) * 0.85;
+    let alpha = inside * cover.max(core) * gap;
+    (shade, nx, ny, alpha)
 }
 
 /// Abstand eines Punktes p zur Strecke a–b.
@@ -85,12 +290,9 @@ pub fn pixels() -> Vec<u8> {
                 let r = (u * u + v * v).sqrt();
                 let noise = hash01(cell * 100003 + x * 137 + y * 7919) as f32;
                 let (color, alpha) = match cell {
-                    0 => {
-                        let a = v.atan2(u);
-                        let edge = 0.79 + 0.065 * (a * 7.).sin() + 0.045 * (a * 11. + 0.7).cos();
-                        let shade = (0.58 + 0.30 * (1. - r) + 0.10 * noise - 0.10 * u + 0.08 * v)
-                            .clamp(0., 1.);
-                        ([shade; 3], ((edge - r) * 32.).clamp(0., 1.))
+                    0 | 6 | 12..=15 => {
+                        let (shade, nx, ny, a) = crown(&crown_kind(cell), u, v);
+                        ([shade, nx * 0.5 + 0.5, ny * 0.5 + 0.5], a)
                     }
                     1 => {
                         let edge = u.abs().max(v.abs());
@@ -130,12 +332,6 @@ pub fn pixels() -> Vec<u8> {
                     5 => {
                         let ellipse = (u * u + v * v * 1.4).sqrt();
                         ([0.09, 0.08, 0.065], ((0.8 - ellipse) * 2.5).clamp(0., 0.5))
-                    }
-                    6 => {
-                        let a = v.atan2(u);
-                        let edge = 0.65 + 0.19 * (a * 9.).cos().abs();
-                        let shade = (0.53 + 0.32 * (1. - r) + 0.11 * noise).clamp(0., 1.);
-                        ([shade; 3], ((edge - r) * 32.).clamp(0., 1.))
                     }
                     10 => leaves(u, v),
                     11 => ([1.; 3], bike(u, v)),
@@ -224,12 +420,11 @@ mod tests {
         for cell in 0..CELLS {
             assert!(alpha_of(&px, cell) > 0.005, "Zelle {cell} leer");
         }
-        for cell in CELLS..COLS * ROWS {
-            assert_eq!(alpha_of(&px, cell), 0., "Zelle {cell} sollte frei sein");
-        }
+        // der Atlas ist voll belegt (eine neue Zelle braucht eine weitere Zeile)
+        const { assert!(CELLS == COLS * ROWS) };
         // Rand jeder Zelle (2 px) frei: Mip-Stufen bluten sonst in die Nachbarn (außer Rechteck/Band, die bis
         // knapp an den Rand reichen und dort ohnehin auslaufen)
-        for cell in [0, 1, 2, 3, 5, 6, 10, 11] {
+        for cell in [0, 1, 2, 3, 5, 6, 10, 11, 12, 13, 14, 15] {
             for t in 0..CELL {
                 for (x, y) in [(t, 0), (t, CELL - 1), (0, t), (CELL - 1, t)] {
                     let i = ((((cell / COLS) * CELL + y) * WIDTH + (cell % COLS) * CELL + x) * 4
@@ -272,6 +467,7 @@ mod dump {
                 out.push((c as f32 * a + bg * (1. - a)) as u8);
             }
         }
-        std::fs::write(path, out).unwrap();
+        std::fs::write(&path, out).unwrap();
+        std::fs::write(format!("{path}.rgba"), &px).unwrap();
     }
 }

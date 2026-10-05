@@ -2022,3 +2022,18 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   Phase 7 (Licht und Post).
 - **Kosten:** Autoszene +0,15 ms GPU-Median gegenüber Phase 4 (4,85 ms). Gemessen mit 60 Bildern, während parallel eine
   Windows-VM lief – nur als Anhaltspunkt.
+
+## Grafik HD/Pixel: Phase 6 – Bäume (05.10.2026)
+
+- **Kronen im Decal-Atlas:** neue Zellen 12 Linde, 13 Platane, 14 Kastanie, 15 Kiefer (der 4 × 4-Atlas ist damit
+  voll); 0 (Laub) und 6 (Nadel) aus demselben Erzeuger `atlas.rs crown` (Blattballen als Kugeln auf einer Kuppel,
+  Kern gefüllt, zwei Oktaven Wertrauschen als Blattkörnung, bei Nadeln radial gestreckt, weiche Lücken).
+- **Licht im Shader statt eingemalt:** Kronenzellen tragen R = Helligkeit ohne Sonne (Verdeckung in den Senken),
+  G/B = Normale, A = Deckung. `sprite_fs` → `crown_light`: Normale mit dem Baumwinkel gedreht, Lambert zur Sonne
+  (0,42 + 0,62·n·l), gemischt mit gleichmäßigem 0,8 nach Sonnenhöhe, Dunkelheit und Schattenstärke (Bedeckung).
+  `is_crown(cell)` erzeugt `atlas.rs` als WGSL-Funktion (eine Liste `CROWNS`, auch für `tree_shadow_vs`).
+- **Gattung → Krone und Grün:** `mesh.rs tree_look` (Tilia 12, Platanus 13, Aesculus 14, Nadel zu 65 % Kiefer 15,
+  sonst 6; übrige Laubbäume 0 in vier Grüntönen). Test `street_trees_get_their_own_crowns`.
+- **Hinweis zur Testszene „park“ (Tiergarten):** dort stehen in den Daten keine Bäume (Baumkataster = Straßenbäume) –
+  auch die Ausgangsaufnahme zeigt keine. Bäume prüft die Szene „boulevard“.
+- **Figuren:** nur Vorschlag (drei Varianten mit Aufwand) im Plan unter Phase 6.

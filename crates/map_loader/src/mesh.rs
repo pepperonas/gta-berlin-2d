@@ -1060,17 +1060,13 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
             seed,
             genus,
         } => {
-            let color = if *genus == 16 {
-                0x4a6952
-            } else {
-                [0x557547, 0x63814d, 0x748955, 0x4e7044][*seed as usize % 4]
-            };
+            let (cell, color) = tree_look(*genus, *seed);
             mesh.sprites.push(Sprite {
                 point: [point.x, point.y, 0.],
                 size: [radius * 2., radius * 2.],
                 angle: hash01(*seed) as f32 * std::f32::consts::TAU,
                 color: rgb(color),
-                cell: if *genus == 16 { 6. } else { 0. },
+                cell,
                 depth: 0.44 - point.y / 500000. * 0.2,
             });
             // Laub unter etwa jedem dritten Laubbaum (am Boden, vor Straßen und Gehwegen)
@@ -1094,10 +1090,45 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
     }
     Ok(mesh)
 }
+/// Kronenbild (Atlaszelle, engine/atlas.rs) und Laubfarbe einer Baumgattung (`citycodes::TREE_GENERA`): Linde,
+/// Platane und Kastanie – die häufigsten Straßenbäume Berlins – haben eigene Kronen; Nadelbäume sind meist Kiefern,
+/// der Rest bekommt die allgemeine Nadelkrone; alle anderen Laubbäume die allgemeine Laubkrone in vier Grüntönen.
+pub fn tree_look(genus: u8, seed: u32) -> (f32, u32) {
+    match genus {
+        1 => (12., [0x5b7b44, 0x62824a][seed as usize % 2]),
+        3 => (13., [0x6f8d54, 0x7a9358][seed as usize % 2]),
+        4 => (14., [0x48693a, 0x51723f][seed as usize % 2]),
+        16 if hash01(seed.wrapping_mul(13).wrapping_add(5)) < 0.65 => (15., 0x45644a),
+        16 => (6., 0x4a6952),
+        _ => (
+            0.,
+            [0x557547, 0x63814d, 0x748955, 0x4e7044][seed as usize % 4],
+        ),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::geom::point_in_ring;
+
+    #[test]
+    fn street_trees_get_their_own_crowns() {
+        let g = |name: &str| {
+            crate::citycodes::TREE_GENERA
+                .iter()
+                .position(|n| *n == name)
+                .unwrap() as u8
+        };
+        assert_eq!(tree_look(g("Tilia"), 1).0, 12.);
+        assert_eq!(tree_look(g("Platanus"), 1).0, 13.);
+        assert_eq!(tree_look(g("Aesculus"), 1).0, 14.);
+        assert_eq!(tree_look(g("Acer"), 1).0, 0.);
+        let pines = (0..200)
+            .filter(|s| tree_look(g("Nadel"), *s).0 == 15.)
+            .count();
+        assert!((100..170).contains(&pines), "Kiefern {pines} von 200");
+        assert!((0..200).all(|s| matches!(tree_look(g("Nadel"), s).0, 6. | 15.)));
+    }
     #[test]
     fn grass_fringe_frays_outwards_whatever_the_winding() {
         for ring in [

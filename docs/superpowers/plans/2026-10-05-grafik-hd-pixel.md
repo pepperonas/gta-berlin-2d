@@ -132,7 +132,32 @@ Ursprünglicher Entwurf:
   Fahrzeugwinkel, nachts Lichtkarten-Reflex; `motoart.rs` analog. Abgestimmt auf die Fahrzeugüberarbeitung vom
   05.10.2026 (`paint_car`, `proportions`).
 
-## Phase 6 – Bäume und Figuren (≈ 1 Tag)
+## Phase 6 – Bäume und Figuren ✅ Bäume (05.10.2026), Figuren nur Vorschlag
+
+Umgesetzt: Kronenzellen Linde (12), Platane (13), Kastanie (14), Kiefer (15) im Decal-Atlas, die beiden alten Kronen
+(0 Laub, 6 Nadel) mit demselben Erzeuger neu (`atlas.rs crown`: Blattballen als Kugeln auf einer Kuppel, Kern ohne
+Ballen gefüllt, Blattkörnung aus Wertrauschen, Nadeln radial gestreckt, weiche Lücken bei Platane und Kiefer). Die
+Zellen tragen kein Licht mehr: R = Helligkeit ohne Sonne, G/B = Normale; `sprite_fs crown_light` dreht die Normale mit
+dem Baum und hellt die Sonnenseite auf (bei Bedeckung und nachts gleichmäßig). Gattung → Zelle und Laubfarbe in
+`mesh.rs tree_look` (Nadelbäume zu 65 % Kiefer); `is_crown` kommt als WGSL-Funktion aus `atlas.rs` und gilt auch für
+den Baumschatten.
+
+### Vorschlag Figuren-Atlas (nicht umgesetzt, wartet auf Freigabe)
+
+Heute: `game/figure.rs` setzt jede Person aus 8–14 Bodies zusammen (Ellipsen und Rechtecke mit flacher Farbe: Rumpf,
+Arme, Kopf, Haare, Tasche, Zubehör), 615 Zeilen, Gangbild aus `pose()`. Von oben bei Zoom 1,2 trägt das; bei 2,6 und
+im HD-Modus wirken die Figuren neben Autos und Bäumen flach.
+
+- **Variante A – Glanz/Licht auf den bestehenden Bodies (≈ 0,5 Tag):** Kopf, Schultern, Taschen als gewölbte Formen
+  (wie Motorradteile, `shape` 6), Licht von der Sonne. Keine neuen Daten, kein Atlas; Figuren bleiben schematisch.
+- **Variante B – Teil-Atlas (≈ 2 Tage, empfohlen):** gemalte Draufsicht-Teile im Stil von `carart` (Lack/Detail mit
+  Normale): Schultern/Rumpf in 3 Statur-Formen, 6 Frisuren, 5 Kopfbedeckungen, Tasche/Rucksack, Kinderwagen, Hund
+  (2 Größen). Farbe weiter je Person aus `look_of`, das Gangbild bleibt (Teile werden wie heute verschoben). Etwa
+  24 Zellen à 128², ≈ 1,6 MB mit Mips. Pixel-Modus nutzt dieselben Zellen (Phase 8 quantisiert).
+- **Variante C – Ganzkörper-Sprites je Typ und Gangphase (≈ 4–5 Tage):** 12 Typen × 8 Phasen × Aktionen; schönstes
+  Ergebnis, aber Farbe und Zubehör ließen sich nicht mehr frei kombinieren, und der Atlas wächst auf ≈ 25 MB.
+
+Ursprünglicher Entwurf:
 
 - Linde, Platane, Kastanie, Kiefer als 256-px-Zellen, Licht-/Schattenseite zur Sonne. Figuren: nur **Vorschlag** mit
   Aufwand für einen Figuren-Atlas (nicht umsetzen ohne Freigabe).

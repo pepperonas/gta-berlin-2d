@@ -18,7 +18,7 @@ struct TreeShadowOut { @builtin(position) position: vec4<f32>, @location(0) uv: 
     @location(3) color: vec3<f32>, @location(4) cell: f32, @location(5) depth: f32,
 ) -> TreeShadowOut {
     var out: TreeShadowOut;
-    if !(cell == 0.0 || cell == 6.0) {
+    if !is_crown(cell) {
         out.position = vec4(2.0, 2.0, 2.0, 1.0); // nur Bäume werfen Schatten (Decals nicht)
         return out;
     }

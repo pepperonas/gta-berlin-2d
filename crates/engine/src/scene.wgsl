@@ -423,7 +423,11 @@ fn atlas_uv(cell: f32, q: vec2<f32>) -> vec2<f32> {
     let uv = vec2(0.5 / ATLAS_CELL) + (q + 0.5) * ((ATLAS_CELL - 1.0) / ATLAS_CELL);
     return (vec2(cell % ATLAS_COLS, floor(cell / ATLAS_COLS)) + uv) / vec2(ATLAS_COLS, ATLAS_ROWS);
 }
-struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32>, @location(1) uv: vec2<f32> };
+struct SpriteOut {
+    @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32>, @location(1) uv: vec2<f32>,
+    // Kronen: Drehung des Baums (cos, sin) und Zelle, damit die Normale in Weltrichtung zeigt
+    @location(2) @interpolate(flat) rot: vec2<f32>, @location(3) @interpolate(flat) cell: f32,
+};
 @vertex fn sprite_vs(
     @builtin(vertex_index) index: u32,
     @location(0) point: vec3<f32>, @location(1) size: vec2<f32>, @location(2) angle: f32,
@@ -436,11 +440,29 @@ struct SpriteOut { @builtin(position) position: vec4<f32>, @location(0) color: v
     out.position = project(vec3(point.xy+offset, point.z), point.xy, depth);
     out.color = color;
     out.uv = atlas_uv(cell, q);
+    out.rot = vec2(cos(angle), sin(angle));
+    out.cell = cell;
     return out;
+}
+// Licht einer Baumkrone (atlas.rs: R = Helligkeit ohne Sonne, G/B = Normale): die sonnige Seite hell, die
+// abgewandte im eigenen Schatten. Bei bedecktem Himmel und nachts gleichmäßig (das Umgebungslicht färbt später).
+fn crown_light(texel: vec4<f32>, rot: vec2<f32>) -> f32 {
+    let nl = texel.gb * 2.0 - 1.0;
+    let nw = vec2(nl.x * rot.x - nl.y * rot.y, nl.x * rot.y + nl.y * rot.x);
+    let n = vec3(nw, sqrt(max(1.0 - dot(nl, nl), 0.0)));
+    let sun = normalize(camera.sun.xyz);
+    let vis = clamp(camera.sun.z * 3.0, 0.0, 1.0) * (1.0 - camera.ambient.w) * clamp(camera.shadow.w, 0.0, 1.0);
+    let lambert = max(dot(n, sun), 0.0);
+    // gleich hell im Mittel wie das frühere eingemalte Licht (≈ 0,75 × Helligkeit)
+    let directional = 0.42 + 0.62 * lambert;
+    return texel.r * mix(0.8, directional, vis);
 }
 @fragment fn sprite_fs(in: SpriteOut) -> @location(0) vec4<f32> {
     let texel = textureSample(atlas, atlas_sampler, in.uv);
     if texel.a < 0.04 { discard; }
+    if is_crown(in.cell) {
+        return vec4(linear_color(vec3(crown_light(texel, in.rot)) * in.color), texel.a);
+    }
     return vec4(linear_color(texel.rgb * in.color), texel.a);
 }
 // Bewegte Objekte (Autos, Personen, Marker): instanzierte Rechtecke/Kreise mit weicher Kante (SDF).

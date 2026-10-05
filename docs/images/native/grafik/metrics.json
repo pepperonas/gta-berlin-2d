@@ -1581,5 +1581,54 @@
     }
    }
   }
+ },
+ "06-baeume": {
+  "hd": {
+   "block": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.488,
+      "p95_ms": 4.881
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 6.102,
+      "p95_ms": 6.536
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "boulevard": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.381,
+      "p95_ms": 5.883
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 5.59,
+      "p95_ms": 7.427
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   },
+   "park": {
+    "2.6": {
+     "cpu": {
+      "frames": 60,
+      "median_ms": 2.996,
+      "p95_ms": 4.487
+     },
+     "gpu": {
+      "frames": 60,
+      "median_ms": 5.217,
+      "p95_ms": 5.591
+     },
+     "gpu_quelle": "Zeitstempel Anfang erster bis Ende letzter Durchgang"
+    }
+   }
+  }
  }
 }

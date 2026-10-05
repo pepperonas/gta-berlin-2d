@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung, Phase 6 (native Fassung): **Baumkronen nach Gattung** – Linde (dicht, rund, kleine Ballen),
+  Platane (breit, große Ballen, Lücken), Kastanie (schwere runde Ballen) und Kiefer (offene Nadelbüschel) mit eigener
+  Krone und eigenem Grün; übrige Laub- und Nadelbäume mit neu gezeichneter allgemeiner Krone. Die Kronen werden von
+  der Sonne beleuchtet: die zugewandte Seite hell, die abgewandte im eigenen Schatten, mit dem Sonnenstand wandernd.
 - Grafik-Überarbeitung, Phase 5 (native Fassung): **Fahrzeuge glänzen**. Der Fahrzeugatlas ist doppelt so fein (Zellen
   512 × 256), die Lackzelle trägt in den bisher freien Kanälen eine Glanzmaske (Lack, Glas, Chrom). Der Sonnenglanz
   wandert mit Fahrzeugwinkel und Sonnenstand über die gewölbte Karosserie, dazu ein Himmelsreflex aus dem
