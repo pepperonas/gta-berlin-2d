@@ -1,0 +1,10 @@
+{
+  "datei": "data/audio/raw/engine_reference_lambo.m4a",
+  "laenge_s": 8.747,
+  "samplerate": 48000,
+  "kanaele": 2,
+  "lufs_integriert": -12.16,
+  "sample_peak_dbfs": -5.25,
+  "true_peak_dbtp": -5.2,
+  "stereo_korrelation": 1.0
+}
