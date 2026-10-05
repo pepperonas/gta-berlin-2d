@@ -18,6 +18,7 @@ use std::f64::consts::FRAC_PI_2;
 
 const PROFILES: &str = include_str!("../../../data/audio/engine_profiles.json");
 const BANK_V10: &str = include_str!("../../../data/audio/engine/v10/manifest.json");
+const BANK_V12: &str = include_str!("../../../data/audio/engine/v12/manifest.json");
 
 /// Tonhöhe eines Loops: tiefer klingt verwaschen, höher nach Spielzeug.
 pub const PITCH_MIN: f64 = 0.7;
@@ -102,7 +103,8 @@ pub struct Bank {
     pub samplerate: u32,
     pub loops: Vec<LoopInfo>,
     pub shots: Vec<ShotInfo>,
-    /// Indizes der Last- bzw. Schub-Loops, nach Drehzahl aufsteigend (gleiche Reihenfolge)
+    /// Indizes der Last- bzw. Schub-Loops, je nach Drehzahl aufsteigend (die Drehzahlen beider Listen dürfen
+    /// verschieden sein: echte Schub-Loops stammen aus dem Ausrollen, nicht aus denselben Stellen wie die Last-Loops)
     pub on: Vec<usize>,
     pub off: Vec<usize>,
     pub reference: String,
@@ -272,7 +274,7 @@ impl Config {
 
 pub fn config() -> &'static Config {
     static C: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
-    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10]))
+    C.get_or_init(|| Config::parse(PROFILES, &[BANK_V10, BANK_V12]))
 }
 
 /// Motor-Samples an? `GTA_ENGINE_SAMPLES=0` schaltet zum Gegenhören auf den Synthese-Klang zurück.
@@ -324,6 +326,8 @@ pub struct Tone {
 /// Was der Sampler je Bild spielt.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SoundOut {
+    /// Sample-Bank, aus der die Indizes stammen
+    pub bank: &'static str,
     /// bis zu vier Loops (zwei Drehzahlen × Last/Schub), unbenutzte mit `gain` 0
     pub layers: [Layer; 4],
     /// ausgelöste Einzelklänge: Index in `Bank::shots`, Pegel
@@ -357,9 +361,10 @@ pub struct EngineSound {
     limiter_phase: f64,
 }
 
-/// Gewichte gleicher Leistung zwischen den Loops, die die (Klang-)Drehzahl einrahmen: (Position in `on`, Gewicht).
-pub fn loop_weights(bank: &Bank, rpm: f64) -> [(usize, f64); 2] {
-    let r: Vec<f64> = bank.on.iter().map(|&i| bank.loops[i].rpm).collect();
+/// Gewichte gleicher Leistung zwischen den Loops einer Liste (Last oder Schub), die die (Klang-)Drehzahl
+/// einrahmen: (Position in der Liste, Gewicht).
+pub fn loop_weights(bank: &Bank, list: &[usize], rpm: f64) -> [(usize, f64); 2] {
+    let r: Vec<f64> = list.iter().map(|&i| bank.loops[i].rpm).collect();
     let n = r.len();
     if rpm <= r[0] {
         return [(0, 1.), (0, 0.)];
@@ -382,9 +387,30 @@ pub fn loop_weights(bank: &Bank, rpm: f64) -> [(usize, f64); 2] {
     [(k, (u * FRAC_PI_2).cos()), (k + 1, (u * FRAC_PI_2).sin())]
 }
 
-/// Tonhöhe eines Loops für eine Klang-Drehzahl (begrenzt).
+/// Tonhöhengrenzen des Loops an Position `k` seiner Liste: 0,7 … 1,4. Wo der Abstand zum Nachbarn größer als
+/// Faktor 2 ist (die Aufnahme gibt dazwischen nichts her), so weit, dass die Tonhöhe bis zur Mitte der Lücke
+/// stetig bleibt – sonst spränge sie in der Überblendung.
+pub fn pitch_bounds(bank: &Bank, list: &[usize], k: usize) -> (f64, f64) {
+    let r = |j: usize| bank.loops[list[j]].rpm;
+    let span = PITCH_MAX / PITCH_MIN;
+    let mut b = (PITCH_MIN, PITCH_MAX);
+    if k + 1 < list.len() && r(k + 1) / r(k) > span {
+        b.1 = (r(k + 1) / r(k)).sqrt() * 1.03;
+    }
+    if k > 0 && r(k) / r(k - 1) > span {
+        b.0 = 1. / ((r(k) / r(k - 1)).sqrt() * 1.03);
+    }
+    b
+}
+
+/// Tonhöhe eines Loops für eine Klang-Drehzahl (begrenzt auf 0,7 … 1,4).
 pub fn loop_pitch(loop_rpm: f64, rpm: f64) -> f64 {
     (rpm / loop_rpm).clamp(PITCH_MIN, PITCH_MAX)
+}
+
+fn pitch_in(bank: &Bank, list: &[usize], k: usize, rpm: f64) -> f64 {
+    let (lo, hi) = pitch_bounds(bank, list, k);
+    (rpm / bank.loops[list[k]].rpm).clamp(lo, hi)
 }
 
 fn smooth(v: &mut f64, target: f64, tc: f64, dt: f64) {
@@ -440,7 +466,7 @@ impl EngineSound {
     pub fn step(
         &mut self,
         p: &Profile,
-        bank: &Bank,
+        bank: &'static Bank,
         inp: &SoundInput,
         dt: f64,
         lod: bool,
@@ -451,6 +477,7 @@ impl EngineSound {
         let limiter = inp.limiter.unwrap_or(p.begrenzer);
         let thr_raw = inp.throttle.clamp(0., 1.);
         let mut out = SoundOut {
+            bank: bank.name.as_str(),
             gate: 1.,
             ..Default::default()
         };
@@ -537,7 +564,8 @@ impl EngineSound {
 
         // Loops: Klang-Drehzahl = Drehzahl × Grundverstimmung
         let rs = self.rpm * p.pitch;
-        let w = loop_weights(bank, rs);
+        let w_on = loop_weights(bank, &bank.on, rs);
+        let w_off = loop_weights(bank, &bank.off, rs);
         // nahe am Leerlauf ist das Last-Loop der Leerlauf selbst; sonst mischt das Gas Last und Schub
         let idle_on = (1. - (self.rpm - p.leerlauf) / 1200.).clamp(0., 1.);
         let load = self.thr.max(idle_on);
@@ -545,24 +573,28 @@ impl EngineSound {
         let mut layers = [Layer::default(); 4];
         if lod {
             // nur der nächstgelegene Loop, Last- und Schubpegel als Lautstärke
-            let k = if w[1].1 > w[0].1 { w[1].0 } else { w[0].0 };
+            let k = if w_on[1].1 > w_on[0].1 {
+                w_on[1].0
+            } else {
+                w_on[0].0
+            };
             let i = bank.on[k];
             layers[0] = Layer {
                 idx: i,
                 gain: (bank.loops[i].gain * (0.6 + 0.4 * load)) as f32,
-                pitch: loop_pitch(bank.loops[i].rpm, rs) as f32,
+                pitch: pitch_in(bank, &bank.on, k, rs) as f32,
             };
         } else {
-            for (j, &(k, wk)) in w.iter().enumerate() {
-                for (m, (list, g)) in [(&bank.on, g_on), (&bank.off, g_off)]
-                    .into_iter()
-                    .enumerate()
-                {
+            for (m, (list, w, g)) in [(&bank.on, w_on, g_on), (&bank.off, w_off, g_off)]
+                .into_iter()
+                .enumerate()
+            {
+                for (j, &(k, wk)) in w.iter().enumerate() {
                     let i = list[k];
-                    layers[j * 2 + m] = Layer {
+                    layers[m * 2 + j] = Layer {
                         idx: i,
                         gain: (wk * g * bank.loops[i].gain) as f32,
-                        pitch: loop_pitch(bank.loops[i].rpm, rs) as f32,
+                        pitch: pitch_in(bank, list, k, rs) as f32,
                     };
                 }
             }
@@ -659,28 +691,40 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["sport", "supercar", "hypercar"]
         );
-        let b = bank();
-        assert_eq!(b.on.len(), b.off.len());
-        assert!(b.on.len() >= 4);
-        for (a, o) in b.on.iter().zip(&b.off) {
-            assert_eq!(b.loops[*a].rpm, b.loops[*o].rpm);
+        assert_eq!(
+            c.banks()
+                .iter()
+                .map(|b| b.name.as_str())
+                .collect::<Vec<_>>(),
+            ["v10", "v12"]
+        );
+        for b in c.banks() {
+            assert!(b.on.len() >= 4 && b.off.len() >= 4, "{}", b.name);
+            // jede Liste deckt die Drehzahlen lückenlos ab; wo der Abstand über Faktor 2 liegt, erweitert
+            // `pitch_bounds` die Grenzen bis zur Mitte (geprüft unten), mehr als Faktor 2,3 darf es nicht sein
+            for list in [&b.on, &b.off] {
+                for w in list.windows(2) {
+                    let r = b.loops[w[1]].rpm / b.loops[w[0]].rpm;
+                    assert!(r > 1. && r <= 2.3, "{}: Lücke {r}", b.name);
+                }
+            }
+            for k in [ShotKind::Blip, ShotKind::Pop] {
+                assert!(!b.shots_of(k).is_empty(), "{}: {k:?}", b.name);
+            }
         }
-        // die Loops decken jede Drehzahl ab, ohne die Tonhöhengrenzen zu sprengen (Abstand ≤ 1,4/0,7 = 2)
-        for w in b.on.windows(2) {
-            let r = b.loops[w[1]].rpm / b.loops[w[0]].rpm;
-            assert!(r <= PITCH_MAX / PITCH_MIN + 0.05, "Lücke {r}");
-        }
-        for k in [
-            ShotKind::Start,
-            ShotKind::Blip,
-            ShotKind::Shift,
-            ShotKind::Pop,
-        ] {
-            assert!(!b.shots_of(k).is_empty(), "{k:?}");
-        }
+        // v10 hat Start und Schalten aus der Aufnahme, der Prüfstand (v12) nicht
+        let v10 = c.bank("v10");
+        assert!(
+            !v10.shots_of(ShotKind::Start).is_empty() && !v10.shots_of(ShotKind::Shift).is_empty()
+        );
+        // echter Schub (v12) liegt auf anderen Drehzahlen als die Last-Loops
+        let v12 = c.bank("v12");
+        let on: Vec<f64> = v12.on.iter().map(|&i| v12.loops[i].rpm).collect();
+        assert!(v12.off.iter().any(|&i| !on.contains(&v12.loops[i].rpm)));
         // Presets unterscheiden sich hörbar: Verstimmung, Begrenzer, Färbung, Pops
         let [s, u, h] = [&c.presets[0], &c.presets[1], &c.presets[2]];
-        assert!(s.pitch < u.pitch && u.pitch < h.pitch);
+        assert!(s.pitch < u.pitch);
+        assert!(s.bank == "v10" && u.bank == "v10" && h.bank == "v12");
         assert!(s.begrenzer < u.begrenzer && u.begrenzer < h.begrenzer);
         assert!(s.tiefpass_hz < u.tiefpass_hz && u.tiefpass_hz < h.tiefpass_hz);
         assert!(s.pop_chance < u.pop_chance && u.pop_chance < h.pop_chance);
@@ -730,29 +774,30 @@ mod tests {
 
     #[test]
     fn crossfade_keeps_power_and_pitch_stays_in_bounds() {
-        let b = bank();
-        for p in &config().presets {
-            let mut r = p.leerlauf * 0.95;
-            while r <= p.begrenzer {
-                let rs = r * p.pitch;
-                let w = loop_weights(b, rs);
-                let sum: f64 = w.iter().map(|x| x.1 * x.1).sum();
-                assert!((sum - 1.).abs() < 1e-9, "{rs}: {sum}");
-                // jeder hörbare Loop bleibt innerhalb der Tonhöhengrenzen, ohne dass sie greifen müssen –
-                // außer unter dem tiefsten bzw. über dem höchsten Loop der Bank (dort hält die Grenze)
-                for (k, wk) in w {
-                    if wk > 0.05 {
-                        let raw = rs / b.loops[b.on[k]].rpm;
-                        let (bottom, top) = (k == 0, k == b.on.len() - 1);
-                        assert!(
-                            raw >= PITCH_MIN - 0.02 || bottom,
-                            "{} bei {rs}: {raw}",
-                            p.name
-                        );
-                        assert!(raw <= PITCH_MAX + 0.02 || top, "{} bei {rs}: {raw}", p.name);
+        let c = config();
+        for p in &c.presets {
+            let b = c.bank(&p.bank);
+            for list in [&b.on, &b.off] {
+                let mut r = p.leerlauf * 0.95;
+                while r <= p.begrenzer {
+                    let rs = r * p.pitch;
+                    let w = loop_weights(b, list, rs);
+                    let sum: f64 = w.iter().map(|x| x.1 * x.1).sum();
+                    assert!((sum - 1.).abs() < 1e-9, "{rs}: {sum}");
+                    // jeder hörbare Loop bleibt innerhalb seiner Tonhöhengrenzen, ohne dass sie greifen müssen –
+                    // außer unter dem tiefsten bzw. über dem höchsten Loop (dort hält die Grenze)
+                    for (k, wk) in w {
+                        if wk > 0.05 {
+                            let raw = rs / b.loops[list[k]].rpm;
+                            let (lo, hi) = pitch_bounds(b, list, k);
+                            let (bottom, top) = (k == 0, k == list.len() - 1);
+                            assert!(raw >= lo - 0.02 || bottom, "{} bei {rs}: {raw}", p.name);
+                            assert!(raw <= hi + 0.02 || top, "{} bei {rs}: {raw}", p.name);
+                            assert!(lo >= 0.6 && hi <= 1.6, "{}: Grenzen {lo}…{hi}", p.name);
+                        }
                     }
+                    r += 50.;
                 }
-                r += 50.;
             }
         }
         assert_eq!(loop_pitch(1000., 5000.), PITCH_MAX);

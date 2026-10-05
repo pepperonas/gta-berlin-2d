@@ -1,0 +1,325 @@
+{
+  "bank": "v12",
+  "_hinweis": "Erzeugt von tools/audio/build_engine_sounds.py – nicht von Hand ändern.",
+  "quelle": "data/audio/raw/engine_reference_svj.m4a",
+  "quelle_sha256": "5acf1d6d4057149ea4d953b432ef396c5b2ad4c866fc069bb7be094c4fda9208",
+  "samplerate": 48000,
+  "drehzahl_annahme": "V12 (Viertakt), hellste Linie = Zündfrequenz: Drehzahl = f0 × 10; Prüfstand, kein Doppler",
+  "loops": [
+    {
+      "datei": "on_idle.wav",
+      "rpm": 1235,
+      "last": "on",
+      "samples": 89782,
+      "loop_start": 0,
+      "loop_ende": 89782,
+      "grundton_hz": 123.5,
+      "quelle_s": [
+        15.0,
+        16.9
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 22.6
+    },
+    {
+      "datei": "off_idle.wav",
+      "rpm": 1235,
+      "last": "off",
+      "samples": 89782,
+      "loop_start": 0,
+      "loop_ende": 89782,
+      "grundton_hz": 123.5,
+      "quelle_s": [
+        15.0,
+        16.9
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 22.6
+    },
+    {
+      "datei": "on_r2700.wav",
+      "rpm": 2738,
+      "last": "on",
+      "samples": 17878,
+      "loop_start": 0,
+      "loop_ende": 17878,
+      "grundton_hz": 273.85,
+      "quelle_s": [
+        21.55,
+        21.95
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 15.0
+    },
+    {
+      "datei": "off_r2700.wav",
+      "rpm": 2738,
+      "last": "off",
+      "samples": 17878,
+      "loop_start": 0,
+      "loop_ende": 17878,
+      "grundton_hz": 273.85,
+      "quelle_s": [
+        21.55,
+        21.95
+      ],
+      "gain_db": -7.0,
+      "drift_cent": 15.0
+    },
+    {
+      "datei": "on_r3300.wav",
+      "rpm": 3297,
+      "last": "on",
+      "samples": 18054,
+      "loop_start": 0,
+      "loop_ende": 18054,
+      "grundton_hz": 329.68,
+      "quelle_s": [
+        22.6,
+        23.0
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 14.8
+    },
+    {
+      "datei": "on_r4100.wav",
+      "rpm": 4122,
+      "last": "on",
+      "samples": 13158,
+      "loop_start": 0,
+      "loop_ende": 13158,
+      "grundton_hz": 412.21,
+      "quelle_s": [
+        23.6,
+        23.9
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 31.7
+    },
+    {
+      "datei": "on_r5600.wav",
+      "rpm": 5747,
+      "last": "on",
+      "samples": 13197,
+      "loop_start": 0,
+      "loop_ende": 13197,
+      "grundton_hz": 574.68,
+      "quelle_s": [
+        24.75,
+        25.05
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 21.6
+    },
+    {
+      "datei": "on_r6800.wav",
+      "rpm": 6837,
+      "last": "on",
+      "samples": 13198,
+      "loop_start": 0,
+      "loop_ende": 13198,
+      "grundton_hz": 683.73,
+      "quelle_s": [
+        25.55,
+        25.85
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 16.5
+    },
+    {
+      "datei": "on_r8400.wav",
+      "rpm": 8383,
+      "last": "on",
+      "samples": 13228,
+      "loop_start": 0,
+      "loop_ende": 13228,
+      "grundton_hz": 838.25,
+      "quelle_s": [
+        26.85,
+        27.15
+      ],
+      "gain_db": 0.0,
+      "drift_cent": 4.8
+    },
+    {
+      "datei": "off_r4000.wav",
+      "rpm": 4047,
+      "last": "off",
+      "samples": 15656,
+      "loop_start": 0,
+      "loop_ende": 15656,
+      "grundton_hz": 404.71,
+      "quelle_s": [
+        88.05,
+        88.4
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 28.6
+    },
+    {
+      "datei": "off_r4600.wav",
+      "rpm": 4613,
+      "last": "off",
+      "samples": 22788,
+      "loop_start": 0,
+      "loop_ende": 22788,
+      "grundton_hz": 461.29,
+      "quelle_s": [
+        87.3,
+        87.8
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 9.2
+    },
+    {
+      "datei": "off_r5800.wav",
+      "rpm": 5742,
+      "last": "off",
+      "samples": 22820,
+      "loop_start": 0,
+      "loop_ende": 22820,
+      "grundton_hz": 574.23,
+      "quelle_s": [
+        86.0,
+        86.5
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 8.5
+    },
+    {
+      "datei": "off_r7700.wav",
+      "rpm": 7725,
+      "last": "off",
+      "samples": 22805,
+      "loop_start": 0,
+      "loop_ende": 22805,
+      "grundton_hz": 772.47,
+      "quelle_s": [
+        83.7,
+        84.2
+      ],
+      "gain_db": -6.0,
+      "drift_cent": 12.9
+    }
+  ],
+  "einzel": [
+    {
+      "datei": "blip_1.wav",
+      "art": "blip",
+      "samples": 52801,
+      "quelle_s": [
+        70.85,
+        71.95
+      ],
+      "gain_db": 0.0,
+      "rpm": 1363
+    },
+    {
+      "datei": "blip_2.wav",
+      "art": "blip",
+      "samples": 39840,
+      "quelle_s": [
+        74.22,
+        75.05
+      ],
+      "gain_db": 0.0,
+      "rpm": 1296
+    },
+    {
+      "datei": "pop_1.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        99.645,
+        99.765
+      ],
+      "gain_db": 0.0,
+      "rpm": 6980
+    },
+    {
+      "datei": "pop_2.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        99.81,
+        99.93
+      ],
+      "gain_db": 0.0,
+      "rpm": 7860
+    },
+    {
+      "datei": "pop_3.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        104.68,
+        104.8
+      ],
+      "gain_db": 0.0,
+      "rpm": 6944
+    },
+    {
+      "datei": "pop_4.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        113.525,
+        113.645
+      ],
+      "gain_db": 0.0,
+      "rpm": 54
+    },
+    {
+      "datei": "pop_5.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        131.095,
+        131.215
+      ],
+      "gain_db": 0.0,
+      "rpm": 6868
+    },
+    {
+      "datei": "pop_6.wav",
+      "art": "pop",
+      "samples": 5759,
+      "quelle_s": [
+        137.83,
+        137.95
+      ],
+      "gain_db": 0.0,
+      "rpm": 1525
+    },
+    {
+      "datei": "pop_7.wav",
+      "art": "pop",
+      "samples": 5760,
+      "quelle_s": [
+        138.51,
+        138.63
+      ],
+      "gain_db": 0.0,
+      "rpm": 1520
+    }
+  ],
+  "referenz": "reference.wav",
+  "referenz_auszug_s": [
+    [
+      20.5,
+      31.5
+    ],
+    [
+      79.5,
+      89.5
+    ],
+    [
+      98.5,
+      105.0
+    ],
+    [
+      137.0,
+      139.5
+    ]
+  ]
+}

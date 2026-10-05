@@ -7,7 +7,7 @@
 use crate::dsp::{
     Biquad, Compressor, Env, FilterType, Noise, Osc, Reverb, Smooth, Table, Wave, pan, shape,
 };
-use crate::sampler::{EngineFrame, SampleBank, SamplerVoice, bank_v10};
+use crate::sampler::{EngineFrame, SamplerVoice, bank_v10};
 use berlin_sim::ambience::Mix;
 use berlin_sim::enginevoice::{Voice, engine_spectrum};
 use berlin_sim::railsound::{RailMix, TrainLayers};
@@ -1250,7 +1250,6 @@ impl Synth {
     /// Stereo-Abtastwerte erzeugen (verschachtelt links/rechts).
     pub fn render(&mut self, out: &mut [f32]) {
         let sr = self.sr;
-        let bank: &SampleBank = bank_v10();
         let dt = 1. / sr as f64;
         for frame in out.chunks_mut(2) {
             let block = self.tick.is_multiple_of(BLOCK);
@@ -1308,7 +1307,7 @@ impl Synth {
                 if v.silent() {
                     continue;
                 }
-                let x = v.next(bank, sr, block) * ech;
+                let x = v.next(sr, block) * ech;
                 let p = v.pan();
                 if v.player {
                     eng += x;

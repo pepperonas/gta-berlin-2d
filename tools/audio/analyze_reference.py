@@ -15,7 +15,8 @@ Drehzahl-Annahmen (Viertakt-V10, Vorbild des Fahrzeugs supercar_awd):
   B  Grundton = halbe Zündfrequenz    Drehzahl = f0 × 24  (Ordnung 2,5 – eine Zylinderbank je Auspuffstrang)
   Nur B ergibt einen plausiblen Verlauf (Leerlauf ~1300, Schaltpunkt ~7000, n_max 8500); A läge bei 3500 1/min.
 
-Aufruf: python tools/audio/analyze_reference.py [data/audio/raw/engine_reference_lambo.m4a]
+Aufruf: python tools/audio/analyze_reference.py [QUELLE [AUSGABEORDNER]]
+        (Vorgabe: die V10-Referenz nach tools/audio/analysis/)
 Braucht ffmpeg (Dekodieren) und librosa, numpy, soundfile, matplotlib, pyloudnorm.
 Die Quelldatei wird nur gelesen.
 """
@@ -36,7 +37,7 @@ import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data/audio/raw/engine_reference_lambo.m4a"
-OUT = ROOT / "tools/audio/analysis"
+OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "tools/audio/analysis"
 HOP = 1024  # ~21 ms bei 48 kHz
 FMIN, FMAX = 30.0, 1200.0
 
@@ -64,6 +65,14 @@ def true_peak_db(src: Path) -> float | None:
                 if "Peak:" in nxt:
                     return float(nxt.split()[1])
     return None
+
+
+def tick_step(dur: float) -> float:
+    """Achsenteilung: etwa 20 Marken über die Länge (0,5 s bei kurzen, 10 s bei langen Aufnahmen)."""
+    for step in (0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0):
+        if dur / step <= 24:
+            return step
+    return 60.0
 
 
 def rpm(f0: np.ndarray, cyl: int) -> np.ndarray:
@@ -154,7 +163,7 @@ def main() -> None:
     ax.set_xlabel("Zeit (s)")
     ax.set_ylabel("Amplitude")
     ax.set_xlim(0, dur)
-    ax.set_xticks(np.arange(0, dur + 0.01, 0.5))
+    ax.set_xticks(np.arange(0, dur + 0.01, tick_step(dur)))
     ax.grid(alpha=0.3)
     ax.set_title("Wellenform und RMS-Hüllkurve")
     fig.tight_layout()
@@ -167,7 +176,7 @@ def main() -> None:
     img = librosa.display.specshow(S, sr=sr, hop_length=256, x_axis="time", y_axis="log", ax=ax, cmap="magma")
     ax.plot(t, f0, color="cyan", lw=1.2, label="f0 (pyin)")
     ax.set_ylim(25, 16000)
-    ax.set_xticks(np.arange(0, dur + 0.01, 0.5))
+    ax.set_xticks(np.arange(0, dur + 0.01, tick_step(dur)))
     ax.legend(loc="upper right")
     fig.colorbar(img, ax=ax, format="%+2.0f dB")
     ax.set_title("Spektrogramm (log-Frequenz) mit Grundfrequenz")
@@ -190,7 +199,7 @@ def main() -> None:
     a2.text(0.05, 8650, "n_max supercar_awd 8500", fontsize=8)
     a2.set_ylabel("Drehzahl (1/min)")
     a2.set_xlabel("Zeit (s)")
-    a2.set_xticks(np.arange(0, dur + 0.01, 0.5))
+    a2.set_xticks(np.arange(0, dur + 0.01, tick_step(dur)))
     a2.grid(alpha=0.3)
     a2.legend(loc="upper left")
     for tr in json.loads((OUT / "transients.json").read_text()):

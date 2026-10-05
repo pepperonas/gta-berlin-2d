@@ -21,7 +21,8 @@ pub struct EngineDebug {
     pub profile: usize,
     /// A: Referenzaufnahme, B: Samples
     pub ab: bool,
-    reference: Option<Arc<[f32]>>,
+    /// geladene Referenz und ihre Bank
+    reference: Option<(String, Arc<[f32]>)>,
     pub status: String,
 }
 impl Default for EngineDebug {
@@ -45,7 +46,16 @@ impl EngineDebug {
     pub fn select(&mut self, dir: i32) {
         self.row = (self.row as i32 + dir).rem_euclid(ROWS.len() as i32) as usize;
     }
-    pub fn adjust(&mut self, dir: f64) {
+    /// Bank, deren Referenz A/B spielt: die des gewählten Profils (Regler) bzw. des gefahrenen Autos.
+    pub fn bank(&self, view: &EngineView) -> String {
+        if !self.manual && !view.out.bank.is_empty() {
+            return view.out.bank.to_owned();
+        }
+        let all = config().all_profiles();
+        all.get(self.profile)
+            .map_or("v10".to_owned(), |p| p.bank.clone())
+    }
+    pub fn adjust(&mut self, dir: f64, view: &EngineView) {
         let n = config().all_profiles().len();
         match self.row {
             0 => self.manual = !self.manual,
@@ -53,21 +63,29 @@ impl EngineDebug {
             2 => self.rpm = (self.rpm + dir * 250.).clamp(600., 10000.),
             3 => self.throttle = (self.throttle + dir * 0.1).clamp(0., 1.),
             4 => self.gear = (self.gear as i64 + dir as i64).clamp(1, 7) as usize,
-            _ => self.toggle_ab(),
+            _ => self.toggle_ab(view),
         }
         // wer an Drehzahl, Gas, Gang oder Profil dreht, will die Regler hören
         if (1..=4).contains(&self.row) {
             self.manual = true;
         }
+        // läuft A/B, folgt die Referenz der Bank des (neuen) Profils
+        if self.row != 5 {
+            self.load_reference(view);
+        }
     }
-    pub fn toggle_ab(&mut self) {
+    pub fn toggle_ab(&mut self, view: &EngineView) {
         self.ab = !self.ab;
-        if self.ab && self.reference.is_none() {
-            self.reference = berlin_audio::sampler::load_reference();
+        self.load_reference(view);
+    }
+    fn load_reference(&mut self, view: &EngineView) {
+        let bank = self.bank(view);
+        if self.ab && self.reference.as_ref().is_none_or(|(b, _)| *b != bank) {
+            self.reference =
+                berlin_audio::sampler::load_reference(&bank).map(|r| (bank.clone(), r));
             if self.reference.is_none() {
                 self.ab = false;
-                self.status =
-                    "Referenz nicht gefunden (data/audio/engine/v10/reference.wav)".into();
+                self.status = format!("Referenz nicht gefunden (data/audio/engine/{bank}/)");
             }
         }
     }
@@ -81,7 +99,7 @@ impl EngineDebug {
             profile: self.profile,
         });
         l.reference = if on && self.ab {
-            self.reference.clone()
+            self.reference.as_ref().map(|(_, r)| r.clone())
         } else {
             None
         };
@@ -235,17 +253,18 @@ mod tests {
         d.select(1);
         d.select(2);
         assert_eq!(d.row, 2);
-        d.adjust(1.);
+        let view = EngineView::default();
+        d.adjust(1., &view);
         assert!(d.manual && d.rpm == 3250.);
         d.row = 3;
         for _ in 0..20 {
-            d.adjust(1.);
+            d.adjust(1., &view);
         }
         assert_eq!(d.throttle, 1.);
         d.row = 1;
         let n = config().all_profiles().len();
         for _ in 0..n {
-            d.adjust(1.);
+            d.adjust(1., &view);
         }
         assert_eq!(d.profile, 1, "Profilauswahl läuft im Kreis");
         let mut l = Listener::default();
@@ -256,8 +275,13 @@ mod tests {
         );
         // A/B lädt die Referenz von der Platte
         d.row = 5;
-        d.adjust(1.);
+        d.adjust(1., &view);
         assert!(d.ab);
+        assert_eq!(d.bank(&view), "v10", "Profil 1 = Supercar");
+        // Profil wechseln (Hypercar = v12): die passende Referenz kommt nach
+        d.profile = 2;
+        d.load_reference(&view);
+        assert!(d.reference.as_ref().is_some_and(|(b, _)| b == "v12"));
         d.sync(&mut l);
         assert!(l.reference.as_ref().is_some_and(|r| r.len() > 48000));
         // geschlossen: nichts überschreibt das Fahren

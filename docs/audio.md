@@ -1,15 +1,16 @@
 # Motorsound aus Aufnahmen
 
-Sportwagen, Supercars und Hypercars mit Verbrennungsmotor und mindestens sechs Zylindern klingen nach einer echten
-Aufnahme (V10 eines durchstartenden Supersportwagens) statt nach dem Synthesizer. Alle teilen eine Sample-Bank; drei
+Sportwagen, Supercars und Hypercars mit Verbrennungsmotor und mindestens sechs Zylindern klingen nach echten
+Aufnahmen statt nach dem Synthesizer. Zwei Sample-Bänke: **v10** (durchstartender V10-Supersportwagen, 8,7 s) für
+Sportwagen und Supercars, **v12** (Twin-Turbo-V12 mit 1000+ PS am Prüfstand, 169 s) für Hypercars. Drei
 Kategorie-Profile und Überschreibungen je Fahrzeug färben und verstimmen sie. Alle anderen Fahrzeuge (Kleinwagen,
 Vierzylinder-Sportwagen, Elektroautos, Lkw, Busse, Zweiräder) behalten ihren Synthese-Klang.
 
 | Teil | Ort |
 |---|---|
-| Referenz (unverändert) | `data/audio/raw/engine_reference_lambo.m4a` |
-| Analyse (Phase 1) | `tools/audio/analyze_reference.py` → `tools/audio/analysis/` (Plots, `SEGMENTE.md`) |
-| Build-Skript (Phase 2) | `tools/audio/build_engine_sounds.py` → `data/audio/engine/v10/` |
+| Referenzen (unverändert) | `data/audio/raw/engine_reference_lambo.m4a` (v10), `engine_reference_svj.m4a` (v12) |
+| Analyse (Phase 1) | `tools/audio/analyze_reference.py [QUELLE [ORDNER]]` → `tools/audio/analysis/` (v10), `analysis_svj/` (v12), je mit `SEGMENTE.md` |
+| Build-Skript (Phase 2) | `tools/audio/build_engine_sounds.py [BANK …]` → `data/audio/engine/v10/`, `…/v12/` |
 | Profile (Phase 4) | `data/audio/engine_profiles.json` |
 | Steuerlogik (rein, getestet) | `crates/sim/src/enginesound.rs` |
 | Wiedergabe | `crates/audio/src/sampler.rs`, eingebunden in `synth.rs` |
@@ -33,7 +34,7 @@ Werkzeuge einrichten (nur für das Neuerzeugen der Samples; das Spiel braucht ni
 ```bash
 python3 -m venv .venv-audio && .venv-audio/bin/pip install -r tools/audio/requirements.txt   # dazu ffmpeg
 .venv-audio/bin/python tools/audio/analyze_reference.py     # optional: Plots neu
-.venv-audio/bin/python tools/audio/build_engine_sounds.py   # Samples + Manifest neu
+.venv-audio/bin/python tools/audio/build_engine_sounds.py   # alle Bänke neu (oder: … v12)
 cargo test --workspace                                       # prüft Bank, Manifest, Klicks, Profile
 ```
 
@@ -42,24 +43,31 @@ Das Build-Skript ist **idempotent**: Gleicher Eingang ergibt bitgleiche Dateien 
 
 ### Wie die Loops entstehen
 
-Die Referenz ist 8,7 s lang und fast nur Hochdrehen unter Last; das Auto fährt dabei vom Mikrofon weg (Details und
-Lücken: `tools/audio/analysis/SEGMENTE.md`). Ein Ausschnitt aus einem Hochdrehen würde als Loop „jaulen“, deshalb:
+Beide Referenzen bestehen vor allem aus Drehzahl-Sweeps; ein Ausschnitt daraus würde als Loop „jaulen“. Die
+v10-Aufnahme ist kurz und fährt vom Mikrofon weg (`tools/audio/analysis/SEGMENTE.md`), die v12-Aufnahme ist ein
+Prüfstandslauf mit vielen Zügen, echtem Ausrollen und Fehlzündungen (`tools/audio/analysis_svj/SEGMENTE.md`).
+Je Bank steht die Konfiguration oben im Build-Skript (`V10`, `V12`: Quelle, Drehzahl-Annahme, Fenster).
 
-1. **Grundton verfolgen** über einen Obertonkamm (robuster als pyin, das hier oft eine Oktave springt).
-   Drehzahl-Annahme: V10, Grundton = halbe Zündfrequenz, also Drehzahl = f0 × 24. Für die Beschriftung wird der
-   Doppler des wegfahrenden Autos herausgerechnet (geschätzte Geschwindigkeit).
+1. **Grundton verfolgen** – v10 über einen Obertonkamm (robuster als pyin, das hier oft eine Oktave springt;
+   Annahme V10, Grundton = halbe Zündfrequenz, Drehzahl = f0 × 24, Doppler des wegfahrenden Autos herausgerechnet),
+   v12 über eine **Linienverfolgung** von einer Startfrequenz aus (stärkstes Maximum innerhalb ±7 % der vorigen
+   Frequenz; der Kamm rutscht beim V12 auf die halbe Frequenz; Annahme Zündfrequenz, Drehzahl = f0 × 10).
 2. **Sweep glätten:** Das Quellfenster wird zeitvariabel nachgetastet (ds/dn = f_ziel / f(s)), bis die Tonhöhe
    stillsteht. Der Leerlauf wird nicht geglättet; dort entfernt ein Kerbfilter einen fremden Dauerton (237/454 Hz).
 3. **Pegel ausgleichen** innerhalb des Fensters (höchstens ±4 dB).
 4. **Loop-Punkt:** Länge = ganze Zahl von Grundtonperioden; der Kopf wird mit gleichstarkem Crossfade (25 ms) mit
    dem Stück hinter dem Ende überblendet. Der Übergang Ende → Anfang ist damit lückenlos.
 5. **Lautheit:** alle Loops auf −18 LUFS (gemessen am wiederholten Loop).
-6. **Schub-Loops** (Gas weg) sind abgeleitet, weil die Aufnahme keinen Schub enthält: Tiefpass 1,5 kHz, Hochpass
-   60 Hz, leichte Sättigung, im Manifest −7 dB. Gefiltert wird über den dreifach wiederholten Loop, damit die Naht
-   nahtlos bleibt.
+6. **Schub-Loops** (Gas weg): v12 hat echte aus dem Ausrollen am Prüfstand (geglättet wie die Züge, im Manifest
+   −6 dB). Wo eine Aufnahme keinen Schub hergibt (v10 ganz, v12 unter 4000 1/min), werden sie aus Last-Loops
+   abgeleitet: Tiefpass 1,5 kHz, Hochpass 60 Hz, leichte Sättigung, −7 dB. Gefiltert wird über den dreifach
+   wiederholten Loop, damit die Naht nahtlos bleibt. Last- und Schub-Loops dürfen auf verschiedenen Drehzahlen
+   liegen; jede Liste wird für sich überblendet.
 
 Qualitätsgrenzen im Skript: Restdrift der Tonhöhe ≤ 35 Cent, Sprung am Loop-Punkt nicht größer als der größte
 Schritt in seiner Umgebung (±64 Samples).
+
+**v10:**
 
 | Loop | Drehzahl | Länge | Quelle (s) | Restdrift |
 |---|---|---|---|---|
@@ -70,7 +78,13 @@ Schritt in seiner Umgebung (±64 Samples).
 | r6000 | 5974 | 0,21 s | 2,98–3,22 | 7 ct |
 | r7200 | 7175 | 0,31 s | 3,30–3,64 | 22 ct |
 
-Einzelklänge: `start` (0,11–0,95 s; ob das ein Motorstart ist, ist unbelegt – die Aufnahme beginnt mit einem harten
+**v12:** Last 1235 (Leerlauf, 1,9 s), 2738, 3297, 4122, 5747, 6837, 8383 aus dem Zug 21,2–27,4 s (0,27–0,38 s,
+Restdrift 5–32 ct); Schub echt 4047, 4613, 5742, 7725 aus dem Ausrollen 83,4–89,3 s (0,33–0,48 s, 9–29 ct),
+abgeleitet 1235 und 2738. Einzelklänge: `blip_1`, `blip_2` (Gasstöße im Stand), `pop_1…7` (Fehlzündungen 99–139 s).
+Kein Start, kein Schalten (Prüfstand im festen Gang). Die A/B-Referenz ist ein 30-s-Auszug (Zug, Ausrollen,
+Fehlzündungen; `referenz_auszug_s` im Manifest), die ganze Aufnahme wäre als WAV 16 MB.
+
+v10-Einzelklänge: `start` (0,11–0,95 s; ob das ein Motorstart ist, ist unbelegt – die Aufnahme beginnt mit einem harten
 Einsatz), `blip` (Gasstoß aus dem Anfahren), `shift_1…3` (die drei Hochschaltvorgänge), `pop_1…5` (Knackser aus dem
 Ende und der ersten Schaltsalve). Lautheit: Start/Blip −16 LUFS, Schalten −20 LUFS, Pops Spitze −3 dBFS.
 
@@ -92,7 +106,9 @@ Beides ist reine Klanglogik; die Fahrphysik wird nicht verändert. Der Begrenzer
 
 **Überblendung:** Klang-Drehzahl = Drehzahl × `pitch` des Profils. Gleiche Leistung (cos/sin) zwischen den zwei
 Loops, die sie einrahmen – aber nur im Bereich, in dem **beide** eine erlaubte Tonhöhe haben (0,7 … 1,4); unter dem
-tiefsten und über dem höchsten Loop hält die Grenze. Tonhöhe = Klang-Drehzahl / Aufnahmedrehzahl.
+tiefsten und über dem höchsten Loop hält die Grenze. Tonhöhe = Klang-Drehzahl / Aufnahmedrehzahl. Liegen zwei
+Loops mehr als Faktor 2 auseinander (v12: Leerlauf 1235 → 2738), erweitert `pitch_bounds` die Grenzen der beiden bis
+zur Mitte der Lücke (dort bis × 1,53 bzw. × 0,65), damit die Tonhöhe in der Überblendung nicht springt.
 
 **Last und Schub:** Gas mischt Last- und Schub-Loop mit gleicher Leistung; nahe dem Leerlauf zählt der Leerlauf-Loop
 als Last. Beim Hochschalten ist das Gas `SHIFT_CUT` = 0,14 s weg (Schaltgeräusch, unter Volllast manchmal ein Pop).
@@ -143,15 +159,20 @@ dem Gas stärker), Bass-Shelf 250 Hz, Höhen-Shelf 3 kHz, Tiefpass des Profils, 
 
 | Preset | Charakter | pitch | Begrenzer | Tiefpass | Shelf Bass/Höhen | Sättigung | Pops |
 |---|---|---|---|---|---|---|---|
-| `sport` | tiefer, weicher | 0,90 | 7600 | 5,2 kHz | +2,5 / −3 dB | 0,15 | 0,25 |
-| `supercar` | nah an der Referenz | 1,00 | 8500 | 9 kHz | 0 / 0 dB | 0,25 | 0,50 |
-| `hypercar` | höher, heller, rauer | 1,08 | 9200 | 12 kHz | −1 / +3 dB | 0,50 | 0,85 |
+| `sport` | tiefer, weicher (Bank v10) | 0,90 | 7600 | 5,2 kHz | +2,5 / −3 dB | 0,15 | 0,25 |
+| `supercar` | nah an der V10-Referenz | 1,00 | 8500 | 9 kHz | 0 / 0 dB | 0,25 | 0,50 |
+| `hypercar` | Twin-Turbo-V12 (Bank v12) | 1,00 | 9000 | 12 kHz | 0 / +1,5 dB | 0,35 | 0,85 |
 
 **Zuordnung:** `zuordnung.klassen` bildet die Fahrzeugklasse (`klasse` in `data/vehicles/vehicles.json`) auf ein
 Preset ab; Elektromotoren sind immer ausgenommen, Vier- und Dreizylinder stehen in `zuordnung.ausgenommen`
 (`roadster`, `leichtcoupe`, `leichtbau`, `rallye`, `drift_coupe`, `hypercar_elektro`). Unter `fahrzeuge` stehen
 Überschreibungen je Fahrzeug-id (nur die genannten Felder ändern sich; `preset` wählt eine andere Grundlage).
-Beispiel: `"hypercar": { "begrenzer": 7100, "pitch": 0.92 }` (der Bugatti-artige dreht nur bis 6800).
+Beispiel: `"hypercar": { "begrenzer": 7100, "pitch": 0.94 }` (der Bugatti-artige dreht nur bis 6800). Welche Bank
+ein Preset spielt, steht in seinem Feld `bank` – Sportwagen auf den V12 umzustellen ist eine Datenänderung.
+
+Pegel gegen den Synthese-Motor desselben Autos (Testfahrt): v10 `supercar_awd` Vollgas +0,3 / Bremsen +1,6 /
+Teilgas +2,6 dB, v12 `hypercar` −0,5 / +2,5 / +3,1 dB. Leerlauf- und Schub-Loops sind auf dieselbe Lautheit gebracht
+wie die Volllast-Loops; wer es im Teillastbereich leiser will, stellt `lautstaerke` nach.
 
 `GTA_ENGINE_SAMPLES=0` schaltet zum Gegenhören auf den Synthese-Klang zurück.
 
@@ -166,27 +187,30 @@ Bild; die Physik-Anzeige (F3) liegt links, es ist immer nur eine offen (sie teil
 - Angezeigt: Profil, Drehzahl, Gas, Gang, Begrenzer, Färbung, alle hörbaren Loops mit Gewicht (orange = Last,
   blau = Schub) und Tonhöhe, Zahl der Motorstimmen im Bild.
 - **F7** oder die Zeile A/B: A spielt die Referenzaufnahme in Schleife (auf den Pegel der Loops gebracht, die
-  Motor-Samples schweigen solange), B wieder die Samples.
+  Motor-Samples schweigen solange), B wieder die Samples. Gespielt wird die Referenz der Bank, die gerade klingt:
+  die des gewählten Profils (Regler) bzw. die des gefahrenen Autos.
 
 ## Ein neues Fahrzeugsample hinzufügen
 
 1. Aufnahme nach `data/audio/raw/<name>.<ext>` kopieren (Original nie verändern).
 2. `analyze_reference.py <datei>` laufen lassen, Plots und `segments.md` ansehen, Drehzahl-Annahme festlegen
    (Zylinderzahl, Grundton = Zündfrequenz oder halbe) und eine Segmenttabelle schreiben.
-3. `build_engine_sounds.py` kopieren oder parametrieren: `SRC`, `OUT` (`data/audio/engine/<bank>/`),
-   `RPM_PER_HZ`, die Fenster in `LOOPS` (Abstand benachbarter Loops höchstens Faktor 2, sonst entsteht eine
-   Tonhöhenlücke) und `ONESHOTS`. Laufen lassen, bis die Qualitätsgrenzen halten.
+3. In `build_engine_sounds.py` eine Konfiguration wie `V12` anlegen und in `BANKS` eintragen: Quelle,
+   `rpm_per_hz`, Verfolgung (`kamm` oder `linie` mit Startfrequenz je Fenster), Last-Fenster (Abstand benachbarter
+   Loops möglichst höchstens Faktor 2), Schub-Fenster aus echtem Ausrollen, abgeleitete Schub-Loops, Einzelklänge,
+   Referenz-Auszug. `build_engine_sounds.py <bank>` laufen lassen, bis die Qualitätsgrenzen halten.
 4. In `crates/sim/src/enginesound.rs` das Manifest per `include_str!` an `Config::parse` übergeben und in
-   `crates/audio/src/sampler.rs` eine Dateiliste wie `V10` samt Ladefunktion anlegen (der Test
-   `bank_matches_the_manifest` zeigt, was fehlt). `SamplerVoice` braucht heute eine Bank je Synthesizer; für eine
-   zweite Bank bekommt `EngineFrame` den Banknamen und der Synthesizer eine Bank je Stimme.
+   `crates/audio/src/sampler.rs` eine Dateiliste per `bank_files!` anlegen und in `files_of` eintragen (der Test
+   `banks_match_their_manifests` zeigt, was fehlt). Jede Stimme spielt die Bank, die `SoundOut.bank` nennt.
 5. In `engine_profiles.json` Presets mit `"bank": "<bank>"` anlegen und Klassen oder einzelne Fahrzeuge zuordnen.
 6. `cargo test --workspace`; im Spiel mit F4/`motorsound` und A/B gegen die Referenz abhören.
 
 ## Grenzen
 
-- Die Referenz ist kurz: Loops sind 0,2–0,6 s lang; über 7200 1/min wird der oberste Loop hochgezogen (bis × 1,4).
-- Schub ist abgeleitet, nicht aufgenommen; ob der Einsatz am Anfang ein Motorstart ist, ist unbelegt.
+- v10 ist kurz: Loops sind 0,2–0,6 s lang; über 7200 1/min wird der oberste Loop hochgezogen (bis × 1,4). Schub
+  ist dort abgeleitet; ob der Einsatz am Anfang ein Motorstart ist, ist unbelegt.
+- v12 hat zwischen Leerlauf und 2700 1/min kein Material (Tonhöhe dort bis × 1,53) und unter 4000 keinen echten
+  Schub; Prüfstandsrauschen liegt unter allem. Start- und Schaltgeräusch fehlen (Hypercars schalten stumm).
 - Die Drehzahl-Beschriftung beruht auf einer Annahme (V10, Ordnung 2,5) und einer geschätzten
   Geschwindigkeit für den Doppler.
 - Abgehört wurde nicht von Menschen in dieser Sitzung; verifiziert sind Spektrogramme der Testfahrt, Pegelmessung

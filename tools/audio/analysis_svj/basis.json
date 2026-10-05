@@ -1,0 +1,10 @@
+{
+  "datei": "data/audio/raw/engine_reference_svj.m4a",
+  "laenge_s": 168.619,
+  "samplerate": 48000,
+  "kanaele": 2,
+  "lufs_integriert": -14.87,
+  "sample_peak_dbfs": -0.1,
+  "true_peak_dbtp": -0.1,
+  "stereo_korrelation": 0.988
+}

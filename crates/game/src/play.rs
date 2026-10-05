@@ -2223,14 +2223,15 @@ impl Game for Play {
             if bind.pressed(keys, Bind::DebugNext) {
                 self.enginedebug.select(1);
             }
+            let view = &self.listener.engine_view;
             if bind.pressed(keys, Bind::DebugLess) {
-                self.enginedebug.adjust(-1.);
+                self.enginedebug.adjust(-1., view);
             }
             if bind.pressed(keys, Bind::DebugMore) {
-                self.enginedebug.adjust(1.);
+                self.enginedebug.adjust(1., view);
             }
             if bind.pressed(keys, Bind::EngineAb) {
-                self.enginedebug.toggle_ab();
+                self.enginedebug.toggle_ab(view);
             }
         }
         self.enginedebug.sync(&mut self.listener);

@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: Hypercars klingen nach einem Twin-Turbo-V12 mit 1000+ PS, aufgenommen am Prüfstand (neue
+  Sample-Bank `v12`): sieben Last-Loops von 1235 bis 8383 1/min aus einem sauberen Volllast-Zug, erstmals **echte
+  Schub-Loops** aus dem Ausrollen (4000–7700 1/min), Gasstöße und sieben echte Fehlzündungen. Sportwagen und
+  Supercars behalten den V10. Welche Bank ein Profil spielt, steht im Feld `bank` in
+  `data/audio/engine_profiles.json`; die Motorsound-Anzeige spielt bei A/B die Referenz der jeweiligen Bank.
+
 - Native Fassung: Sportwagen, Supercars und Hypercars mit Verbrennungsmotor (ab sechs Zylindern) klingen nach einer
   echten V10-Aufnahme statt nach dem Synthesizer. Sechs Last- und sechs Schub-Loops (1360–7180 1/min) werden nach
   Drehzahl überblendet und verstimmt, Gas mischt Last und Schub; dazu Anlassen, Schaltgeräusch, Zwischengas beim
