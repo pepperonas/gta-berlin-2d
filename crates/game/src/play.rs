@@ -27,6 +27,9 @@ pub struct Play {
     pub bigmap: crate::bigmap::BigMap,
     /// HUD-Breite des letzten Bildes (Basiseinheiten), für die Kartenbedienung im Simulationsschritt
     hud_width: f32,
+    /// Klickfläche des Entwickler-Links auf dem Titelbild (vom letzten Zeichnen) und ob der Zeiger darauf liegt
+    title_link: Option<[f32; 4]>,
+    title_link_hover: bool,
     /// Anzeige-Schalter der Befehlszeile (fps, ebenen, silhouetten)
     debug: crate::console::Debug,
     fps: crate::fps::Meter,
@@ -250,7 +253,12 @@ impl Play {
         self.hud_width = out.width;
         match self.screen {
             Screen::Title => {
-                crate::menu::draw_title(out, &self.menu, self.world.loading);
+                self.title_link = Some(crate::menu::draw_title(
+                    out,
+                    &self.menu,
+                    self.world.loading,
+                    self.title_link_hover,
+                ));
                 return;
             }
             Screen::Controls(_) => {
@@ -381,6 +389,8 @@ impl Play {
             teleport_auto: false,
             bigmap,
             hud_width: 1280.,
+            title_link: None,
+            title_link_hover: false,
             debug: Default::default(),
             fps: Default::default(),
             world,
@@ -976,6 +986,14 @@ impl Play {
                 false
             }
             Screen::Title => {
+                // Entwickler-Link unten links: Zeiger darüber hebt ihn hervor, Klick öffnet den Browser
+                self.title_link_hover = self
+                    .title_link
+                    .zip(keys.mouse.hud)
+                    .is_some_and(|(r, p)| crate::menu::in_rect(r, p));
+                if self.title_link_hover && keys.mouse.left_pressed {
+                    crate::menu::open_url(crate::menu::CREDIT_URL);
+                }
                 if !self.world.loading {
                     let mp = self.menu.mouse(
                         self.hud_width / 2.,

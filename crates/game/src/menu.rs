@@ -389,7 +389,48 @@ fn skyline(h: &mut Hud) {
     h.ellipse(tx, base - 402., 3., 3., [1., 0.231, 0.188, 1.]);
 }
 
-pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool) {
+/// Entwickler-Zeile unten links auf dem Titelbild; der GitHub-Teil ist ein Link.
+pub const CREDIT: &str = "Entwickelt von Martin Pfeffer · celox.io · ";
+pub const CREDIT_LINK: &str = "github.com/pepperonas";
+pub const CREDIT_URL: &str = "https://github.com/pepperonas";
+const CREDIT_SIZE: f32 = 12.;
+const CREDIT_Y: f32 = 720. - 16.;
+
+/// Klickfläche des GitHub-Links (x, y, Breite, Höhe in Basiseinheiten).
+pub fn credit_link_rect(h: &Hud) -> [f32; 4] {
+    let x = 36. + h.text_width(CREDIT, CREDIT_SIZE);
+    let w = h.text_width(CREDIT_LINK, CREDIT_SIZE);
+    [
+        x - 4.,
+        CREDIT_Y - CREDIT_SIZE - 4.,
+        w + 8.,
+        CREDIT_SIZE + 10.,
+    ]
+}
+
+/// Liegt der Mauszeiger (HUD-Koordinaten) auf dem Link?
+pub fn in_rect(r: [f32; 4], p: glam::Vec2) -> bool {
+    p.x >= r[0] && p.x <= r[0] + r[2] && p.y >= r[1] && p.y <= r[1] + r[3]
+}
+
+/// Öffnet eine Adresse im Standardbrowser (ohne zusätzliche Abhängigkeit).
+pub fn open_url(url: &str) {
+    if cfg!(test) {
+        return;
+    }
+    let mut cmd = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", ""]);
+        c
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    let _ = cmd.arg(url).spawn();
+}
+
+pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f32; 4] {
     let vw = h.width;
     // abgedunkelt, unten stärker (ein Verlauf aus Streifen zeigte Nähte zwischen den Kanten)
     h.rect(0., 0., vw, 720., [0.04, 0.03, 0.1, 0.4], 0.);
@@ -430,15 +471,23 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool) {
         Align::Right,
         true,
     );
-    h.text(
-        "Kartendaten © OpenStreetMap-Mitwirkende (ODbL)",
-        36.,
-        720. - 16.,
-        12.,
-        grey,
+    let w = h.text(CREDIT, 36., CREDIT_Y, CREDIT_SIZE, grey, Align::Left, true);
+    let link = if link_hover {
+        YELLOW
+    } else {
+        [0.62, 0.74, 1., 1.]
+    };
+    let lw = h.text(
+        CREDIT_LINK,
+        36. + w,
+        CREDIT_Y,
+        CREDIT_SIZE,
+        link,
         Align::Left,
         true,
     );
+    h.rect(36. + w, CREDIT_Y + 2., lw, 1., link, 0.);
+    credit_link_rect(h)
 }
 
 pub fn draw_pause(h: &mut Hud, m: &Menu, completed: u32, best: Option<f64>) {
@@ -780,7 +829,16 @@ mod tests {
     #[test]
     fn screens_draw_within_the_frame() {
         let mut h = Hud::new([1280., 720.]);
-        draw_title(&mut h, &title_menu(true), false);
+        let r = draw_title(&mut h, &title_menu(true), false, false);
+        let ver = h.text_width(
+            &format!("v{} · native Fassung", crate::about::game_version()),
+            14.,
+        );
+        assert!(
+            r[0] > 36. && r[0] + r[2] < 1280. - 36. - ver - 20.,
+            "Link vor der Versionszeile: {r:?}"
+        );
+        assert!(r[1] + r[3] <= 720.);
         draw_pause(&mut h, &pause_menu(), 3, Some(95.));
         let binds = crate::bindings::Bindings::default();
         draw_controls(&mut h, true, &binds);

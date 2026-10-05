@@ -244,6 +244,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Titelbild (native Fassung): unten links steht jetzt „Entwickelt von Martin Pfeffer · celox.io ·
+  github.com/pepperonas“; der GitHub-Teil ist ein Link (Zeiger darauf hebt ihn gelb hervor, Klick öffnet das Profil
+  im Browser). Die OpenStreetMap-Quellenangabe steht weiter auf der großen Karte und unter „Über das Spiel“.
+
 - Native Rust-Portierung: Gas und Bremse am Controller nutzen den ganzen Triggerweg (progressive Kennlinie, Pedal auf
   das Haftungslimit abgebildet; vorher war ab halbem Gas schon fast Vollgas erreicht). Vollgas unverändert.
   Lenkstick mit kleinerer Totzone und feinerer Mitte.
