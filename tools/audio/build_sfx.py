@@ -19,7 +19,7 @@ import io
 import json
 import sys
 import urllib.request
-import zipfile
+import zipfile  # noqa: F401  (Archive)
 from pathlib import Path
 
 import librosa
@@ -32,10 +32,51 @@ RECIPES = ROOT / "tools/audio/sfx_recipes.json"
 CACHE = ROOT / "tools/audio/.cache/sfx"
 OUT = ROOT / "data/audio/sfx"
 SR = 48000
+QUELLEN: dict = {}
 
 
-def archive(src_id: str, src: dict) -> zipfile.ZipFile:
+class Single:
+    """Einzeldatei (Freesound) mit derselben Schnittstelle wie ein ZIP-Archiv."""
+
+    def __init__(self, name: str, data: bytes):
+        self.name, self.data = name, data
+
+    def namelist(self) -> list[str]:
+        return [self.name]
+
+    def read(self, _name: str) -> bytes:
+        return self.data
+
+
+def freesound(src_id: str, src: dict) -> Single:
+    """Originaldatei von Freesound (tools/audio/freesound.py); Lizenz und Urheber werden beim Laden geprüft."""
+    sid = src["freesound"]
+    hits = list(CACHE.glob(f"fs_{sid}.*"))
+    if hits:
+        path = hits[0]
+    else:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import freesound as fs
+
+        meta = fs.info(sid)
+        lic = fs.license_name(meta["license"])
+        if lic != src["lizenz"] or meta["username"] not in src["urheber"]:
+            sys.exit(f"{src_id}: Rezept sagt {src['lizenz']}/{src['urheber']}, Freesound {lic}/{meta['username']}")
+        print("lade Freesound", sid, meta["name"])
+        path = CACHE / f"fs_{sid}.{meta['type']}"
+        path.write_bytes(fs.download(sid))
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if not src.get("sha256"):
+        sys.exit(f"{src_id}: sha256 im Rezept eintragen: {digest}")
+    if digest != src["sha256"]:
+        sys.exit(f"{src_id}: Prüfsumme stimmt nicht ({digest})")
+    return Single(path.name, path.read_bytes())
+
+
+def archive(src_id: str, src: dict):
     CACHE.mkdir(parents=True, exist_ok=True)
+    if "freesound" in src:
+        return freesound(src_id, src)
     path = CACHE / f"{src_id}.zip"
     if not path.exists():
         print("lade", src["url"])
@@ -47,14 +88,16 @@ def archive(src_id: str, src: dict) -> zipfile.ZipFile:
     return zipfile.ZipFile(path)
 
 
-def find(z: zipfile.ZipFile, pattern: str) -> list[str]:
+def find(z, pattern: str) -> list[str]:
     names = [n for n in z.namelist() if not n.startswith("__MACOSX") and fnmatch.fnmatch(n, pattern)]
+    if isinstance(z, Single):
+        names = z.namelist()
     if not names:
         sys.exit(f"keine Datei passt auf {pattern}")
     return sorted(names)
 
 
-def load(z: zipfile.ZipFile, name: str) -> np.ndarray:
+def load(z, name: str) -> np.ndarray:
     y, sr = sf.read(io.BytesIO(z.read(name)), dtype="float64", always_2d=True)
     m = y.mean(axis=1)
     if sr != SR:
@@ -65,19 +108,24 @@ def load(z: zipfile.ZipFile, name: str) -> np.ndarray:
     return m[max(0, on - int(0.003 * SR)) :]
 
 
-def variants(rec: dict, z: zipfile.ZipFile) -> list[list[dict]]:
+def variants(rec: dict, z) -> list[list[dict]]:
     if "varianten" in rec:
         return rec["varianten"]
     pats = rec["dateien"] if isinstance(rec["dateien"], list) else [rec["dateien"]]
     return [[{"datei": n, "at": 0}] for p in pats for n in find(z, p)]
 
 
-def render(rec: dict, layers: list[dict], z: zipfile.ZipFile) -> np.ndarray:
+def render(rec: dict, layers: list[dict], z) -> np.ndarray:
     n = int(rec["laenge_s"] * SR)
     x = np.zeros(n)
     for lay in layers:
-        name = find(z, lay["datei"])[0]
-        y = load(z, name) * 10 ** (lay.get("db", 0) / 20)
+        zz = archive(lay["quelle"], QUELLEN[lay["quelle"]]) if "quelle" in lay else z
+        name = find(zz, lay["datei"])[0]
+        z_lay = zz
+        y = load(z_lay, name) * 10 ** (lay.get("db", 0) / 20)
+        if lay.get("von_s") is not None:
+            # Ausschnitt aus einer langen Aufnahme (ab Einsatz gezählt)
+            y = y[int(lay["von_s"] * SR) : int(lay.get("bis_s", 1e9) * SR)]
         a = int(lay.get("at", 0) * SR)
         if a < n:
             seg = y[: n - a]
@@ -96,6 +144,7 @@ def render(rec: dict, layers: list[dict], z: zipfile.ZipFile) -> np.ndarray:
 
 def build(only: list[str]) -> None:
     cfg = json.loads(RECIPES.read_text())
+    QUELLEN.update(cfg["quellen"])
     OUT.mkdir(parents=True, exist_ok=True)
     man_path = OUT / "manifest.json"
     manifest = json.loads(man_path.read_text()) if man_path.exists() else {}
@@ -120,15 +169,17 @@ def build(only: list[str]) -> None:
             f = f"{name}_{i + 1}.wav"
             sf.write(OUT / f, x.astype(np.float32), SR, subtype="PCM_16")
             files.append(f)
+        extra = sorted({lay["quelle"] for v in variants(rec, z) for lay in v if "quelle" in lay} - {rec["quelle"]})
         klaenge[name] = {
             "zweck": rec.get("zweck", ""),
             "dateien": files,
             "quelle": rec["quelle"],
+            **({"weitere_quellen": extra} if extra else {}),
         }
         print(name, len(files))
-    used = {k["quelle"] for k in klaenge.values()}
+    used = {q for k in klaenge.values() for q in [k["quelle"], *k.get("weitere_quellen", [])]}
     manifest["quellen"] = {
-        k: {f: v[f] for f in ("titel", "seite", "lizenz", "urheber")}
+        k: {f: v[f] for f in ("titel", "seite", "lizenz", "urheber") if f in v}
         for k, v in cfg["quellen"].items()
         if k in used
     }

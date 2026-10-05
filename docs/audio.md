@@ -262,6 +262,13 @@ Der Test `sfx_samples_match_the_synth_loudness` misst das lauteste 50-ms-Fenster
 wie der frühere harte Schritt (Gras etwas leiser), alles andere 20 % über der Synthese; nie leiser als die
 Synthese, keine Übersteuerung.
 
+**Freesound** (`tools/audio/freesound.py`): Zugangsdaten nur in `~/.config/gta-berlin/freesound.json`
+(`client_id`, `client_secret`; nach `freesound.py login` + `freesound.py code CODE` auch die OAuth-Tokens, nötig
+für Originaldateien). `freesound.py search "…" [--cc0] [--max-dur S]` listet Kandidaten. Im Rezept ist eine Quelle
+dann `{"freesound": ID, "sha256": …, "lizenz": …, "urheber": …, "titel": …, "seite": …}`; Lizenz und Urheber
+prüft der Download gegen die API, die Prüfsumme hält den Stand fest. Schichten können eine eigene `quelle` und mit
+`von_s`/`bis_s` einen Ausschnitt einer langen Aufnahme tragen.
+
 **Neuer Klang:** Quelle und Rezept in `sfx_recipes.json` eintragen, `build_sfx.py <klang>` laufen lassen, in
 `synth.rs` ein `SfxSpec` anlegen und im `play`-Arm `Sfx::X if self.sample(SPEC, k, M) => {}` vor den
 Synthese-Arm setzen, Zielwert in den Pegel-Test aufnehmen.
