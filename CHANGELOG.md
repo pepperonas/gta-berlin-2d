@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Treffer sieht man am Getroffenen.** Ein angeschossener oder geschlagener Passant ruckt vom
+  Angreifer weg, dreht den Oberkörper mit dem Stoß ab, reißt die Arme zur Brust und blitzt im ersten Moment rötlich
+  auf; nach knapp einer halben Sekunde federt er zurück und flieht bzw. kämpft wie bisher.
 - Native Fassung: **Schusswaffen in der Hand sehen echt aus, Kugeln kommen aus dem Lauf.** Pistole, Maschinenpistole
   und Schrotflinte sind aus Teilen gezeichnet (Griff, Verschluss bzw. Gehäuse, Lauf mit Mündung, Holzschaft und
   Vorderschaft) und werden beidhändig gehalten – Arme gestreckt, die Schrotflinte an der Schulter. Mündungsfeuer und

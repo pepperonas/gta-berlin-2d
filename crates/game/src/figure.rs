@@ -296,6 +296,23 @@ pub struct Who {
     /// Hände an einer Schusswaffe ([links, rechts] als (vor, quer) in px, `weaponart::hands`): Arme gestreckt, Hände
     /// vor der Waffe, der Oberkörper dreht nicht mit dem Schritt
     pub hold: Option<[[f32; 2]; 2]>,
+    /// Treffer-Reaktion: Richtung, aus der der Treffer kam (rad, Weltsystem), und Zeit seit dem Treffer (s)
+    pub hit: Option<(f32, f32)>,
+}
+
+/// Wie lange ein Treffer sichtbar nachwirkt (s)
+pub const HIT_REACT_S: f32 = 0.45;
+/// Stärke der Treffer-Reaktion über die Zeit: in 50 ms voll ausgeschlagen (der Ruck), dann federnd zurück (0 … 1).
+pub fn hit_react(t: f32) -> f32 {
+    if !(0. ..HIT_REACT_S).contains(&t) {
+        0.
+    } else if t < 0.05 {
+        t / 0.05
+    } else {
+        let u = (t - 0.05) / (HIT_REACT_S - 0.05);
+        (1. - u) * (1. - u) * (1. + 0.6 * (u * 9.).sin() * (1. - u))
+    }
+    .clamp(0., 1.)
 }
 impl Who {
     pub fn of(p: &Ped) -> Self {
@@ -311,6 +328,13 @@ impl Who {
             run: if moving && run { 1. } else { 0. },
             skin: p.skin,
             hold: None,
+            // getroffen und noch auf den Beinen: Richtung vom Angreifer weg
+            hit: (p.state != S::Dead && (p.hurt_t as f32) < HIT_REACT_S).then(|| {
+                (
+                    ((p.y - p.threat.1).atan2(p.x - p.threat.0)) as f32,
+                    p.hurt_t as f32,
+                )
+            }),
         }
     }
 }
@@ -390,9 +414,23 @@ pub fn pose(who: &Who, acc: Acc) -> ([f32; 2], [[f32; 2]; 2], f32) {
 /// Schritt, Tasche, Oberkörper mit Schultern (dreht gegen die Hüfte), Arme mit Ellbogen und Händen, Kopf mit Ohren,
 /// Haaren oder Kopfbedeckung, Zubehör (Kinderwagen, Hund an der Leine, Stock, Tasche …).
 pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<Body>) {
-    let (x, y, a) = (who.x as f32, who.y as f32, who.facing as f32);
+    let (mut x, mut y, a) = (who.x as f32, who.y as f32, who.facing as f32);
     let k = look.scale;
     let (feet, mut hands, mut twist) = pose(who, look.acc);
+    // Treffer: der Körper ruckt vom Angreifer weg, der Oberkörper dreht ab, die Arme zucken zur Brust
+    let hit = who.hit.map_or(0., |(_, t)| hit_react(t));
+    if let Some((dir, _)) = who.hit {
+        x += dir.cos() * 2.4 * k * hit;
+        y += dir.sin() * 2.4 * k * hit;
+        // von welcher Seite: der Oberkörper dreht mit dem Stoß
+        let side = (dir - a).sin();
+        twist += 0.55 * hit * if side >= 0. { 1. } else { -1. };
+        for (i, h) in hands.iter_mut().enumerate() {
+            let tgt = [1.8, if i == 0 { -2.6 } else { 2.6 }];
+            h[0] += (tgt[0] - h[0]) * hit * 0.8;
+            h[1] += (tgt[1] - h[1]) * hit * 0.8;
+        }
+    }
     if let Some(h) = who.hold {
         hands = [[h[0][0] / k, h[0][1] / k], [h[1][0] / k, h[1][1] / k]];
         twist = 0.;
@@ -413,8 +451,18 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
                 color,
             });
         };
-    let skin = rgba(who.skin);
-    let top = rgba(look.top);
+    // im ersten Moment blitzt die Figur rötlich auf
+    let flash = who.hit.map_or(0., |(_, t)| (1. - t / 0.12).clamp(0., 1.));
+    let tint = |c: [f32; 4]| {
+        [
+            c[0] + (1. - c[0]) * flash * 0.7,
+            c[1] * (1. - flash * 0.45),
+            c[2] * (1. - flash * 0.45),
+            c[3],
+        ]
+    };
+    let skin = tint(rgba(who.skin));
+    let top = tint(rgba(look.top));
     push(
         [x + 1.5, y + 2.],
         [6. * k, 6. * k],
@@ -714,5 +762,37 @@ mod tests {
             kind: Kind::Everyday,
             style: Default::default(),
         }
+    }
+
+    #[test]
+    fn a_hit_jolts_the_body_away_from_the_shooter_and_settles() {
+        // Hüllkurve: Ruck in 50 ms, danach zurück auf 0
+        assert_eq!(hit_react(0.), 0.);
+        assert!((hit_react(0.05) - 1.).abs() < 1e-5);
+        assert!(hit_react(0.2) > 0. && hit_react(0.2) < 1.);
+        assert_eq!(hit_react(HIT_REACT_S), 0.);
+        assert_eq!(hit_react(-1.), 0.);
+        // getroffen von links (Schütze bei −x): der Oberkörper (letzter großer Körper) rückt nach +x
+        let mut p = test_ped();
+        p.state = berlin_sim::pedestrians::PedState::Idle;
+        let look = look_of(&p);
+        let torso_x = |p: &Ped| {
+            let mut out = Vec::new();
+            person_bodies(&Who::of(p), &look, 0.6, 0., &mut out);
+            // Oberkörper: der Körper mit der Kleidungsfarbe, mittig gelegen (größte Fläche)
+            out.iter()
+                .skip(1)
+                .max_by(|a, b| (a.half[0] * a.half[1]).total_cmp(&(b.half[0] * b.half[1])))
+                .unwrap()
+                .center[0]
+        };
+        let calm = torso_x(&p);
+        p.threat = (p.x - 100., p.y);
+        p.hurt_t = 0.05;
+        let hit = torso_x(&p);
+        assert!(hit > calm + 1.5, "{calm} → {hit}");
+        // tot oder lange her: keine Reaktion
+        p.hurt_t = 5.;
+        assert!((torso_x(&p) - calm).abs() < 1e-4);
     }
 }

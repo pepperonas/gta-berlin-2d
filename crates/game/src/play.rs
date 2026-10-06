@@ -4030,6 +4030,7 @@ fn player_figure(
             run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
             skin: 0xf2d0b1,
             hold: crate::weaponart::hands(pl.combat.weapon().id),
+            hit: None,
         };
         let fig0 = out.len();
         crate::figure::person_bodies(&who, look, depth, time, out);

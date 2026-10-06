@@ -2538,3 +2538,7 @@ die alte Regel (ab 55 px/s, Tempo × 0,32, Flucht) – sonst änderte sich der E
 `play.rs weapon_bodies`, Haltung über `figure::Who::hold` (Hände vor der Waffe, kein Hüftschwung). Mündung als eine
 Quelle: `sim::combat::muzzle`/`muzzle_at` – `Event::Shot` startet dort, ein Test prüft, dass das Laufende der
 Zeichnung auf ihr liegt. Konsole `waffe`.
+
+**Treffer-Reaktion (06.10.2026):** rein Darstellung: `figure::Who::hit` (Richtung vom `Ped::threat` weg, `hurt_t`) →
+`person_bodies` verschiebt den Körper um 2,4 px · `hit_react(t)` (50-ms-Ruck, federnd über `HIT_REACT_S` = 0,45 s),
+dreht den Oberkörper bis 0,55 rad zur Stoßseite, zieht die Hände zur Brust und tönt Haut/Oberteil 0,12 s rötlich.
