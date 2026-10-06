@@ -2791,3 +2791,76 @@ fn click_walking_jumps_toward_the_clicked_spot() {
         "{ok} von {tried}: am Klickziel hinter dem Zaun angekommen"
     );
 }
+
+/// Fingerabdruck des Einzelspieler-Ablaufs: 3000 Schritte mit wechselnden Eingaben (laufen, sprinten, schießen,
+/// einsteigen, fahren, lenken, aussteigen). Der Koop-Umbau darf ihn nicht verändern – ohne Spieler 2 läuft die
+/// Simulation bitgleich. Weicht er ab, hat sich das Einzelspielerverhalten geändert (nicht einfach neu eintragen).
+#[test]
+fn single_player_fingerprint_is_stable() {
+    let mut w = world(4242);
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut mix = |v: f64| {
+        for b in v.to_bits().to_le_bytes() {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
+    };
+    for i in 0..3000usize {
+        let phase = i / 250;
+        let mut inp = Input::default();
+        match phase % 6 {
+            0 => {
+                inp.move_x = 1.;
+                inp.sprint = i % 2 == 0;
+            }
+            1 => {
+                inp.move_y = -1.;
+                inp.combat.fire = true;
+                inp.combat.fire_pressed = i % 20 == 0;
+                inp.combat.weapon_slot = if i % 250 == 1 { 3 } else { 0 };
+            }
+            2 => {
+                inp.enter_exit = i % 250 == 0;
+                inp.throttle = 1.;
+                inp.steer = ((i as f64) * 0.01).sin();
+            }
+            3 => {
+                inp.throttle = 0.6;
+                inp.steer = -0.4;
+                inp.handbrake = i % 90 < 10;
+            }
+            4 => {
+                inp.brake = 1.;
+                inp.enter_exit = i % 250 == 200;
+            }
+            _ => {
+                inp.move_x = -0.7;
+                inp.move_y = 0.7;
+                inp.jump = i % 60 == 0;
+            }
+        }
+        w.update(&inp, DT);
+    }
+    mix(w.player.x);
+    mix(w.player.y);
+    mix(w.money as f64);
+    mix(w.camera.x);
+    mix(w.camera.y);
+    mix(w.camera.zoom);
+    for c in &w.cars {
+        mix(c.x);
+        mix(c.y);
+        mix(c.angle);
+    }
+    for p in &w.peds {
+        mix(p.x);
+        mix(p.y);
+    }
+    for b in &w.bikes {
+        mix(b.x);
+        mix(b.y);
+    }
+    println!("Fingerabdruck {h:#018x} ({} Autos, {} Passanten)", w.cars.len(), w.peds.len());
+    assert_eq!(h, FINGERPRINT, "Einzelspieler-Ablauf hat sich geändert");
+}
+const FINGERPRINT: u64 = 0xe6fa_c4f9_2b60_2bd6;

@@ -1,5 +1,7 @@
 # GTA Berlin
 
+<p align="center"><img src="docs/images/artwork/tyson-gta-berlin.jpg" alt="GTA Berlin – Titelbild mit Tyson" width="100%"></p>
+
 <!-- Badges: erzeugt von tools/badges.mjs, aktualisiert vom Commit-Hook tools/githooks/pre-commit -->
 <p>
 <img src="docs/badges/version.svg" alt="Version">
@@ -94,6 +96,12 @@ Dokumentation:
 - [Beschleunigung: Recherche, Messverfahren und alle 45 Fahrzeugwerte](docs/FAHRZEUG-BESCHLEUNIGUNG.md)
 - [Grafiküberarbeitung: Bildvergleiche, Effekte und Renderzeiten](docs/GRAFIK-UPDATE-2026-10-01.md)
 - [Versionsverlauf](CHANGELOG.md)
+
+## Artwork
+
+<p align="center"><img src="docs/images/artwork/gustav-gta-berlin.jpg" alt="GTA Berlin – Motiv mit Gustav" width="70%"></p>
+
+Zwei Titelmotive: Tyson (oben) und Gustav. Beide liegen unter `docs/images/artwork/`.
 
 ## Version
 
