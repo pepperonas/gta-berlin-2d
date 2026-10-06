@@ -11,6 +11,7 @@ pub mod carmodels;
 pub mod city;
 pub mod collision;
 pub mod combat;
+pub mod coop;
 pub mod daylight;
 pub mod drift;
 pub mod dynamics;

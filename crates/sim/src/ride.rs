@@ -1109,9 +1109,7 @@ impl World {
             let left = t.left_t.unwrap_or(0.) + dt;
             t.left_t = Some(left);
             let (hx, hy, _) = point_on_shape(&sh, t.s);
-            if left > 30.
-                && ((hx - self.camera.x).abs() > 1400. || (hy - self.camera.y).abs() > 900.)
-            {
+            if left > 30. && !self.in_view_any(hx, hy, 1400., 900.) {
                 return; // Zug ist weg
             }
         }

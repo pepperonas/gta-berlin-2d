@@ -509,17 +509,25 @@ pub fn step_transit(
     t: f64,
     blocked: &mut dyn FnMut(&Pattern, &mut Veh, f64) -> bool,
 ) {
-    scan(st, tr, cam, minutes, day, t);
+    scan(st, tr, &[cam], minutes, day, t);
     advance(st, tr, minutes, day, dt, blocked);
 }
 
 /// Einmal je Sekunde: Muster um die Kamera verfolgen (neue mit Fahrzeugen im aktuellen Takt), ferne vergessen.
-pub fn scan(st: &mut State, tr: &mut Transit, cam: Pt, minutes: f64, day: u32, t: f64) {
+/// `cams`: Kameramitten (im Koop beide Spieler); verfolgt wird, was nahe irgendeiner liegt.
+pub fn scan(st: &mut State, tr: &mut Transit, cams: &[Pt], minutes: f64, day: u32, t: f64) {
     if st.last_scan.is_some_and(|l| t - l < EVERY) {
         return;
     }
     st.last_scan = Some(t);
-    let near = tr.patterns_near(cam.0, cam.1, TRACK);
+    let mut near = tr.patterns_near(cams[0].0, cams[0].1, TRACK);
+    if cams.len() > 1 {
+        for c in &cams[1..] {
+            near.extend(tr.patterns_near(c.0, c.1, TRACK));
+        }
+        near.sort_unstable();
+        near.dedup();
+    }
     st.tracked.retain(|id, _| near.binary_search(id).is_ok());
     for id in near {
         st.tracked.entry(id).or_insert_with(|| {

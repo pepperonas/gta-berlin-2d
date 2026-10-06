@@ -87,7 +87,7 @@ impl Emergency {
 }
 
 fn out_of_view(w: &World, x: f64, y: f64, pad: f64) -> bool {
-    (x - w.camera.x).abs() > VIEW_HALF.0 + pad || (y - w.camera.y).abs() > VIEW_HALF.1 + pad
+    !w.in_view_any(x, y, VIEW_HALF.0 + pad, VIEW_HALF.1 + pad)
 }
 
 /// Einsatzfahrzeug außer Sicht auf eine Spur setzen und zum Ziel schicken.

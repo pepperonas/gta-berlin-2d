@@ -370,6 +370,8 @@ pub struct Ctx<'a> {
     pub walker_grid: Option<&'a Grid>,
     /// Spieler zu Fuß: (x, y, Ebene)
     pub player_on_foot: Option<(f64, f64, i8)>,
+    /// Spieler 2 zu Fuß (Koop)
+    pub player2_on_foot: Option<(f64, f64, i8)>,
     pub rng: &'a mut Rng,
     pub time: f64,
     pub res: &'a mut Reservations,
@@ -751,6 +753,9 @@ fn obstacle_ahead(car: &Car, ai: &Ai, cx: &mut Ctx) -> Obstacles {
         }
     }
     if let Some((px, py, pl)) = cx.player_on_foot {
+        check(cx, px, py, pl, 17., None, false, true, false);
+    }
+    if let Some((px, py, pl)) = cx.player2_on_foot {
         check(cx, px, py, pl, 17., None, false, true, false);
     }
     // Straßenbahnwagen: warten, bis sie vorbei sind

@@ -149,6 +149,35 @@ pub struct Player {
     /// gerade gelandet (der Klick-Laufweg wird danach neu geplant)
     pub landed: bool,
 }
+impl Player {
+    /// Figur am Ursprung, zu Fuß, ohne Zustand.
+    pub fn fresh() -> Self {
+        Self {
+            x: 0.,
+            y: 0.,
+            angle: 0.,
+            in_car: None,
+            step: 0.,
+            stun: 0.,
+            swimming: false,
+            move_speed: 0.,
+            level: Default::default(),
+            level_init: false,
+            combat: Default::default(),
+            click: None,
+            click_t: 0.,
+            ride: None,
+            inside: None,
+            entry_guard: None,
+            click_stall: (0., 0., 0.),
+            z: 0.,
+            vz: 0.,
+            jump_v: (0., 0.),
+            click_goal: None,
+            landed: false,
+        }
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
     pub x: f64,
@@ -268,7 +297,11 @@ pub struct World {
     park_tick: u64,
     next_car: u32,
     next_ped: u32,
-    focus_key: String,
+    pub(crate) focus_key: String,
+    /// Koop: Neues entsteht reihum um beide Spieler
+    spawn_turn: bool,
+    /// Spieler 2 (lokaler Koop, coop.rs); `None` = Einzelspiel
+    pub p2: Option<Box<crate::coop::Seat>>,
 }
 
 fn spot_free_static(city: &mut City, knocked: &Knocked, x: f64, y: f64, r: f64, lvl: i8) -> bool {
@@ -332,30 +365,7 @@ impl World {
             god: false,
             weather_cycle: true,
             seed,
-            player: Player {
-                x: 0.,
-                y: 0.,
-                angle: 0.,
-                in_car: None,
-                step: 0.,
-                stun: 0.,
-                swimming: false,
-                move_speed: 0.,
-                level: Default::default(),
-                level_init: false,
-                combat: Default::default(),
-                click: None,
-                click_t: 0.,
-                ride: None,
-                inside: None,
-                entry_guard: None,
-                click_stall: (0., 0., 0.),
-                z: 0.,
-                vz: 0.,
-                jump_v: (0., 0.),
-                click_goal: None,
-                landed: false,
-            },
+            player: Player::fresh(),
             player_car_id: None,
             mission: Mission::default(),
             money: 0.,
@@ -415,6 +425,8 @@ impl World {
             next_car: 1,
             next_ped: 1,
             focus_key: "world".into(),
+            p2: None,
+            spawn_turn: false,
         };
         w.spawn_player_and_car();
         if let Some(pc) = w.city.places.parked.first().copied() {
@@ -480,6 +492,12 @@ impl World {
     pub fn stream(&mut self) -> bool {
         let (x, y) = (self.camera.x, self.camera.y);
         self.loading = !self.city.focus(&self.focus_key, x, y);
+        // Koop: auch um Spieler 2 muss alles da sein
+        if let Some(s) = self.p2.as_ref() {
+            let (k, x2, y2) = (s.focus_key.clone(), s.camera.x, s.camera.y);
+            let ready2 = self.city.focus(&k, x2, y2);
+            self.loading |= !ready2;
+        }
         self.lanes.sync(&mut self.city);
         if !self.loading && !self.populated {
             self.populate();
@@ -520,6 +538,12 @@ impl World {
         self.ped_target = (p as f64 * crate::weather::people_factor(&self.sky.p) * self.ped_scale)
             .round()
             .max(min) as usize;
+        // Koop, getrennte Ausschnitte: beide wollen belebt sein
+        if self.apart() {
+            let k = crate::coop::APART_FACTOR;
+            self.car_target = (self.car_target as f64 * k).round() as usize;
+            self.ped_target = (self.ped_target as f64 * k).round() as usize;
+        }
     }
 
     /// Stadtleben: Passanten mit Tätigkeit an ihren Plätzen halten (life.rs). Neue entstehen nur außer Sicht, außer
@@ -530,19 +554,28 @@ impl World {
             return;
         }
         self.life_t = self.time;
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (foci, nf) = self.foci();
         let in_view = |x: f64, y: f64| {
-            (x - cx).abs() < life::VIEW_HALF_X && (y - cy).abs() < life::VIEW_HALF_Y
+            foci[..nf].iter().any(|&(cx, cy)| {
+                (x - cx).abs() < life::VIEW_HALF_X && (y - cy).abs() < life::VIEW_HALF_Y
+            })
         };
-        let want = life::life_spots(
-            &mut self.city,
-            &mut self.life_cache,
-            cx,
-            cy,
-            self.clock,
-            self.day,
-            life::RADIUS,
-        );
+        let mut want = Vec::new();
+        for &(cx, cy) in &foci[..nf] {
+            for s in life::life_spots(
+                &mut self.city,
+                &mut self.life_cache,
+                cx,
+                cy,
+                self.clock,
+                self.day,
+                life::RADIUS,
+            ) {
+                if nf == 1 || !want.iter().any(|w: &life::Hang| w.key == s.key) {
+                    want.push(s);
+                }
+            }
+        }
         let keys: HashSet<&str> = want.iter().map(|s| s.key.as_str()).collect();
         let mut drop_ids = Vec::new();
         self.hangers.retain(|key, id| {
@@ -552,7 +585,7 @@ impl World {
             if p.state != PedState::Hang {
                 return false; // aufgescheucht: geht als normaler Passant weiter
             }
-            let far = (p.x - cx).hypot(p.y - cy) > life::DESPAWN;
+            let far = crate::coop::min_dist(&foci[..nf], p.x, p.y) > life::DESPAWN;
             if far || (!keys.contains(key.as_str()) && !in_view(p.x, p.y)) {
                 drop_ids.push(*id);
                 return false;
@@ -596,14 +629,23 @@ impl World {
             return;
         }
         self.anim_t = self.time;
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (foci, nf) = self.foci();
         let in_view = |x: f64, y: f64| {
-            (x - cx).abs() < VIEW_HALF_X + 60. && (y - cy).abs() < VIEW_HALF_Y + 60.
+            foci[..nf].iter().any(|&(cx, cy)| {
+                (x - cx).abs() < VIEW_HALF_X + 60. && (y - cy).abs() < VIEW_HALF_Y + 60.
+            })
         };
-        let spots = an::animal_spots(&mut self.city, &mut self.life_cache, cx, cy, an::RADIUS);
+        let mut spots = Vec::new();
+        for &(cx, cy) in &foci[..nf] {
+            for s in an::animal_spots(&mut self.city, &mut self.life_cache, cx, cy, an::RADIUS) {
+                if nf == 1 || !spots.iter().any(|w: &an::Spot| w.key == s.key) {
+                    spots.push(s);
+                }
+            }
+        }
         let want: HashSet<&str> = spots.iter().map(|s| s.key.as_str()).collect();
         self.animals.retain(|a| {
-            let far = (a.x - cx).hypot(a.y - cy) > DESPAWN;
+            let far = crate::coop::min_dist(&foci[..nf], a.x, a.y) > DESPAWN;
             let flown = a.state == State::Fly && !in_view(a.x, a.y);
             !(far || flown || (!want.contains(a.key.as_str()) && !in_view(a.x, a.y)))
         });
@@ -646,15 +688,18 @@ impl World {
             return;
         }
         self.scoot_t = self.time;
-        let (cx, cy) = (self.camera.x, self.camera.y);
-        let near: HashSet<i64> = self
-            .city
-            .edge_segs
-            .query(&Rect::around(cx, cy, 1300.))
-            .into_iter()
-            .filter_map(|h| self.city.edge_segs.get(h).edge)
-            .filter(|id| self.city.edges.get(id).is_some_and(|e| e.lvl < 1))
-            .collect();
+        let (foci, nf) = self.foci();
+        let mut near: HashSet<i64> = HashSet::new();
+        for &(cx, cy) in &foci[..nf] {
+            near.extend(
+                self.city
+                    .edge_segs
+                    .query(&Rect::around(cx, cy, 1300.))
+                    .into_iter()
+                    .filter_map(|h| self.city.edge_segs.get(h).edge)
+                    .filter(|id| self.city.edges.get(id).is_some_and(|e| e.lvl < 1)),
+            );
+        }
         self.scooters.retain(|id, _| near.contains(id));
         if self.puddles.len() > 4000 {
             self.puddles.retain(|id, _| near.contains(id));
@@ -776,7 +821,7 @@ impl World {
     }
     fn spawn_bike(&mut self, min_r: f64, max_r: f64) -> Option<u32> {
         use crate::bikes;
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (cx, cy) = self.spawn_focus();
         let (lane, s) = bikes::spawn_spot(
             &self.city,
             &mut self.lanes,
@@ -802,10 +847,11 @@ impl World {
             &mut self.rng,
             kind,
         )?;
-        if self
-            .cars
-            .iter()
-            .any(|c| (c.x - b.x).abs() < c.hw + 12. && (c.y - b.y).abs() < c.hw + 12.)
+        if (self.p2.is_some() && self.focus_dist(b.x, b.y) < min_r)
+            || self
+                .cars
+                .iter()
+                .any(|c| (c.x - b.x).abs() < c.hw + 12. && (c.y - b.y).abs() < c.hw + 12.)
             || self
                 .bikes
                 .iter()
@@ -963,9 +1009,10 @@ impl World {
             });
         }
         // Fernes, Verschwundenes und lange Liegendes außer Sicht abbauen; Fehlendes im Ring erzeugen
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (foci, nf) = self.foci();
+        let md = |x: f64, y: f64| crate::coop::min_dist(&foci[..nf], x, y);
         self.bikes.retain(|b| {
-            let d = (b.x - cx).hypot(b.y - cy);
+            let d = md(b.x, b.y);
             b.state != State::Gone
                 && d < DESPAWN
                 && !(b.state == State::Lying && b.t > 30. && d > 900.)
@@ -975,10 +1022,7 @@ impl World {
         if riding < target {
             self.spawn_bike(SPAWN_MIN, SPAWN_MAX);
         } else if riding > target + 2
-            && let Some(k) = self
-                .bikes
-                .iter()
-                .position(|b| (b.x - cx).hypot(b.y - cy) > SPAWN_MIN)
+            && let Some(k) = self.bikes.iter().position(|b| md(b.x, b.y) > SPAWN_MIN)
         {
             self.bikes.remove(k);
         }
@@ -994,6 +1038,11 @@ impl World {
             .map(|c| {
                 Some(c.id) == self.player_car_id
                     || Some(c.id) == self.player.in_car
+                    || self.seat_of_car(c.id).is_some()
+                    || self
+                        .p2
+                        .as_ref()
+                        .is_some_and(|s| Some(c.id) == s.player_car_id)
                     || c.cargo
                     || c.role == Role::Parked
             })
@@ -1030,10 +1079,14 @@ impl World {
     }
 
     fn spawn_traffic(&mut self, min_r: f64, max_r: f64) -> Option<u32> {
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (cx, cy) = self.spawn_focus();
         for _ in 0..8 {
             let (lane, s, x, y) = self.lanes.spawn_spot(&mut self.rng, cx, cy, min_r, max_r)?;
             if !self.cars.iter().all(|o| (o.x - x).hypot(o.y - y) > 70.) {
+                continue;
+            }
+            // Koop: nicht im Blick des anderen Spielers entstehen
+            if self.p2.is_some() && self.focus_dist(x, y) < min_r {
                 continue;
             }
             let agents: Vec<Agent> = self.cars.iter().map(Agent::of).collect();
@@ -1047,6 +1100,7 @@ impl World {
                     agent_grid: None,
                     walker_grid: None,
                     player_on_foot: None,
+                    player2_on_foot: None,
                     rng: &mut self.rng,
                     time: self.time,
                     res: &mut self.res,
@@ -1111,6 +1165,7 @@ impl World {
                 agent_grid: None,
                 walker_grid: None,
                 player_on_foot: None,
+                player2_on_foot: None,
                 rng: &mut self.rng,
                 time: self.time,
                 res: &mut self.res,
@@ -1163,6 +1218,7 @@ impl World {
                 agent_grid: None,
                 walker_grid: None,
                 player_on_foot: None,
+                player2_on_foot: None,
                 rng: &mut self.rng,
                 time: self.time,
                 res: &mut self.res,
@@ -1355,8 +1411,18 @@ impl World {
         self.cars.retain(|c| c.id != id);
     }
 
+    /// Wo Neues entsteht: um die Kamera, im Koop reihum um beide.
+    fn spawn_focus(&mut self) -> (f64, f64) {
+        let (f, n) = self.foci();
+        if n == 1 {
+            return f[0];
+        }
+        self.spawn_turn = !self.spawn_turn;
+        f[self.spawn_turn as usize]
+    }
+
     fn spawn_ped(&mut self, min_r: f64, max_r: f64) -> Option<u32> {
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (cx, cy) = self.spawn_focus();
         let sp = pedestrians::spawn_spot(
             &mut self.city,
             &mut self.sidewalks,
@@ -1369,6 +1435,9 @@ impl World {
         let id = self.next_ped;
         self.next_ped += 1;
         let mut p = create_ped(id, &mut self.city, &mut self.sidewalks, sp, &mut self.rng);
+        if self.p2.is_some() && self.focus_dist(p.x, p.y) < min_r {
+            return None; // Koop: nicht im Blick des anderen Spielers
+        }
         p.dead_t = 0.;
         if self.day_rhythm {
             // Jogger und Hundehalter je nach Tageszeit
@@ -1403,18 +1472,20 @@ impl World {
     }
 
     fn manage_population(&mut self) {
-        let (cx, cy) = (self.camera.x, self.camera.y);
         if self.day_rhythm && self.time - self.rhythm_t >= 2. {
             // Tageszeit und Ort bestimmen, wie viel los ist
             self.rhythm_t = self.time;
             self.set_targets();
         }
+        let (foci, nf) = self.foci();
+        let md = |x: f64, y: f64| crate::coop::min_dist(&foci[..nf], x, y);
         let keep = |w: &World, c: &Car| {
             Some(c.id) == w.player_car_id
                 || Some(c.id) == w.player.in_car
                 || c.cargo
                 || matches!(c.role, Role::Parked | Role::Curb)
                 || c.driver == Some(Driver::Player)
+                || w.p2.as_ref().is_some_and(|s| Some(c.id) == s.player_car_id)
                 || (c.duty.is_some() && !c.done)
                 || c.bus.is_some()
         };
@@ -1423,19 +1494,19 @@ impl World {
                 && c.ai
                     .as_ref()
                     .is_some_and(|a| a.still_t > 30. || a.head_on >= 4)
-                && (c.x - cx).hypot(c.y - cy) > 1100.
+                && md(c.x, c.y) > 1100.
         };
         let drop: Vec<u32> = self
             .cars
             .iter()
-            .filter(|c| !(keep(self, c) || ((c.x - cx).hypot(c.y - cy) < DESPAWN && !stuck(c))))
+            .filter(|c| !(keep(self, c) || (md(c.x, c.y) < DESPAWN && !stuck(c))))
             .map(|c| c.id)
             .collect();
         for id in &drop {
             drop_claims(&mut self.res, *id);
         }
         self.cars.retain(|c| !drop.contains(&c.id));
-        self.peds.retain(|p| (p.x - cx).hypot(p.y - cy) < DESPAWN);
+        self.peds.retain(|p| md(p.x, p.y) < DESPAWN);
         let npc = self
             .cars
             .iter()
@@ -1451,9 +1522,7 @@ impl World {
         // weniger los als eben (Tageszeit, anderer Ort): Überzählige außer Sicht verschwinden lassen, eins je Schritt
         if self.day_rhythm && npc > self.car_target + 2 {
             let i = self.cars.iter().position(|c| {
-                c.driver == Some(Driver::Npc)
-                    && !keep(self, c)
-                    && (c.x - cx).hypot(c.y - cy) > SPAWN_MIN
+                c.driver == Some(Driver::Npc) && !keep(self, c) && md(c.x, c.y) > SPAWN_MIN
             });
             if let Some(i) = i {
                 drop_claims(&mut self.res, self.cars[i].id);
@@ -1467,9 +1536,7 @@ impl World {
             .count();
         if self.day_rhythm && walkers > self.ped_target + 4 {
             let i = self.peds.iter().position(|q| {
-                q.state == PedState::Walk
-                    && q.hang.is_none()
-                    && (q.x - cx).hypot(q.y - cy) > SPAWN_MIN
+                q.state == PedState::Walk && q.hang.is_none() && md(q.x, q.y) > SPAWN_MIN
             });
             if let Some(i) = i {
                 self.peds.remove(i);
@@ -1580,18 +1647,21 @@ impl World {
     }
     /// Parkende Autos im Umkreis der Kamera erzeugen, ferne wieder abbauen.
     fn manage_parked(&mut self) {
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (foci, nf) = self.foci();
+        let md = |x: f64, y: f64| crate::coop::min_dist(&foci[..nf], x, y);
         let pid = self.player_car_id;
+        let pid2 = self.p2.as_ref().and_then(|s| s.player_car_id);
         let mut freed = Vec::new();
         self.cars.retain(|c| {
             if c.role != Role::Curb
                 || c.driver == Some(Driver::Player)
                 || Some(c.id) == pid
+                || (pid2.is_some() && Some(c.id) == pid2)
                 || c.cargo
             {
                 return true;
             }
-            if (c.x - cx).hypot(c.y - cy) < PARKED_DESPAWN {
+            if md(c.x, c.y) < PARKED_DESPAWN {
                 return true;
             }
             freed.extend(c.park_key);
@@ -1605,30 +1675,33 @@ impl World {
             return;
         }
         let r = PARKED_RADIUS;
-        let mut seen = Vec::new();
-        for h in self.city.edge_segs.query(&Rect::around(cx, cy, r)) {
-            if let Some(e) = self.city.edge_segs.get(h).edge
-                && !seen.contains(&e)
-            {
-                seen.push(e);
-            }
-        }
-        for e in seen {
-            for (key, x, y, angle) in self.parking_slots(e) {
-                if self.parked_keys.contains(&key)
-                    || (x - cx).hypot(y - cy) > r
-                    || !self.slot_free(x, y, angle)
+        for &(cx, cy) in &foci[..nf] {
+            let mut seen = Vec::new();
+            for h in self.city.edge_segs.query(&Rect::around(cx, cy, r)) {
+                if let Some(e) = self.city.edge_segs.get(h).edge
+                    && !seen.contains(&e)
                 {
-                    continue;
+                    seen.push(e);
                 }
-                let color = CAR_COLORS
-                    [(hash01(x * 31. + y) * CAR_COLORS.len() as f64) as usize % CAR_COLORS.len()];
-                let id = self.new_car_id();
-                let mut c = Car::new(id, x, y, angle, color, Role::Curb, "car");
-                c.park_key = Some(key);
-                c.controls.handbrake = true;
-                self.parked_keys.insert(key);
-                self.cars.push(c);
+            }
+            for e in seen {
+                for (key, x, y, angle) in self.parking_slots(e) {
+                    if self.parked_keys.contains(&key)
+                        || (x - cx).hypot(y - cy) > r
+                        || !self.slot_free(x, y, angle)
+                    {
+                        continue;
+                    }
+                    let color = CAR_COLORS[(hash01(x * 31. + y) * CAR_COLORS.len() as f64)
+                        as usize
+                        % CAR_COLORS.len()];
+                    let id = self.new_car_id();
+                    let mut c = Car::new(id, x, y, angle, color, Role::Curb, "car");
+                    c.park_key = Some(key);
+                    c.controls.handbrake = true;
+                    self.parked_keys.insert(key);
+                    self.cars.push(c);
+                }
             }
         }
     }
@@ -1660,7 +1733,7 @@ impl World {
         let car_d = self
             .cars
             .iter()
-            .filter(|c| !c.wrecked)
+            .filter(|c| !c.wrecked && c.driver != Some(Driver::Player))
             .map(|c| (c.x - px).hypot(c.y - py))
             .fold(f64::INFINITY, f64::min);
         let bike = self
@@ -1687,7 +1760,8 @@ impl World {
             ENTER_DIST
         };
         for (i, c) in self.cars.iter().enumerate() {
-            if c.wrecked || only.is_some_and(|id| id != c.id) {
+            // wrack, nicht das gewünschte oder vom anderen Spieler gefahren
+            if c.wrecked || only.is_some_and(|id| id != c.id) || c.driver == Some(Driver::Player) {
                 continue;
             }
             let d = (c.x - px).hypot(c.y - py);
@@ -2441,6 +2515,10 @@ impl World {
         for b in &mut self.bikes {
             step_level(&mut self.city, b.x, b.y, Some(b.angle), &mut b.level);
         }
+        self.update_player_level();
+    }
+    /// Ebene der Spielfigur (im Auto wie das Auto, im Bahnhof wie der Bahnsteig, sonst über die Portale).
+    pub(crate) fn update_player_level(&mut self) {
         if let Some(c) = self
             .player
             .in_car
@@ -2777,6 +2855,13 @@ impl World {
 
     /// Ein Simulationsschritt.
     pub fn update(&mut self, input: &Input, dt: f64) {
+        self.update_with(input, None, dt);
+    }
+    /// Ein Simulationsschritt mit Eingaben beider Spieler (Koop; ohne Spieler 2 wie `update`).
+    pub fn update_coop(&mut self, input: &Input, input2: &Input, dt: f64) {
+        self.update_with(input, Some(input2), dt);
+    }
+    fn update_with(&mut self, input: &Input, input2: Option<&Input>, dt: f64) {
         self.events.clear();
         self.city.tick(dt);
         if let Some(s) = self.pending_save.clone()
@@ -2796,25 +2881,302 @@ impl World {
             self.day_count += 1;
         }
         self.step_weather(dt);
-        if let Some(n) = self.notice.as_mut() {
-            n.t -= dt;
-            if n.t <= 0. {
-                self.notice = None;
-            }
-        }
-        if let Some((_, t)) = self.veh_info.as_mut() {
-            *t += dt;
-            if *t > VEH_INFO_S {
-                self.veh_info = None;
-            }
-        }
+        self.tick_seat(dt);
+        self.with_p2(|w| w.tick_seat(dt));
         if matches!(
             self.mission.state,
             State::Briefing | State::Success | State::Failed
         ) {
-            self.update_mission(input, dt);
+            // Auftrag bestätigen bzw. Ergebnis wegdrücken kann jeder Spieler
+            let both = Input {
+                action: input.action || (self.p2.is_some() && input2.is_some_and(|i| i.action)),
+                ..*input
+            };
+            self.update_mission(&both, dt);
             return;
         }
+        let (train_input, pc) = self.player_phase(input, dt);
+        // Spieler 2 auf dem Platz von Spieler 1: derselbe Spielercode
+        let i2 = input2.copied().unwrap_or_default();
+        let p2_step = self.with_p2(|w| w.player_phase(&i2, dt));
+        let pc2 = p2_step.and_then(|r| r.1);
+        let p2_pos = self.p2.as_ref().map(|s| (s.player.x, s.player.y));
+
+        // KI: Momentaufnahme + Nachbarschaftsraster (während der Schleife bewegt sich nichts)
+        let agents: Vec<Agent> = self.cars.iter().map(Agent::of).collect();
+        let walkers: Vec<Walker> = self
+            .peds
+            .iter()
+            .map(|p| Walker {
+                x: p.x,
+                y: p.y,
+                lvl: p.level.lvl,
+                alive: p.state != PedState::Dead,
+            })
+            .collect();
+        let mut g_cars = Grid::default();
+        g_cars.build(agents.iter().map(|a| (a.x, a.y)), GRID_CELL);
+        let mut g_peds = Grid::default();
+        g_peds.build(walkers.iter().map(|p| (p.x, p.y)), GRID_CELL);
+        let on_foot = self.player.in_car.is_none().then_some((
+            self.player.x,
+            self.player.y,
+            self.player.level.lvl,
+        ));
+        let on_foot2 = self.p2.as_ref().and_then(|s| {
+            s.player
+                .in_car
+                .is_none()
+                .then_some((s.player.x, s.player.y, s.player.level.lvl))
+        });
+        for i in 0..self.cars.len() {
+            if self.cars[i].driver != Some(Driver::Npc) {
+                continue;
+            }
+            let mut ctx = Ctx {
+                city: &mut self.city,
+                lanes: &mut self.lanes,
+                agents: &agents,
+                walkers: &walkers,
+                agent_grid: Some(&g_cars),
+                walker_grid: Some(&g_peds),
+                player_on_foot: on_foot,
+                player2_on_foot: on_foot2,
+                rng: &mut self.rng,
+                time: self.time,
+                res: &mut self.res,
+                events: &mut self.events,
+                rails: &self.rail_obs,
+            };
+            update_service(&mut self.cars[i], ctx.lanes, ctx.city, ctx.rng, dt);
+            drive_ai(&mut self.cars[i], &mut ctx, dt);
+        }
+        // Tempo des Spielerautos vor den Zusammenstößen (Drift-Wertung)
+        let mut pre_hit: Vec<(u32, f64, f64)> = Vec::new();
+        for i in 0..self.cars.len() {
+            let c = &mut self.cars[i];
+            if c.driver.is_none() && !c.wrecked && Some(i) != pc && Some(i) != pc2 {
+                c.controls = crate::dynamics::Controls {
+                    handbrake: true,
+                    ..Default::default()
+                };
+            }
+            if c.role == Role::Curb
+                && c.driver.is_none()
+                && !c.wrecked
+                && c.vx.abs() + c.vy.abs() < 2.
+                && c.ang_vel.abs() < 0.01
+            {
+                (c.vx, c.vy, c.ang_vel) = (0., 0., 0.);
+                continue;
+            }
+            self.apply_weather(i, dt);
+            let c = &self.cars[i];
+            let ground = self.city.surface_at(c.x, c.y, Some(c.lvl()));
+            let c = &mut self.cars[i];
+            let falls = c.phys.as_ref().map_or(0, |s| s.passenger_falls);
+            let aqua_was = c.phys.as_ref().map_or(0., |s| s.aqua[0].max(s.aqua[1]));
+            let curbs = c.phys.as_ref().map_or(0, |s| s.curb_hits);
+            // Spielerauto mit Fahrphysik: Untergrund je Rad
+            if c.driver == Some(crate::car::Driver::Player)
+                && let Some(v) = crate::car::vphys_vehicle(c)
+            {
+                let env = self.wheel_env(i, v);
+                self.cars[i].env = Some(Box::new(env));
+            }
+            // Physik-LOD: KI im Umkreis des Spielers fährt mit voller Fahrphysik (vierrädrig, mit Datensatz)
+            let (px, py) = (self.player.x, self.player.y);
+            let r = self.ai_full_radius;
+            let c = &mut self.cars[i];
+            c.lod_full = c.ai.is_some()
+                && !c.wrecked
+                && ((c.x - px).hypot(c.y - py) < r
+                    || p2_pos.is_some_and(|(qx, qy)| (c.x - qx).hypot(c.y - qy) < r))
+                && crate::car::vphys_vehicle(c).is_some_and(|v| !v.two_wheel);
+            let fallen_was = c.phys.as_ref().is_some_and(|s| s.fallen.is_some());
+            let rolled_was = c.phys.as_ref().is_some_and(|s| s.rolled);
+            let jack_was = c.phys.as_ref().is_some_and(|s| s.jackknifed);
+            step_car(c, dt, Some(ground));
+            // umgekippt: das Fahrzeug ist hin
+            if !rolled_was && c.phys.as_ref().is_some_and(|s| s.rolled) && !c.wrecked {
+                c.health = 0.;
+                c.wrecked = true;
+                let (x, y, id) = (c.x, c.y, c.id);
+                let player = c.driver == Some(crate::car::Driver::Player);
+                self.events.push(Event::Crash {
+                    x,
+                    y,
+                    strength: 1.,
+                    car: id,
+                });
+                self.events.push(Event::Wreck {
+                    x,
+                    y,
+                    car: id,
+                    player,
+                });
+                if player {
+                    self.notify_car(id, "Umgekippt!", 2.);
+                }
+            }
+            // Sattelzug eingeknickt: Hinweis einmal je Vorfall
+            let c = &self.cars[i];
+            if !jack_was
+                && c.driver == Some(crate::car::Driver::Player)
+                && c.phys.as_ref().is_some_and(|s| s.jackknifed)
+            {
+                let (x, y, id) = (c.x, c.y, c.id);
+                self.notify_car(id, "Eingeknickt!", 2.);
+                self.events.push(Event::Crash {
+                    x,
+                    y,
+                    strength: 0.6,
+                    car: id,
+                });
+            }
+            let c = &mut self.cars[i];
+            if !fallen_was
+                && c.driver == Some(crate::car::Driver::Player)
+                && let Some(why) = c.phys.as_ref().and_then(|s| s.fallen)
+            {
+                let id = c.id;
+                if self.seat_of_car(id) == Some(1) {
+                    self.with_p2(|w| w.throw_rider(i, why));
+                } else {
+                    self.throw_rider(i, why);
+                }
+            }
+            let c = &self.cars[i];
+            if let Some(s) = c.phys.as_ref() {
+                let aq = s.aqua[0].max(s.aqua[1]);
+                if aq > 0.5 && aqua_was <= 0.5 {
+                    self.events.push(Event::Aquaplane {
+                        x: c.x,
+                        y: c.y,
+                        car: c.id,
+                        player: true,
+                    });
+                }
+                if s.curb_hits > curbs {
+                    self.events.push(Event::Curb {
+                        x: c.x,
+                        y: c.y,
+                        car: c.id,
+                    });
+                }
+            }
+            if c.phys.as_ref().is_some_and(|s| s.passenger_falls > falls) {
+                let id = c.id;
+                self.events.push(Event::PassengersFell {
+                    x: c.x,
+                    y: c.y,
+                    car: id,
+                });
+                self.notify_car(id, "Fahrgäste gestürzt!", 1.6);
+            }
+            let c = &mut self.cars[i];
+            if c.driver == Some(crate::car::Driver::Player) {
+                pre_hit.push((c.id, c.vx, c.vy));
+            }
+            collide_car_world(c, &mut self.city, &mut self.knocked, &mut self.events);
+        }
+        // Auto gegen Auto: nur Nachbarn, Paare in aufsteigender Folge
+        let mut pairs = Grid::default();
+        pairs.build(self.cars.iter().map(|c| (c.x, c.y)), GRID_CELL);
+        let mut nb = Vec::new();
+        for i in 0..self.cars.len() {
+            let (ax, ay) = (self.cars[i].x, self.cars[i].y);
+            pairs.near(ax, ay, 170., &mut nb);
+            for &j in &nb {
+                if j <= i {
+                    continue;
+                }
+                let (lo, hi) = self.cars.split_at_mut(j);
+                let (a, b) = (&mut lo[i], &mut hi[0]);
+                let r = a.hw + b.hw + 4.;
+                if (a.x - b.x).abs() < r
+                    && (a.y - b.y).abs() < r
+                    && touch(&mut self.city, (a.x, a.y, a.lvl()), (b.x, b.y, b.lvl()))
+                {
+                    collide_cars(a, b, &mut self.events);
+                }
+            }
+        }
+        self.sync_seat_car(&pre_hit);
+        self.with_p2(|w| w.sync_seat_car(&pre_hit));
+        self.update_transit(dt);
+        self.seat_transit(&train_input, dt);
+        self.update_levels();
+        if let Some((t2, _)) = p2_step {
+            self.with_p2(|w| {
+                w.seat_transit(&t2, dt);
+                w.update_player_level();
+            });
+        }
+
+        // Beschossene Autos: KI-Fahrer steigt aus und rennt weg. Wracks: ebenso, Wrack verschwindet später außer Sicht
+        for i in 0..self.cars.len() {
+            if let Some((fx, fy)) = self.cars[i].shot_at.take()
+                && self.cars[i].driver == Some(Driver::Npc)
+                && !self.cars[i].wrecked
+            {
+                self.cars[i].driver = None;
+                self.cars[i].ai = None;
+                let id = self.cars[i].id;
+                drop_claims(&mut self.res, id);
+                self.fleeing_driver(i, fx, fy, 5.);
+            }
+            if !self.cars[i].wrecked {
+                continue;
+            }
+            self.cars[i].wreck_t += dt;
+            if self.cars[i].driver == Some(Driver::Npc) {
+                self.cars[i].driver = None;
+                self.cars[i].ai = None;
+                let id = self.cars[i].id;
+                drop_claims(&mut self.res, id);
+                let (x, y) = (self.cars[i].x, self.cars[i].y);
+                self.fleeing_driver(i, x, y, 3.);
+            }
+        }
+        let (pid, inc) = (self.player_car_id, self.player.in_car);
+        let (pid2, inc2) = self
+            .p2
+            .as_ref()
+            .map_or((None, None), |s| (s.player_car_id, s.player.in_car));
+        let (foci, nf) = self.foci();
+        self.cars.retain(|c| {
+            !(c.wrecked
+                && c.wreck_t > 20.
+                && Some(c.id) != pid
+                && Some(c.id) != inc
+                && (pid2.is_none() || Some(c.id) != pid2)
+                && (inc2.is_none() || Some(c.id) != inc2)
+                && !c.cargo
+                && crate::coop::min_dist(&foci[..nf], c.x, c.y) > 900.)
+        });
+
+        // Spieler zu Fuß gegen Autos
+        self.player_vs_cars();
+        self.with_p2(|w| w.player_vs_cars());
+
+        self.update_peds(dt);
+        self.update_bikes(dt);
+        crate::services::manage_emergency(self, dt);
+        self.manage_population();
+        self.manage_parked();
+        self.manage_life(false);
+        self.manage_animals(false);
+        self.update_animals(dt);
+        self.manage_scooters();
+        self.update_mission_coop(input, &i2, dt);
+        self.update_camera(dt);
+        self.with_p2(|w| w.update_camera(dt));
+    }
+
+    /// Spielerteil eines Schritts: Bahnhof, Ein- und Aussteigen, eigenes Auto, zu Fuß, Kampf, Bewusstlosigkeit.
+    /// Gibt die Eingabe für die eigene Bahn und den Index des eigenen Autos zurück.
+    fn player_phase(&mut self, input: &Input, dt: f64) -> (Input, Option<usize>) {
         let driver = self
             .player
             .ride
@@ -2928,208 +3290,37 @@ impl World {
         if self.player.combat.dead {
             self.update_knockout(dt);
         }
+        (train_input, pc)
+    }
 
-        // KI: Momentaufnahme + Nachbarschaftsraster (während der Schleife bewegt sich nichts)
-        let agents: Vec<Agent> = self.cars.iter().map(Agent::of).collect();
-        let walkers: Vec<Walker> = self
-            .peds
-            .iter()
-            .map(|p| Walker {
-                x: p.x,
-                y: p.y,
-                lvl: p.level.lvl,
-                alive: p.state != PedState::Dead,
-            })
-            .collect();
-        let mut g_cars = Grid::default();
-        g_cars.build(agents.iter().map(|a| (a.x, a.y)), GRID_CELL);
-        let mut g_peds = Grid::default();
-        g_peds.build(walkers.iter().map(|p| (p.x, p.y)), GRID_CELL);
-        let on_foot = self.player.in_car.is_none().then_some((
-            self.player.x,
-            self.player.y,
-            self.player.level.lvl,
-        ));
-        for i in 0..self.cars.len() {
-            if self.cars[i].driver != Some(Driver::Npc) {
-                continue;
-            }
-            let mut ctx = Ctx {
-                city: &mut self.city,
-                lanes: &mut self.lanes,
-                agents: &agents,
-                walkers: &walkers,
-                agent_grid: Some(&g_cars),
-                walker_grid: Some(&g_peds),
-                player_on_foot: on_foot,
-                rng: &mut self.rng,
-                time: self.time,
-                res: &mut self.res,
-                events: &mut self.events,
-                rails: &self.rail_obs,
-            };
-            update_service(&mut self.cars[i], ctx.lanes, ctx.city, ctx.rng, dt);
-            drive_ai(&mut self.cars[i], &mut ctx, dt);
-        }
-        // Tempo des Spielerautos vor den Zusammenstößen (Drift-Wertung)
-        let mut pre_hit: Option<(u32, f64, f64)> = None;
-        for i in 0..self.cars.len() {
-            let c = &mut self.cars[i];
-            if c.driver.is_none() && !c.wrecked && Some(i) != pc {
-                c.controls = crate::dynamics::Controls {
-                    handbrake: true,
-                    ..Default::default()
-                };
-            }
-            if c.role == Role::Curb
-                && c.driver.is_none()
-                && !c.wrecked
-                && c.vx.abs() + c.vy.abs() < 2.
-                && c.ang_vel.abs() < 0.01
-            {
-                (c.vx, c.vy, c.ang_vel) = (0., 0., 0.);
-                continue;
-            }
-            self.apply_weather(i, dt);
-            let c = &self.cars[i];
-            let ground = self.city.surface_at(c.x, c.y, Some(c.lvl()));
-            let c = &mut self.cars[i];
-            let falls = c.phys.as_ref().map_or(0, |s| s.passenger_falls);
-            let aqua_was = c.phys.as_ref().map_or(0., |s| s.aqua[0].max(s.aqua[1]));
-            let curbs = c.phys.as_ref().map_or(0, |s| s.curb_hits);
-            // Spielerauto mit Fahrphysik: Untergrund je Rad
-            if c.driver == Some(crate::car::Driver::Player)
-                && let Some(v) = crate::car::vphys_vehicle(c)
-            {
-                let env = self.wheel_env(i, v);
-                self.cars[i].env = Some(Box::new(env));
-            }
-            // Physik-LOD: KI im Umkreis des Spielers fährt mit voller Fahrphysik (vierrädrig, mit Datensatz)
-            let (px, py) = (self.player.x, self.player.y);
-            let c = &mut self.cars[i];
-            c.lod_full = c.ai.is_some()
-                && !c.wrecked
-                && (c.x - px).hypot(c.y - py) < self.ai_full_radius
-                && crate::car::vphys_vehicle(c).is_some_and(|v| !v.two_wheel);
-            let fallen_was = c.phys.as_ref().is_some_and(|s| s.fallen.is_some());
-            let rolled_was = c.phys.as_ref().is_some_and(|s| s.rolled);
-            let jack_was = c.phys.as_ref().is_some_and(|s| s.jackknifed);
-            step_car(c, dt, Some(ground));
-            // umgekippt: das Fahrzeug ist hin
-            if !rolled_was && c.phys.as_ref().is_some_and(|s| s.rolled) && !c.wrecked {
-                c.health = 0.;
-                c.wrecked = true;
-                let (x, y, id) = (c.x, c.y, c.id);
-                let player = c.driver == Some(crate::car::Driver::Player);
-                self.events.push(Event::Crash {
-                    x,
-                    y,
-                    strength: 1.,
-                    car: id,
-                });
-                self.events.push(Event::Wreck {
-                    x,
-                    y,
-                    car: id,
-                    player,
-                });
-                if player {
-                    self.notice = Some(Notice {
-                        text: "Umgekippt!".into(),
-                        t: 2.,
-                    });
-                }
-            }
-            // Sattelzug eingeknickt: Hinweis einmal je Vorfall
-            let c = &self.cars[i];
-            if !jack_was
-                && c.driver == Some(crate::car::Driver::Player)
-                && c.phys.as_ref().is_some_and(|s| s.jackknifed)
-            {
-                self.notice = Some(Notice {
-                    text: "Eingeknickt!".into(),
-                    t: 2.,
-                });
-                let (x, y, id) = (c.x, c.y, c.id);
-                self.events.push(Event::Crash {
-                    x,
-                    y,
-                    strength: 0.6,
-                    car: id,
-                });
-            }
-            let c = &mut self.cars[i];
-            if !fallen_was
-                && c.driver == Some(crate::car::Driver::Player)
-                && let Some(why) = c.phys.as_ref().and_then(|s| s.fallen)
-            {
-                self.throw_rider(i, why);
-            }
-            let c = &self.cars[i];
-            if let Some(s) = c.phys.as_ref() {
-                let aq = s.aqua[0].max(s.aqua[1]);
-                if aq > 0.5 && aqua_was <= 0.5 {
-                    self.events.push(Event::Aquaplane {
-                        x: c.x,
-                        y: c.y,
-                        car: c.id,
-                        player: true,
-                    });
-                }
-                if s.curb_hits > curbs {
-                    self.events.push(Event::Curb {
-                        x: c.x,
-                        y: c.y,
-                        car: c.id,
-                    });
-                }
-            }
-            if c.phys.as_ref().is_some_and(|s| s.passenger_falls > falls) {
-                self.events.push(Event::PassengersFell {
-                    x: c.x,
-                    y: c.y,
-                    car: c.id,
-                });
-                self.notice = Some(Notice {
-                    text: "Fahrgäste gestürzt!".into(),
-                    t: 1.6,
-                });
-            }
-            let c = &mut self.cars[i];
-            if c.driver == Some(crate::car::Driver::Player) {
-                pre_hit = Some((c.id, c.vx, c.vy));
-            }
-            collide_car_world(c, &mut self.city, &mut self.knocked, &mut self.events);
-        }
-        // Auto gegen Auto: nur Nachbarn, Paare in aufsteigender Folge
-        let mut pairs = Grid::default();
-        pairs.build(self.cars.iter().map(|c| (c.x, c.y)), GRID_CELL);
-        let mut nb = Vec::new();
-        for i in 0..self.cars.len() {
-            let (ax, ay) = (self.cars[i].x, self.cars[i].y);
-            pairs.near(ax, ay, 170., &mut nb);
-            for &j in &nb {
-                if j <= i {
-                    continue;
-                }
-                let (lo, hi) = self.cars.split_at_mut(j);
-                let (a, b) = (&mut lo[i], &mut hi[0]);
-                let r = a.hw + b.hw + 4.;
-                if (a.x - b.x).abs() < r
-                    && (a.y - b.y).abs() < r
-                    && touch(&mut self.city, (a.x, a.y, a.lvl()), (b.x, b.y, b.lvl()))
-                {
-                    collide_cars(a, b, &mut self.events);
-                }
+    /// Hinweis und Fahrzeugkarte eines Sitzes altern lassen.
+    fn tick_seat(&mut self, dt: f64) {
+        if let Some(n) = self.notice.as_mut() {
+            n.t -= dt;
+            if n.t <= 0. {
+                self.notice = None;
             }
         }
+        if let Some((_, t)) = self.veh_info.as_mut() {
+            *t += dt;
+            if *t > VEH_INFO_S {
+                self.veh_info = None;
+            }
+        }
+    }
+
+    /// Nach den Zusammenstößen: Drift-Wertung des eigenen Autos und die Figur auf das Auto setzen.
+    fn sync_seat_car(&mut self, pre_hit: &[(u32, f64, f64)]) {
         if let Some(i) = self.player.in_car.and_then(|id| self.car_index(id)) {
             // ein Zusammenstoß verwirft den laufenden Drift (Wertung) – auch ein streifender ohne Schaden, sobald er
             // spürbar Tempo kostet
             let id = self.cars[i].id;
-            let jolt = pre_hit.filter(|p| p.0 == id).is_some_and(|(_, vx, vy)| {
-                (self.cars[i].vx - vx).hypot(self.cars[i].vy - vy) > DRIFT_JOLT
-            });
+            let jolt = pre_hit
+                .iter()
+                .find(|p| p.0 == id)
+                .is_some_and(|(_, vx, vy)| {
+                    (self.cars[i].vx - vx).hypot(self.cars[i].vy - vy) > DRIFT_JOLT
+                });
             if (jolt
                 || self
                     .events
@@ -3142,8 +3333,11 @@ impl World {
             let c = &self.cars[i];
             (self.player.x, self.player.y, self.player.angle) = (c.x, c.y, c.angle);
         }
-        self.update_transit(dt);
-        self.update_player_train(&train_input, dt);
+    }
+
+    /// Eigene Bahn, Mitfahrt und Tunnelansicht eines Sitzes.
+    fn seat_transit(&mut self, train_input: &Input, dt: f64) {
+        self.update_player_train(train_input, dt);
         if self.player.ride.is_some() {
             self.update_ride();
         }
@@ -3157,49 +3351,10 @@ impl World {
         if (self.underground - ug).abs() < 0.01 {
             self.underground = ug;
         }
-        self.update_levels();
+    }
 
-        // Beschossene Autos: KI-Fahrer steigt aus und rennt weg. Wracks: ebenso, Wrack verschwindet später außer Sicht
-        for i in 0..self.cars.len() {
-            if let Some((fx, fy)) = self.cars[i].shot_at.take()
-                && self.cars[i].driver == Some(Driver::Npc)
-                && !self.cars[i].wrecked
-            {
-                self.cars[i].driver = None;
-                self.cars[i].ai = None;
-                let id = self.cars[i].id;
-                drop_claims(&mut self.res, id);
-                self.fleeing_driver(i, fx, fy, 5.);
-            }
-            if !self.cars[i].wrecked {
-                continue;
-            }
-            self.cars[i].wreck_t += dt;
-            if self.cars[i].driver == Some(Driver::Npc) {
-                self.cars[i].driver = None;
-                self.cars[i].ai = None;
-                let id = self.cars[i].id;
-                drop_claims(&mut self.res, id);
-                let (x, y) = (self.cars[i].x, self.cars[i].y);
-                self.fleeing_driver(i, x, y, 3.);
-            }
-        }
-        let (cx, cy, pid, inc) = (
-            self.camera.x,
-            self.camera.y,
-            self.player_car_id,
-            self.player.in_car,
-        );
-        self.cars.retain(|c| {
-            !(c.wrecked
-                && c.wreck_t > 20.
-                && Some(c.id) != pid
-                && Some(c.id) != inc
-                && !c.cargo
-                && (c.x - cx).hypot(c.y - cy) > 900.)
-        });
-
-        // Spieler zu Fuß gegen Autos
+    /// Spieler zu Fuß gegen Autos.
+    fn player_vs_cars(&mut self) {
         if self.player.in_car.is_none()
             && self.player.ride.is_none()
             && self.player.inside.is_none()
@@ -3226,18 +3381,6 @@ impl World {
                 }
             }
         }
-
-        self.update_peds(dt);
-        self.update_bikes(dt);
-        crate::services::manage_emergency(self, dt);
-        self.manage_population();
-        self.manage_parked();
-        self.manage_life(false);
-        self.manage_animals(false);
-        self.update_animals(dt);
-        self.manage_scooters();
-        self.update_mission(input, dt);
-        self.update_camera(dt);
     }
 
     fn update_peds(&mut self, dt: f64) {
@@ -3253,6 +3396,24 @@ impl World {
         }
         let mut threats = Vec::new();
         if let Some(c) = self.player_car()
+            && !c.wrecked
+            && c.speed() > 130.
+        {
+            threats.push(Threat {
+                x: c.x,
+                y: c.y,
+                vx: c.vx,
+                vy: c.vy,
+                r: 90.,
+                always: false,
+                melee: false,
+            });
+        }
+        if let Some(c) = self
+            .p2
+            .as_ref()
+            .and_then(|s| s.player.in_car)
+            .and_then(|id| self.car(id))
             && !c.wrecked
             && c.speed() > 130.
         {
@@ -3333,9 +3494,13 @@ impl World {
             .collect();
         let on_foot = (self.player.in_car.is_none() && !self.player.combat.dead)
             .then_some((self.player.x, self.player.y));
-        let alive = !self.player.combat.dead;
+        let on_foot2 = self.p2.as_ref().and_then(|s| {
+            (s.player.in_car.is_none() && !s.player.combat.dead).then_some((s.player.x, s.player.y))
+        });
+        let alive = !self.player.combat.dead || on_foot2.is_some();
         let mut punches = Vec::new();
         let player_car = self.player.in_car;
+        let player_car2 = self.p2.as_ref().and_then(|s| s.player.in_car);
         let mut near = Vec::new();
         let mut hits: Vec<(f64, f64)> = Vec::new();
         for k in 0..self.peds.len() {
@@ -3386,7 +3551,8 @@ impl World {
                                 x: ped.x,
                                 y: ped.y,
                                 car: c.id,
-                                player: Some(c.id) == player_car,
+                                player: Some(c.id) == player_car
+                                    || (player_car2.is_some() && Some(c.id) == player_car2),
                                 speed,
                                 bike: false,
                             });
@@ -3407,6 +3573,7 @@ impl World {
                 knocked: &self.knocked,
                 cars: &moving,
                 player_on_foot: on_foot,
+                player2_on_foot: on_foot2,
                 punches: &mut punches,
             };
             pedestrians::update_ped(&mut self.peds[k], &mut cx, dt);
@@ -3419,7 +3586,13 @@ impl World {
                 hit: true,
                 npc: true,
             });
-            crate::combat::hurt_player(self, crate::combat::FIGHT_DMG, (x, y));
+            // trifft den Spieler, dem der Schlag galt (den näheren)
+            let p1 = on_foot.map_or(f64::INFINITY, |(px, py)| (px - x).hypot(py - y));
+            if on_foot2.is_some_and(|(qx, qy)| (qx - x).hypot(qy - y) < p1) {
+                self.with_p2(|w| crate::combat::hurt_player(w, crate::combat::FIGHT_DMG, (x, y)));
+            } else {
+                crate::combat::hurt_player(self, crate::combat::FIGHT_DMG, (x, y));
+            }
         }
         for (hx, hy) in hits {
             for o in &mut self.peds {
@@ -3428,10 +3601,11 @@ impl World {
                 }
             }
         }
-        let (cx, cy) = (self.camera.x, self.camera.y);
+        let (foci, nf) = self.foci();
         self.peds.retain(|q| {
             q.state != PedState::Dead
-                || ((q.dead_t < 60. || (q.x - cx).hypot(q.y - cy) < 900.) && q.dead_t < 300.)
+                || ((q.dead_t < 60. || crate::coop::min_dist(&foci[..nf], q.x, q.y) < 900.)
+                    && q.dead_t < 300.)
         });
     }
 
@@ -3441,6 +3615,45 @@ impl World {
             y: self.player.y,
             in_car: self.player.in_car,
         }
+    }
+    /// Auftrag im Koop: zählt für den Spieler, der ihn gerade voranbringt – den mit der Fracht, sonst den, der dem
+    /// Ziel näher ist. Geld, Bestzeit und Auftrag sind gemeinsam.
+    fn update_mission_coop(&mut self, input: &Input, input2: &Input, dt: f64) {
+        if self.p2.is_some() && self.mission_prefers_p2() {
+            let i2 = *input2;
+            self.with_p2(|w| w.update_mission(&i2, dt));
+        } else {
+            self.update_mission(input, dt);
+        }
+    }
+    fn mission_prefers_p2(&self) -> bool {
+        let Some(s) = self.p2.as_ref() else {
+            return false;
+        };
+        let view = |p: &Player| PlayerView {
+            x: p.x,
+            y: p.y,
+            in_car: p.in_car,
+        };
+        if self.mission.state == State::ToDropoff
+            && let Some(cargo) = self.mission.cargo_car
+        {
+            if self.player.in_car == Some(cargo) {
+                return false;
+            }
+            if s.player.in_car == Some(cargo) {
+                return true;
+            }
+        }
+        let places = &self.city.places;
+        let target = self
+            .mission
+            .objective(places, view(&self.player), &self.cars)
+            .1;
+        target.is_some_and(|(tx, ty)| {
+            (s.player.x - tx).hypot(s.player.y - ty)
+                < (self.player.x - tx).hypot(self.player.y - ty)
+        })
     }
     fn update_mission(&mut self, input: &Input, dt: f64) {
         let pv = self.mission_view();

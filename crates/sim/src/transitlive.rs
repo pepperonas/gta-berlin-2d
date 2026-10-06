@@ -48,7 +48,7 @@ pub struct Visible {
 }
 
 fn out_of_view(w: &World, x: f64, y: f64, pad: f64) -> bool {
-    (x - w.camera.x).abs() > VIEW_HALF_X + pad || (y - w.camera.y).abs() > VIEW_HALF_Y + pad
+    !w.in_view_any(x, y, VIEW_HALF_X + pad, VIEW_HALF_Y + pad)
 }
 
 impl World {
@@ -100,7 +100,7 @@ impl World {
         }
         let sh = tr.shape_of(p);
         let (hx, hy, ha) = point_on_shape(sh, pos.s);
-        if (hx - self.camera.x).abs() > 2500. || (hy - self.camera.y).abs() > 2500. {
+        if !self.in_view_any(hx, hy, 2500., 2500.) {
             return false;
         }
         let patient = (!strict && v.blocked_t > TRAM_PATIENCE).then_some(ha);
@@ -176,13 +176,9 @@ impl World {
             return;
         }
         let mut st = std::mem::take(&mut self.transit_state);
-        let (cam, clock, day, time) = (
-            (self.camera.x, self.camera.y),
-            self.clock,
-            self.day,
-            self.time,
-        );
-        crate::transit::scan(&mut st, &mut tr, cam, clock, day, time);
+        let (foci, nf) = self.foci();
+        let (clock, day, time) = (self.clock, self.day, self.time);
+        crate::transit::scan(&mut st, &mut tr, &foci[..nf], clock, day, time);
         {
             let this = &*self;
             let t: &Transit = &tr;
@@ -243,7 +239,7 @@ impl World {
                 let p = &tr.patterns[id];
                 let pos = position_at(p, v.tau);
                 let (qx, qy, _) = point_on_shape(tr.shape_of(p), pos.s);
-                let d = (qx - cam.0).hypot(qy - cam.1);
+                let d = crate::coop::min_dist(&foci[..nf], qx, qy);
                 let last = *p.stops.last().unwrap_or(&0.);
                 if d < BUS_LIVE
                     && (out_of_view(self, qx, qy, 80.) || !populated)
@@ -266,7 +262,7 @@ impl World {
         let mut drop_ids = Vec::new();
         for c in &self.cars {
             let Some(b) = &c.bus else { continue };
-            let far = (c.x - cam.0).hypot(c.y - cam.1) > 2400.;
+            let far = crate::coop::min_dist(&foci[..nf], c.x, c.y) > 2400.;
             let done = (c.done || c.wrecked || c.driver != Some(Driver::Npc))
                 && out_of_view(self, c.x, c.y, 200.);
             if far || done {
@@ -303,7 +299,10 @@ impl World {
             for v in &s.veh {
                 let pos = position_at(p, v.tau);
                 let (hx, hy, _) = point_on_shape(tr.shape_of(p), pos.s);
-                if (hx - cam.0).abs() > 2200. || (hy - cam.1).abs() > 2200. {
+                if !foci[..nf]
+                    .iter()
+                    .any(|&(cx, cy)| (hx - cx).abs() <= 2200. && (hy - cy).abs() <= 2200.)
+                {
                     continue;
                 }
                 let moving = !pos.dwelling && v.blocked_t <= 0.;

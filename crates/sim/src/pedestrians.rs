@@ -343,6 +343,8 @@ pub struct PedCtx<'a> {
     pub cars: &'a [MovingCar],
     /// Spieler zu Fuß (x, y)
     pub player_on_foot: Option<Pt>,
+    /// Spieler 2 zu Fuß (Koop)
+    pub player2_on_foot: Option<Pt>,
     /// Faustschläge auf die Spielfigur in diesem Schritt (von wo)
     pub punches: &'a mut Vec<Pt>,
 }
@@ -504,9 +506,10 @@ pub fn update_ped(p: &mut Ped, cx: &mut PedCtx, dt: f64) {
             let ahead = cx
                 .sw
                 .point(cx.city, p.edge, p.side, p.s + p.dir as f64 * 14.);
-            if cx
-                .player_on_foot
-                .is_some_and(|(x, y)| (x - ahead.0).hypot(y - ahead.1) < 11.)
+            if [cx.player_on_foot, cx.player2_on_foot]
+                .into_iter()
+                .flatten()
+                .any(|(x, y)| (x - ahead.0).hypot(y - ahead.1) < 11.)
             {
                 break 'walk;
             }
@@ -629,7 +632,17 @@ pub fn update_ped(p: &mut Ped, cx: &mut PedCtx, dt: f64) {
             // combat.js updateFight: zur Spielfigur laufen, zuschlagen, irgendwann aufgeben
             p.fight_t += dt;
             p.punch = (p.punch - dt).max(0.);
-            let Some((tx, ty)) = cx.player_on_foot else {
+            // der nähere Spieler (Koop); allein immer Spieler 1
+            let target = match (cx.player_on_foot, cx.player2_on_foot) {
+                (Some(a), Some(b))
+                    if (b.0 - p.x).hypot(b.1 - p.y) < (a.0 - p.x).hypot(a.1 - p.y) =>
+                {
+                    Some(b)
+                }
+                (None, b) => b,
+                (a, _) => a,
+            };
+            let Some((tx, ty)) = target else {
                 p.state = PedState::Idle;
                 p.t = 1.;
                 break 'fight;

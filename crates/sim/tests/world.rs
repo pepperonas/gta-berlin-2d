@@ -2843,7 +2843,7 @@ fn single_player_fingerprint_is_stable() {
     }
     mix(w.player.x);
     mix(w.player.y);
-    mix(w.money as f64);
+    mix(w.money);
     mix(w.camera.x);
     mix(w.camera.y);
     mix(w.camera.zoom);
@@ -2860,7 +2860,11 @@ fn single_player_fingerprint_is_stable() {
         mix(b.x);
         mix(b.y);
     }
-    println!("Fingerabdruck {h:#018x} ({} Autos, {} Passanten)", w.cars.len(), w.peds.len());
+    println!(
+        "Fingerabdruck {h:#018x} ({} Autos, {} Passanten)",
+        w.cars.len(),
+        w.peds.len()
+    );
     assert_eq!(h, FINGERPRINT, "Einzelspieler-Ablauf hat sich geändert");
 }
 const FINGERPRINT: u64 = 0xe6fa_c4f9_2b60_2bd6;
