@@ -400,6 +400,70 @@
       "sha256": "575f95c0c3b2c4fb0946c5273388b7d932c4ceb1cca0da7e3df3403db80ca7af",
       "lizenz": "CC BY 4.0",
       "urheber": "theblockofsound235"
+    },
+    "fs_693124": {
+      "freesound": 693124,
+      "titel": "Makarov 9mm Handgun being reloaded while empty. Full sequence",
+      "seite": "https://freesound.org/people/serøutōnin--deprivəd/sounds/693124/",
+      "sha256": "2f436d9b79cf91c5b9f70c3d84931bd873c4fafc5b8bb858405bb266f867ab02",
+      "lizenz": "CC0 1.0",
+      "urheber": "serøutōnin--deprivəd"
+    },
+    "fs_719243": {
+      "freesound": 719243,
+      "titel": "A small pistol's magazine being removed",
+      "seite": "https://freesound.org/people/serøutōnin--deprivəd/sounds/719243/",
+      "sha256": "43f4cd926483a374bbe6faac2aa48e16bdd8f33da48f63f978182e794f0d57d0",
+      "lizenz": "CC0 1.0",
+      "urheber": "serøutōnin--deprivəd"
+    },
+    "fs_387849": {
+      "freesound": 387849,
+      "titel": "mag_in_01.wav",
+      "seite": "https://freesound.org/people/RoLL1n/sounds/387849/",
+      "sha256": "a55a20ae5fcaab41b60293f15cc5870f72f9253e95fef049c3a99828da7b9905",
+      "lizenz": "CC0 1.0",
+      "urheber": "RoLL1n"
+    },
+    "fs_711555": {
+      "freesound": 711555,
+      "titel": "SIG Sauer P226 slide release",
+      "seite": "https://freesound.org/people/areniporgen/sounds/711555/",
+      "sha256": "b343eaf29e0f9ef76461c391d4e505d82042737a35ea6e109160ca4aa2745399",
+      "lizenz": "CC0 1.0",
+      "urheber": "areniporgen"
+    },
+    "fs_677160": {
+      "freesound": 677160,
+      "titel": "Uzi submachine gun being reloaded while empty. Full sequence",
+      "seite": "https://freesound.org/people/serøutōnin--deprivəd/sounds/677160/",
+      "sha256": "7b6fbae63fbf7d8fbc3ebc8c0c8346ac7d5dfcc9823ce937297932228481ea1f",
+      "lizenz": "CC0 1.0",
+      "urheber": "serøutōnin--deprivəd"
+    },
+    "fs_108793": {
+      "freesound": 108793,
+      "titel": "shell load.ogg",
+      "seite": "https://freesound.org/people/CeebFrack/sounds/108793/",
+      "sha256": "7fb4c5fc6931a95c955cc5e9aa3657d21db2a581a9a04e3d62f4dd466fbfff54",
+      "lizenz": "CC0 1.0",
+      "urheber": "CeebFrack"
+    },
+    "fs_449612": {
+      "freesound": 449612,
+      "titel": "SXP_SHOTGUN_RACK_03",
+      "seite": "https://freesound.org/people/dasBUTCHER84/sounds/449612/",
+      "sha256": "fb8aa3aef4d314650cdceded4d673c5aae3ff9e85bebe925e4cc2d62b1ad1107",
+      "lizenz": "CC0 1.0",
+      "urheber": "dasBUTCHER84"
+    },
+    "fs_449614": {
+      "freesound": 449614,
+      "titel": "SXP_SHOTGUN_RACK_01",
+      "seite": "https://freesound.org/people/dasBUTCHER84/sounds/449614/",
+      "sha256": "2790348ce50dc6be30767050b91ea5f5c810927600f0dd4fb4a4449cae03482b",
+      "lizenz": "CC0 1.0",
+      "urheber": "dasBUTCHER84"
     }
   },
   "klaenge": {
@@ -474,47 +538,6 @@
       "laenge_s": 0.35,
       "fade_s": 0.12,
       "hochpass_hz": 40
-    },
-    "reload": {
-      "zweck": "Nachladen beginnt: Magazin raus",
-      "quelle": "kenney_rpg",
-      "varianten": [
-        [
-          {
-            "datei": "*/metalClick.ogg",
-            "at": 0
-          }
-        ],
-        [
-          {
-            "datei": "*/metalClick.ogg",
-            "at": 0
-          },
-          {
-            "datei": "*/beltHandle1.ogg",
-            "at": 0.06,
-            "db": -8
-          }
-        ]
-      ],
-      "laenge_s": 0.4,
-      "fade_s": 0.08,
-      "hochpass_hz": 150
-    },
-    "reloaded": {
-      "zweck": "Nachladen fertig: Magazin rastet ein",
-      "quelle": "kenney_rpg",
-      "varianten": [
-        [
-          {
-            "datei": "*/metalLatch.ogg",
-            "at": 0
-          }
-        ]
-      ],
-      "laenge_s": 0.2,
-      "fade_s": 0.05,
-      "hochpass_hz": 150
     },
     "weapon_switch": {
       "zweck": "Waffe wechseln (Holster, Gürtel)",
@@ -1408,6 +1431,220 @@
       "laenge_s": 3.45,
       "fade_s": 1.0,
       "hochpass_hz": 60
+    },
+    "reload_pistol": {
+      "zweck": "Pistole nachladen: Magazin raus, neues Magazin rein (Makarov bzw. Kleinpistole)",
+      "quelle": "fs_693124",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_693124",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.0,
+            "bis_s": 0.5
+          },
+          {
+            "quelle": "fs_693124",
+            "datei": "*",
+            "at": 0.6,
+            "von_s": 0.68,
+            "bis_s": 1.1
+          }
+        ],
+        [
+          {
+            "quelle": "fs_719243",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_387849",
+            "datei": "*",
+            "at": 0.62,
+            "db": -1
+          }
+        ]
+      ],
+      "laenge_s": 1.15,
+      "fade_s": 0.06,
+      "hochpass_hz": 120
+    },
+    "reloaded_pistol": {
+      "zweck": "Pistole fertig: Schlitten schnappt vor (SIG P226 bzw. Makarov)",
+      "quelle": "fs_711555",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_711555",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_693124",
+            "datei": "*",
+            "at": 0,
+            "von_s": 1.5,
+            "bis_s": 1.85
+          }
+        ]
+      ],
+      "laenge_s": 0.4,
+      "fade_s": 0.05,
+      "hochpass_hz": 120
+    },
+    "reload_smg": {
+      "zweck": "MP nachladen: Magazin raus, neues Magazin rein (Uzi)",
+      "quelle": "fs_677160",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.0,
+            "bis_s": 0.6
+          },
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0.85,
+            "von_s": 1.52,
+            "bis_s": 2.15
+          }
+        ],
+        [
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0,
+            "von_s": 0.03,
+            "bis_s": 0.6,
+            "db": -1
+          },
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0.92,
+            "von_s": 1.74,
+            "bis_s": 2.15
+          }
+        ]
+      ],
+      "laenge_s": 1.6,
+      "fade_s": 0.06,
+      "hochpass_hz": 120
+    },
+    "reloaded_smg": {
+      "zweck": "MP fertig: Ladehebel zurück und vor (Uzi)",
+      "quelle": "fs_677160",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0,
+            "von_s": 3.0,
+            "bis_s": 3.65
+          }
+        ],
+        [
+          {
+            "quelle": "fs_677160",
+            "datei": "*",
+            "at": 0,
+            "von_s": 3.3,
+            "bis_s": 3.65
+          }
+        ]
+      ],
+      "laenge_s": 0.7,
+      "fade_s": 0.05,
+      "hochpass_hz": 120
+    },
+    "reload_shotgun": {
+      "zweck": "Schrotflinte nachladen: vier Patronen einschieben",
+      "quelle": "fs_108793",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 0.1
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 0.55,
+            "db": -2
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 1.0,
+            "db": -1
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 1.45,
+            "db": -3
+          }
+        ],
+        [
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 0.12,
+            "db": -1
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 0.58
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 1.03,
+            "db": -2
+          },
+          {
+            "quelle": "fs_108793",
+            "datei": "*",
+            "at": 1.5,
+            "db": -1
+          }
+        ]
+      ],
+      "laenge_s": 2.05,
+      "fade_s": 0.06,
+      "hochpass_hz": 120
+    },
+    "reloaded_shotgun": {
+      "zweck": "Schrotflinte fertig: durchladen (Pumpe vor und zurück)",
+      "quelle": "fs_449612",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_449612",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_449614",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 0.5,
+      "fade_s": 0.05,
+      "hochpass_hz": 120
     }
   }
 }

@@ -56,8 +56,18 @@ pub const PUNCH: SfxSpec = spec("punch", 0.314, 0.06, true);
 pub const THUD: SfxSpec = spec("thud", 0.279, 0.06, true);
 pub const IMPACT: SfxSpec = spec("impact", 0.131, 0.1, true);
 pub const HIT: SfxSpec = spec("hit", 0.217, 0.06, true);
-pub const RELOAD: SfxSpec = spec("reload", 0.205, 0.03, false);
-pub const RELOADED: SfxSpec = spec("reloaded", 0.135, 0.03, false);
+/// Nachladen je Waffe (0 Pistole, 1 MP, 2 Schrotflinte): Beginn (Magazin raus/rein, Patronen) und Ende (Schlitten,
+/// Ladehebel, Pumpe) – echte Aufnahmen (Freesound, CC0), Rezepte in tools/audio/sfx_recipes.json.
+pub const RELOAD: [SfxSpec; 3] = [
+    spec("reload_pistol", 0.127, 0.03, false),
+    spec("reload_smg", 0.116, 0.03, false),
+    spec("reload_shotgun", 0.23, 0.03, false),
+];
+pub const RELOADED: [SfxSpec; 3] = [
+    spec("reloaded_pistol", 0.2, 0.03, false),
+    spec("reloaded_smg", 0.111, 0.03, false),
+    spec("reloaded_shotgun", 0.153, 0.03, false),
+];
 pub const WEAPON_SWITCH: SfxSpec = spec("weapon_switch", 0.154, 0.05, false);
 pub const UI: SfxSpec = spec("ui", 0.41, 0.02, false);
 pub const TICK: SfxSpec = spec("tick", 0.386, 0., false);
@@ -151,8 +161,9 @@ pub enum Sfx {
     Thud(f32),
     /// Kugeleinschlag
     Impact(f32),
-    Reload,
-    Reloaded,
+    /// Nachladen beginnt bzw. ist fertig, Waffe wie bei `Gun`
+    Reload(u8),
+    Reloaded(u8),
     WeaponSwitch,
     /// Spritzwasser beim Aufschwimmen (Aquaplaning)
     Splash(f32),
@@ -1709,13 +1720,13 @@ impl Synth {
                 self.burst(0.35, 700., 0.3 * k, Lowpass, 0.7, 0., 0., M);
                 self.burst(0.18, 2200., 0.12 * k, Bandpass, 0.7, 0., 0., M);
             }
-            Sfx::Reload if self.sample(RELOAD, 1., M) => {}
-            Sfx::Reload => {
+            Sfx::Reload(w) if self.sample(RELOAD[(w as usize).min(2)], 1., M) => {}
+            Sfx::Reload(_) => {
                 self.tone(1400., 0.04, Sine, 0.06, 0., 0., 0., M);
                 self.tone(900., 0.05, Sine, 0.06, 0.12, 0., 0., M);
             }
-            Sfx::Reloaded if self.sample(RELOADED, 1., M) => {}
-            Sfx::Reloaded => self.tone(1800., 0.04, Sine, 0.07, 0., 0., 0., M),
+            Sfx::Reloaded(w) if self.sample(RELOADED[(w as usize).min(2)], 1., M) => {}
+            Sfx::Reloaded(_) => self.tone(1800., 0.04, Sine, 0.07, 0., 0., 0., M),
             Sfx::WeaponSwitch if self.sample(WEAPON_SWITCH, 1., M) => {}
             Sfx::WeaponSwitch => self.tone(1100., 0.04, Triangle, 0.07, 0., 0., 0., M),
             Sfx::Tick if self.sample(TICK, 1., M) => {}
@@ -2119,8 +2130,12 @@ mod tests {
             (Sfx::Thud(1.), "thud", 0.037),
             (Sfx::Impact(1.), "impact", 0.0125),
             (Sfx::Hit, "hit", 0.043),
-            (Sfx::Reload, "reload", 0.01),
-            (Sfx::Reloaded, "reloaded", 0.011),
+            (Sfx::Reload(0), "reload_pistol", 0.016),
+            (Sfx::Reload(1), "reload_smg", 0.016),
+            (Sfx::Reload(2), "reload_shotgun", 0.016),
+            (Sfx::Reloaded(0), "reloaded_pistol", 0.02),
+            (Sfx::Reloaded(1), "reloaded_smg", 0.02),
+            (Sfx::Reloaded(2), "reloaded_shotgun", 0.02),
             (Sfx::WeaponSwitch, "weapon_switch", 0.009),
             (Sfx::Crash(1.), "crash_heavy", 0.1018),
             (Sfx::Crash(0.3), "crash_light", 0.0342),

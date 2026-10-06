@@ -494,7 +494,7 @@ mod tests {
             "data/audio/sfx: neu bauen mit tools/audio/build_sfx.py"
         );
         assert!(man.matches("\"lizenz\"").count() == man.matches("\"urheber\"").count());
-        for name in ["step_hard", "punch", "reload"] {
+        for name in ["step_hard", "punch", "reload_pistol"] {
             let b = sfx_bank(name);
             assert!(b.len() >= 2 && b.iter().all(|v| v.len() > 1000), "{name}");
         }

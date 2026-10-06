@@ -281,7 +281,8 @@ Synthese-Arm setzen, Zielwert in den Pegel-Test aufnehmen.
 | Schritt nass | „Footsteps on different surfaces“ (water) von congusbongus, nach EminYILDIRIM und swuing (Freesound) | CC BY 3.0 |
 | Ausholen | „Swishes Sound Pack“ von artisticdude | CC0 |
 | Faustschlag / Treffer, Blech, Einschlag, Aufprall | Kenney „Impact Sounds“ (impactPunch_medium, impactMetal_heavy, impactMining, impactSoft_heavy) | CC0 |
-| Nachladen, eingerastet, Waffenwechsel | Kenney „RPG Audio“ (metalClick, metalLatch, beltHandle, clothBelt, handleSmallLeather) | CC0 |
+| Waffenwechsel | Kenney „RPG Audio“ (clothBelt, handleSmallLeather) | CC0 |
+| Nachladen je Waffe | Freesound (siehe „Nachladen je Waffe“ unten) | CC0 |
 
 ### Phase 6: Menü und Aufträge (vorgezogen)
 
@@ -436,3 +437,22 @@ Für **V8** (Muscle-Cars), **Sechszylinder-Limousinen** (Oberklasse), **Motorrä
 **luftgekühlten Boxer** fand sich keine frei lizenzierte Aufnahme mit einem gehaltenen Drehzahlbereich: die
 V8-Prüfstandsaufnahme (Ears68) ist von Publikum und Ansager überlagert, die Corvette- und Motorradaufnahmen haben nur
 Leerlauf und kurze Gasstöße. Elektroantriebe bleiben bewusst synthetisch (Umrichterton).
+
+## Nachladen je Waffe (06.10.2026)
+
+`Sfx::Reload(waffe)` beim Beginn und `Sfx::Reloaded(waffe)` am Ende des Nachladens (0 Pistole, 1 MP,
+2 Schrotflinte; `sound.rs gun_kind`, dieselbe Zuordnung wie beim Schuss). Die Beginn-Klänge laufen über die
+Nachladezeit der Waffe (`combat.rs`: Pistole 1,2 s, MP 1,7 s, Schrotflinte 2,2 s), die End-Klänge sind kurz:
+
+| Klang | Quelle (Freesound, CC0) | Inhalt |
+|---|---|---|
+| `reload_pistol` | 693124 serøutōnin–deprivəd (Makarov), 719243 (Kleinpistole), 387849 RoLL1n | Magazin raus, bei ~0,6 s neues Magazin rein |
+| `reloaded_pistol` | 711555 areniporgen (SIG P226), 693124 | Schlitten schnappt vor |
+| `reload_smg` | 677160 serøutōnin–deprivəd (Uzi, ganze Folge) | Magazin raus, bei ~0,85 s neues Magazin rein |
+| `reloaded_smg` | 677160 | Ladehebel zurück und vor |
+| `reload_shotgun` | 108793 CeebFrack | vier Patronen (0,1 / 0,55 / 1,0 / 1,45 s) |
+| `reloaded_shotgun` | 449612, 449614 dasBUTCHER84 | Pumpe vor und zurück |
+
+Ausschnitte über `von_s`/`bis_s` (ab Einsatz gezählt), Hochpass 120 Hz; die Einsätze wurden vor dem Schneiden mit
+librosa vermessen. Pegel: Ziel 0,016 (Beginn) bzw. 0,02 (Ende) als Effektivwert des lautesten 50-ms-Fensters
+(`sfx_samples_match_the_synth_loudness`). Die alten Klänge `reload`/`reloaded` (Kenney-Klicks) sind entfernt.

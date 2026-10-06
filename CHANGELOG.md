@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **echte Nachladegeräusche je Waffe** statt zweier Klicks für alle (Freesound, CC0, Rezepte in
+  `tools/audio/sfx_recipes.json`): Pistole – Magazin raus, neues Magazin rein (Makarov bzw. Kleinpistole), am Ende
+  schnappt der Schlitten vor (SIG P226); MP – Magazin raus und rein, dann Ladehebel zurück und vor (Uzi);
+  Schrotflinte – vier Patronen werden eingeschoben, dann durchgeladen (Pumpe). Je zwei Varianten, Pegel geeicht.
 - Native Fassung: **neues Logo im Titelbild.** „GTA BERLIN“ in Anton (SIL Open Font License) als eigener
   Abstandsfeld-Atlas: leicht kursiv, Verlauf mit Glanzkante (Berlin in Gold, GTA in Weiß), Kantenlicht, dunkle Kontur,
   3D-Extrusion nach rechts unten und weicher Schlagschatten; im Pixel-Modus ein Pixelschriftzug mit versetztem

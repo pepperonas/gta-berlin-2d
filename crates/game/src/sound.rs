@@ -117,11 +117,7 @@ impl Listener {
                 Event::MissionSuccess => Some((Sfx::MissionSuccess, 1.)),
                 Event::MissionFail => Some((Sfx::MissionFail, 1.)),
                 Event::Shot { x, y, weapon, .. } => {
-                    let kind = match weapon {
-                        "pistol" => 0,
-                        "smg" => 1,
-                        _ => 2,
-                    };
+                    let kind = gun_kind(weapon);
                     // Schüsse hört man weiter als einen Unfall
                     let k = (1. - (x - cx).hypot(y - cy) / (EVENT_HEAR * 2.)).clamp(0., 1.) as f32;
                     Some((Sfx::Gun(kind, 1.), k))
@@ -135,8 +131,8 @@ impl Listener {
                 Event::PlayerHurt { .. } => Some((Sfx::Punch(1.), 1.)),
                 Event::Wasted { .. } => Some((Sfx::MissionFail, 1.)),
                 Event::Respawn { .. } => Some((Sfx::Pickup, 1.)),
-                Event::Reload { .. } => Some((Sfx::Reload, 1.)),
-                Event::Reloaded { .. } => Some((Sfx::Reloaded, 1.)),
+                Event::Reload { weapon } => Some((Sfx::Reload(gun_kind(weapon)), 1.)),
+                Event::Reloaded { weapon } => Some((Sfx::Reloaded(gun_kind(weapon)), 1.)),
                 Event::WeaponSwitch { .. } => Some((Sfx::WeaponSwitch, 1.)),
                 // Absprung und Landung: Schritte auf dem Untergrund (unten, braucht die Stadt)
                 Event::Jump { .. } | Event::Land { .. } => None,
@@ -358,6 +354,15 @@ impl Listener {
         f.rail = self.rail.step(w, dt, &mut f.sfx);
         f.ambience = ambience_at(w);
         f
+    }
+}
+
+/// Waffe → Klangnummer (Schuss und Nachladen): 0 Pistole, 1 MP, 2 Schrotflinte.
+fn gun_kind(weapon: &str) -> u8 {
+    match weapon {
+        "pistol" => 0,
+        "smg" => 1,
+        _ => 2,
     }
 }
 
