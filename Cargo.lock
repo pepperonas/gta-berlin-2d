@@ -152,7 +152,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "berlin-audio"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "berlin-sim",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "berlin-engine"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "berlin-map-loader",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "berlin-map-loader"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "berlin-probe"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "berlin-sim"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "berlin-map-loader",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "gta-berlin"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "berlin-audio",
@@ -1714,7 +1714,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "physics-calibrate"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "anyhow",
  "berlin-sim",

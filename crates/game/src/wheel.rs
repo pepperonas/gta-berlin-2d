@@ -1,7 +1,8 @@
 //! Waffenrad (Port von `weaponwheel.js`): eine Taste, die kurz getippt etwas anderes tut als gehalten.
 //!  – Maus: beide Tasten zusammen halten (zu Fuß) = Rad genau am Zeiger; gewählt ist das Feld in Richtung des Zeigers
 //!    ab der Radmitte. Beide Tasten loslassen nimmt die Waffe, kurzes Doppeltippen tut nichts.
-//!  – Controller: rechten Stick drücken öffnet das Rad, der Stick wählt, nochmal drücken oder A nimmt, B bricht ab.
+//!  – Controller (Waffenrad): rechten Stick gedrückt halten öffnet das Rad, der Stick wählt, Loslassen nimmt (Stick in
+//!    der Mitte: keine Änderung), B bricht ab. Das Fahrhilfen-Rad bleibt beim Antippen (`pad_step`).
 //! Solange das Rad offen ist, läuft das Spiel in Zeitlupe.
 use berlin_engine::hud::{Align, Hud};
 use berlin_sim::combat::{Combat, WEAPONS};
@@ -169,7 +170,7 @@ impl WheelButton {
             ..Default::default()
         }
     }
-    /// Controller-Rad an einer Taste: drücken öffnet bzw. nimmt, A nimmt, B bricht ab, der Stick wählt.
+    /// Controller-Rad an einer Taste (Fahrhilfen-Rad): drücken öffnet bzw. nimmt, A nimmt, B bricht ab, der Stick wählt.
     #[allow(clippy::too_many_arguments)]
     pub fn pad_step(
         &mut self,
@@ -201,6 +202,51 @@ impl WheelButton {
             return self.cancel();
         }
         if toggle || confirm {
+            return self.close_pick();
+        }
+        Outcome::default()
+    }
+    /// Controller-Waffenrad zum Halten: Drücken öffnet, offen bleibt es nur, solange die Taste gehalten wird;
+    /// Loslassen übernimmt die Waffe, auf die der Stick zeigt – steht der Stick in der Mitte, ändert sich nichts.
+    /// B bricht ab.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pad_hold_step(
+        &mut self,
+        t: f64,
+        at: Vec2,
+        pressed: bool,
+        held: bool,
+        back: bool,
+        stick: (f32, f32),
+        can_open: bool,
+        current: usize,
+        n: usize,
+    ) -> Outcome {
+        if self.open && !can_open {
+            return self.cancel();
+        }
+        if pressed && can_open && !self.open {
+            self.open_now(t, at, current, n);
+            // Mitte = keine Änderung: erst der Stick wählt
+            self.hover = None;
+            return Outcome {
+                opened: true,
+                ..Default::default()
+            };
+        }
+        if !self.open {
+            return Outcome::default();
+        }
+        if stick.0.hypot(stick.1) < STICK_DEAD {
+            self.hover = None;
+            self.v = Vec2::ZERO;
+        } else {
+            self.aim(stick.0, stick.1);
+        }
+        if back {
+            return self.cancel();
+        }
+        if !held {
             return self.close_pick();
         }
         Outcome::default()
@@ -457,6 +503,37 @@ mod tests {
         w.pad_step(0.8, at, true, false, false, (0., 0.), true, 0, 6);
         let o = w.pad_step(0.9, at, false, false, false, (0., 0.), false, 0, 6);
         assert!(o.closed && o.pick.is_none());
+    }
+    #[test]
+    fn hold_wheel_stays_open_while_held_and_takes_the_stick_choice() {
+        let mut w = WheelButton::default();
+        let at = Vec2::new(640., 360.);
+        let step = |w: &mut WheelButton, pressed, held, back, stick| {
+            w.pad_hold_step(0., at, pressed, held, back, stick, true, 2, 8)
+        };
+        // drücken öffnet, die Mitte ist leer (keine Vorwahl)
+        assert!(step(&mut w, true, true, false, (0., 0.)).opened);
+        assert!(w.open && w.hover.is_none());
+        // gehalten: bleibt offen, der Stick zeigt nach rechts
+        step(&mut w, false, true, false, (1., 0.));
+        assert!(w.open);
+        let right = slot(1., 0., 8, 0.);
+        assert_eq!(w.hover, right);
+        // loslassen übernimmt
+        let o = step(&mut w, false, false, false, (1., 0.));
+        assert!(o.closed && !w.open);
+        assert_eq!(o.pick, right);
+        // Stick zurück in die Mitte, dann loslassen: keine Änderung
+        step(&mut w, true, true, false, (0., 0.));
+        step(&mut w, false, true, false, (0., 1.));
+        step(&mut w, false, true, false, (0.05, 0.));
+        let o = step(&mut w, false, false, false, (0., 0.));
+        assert!(o.closed && o.pick.is_none(), "Mitte: {:?}", o.pick);
+        // B bricht ab
+        step(&mut w, true, true, false, (0., 0.));
+        step(&mut w, false, true, false, (1., 0.));
+        let o = step(&mut w, false, true, true, (1., 0.));
+        assert!(o.closed && o.pick.is_none() && !w.open);
     }
     #[test]
     fn slots_go_clockwise_from_the_top() {

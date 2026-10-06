@@ -67,8 +67,8 @@ lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
 erledigten Auftrag wird automatisch gespeichert. F8 schaltet die Grafik zwischen HD (Standard) und Pixel um (auch im
 Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–8 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller zu Fuß: A sprinten (tippen = Aktion), X springen, Y einsteigen (das Fahrzeug schimmert dann
-dezent), B nachladen, RT angreifen, RB treten, LB nächste Waffe, rechten Stick drücken = Waffenrad (Stick wählt,
-nochmal drücken oder A nimmt, B bricht ab). Im Auto: RT/LT Gas/Bremse, B Handbremse, Y aussteigen, X hupen
+dezent), B nachladen, RT angreifen, RB treten, LB nächste Waffe, rechten Stick gedrückt halten = Waffenrad (Stick
+wählt, Loslassen nimmt, Stick in der Mitte lässt die Waffe, B bricht ab). Im Auto: RT/LT Gas/Bremse, B Handbremse, Y aussteigen, X hupen
 (in Polizei- und Rettungswagen lang halten = Sirene), rechten Stick drücken = Fahrhilfen-Rad (ESP, ABS, Sirene).
 Stadtplan: linker Stick verschieben, rechter Stick bzw. RT/LT zoomen, A Wegpunkt, X Teleport, B zurück;
 Teleport-Rückfrage mit Stick/Steuerkreuz wählen, A bestätigt.

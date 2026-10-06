@@ -487,6 +487,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Geändert
 
+- Native Fassung: Das Waffenrad am Controller ist nur offen, solange der rechte Stick gedrückt bleibt. Loslassen
+  übernimmt die Waffe, auf die der Stick zeigt; steht der Stick in der Mitte, bleibt die aktuelle Waffe. B bricht ab.
 - Native Fassung: weniger POIs, dafür Schilder am Haus. Ärzte, Dienstleister, kleine Läden und Restaurants tragen
   kein Schild mehr und bleiben nachts dunkel. Bars, Kneipen, Clubs, Spätis, Imbisse, Cafés und Hotels bekommen am
   Eingang ein eigenes Schild statt eines einheitlichen Schriftzugs: Röhrenschrift, Neonrahmen, Leuchtkasten,

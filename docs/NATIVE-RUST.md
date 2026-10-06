@@ -2417,3 +2417,10 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
 - **Eingabe:** P1: Esc (nicht Start) bzw. Pad-B, Waffenrad offen/gedrückt → `cancel`; die Pause öffnet bei Esc nicht,
   solange ausgeholt wird. P2: B oder sein Waffenrad. Beim Ausholen wird `reload` unterdrückt (B = Nachladen).
 
+## Waffenrad am Controller zum Halten (06.10.2026)
+
+`WheelButton::pad_hold_step` (P1 und P2): Stickdruck öffnet, offen nur solange gehalten (`PadButton::held`), der Stick
+zeigt, Loslassen übernimmt; steht der Stick beim Loslassen in der Totzone (Mitte), bleibt die Waffe (keine Vorwahl
+beim Öffnen). B bricht ab. Das Fahrhilfen-Rad im Auto bleibt beim Antippen (`pad_step`). Ersetzt die Beschreibung
+„nochmal drücken oder A nimmt“ weiter oben.
+

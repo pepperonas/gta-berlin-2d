@@ -1242,11 +1242,11 @@ impl Play {
             .is_some_and(|c| c.has_siren());
         let wh = &mut self.wheel_p2;
         let was = wh.open;
-        let o = wh.pad_step(
+        let o = wh.pad_hold_step(
             t,
             center,
             bind.pad_pressed(&k2, B::WeaponWheel),
-            edges.a,
+            bind.pad_of(B::WeaponWheel).is_some_and(|b| b.held(&k2.pad)),
             edges.b,
             (pad.rx, pad.ry),
             alive_foot,
@@ -3227,13 +3227,15 @@ impl Play {
         {
             outcomes.push(self.wheel_m.choose(i));
         }
-        // Controller: rechten Stick drücken öffnet bzw. nimmt, A nimmt, B bricht ab
+        // Controller: Stick gedrückt halten öffnet das Rad, der Stick zeigt, Loslassen nimmt (Mitte: keine Änderung),
+        // B bricht ab
         let pad_was = self.wheel_p.open;
-        let o = self.wheel_p.pad_step(
+        let o = self.wheel_p.pad_hold_step(
             t,
             hud_center,
             bind.pad_pressed(keys, Bind::WeaponWheel),
-            keys.pad_pressed.a,
+            bind.pad_of(Bind::WeaponWheel)
+                .is_some_and(|b| b.held(&keys.pad)),
             keys.pad_pressed.b,
             (keys.pad.rx, keys.pad.ry),
             alive_foot,
