@@ -993,6 +993,18 @@ pub fn weapon_panel(h: &mut Hud, c: &berlin_sim::combat::Combat, r: f32, b: f32)
         Align::Right,
         true,
     );
+    if c.charge.is_some() {
+        // Ausholen: wie werfen, wie abbrechen
+        h.text(
+            "LOSLASSEN WIRFT · ESC / B BRICHT AB",
+            r,
+            y - 2.,
+            11.,
+            [0.95, 0.95, 0.95, 0.85],
+            Align::Right,
+            true,
+        );
+    }
     if wp.melee {
         h.text(
             "NAHKAMPF",

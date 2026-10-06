@@ -128,6 +128,8 @@ pub struct Play {
 
     /// Waffenrad (Maus rechts, Controller LB), Echtzeit für das Halten, Zeitlupe
     wheel_m: crate::wheel::WheelButton,
+    /// Wurfvorschau je Spieler beim Ausholen (throwaim.rs)
+    arcs: Vec<crate::throwaim::Arc>,
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
     wheel_p2: crate::wheel::WheelButton,
@@ -577,6 +579,7 @@ impl Play {
             teleport: None,
 
             wheel_m: Default::default(),
+            arcs: Vec::new(),
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
             chord: Default::default(),
@@ -1266,6 +1269,18 @@ impl Play {
             i.action_held = false;
             i.jump = false;
         }
+        // Ausholen: B oder das Waffenrad bricht ab, B lädt dabei nicht nach
+        if self
+            .world
+            .p2
+            .as_ref()
+            .is_some_and(|s| s.player.combat.charge.is_some())
+        {
+            i.combat.reload = false;
+            if edges.b || was || self.wheel_p2.open {
+                i.combat.cancel = true;
+            }
+        }
         assist_input(
             &mut self.assist[1],
             &mut self.horn[1],
@@ -1434,7 +1449,10 @@ impl Play {
                     self.ui_sound();
                     return true;
                 }
-                if pause && !self.world.loading {
+                // Esc beim Ausholen eines Wurfs bricht den Wurf ab (Play::step), statt zu pausieren; Start pausiert
+                let throw_esc = self.world.player.combat.charge.is_some()
+                    && !self.bindings.pad_pressed(keys, B::Pause);
+                if pause && !self.world.loading && !throw_esc {
                     self.pause();
                     self.ui_sound();
                     if let Some(a) = &self.audio {
@@ -1778,7 +1796,22 @@ pub fn combat_input(
         aim_x: rx as f64,
         aim_y: ry as f64,
         aim_world: None,
+        cancel: false,
     }
+}
+
+/// Wurfvorschau des Spielers auf dem aktiven Sitz, solange er mit einer Wurfwaffe ausholt.
+fn throw_arc(w: &mut berlin_sim::world::World) -> Option<crate::throwaim::Arc> {
+    let c = &w.player.combat;
+    let t = c.charge?;
+    let wp = c.weapon();
+    let kind = berlin_sim::throw::Kind::of(wp.id)?;
+    let (ang, d) = (c.aim, berlin_sim::throw::charge_reach(wp.range, t));
+    let pts = w.throw_preview(kind, ang, d);
+    Some(crate::throwaim::Arc {
+        pts,
+        grenade: kind == berlin_sim::throw::Kind::Grenade,
+    })
 }
 
 /// Zweirad: Schräglage (rad, positiv = nach rechts), Nickwinkel (Wheelie positiv) und ob es gestürzt liegt.
@@ -3263,6 +3296,14 @@ impl Play {
         if let Some(i) = outcomes.iter().find_map(|o| o.pick) {
             input.combat.weapon_slot = i as u8 + 1;
         }
+        // Ausholen (Wurfwaffe): Esc bzw. B bricht ab, ebenso das Waffenrad; B lädt dabei nicht nach
+        if w2.player.combat.charge.is_some() {
+            input.combat.reload = false;
+            let esc = bind.pressed(keys, Bind::Pause) && !bind.pad_pressed(keys, Bind::Pause);
+            if esc || keys.pad_pressed.b || combo || open {
+                input.combat.cancel = true;
+            }
+        }
         self.time_scale = crate::wheel::ease_time_scale(
             self.time_scale,
             self.wheel_m.open || self.wheel_p.open,
@@ -3286,6 +3327,13 @@ impl Play {
             self.fx.click_ring(at);
         }
         self.fx.ingest(&self.world.events);
+        self.arcs.clear();
+        if let Some(a) = throw_arc(&mut self.world) {
+            self.arcs.push(a);
+        }
+        if let Some(Some(a)) = self.world.with_p2(throw_arc) {
+            self.arcs.push(a);
+        }
         self.step_nav();
         // Controller-Vibration aus Stößen und dem Schlupf des eigenen Autos
         if self.bindings.rumble {
@@ -4184,6 +4232,11 @@ impl Game for Play {
         let l = self.lighting().unwrap_or_default();
         let ambient = if l.dark > 0. { l.ambient } else { [1.; 3] };
         self.fx.effects(out, ambient);
+        if matches!(self.screen, Screen::Playing) {
+            for a in &self.arcs {
+                crate::throwaim::bodies(a, self.real_t as f32, out);
+            }
+        }
         // Einsteigen möglich: das Fahrzeug, in das F bzw. Y führt, schimmert dezent (je Spieler zu Fuß); durchscheinend,
         // daher hier und nicht in `bodies` (sonst verdeckte es den Schatten und hellte die Silhouette auf)
         if matches!(self.screen, Screen::Playing) {

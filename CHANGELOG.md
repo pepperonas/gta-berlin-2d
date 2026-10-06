@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Granate und Molotow mit Ausholen und Wurfvorschau.** Die Wurftaste halten holt aus: die Weite
+  pendelt gleichmäßig zwischen einem Viertel und der vollen Weite hin und her (1,6 s je Hin und Her), Loslassen wirft.
+  Ein gepunkteter Bogen zeigt die echte Flugbahn bis zum Aufschlag (bricht an Hauswänden ab), am Landepunkt ein Ring
+  mit dem Wirkungsradius. Abbrechen: B am Controller, Esc an der Tastatur (pausiert dann nicht), außerdem Waffenrad,
+  Waffenwechsel, Treten, Einsteigen oder Betäubung. B lädt beim Ausholen nicht nach.
 - Native Fassung: **Feuer, Explosionen und Rauch aus gerenderten Vorlagen.** Statt runder Partikel spielen jetzt
   in Houdini simulierte Flipbooks (CC0, Unity Labs Paris): Auto-Explosionen als Feuerball, der in schwarzen Ölrauch
   übergeht (zwei Varianten, dazu zwei kleinere Nachdetonationen), Granaten als kompakter Blitz, brennende Wracks und

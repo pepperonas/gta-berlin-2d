@@ -29,6 +29,7 @@ mod rumble;
 mod snowtracks;
 mod sound;
 mod streetfurn;
+mod throwaim;
 mod underground;
 mod weatherfx;
 mod wheel;

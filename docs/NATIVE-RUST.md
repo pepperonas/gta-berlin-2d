@@ -2404,3 +2404,16 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   Trümmerregen (kyles) und einem Knall eines brennenden Autos (qubodup); `grenade` eigener Knall (qubodup M67 +
   klangfabrik). Pegel gegen die Synthese kalibriert.
 
+## Ausholen und Wurfvorschau (06.10.2026)
+
+- **Simulation:** `Combat::charge` (Sekunden Ausholen), `CombatInput::cancel`. Wurfwaffen: `fire_pressed` beginnt,
+  gehaltenes `fire` lädt, Loslassen wirft mit `throw::charge_reach(range, t)` (Dreieck zwischen `CHARGE_MIN` = 25 %
+  und 100 %, Periode `CHARGE_PERIOD` 1,6 s). `cancel`, `kick`, Waffenwechsel, Einsteigen, Betäubung verwerfen das
+  Ausholen ohne Wurf. Die Mausweite zählt nicht mehr – nur die Haltedauer; die Richtung kommt weiter von Maus/Stick.
+- **Vorschau:** `World::throw_preview(kind, ang, d)` rechnet dieselbe Flugbahn wie der echte Wurf (Start aus
+  `launch_state`, gleiche Schwerkraft, gleiche Hindernisprüfung) bis zum ersten Aufschlag; ein Test vergleicht das
+  Ende mit dem echten Zerschellen. Gezeichnet von `game/throwaim.rs` (wandernde Punkte, Bodenschatten, Wirkungsring)
+  im Effekt-Durchgang, je Spieler (`Play::arcs`).
+- **Eingabe:** P1: Esc (nicht Start) bzw. Pad-B, Waffenrad offen/gedrückt → `cancel`; die Pause öffnet bei Esc nicht,
+  solange ausgeholt wird. P2: B oder sein Waffenrad. Beim Ausholen wird `reload` unterdrückt (B = Nachladen).
+

@@ -86,6 +86,19 @@ impl Flame {
     }
 }
 
+/// Ausholen: so lange dauert ein ganzes Hin und Her der Wurfweite (s)
+pub const CHARGE_PERIOD: f64 = 1.6;
+/// kürzeste Wurfweite beim Ausholen (Anteil der größten)
+pub const CHARGE_MIN: f64 = 0.25;
+
+/// Wurfweite nach `t` Sekunden Ausholen: pendelt gleichmäßig zwischen `CHARGE_MIN · range` (beim Drücken) und
+/// `range` (nach einer halben Periode) hin und her, solange die Taste gehalten wird.
+pub fn charge_reach(range: f64, t: f64) -> f64 {
+    let u = (t.max(0.) / (CHARGE_PERIOD / 2.)).rem_euclid(2.);
+    let tri = if u <= 1. { u } else { 2. - u };
+    range * (CHARGE_MIN + (1. - CHARGE_MIN) * tri)
+}
+
 /// Anfangsgeschwindigkeit für einen Wurf über die Strecke `d` (px): Flugzeit wächst mit der Weite.
 pub fn launch(d: f64) -> (f64, f64) {
     let t = (0.35 + d / 700.).clamp(0.4, 1.1);
@@ -93,18 +106,15 @@ pub fn launch(d: f64) -> (f64, f64) {
 }
 
 impl World {
-    /// Wurf der Spielfigur (auf dem gerade aktiven Sitz) in Richtung `ang` über die Strecke `d`.
-    pub fn throw(&mut self, kind: Kind, ang: f64, d: f64) {
+    /// Wurfkörper in der Hand der Spielfigur (aktiver Sitz), abgeworfen in Richtung `ang` über die Strecke `d`.
+    fn launch_state(&self, kind: Kind, ang: f64, d: f64) -> Thrown {
         let (vh, vz) = launch(d);
         let p = &self.player;
-        let (x, y) = (p.x + ang.cos() * 8., p.y + ang.sin() * 8.);
-        self.thrown_seq += 1;
-        let id = self.thrown_seq;
-        self.thrown.push(Thrown {
-            id,
+        Thrown {
+            id: 0,
             kind,
-            x,
-            y,
+            x: p.x + ang.cos() * 8.,
+            y: p.y + ang.sin() * 8.,
             z: 12.,
             vx: ang.cos() * vh,
             vy: ang.sin() * vh,
@@ -113,7 +123,18 @@ impl World {
             t: 0.,
             spin: 0.,
             by: self.seat_index(),
-        });
+        }
+    }
+
+    /// Wurf der Spielfigur (auf dem gerade aktiven Sitz) in Richtung `ang` über die Strecke `d`.
+    pub fn throw(&mut self, kind: Kind, ang: f64, d: f64) {
+        self.thrown_seq += 1;
+        let g = Thrown {
+            id: self.thrown_seq,
+            ..self.launch_state(kind, ang, d)
+        };
+        let (x, y) = (g.x, g.y);
+        self.thrown.push(g);
         self.events.push(Event::Throw {
             x,
             y,
@@ -122,6 +143,38 @@ impl World {
                 Kind::Molotov => "molotov",
             },
         });
+    }
+
+    /// Vorschau eines Wurfs (Bogen beim Ausholen): Punkte (x, y, Höhe) je Simulationsschritt, genau wie der echte
+    /// Flug, bis zur ersten Berührung – Boden oder ein Hindernis, das ihn aufhält (dort endet der Bogen).
+    pub fn throw_preview(&mut self, kind: Kind, ang: f64, d: f64) -> Vec<(f64, f64, f64)> {
+        let dt = crate::world::DT;
+        let mut g = self.launch_state(kind, ang, d);
+        let mut out = vec![(g.x, g.y, g.z)];
+        for _ in 0..240 {
+            let sp = g.vx.hypot(g.vy);
+            let a = g.vy.atan2(g.vx);
+            let r = cast_ray(self, g.x, g.y, a, sp * dt + 3., g.lvl);
+            let blocked = match r.hit {
+                Some(Target::Wall) => true,
+                Some(Target::Car(_)) => g.z < OVER_CAR,
+                _ => false,
+            };
+            if blocked {
+                out.push((r.x - a.cos() * 3., r.y - a.sin() * 3., g.z));
+                break;
+            }
+            g.x += g.vx * dt;
+            g.y += g.vy * dt;
+            g.vz -= GRAVITY * dt;
+            g.z += g.vz * dt;
+            if g.z <= 0. {
+                out.push((g.x, g.y, 0.));
+                break;
+            }
+            out.push((g.x, g.y, g.z));
+        }
+        out
     }
 
     /// Ein Schritt aller Würfe und Feuer.

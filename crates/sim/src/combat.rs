@@ -199,6 +199,8 @@ pub struct Combat {
     pub fall: f64,
     /// schon ins Krankenhaus gebracht, wartet auf die Kacheln dort
     pub moved: bool,
+    /// Wurfwaffe: so lange wird schon ausgeholt (s); die Weite pendelt (`throw::charge_reach`)
+    pub charge: Option<f64>,
 }
 impl Default for Combat {
     fn default() -> Self {
@@ -216,6 +218,7 @@ impl Default for Combat {
             dead_t: 0.,
             fall: 0.,
             moved: false,
+            charge: None,
         }
     }
 }
@@ -241,6 +244,8 @@ pub struct CombatInput {
     pub aim_y: f64,
     /// Maus: Zielpunkt auf dem Boden (Kartenpixel); hat Vorrang vor dem Stick
     pub aim_world: Option<(f64, f64)>,
+    /// Ausholen abbrechen (Wurfwaffen): Esc bzw. B, Waffenrad
+    pub cancel: bool,
 }
 
 /// Wehrt sich dieser Passant? Fest je Person (aus der Nummer, nicht aus dem Welt-Zufall).
@@ -850,6 +855,7 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
         c.hp = (c.hp + REGEN_RATE * dt).min(PLAYER_HP);
     }
     if w.player.in_car.is_some() {
+        c.charge = None;
         return;
     }
     let n = WEAPONS.len();
@@ -864,6 +870,7 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
         sel = (sel + n - 1) % n;
     }
     if sel != c.weapon {
+        c.charge = None;
         c.weapon = sel;
         c.reload_t = 0.;
         c.cool = c.cool.max(0.15);
@@ -885,6 +892,7 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
         w.events.push(Event::Reload { weapon: wp.id });
     }
     if w.player.stun > 0. {
+        w.player.combat.charge = None;
         return;
     }
     // Zielen: Maus › rechter Stick › Blickrichtung; die Maus rastet nur auf dem Ziel unter dem Zeiger ein, am Stick
@@ -914,6 +922,35 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
     }
     let c = &mut w.player.combat;
     c.aim = ang;
+    // Wurfwaffe: Drücken holt aus (die Weite pendelt), Loslassen wirft, Abbruch (Esc/B, Waffenrad, Tritt) verwirft
+    if wp.throw {
+        if input.cancel || input.kick {
+            c.charge = None;
+        } else if let Some(t) = c.charge {
+            if input.fire {
+                c.charge = Some(t + dt);
+            } else {
+                c.charge = None;
+                c.cool = wp.cooldown;
+                c.attack = Some(Attack {
+                    kind: AttackKind::Throw,
+                    t: 0.3,
+                    weapon: wp.id,
+                });
+                c.mag[c.weapon] -= 1;
+                let d = crate::throw::charge_reach(wp.range, t);
+                if let Some(k) = crate::throw::Kind::of(wp.id) {
+                    w.throw(k, ang, d);
+                }
+                return;
+            }
+        } else if input.fire_pressed && c.cool <= 0. && c.reload_t <= 0. && c.mag[c.weapon] > 0 {
+            c.charge = Some(0.);
+        }
+        if c.charge.is_some() {
+            return;
+        }
+    }
     if input.kick && c.cool <= 0. {
         c.cool = KICK.cooldown;
         c.attack = Some(Attack {
@@ -935,23 +972,6 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
             weapon: wp.id,
         });
         strike(w, &wp, ang);
-    } else if wp.throw && c.reload_t <= 0. && c.mag[c.weapon] > 0 {
-        c.cool = wp.cooldown;
-        c.attack = Some(Attack {
-            kind: AttackKind::Throw,
-            t: 0.3,
-            weapon: wp.id,
-        });
-        c.mag[c.weapon] -= 1;
-        // Weite: bis zum Mauspunkt, am Stick drei Viertel der größten Weite
-        let (px, py) = (w.player.x, w.player.y);
-        let d = match input.aim_world {
-            Some((x, y)) => (x - px).hypot(y - py).clamp(30., wp.range),
-            None => wp.range * 0.75,
-        };
-        if let Some(k) = crate::throw::Kind::of(wp.id) {
-            w.throw(k, ang, d);
-        }
     } else if c.reload_t <= 0. && c.mag[c.weapon] > 0 {
         c.cool = wp.cooldown;
         c.attack = Some(Attack {
