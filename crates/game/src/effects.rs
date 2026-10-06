@@ -91,6 +91,8 @@ pub struct Effects {
     emit: std::collections::HashMap<u32, f32>,
     last_skid: std::collections::HashMap<(u32, i8), [f32; 2]>,
     gun: crate::gunfx::GunFx,
+    /// brennende Wracks und Explosionen
+    fire: crate::firefx::FireFx,
     splats: std::collections::VecDeque<Splat>,
     seq: u32,
     /// Ring am Boden, wohin ein Klick die Figur schickt (main.js clickFx)
@@ -103,6 +105,7 @@ impl Effects {
     /// Ereignisse eines Schritts übernehmen.
     pub fn ingest(&mut self, events: &[Event]) {
         self.gun.ingest(events);
+        self.fire.ingest(events);
         for e in events {
             match e {
                 Event::Blood { x, y, a, n } => {
@@ -283,6 +286,7 @@ impl Effects {
             }
         }
         self.gun.step(dt);
+        self.fire.step(dt);
         for s in &mut self.splats {
             s.age += dt;
         }
@@ -321,7 +325,12 @@ impl Effects {
                 color: [c[0], c[1], c[2], a],
             });
         }
+        self.fire.effects(out, lit);
         self.gun.effects(out, lit);
+    }
+    /// Brennende und glimmende Wracks der Welt (jeden Schritt).
+    pub fn fires(&mut self, w: &berlin_sim::world::World, dt: f32) {
+        self.fire.tick(w, dt);
     }
     pub fn bodies(&self, out: &mut Vec<Body>) {
         // Bremsspuren: dunkle Gummistriche, die nach 8 s verblassen
@@ -353,6 +362,7 @@ impl Effects {
                 color: [0.42 - 0.18 * k, 0.03, 0.03, 0.85 * fade],
             });
         }
+        self.fire.bodies(out);
         self.gun.bodies(out);
         if let Some((at, t)) = self.ring {
             let k = t / RING_S;
@@ -368,8 +378,9 @@ impl Effects {
         }
     }
     /// Mündungsfeuer erhellt nachts kurz die Umgebung.
-    pub fn lights(&self, out: &mut Vec<LightSource>, dark: f32) {
+    pub fn lights(&self, out: &mut Vec<LightSource>, dark: f32, time: f32) {
         self.gun.lights(out, dark);
+        self.fire.lights(out, dark, time);
     }
     #[cfg(test)]
     pub fn blood_count(&self) -> usize {

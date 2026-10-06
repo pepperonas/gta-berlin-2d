@@ -147,6 +147,24 @@
       ],
       "quelle": "fs_709572"
     },
+    "explosion": {
+      "zweck": "Fahrzeug explodiert: Knall mit Nachhall (zwei Aufnahmen)",
+      "dateien": [
+        "explosion_1.wav",
+        "explosion_2.wav"
+      ],
+      "quelle": "fs_235968",
+      "weitere_quellen": [
+        "fs_186932"
+      ]
+    },
+    "fire_crackle": {
+      "zweck": "brennendes Wrack: Knistern und Prasseln",
+      "dateien": [
+        "fire_crackle_1.wav"
+      ],
+      "quelle": "fs_422742"
+    },
     "hit": {
       "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
       "dateien": [
@@ -864,6 +882,24 @@
       "seite": "https://freesound.org/people/dasBUTCHER84/sounds/449614/",
       "lizenz": "CC0 1.0",
       "urheber": "dasBUTCHER84"
+    },
+    "fs_235968": {
+      "titel": "Explosion_01.wav",
+      "seite": "https://freesound.org/people/tommccann/sounds/235968/",
+      "lizenz": "CC0 1.0",
+      "urheber": "tommccann"
+    },
+    "fs_186932": {
+      "titel": "fire_explosion.wav",
+      "seite": "https://freesound.org/people/ReadeOnly/sounds/186932/",
+      "lizenz": "CC0 1.0",
+      "urheber": "ReadeOnly"
+    },
+    "fs_422742": {
+      "titel": "Fire_Crackle_1.wav",
+      "seite": "https://freesound.org/people/KieranKeegan/sounds/422742/",
+      "lizenz": "CC0 1.0",
+      "urheber": "KieranKeegan"
     }
   }
 }

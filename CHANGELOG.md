@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Fahrzeug-Explosionen.** Wird ein Fahrzeug zum Wrack (Unfall, Beschuss, Überschlag), fängt es
+  Feuer und explodiert nach gut 4 s: Feuerball mit weißem Kern, Druckwellenring, Trümmer, Rauchsäule, Lichtblitz,
+  danach Brandfleck und ein verkohltes, noch qualmendes Wrack. Die Druckwelle verletzt Menschen und Spieler,
+  beschädigt und schiebt Autos (Kettenreaktionen), Passanten fliehen. Wer im brennenden Wagen sitzt, wird gewarnt –
+  bleibt er drin, schleudert ihn die Explosion hinaus. Knall und Knistern aus Aufnahmen (Freesound, CC0: tommccann,
+  ReadeOnly, KieranKeegan), Controller-Vibration in der Nähe. Befehl `sprengen` setzt das nächste fremde Auto in
+  Brand. Fahrräder und E-Roller brennen nicht.
 - Native Fassung: **Route auf der Straße.** Ist ein Wegpunkt gesetzt, liegt die Strecke als dezente, langsam
   zum Ziel wandernde violette Strichlinie auf der Fahrbahn (nächste 600 m, hinter Autos und Häusern, nachts nur halb
   abgedunkelt) – nicht mehr nur auf der Minikarte. Im Koop je Spieler seine Route.

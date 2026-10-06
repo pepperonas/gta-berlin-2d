@@ -81,6 +81,9 @@ pub const CRASH_LIGHT: SfxSpec = spec("crash_light", 0.783, 0.08, true);
 /// ab dieser Stärke (`Sfx::Crash`) spielt der schwere Unfall
 pub const CRASH_HEAVY_AT: f32 = 0.45;
 pub const HORN: SfxSpec = spec("horn", 0.168, 0.02, true);
+/// Fahrzeug-Explosion (Knall mit Nachhall) und Knistern eines brennenden Wracks
+pub const EXPLOSION: SfxSpec = spec("explosion", 0.653, 0.06, true);
+pub const FIRE_CRACKLE: SfxSpec = spec("fire_crackle", 0.893, 0.08, true);
 pub const DOOR: SfxSpec = spec("door", 0.229, 0.05, true);
 pub const KNOCK: SfxSpec = spec("knock", 0.408, 0.08, true);
 pub const SPLASH: SfxSpec = spec("splash", 0.351, 0.1, true);
@@ -139,6 +142,9 @@ pub struct Vehicle {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sfx {
     Crash(f32),
+    /// Fahrzeug explodiert (Lautstärke), brennendes Wrack knistert (Lautstärke)
+    Explosion(f32),
+    FireCrackle(f32),
     Hit,
     Horn(f32),
     Knock(f32),
@@ -1561,6 +1567,21 @@ impl Synth {
                     k,
                     M,
                 ) => {}
+            Sfx::Explosion(k) if self.sample(EXPLOSION, k, M) => {}
+            Sfx::Explosion(k) => {
+                // ohne Aufnahme: dumpfer Schlag, Rauschen, das tief abklingt
+                self.burst(2.2, 700., 0.9 * k, Lowpass, 0.6, 0., 0.004, M);
+                self.burst(0.35, 2600., 0.5 * k, Lowpass, 0.7, 0., 0.002, M);
+                self.tone(55., 0.9, Sine, 0.6 * k, 0., -30., 0., M);
+            }
+            Sfx::FireCrackle(k) if self.sample(FIRE_CRACKLE, k, M) => {}
+            Sfx::FireCrackle(k) => {
+                let mut t = 0.;
+                for i in 0..10 {
+                    t += 0.12 + 0.11 * ((i * 7 % 5) as f32 / 5.);
+                    self.burst(0.03, 3000., 0.08 * k, Bandpass, 1.2, t, 0.001, M);
+                }
+            }
             Sfx::Crash(k) => {
                 self.burst(
                     0.35 + k * 0.3,
@@ -2139,6 +2160,8 @@ mod tests {
             (Sfx::Reloaded(2), "reloaded_shotgun", 0.04),
             (Sfx::WeaponSwitch, "weapon_switch", 0.009),
             (Sfx::Crash(1.), "crash_heavy", 0.1018),
+            (Sfx::Explosion(1.), "explosion", 0.17),
+            (Sfx::FireCrackle(1.), "fire_crackle", 0.02),
             (Sfx::Crash(0.3), "crash_light", 0.0342),
             (Sfx::Horn(1.), "horn", 0.03),
             (Sfx::Door, "door", 0.0376),

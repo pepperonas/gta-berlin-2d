@@ -56,6 +56,18 @@ impl Rumbler {
                     weak: 0.3,
                     ms: 160,
                 }),
+                // Explosion in der Nähe: Wucht nach Entfernung (12 m voll, 60 m nichts mehr)
+                Event::Explosion { x, y, .. } => {
+                    let d = (x - me.0).hypot(y - me.1);
+                    let k = (1. - (d - 120.) / 480.).clamp(0., 1.) as f32;
+                    if k > 0.05 {
+                        take(Rumble {
+                            strong: k,
+                            weak: 0.7 * k,
+                            ms: 250 + (350. * k) as u32,
+                        });
+                    }
+                }
                 Event::Wasted { .. } => take(Rumble {
                     strong: 1.,
                     weak: 0.6,

@@ -2334,3 +2334,22 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   Routenfarbe mit Deckkraft 0,32, Tiefe 0,63 (hinter Fahrzeugen und Häusern), wandern mit 1,4 m/s zum Ziel, nach
   600 m (`ROUTE_AHEAD`) Schluss. Bild: `images/native/route/route-auf-der-strasse.webp`.
 
+## Fahrzeug-Explosionen (06.10.2026)
+
+- **Simulation (`sim/fire.rs`):** `World::update_fires` (nach den Zusammenstößen): jedes Wrack, das brennen kann
+  (`can_burn`: keine Fahrräder/Roller), bekommt `Car::burn` = `BURN_S` (4 s) + Streuung aus der Fahrzeugnummer (kein
+  Welt-Zufall), Ereignis `CarFire`; bei 0 `explode`: `Car::exploded`, Ereignis `Explosion{strength}` (nach Größe),
+  Druckwelle `BLAST_R` (8 m × Stärke): Menschen `hurt_ped` (bis 160), Spieler `hurt_player` (bis 70; im explodierenden
+  Wagen hinausgeschleudert, 84), Fahrzeuge Schaden (bis 90) und Stoß (260 px/s) – wer dabei zum Wrack wird, brennt
+  selbst (Kettenreaktion); Passanten im Umkreis von 40 m fliehen. Warnung „Das Auto brennt – raus hier!“ je Sitz.
+  Schalter `World::explosions` (aus = Wracks bleiben ruhig). Tests `crates/sim/tests/fire.rs`.
+- **Darstellung (`game/firefx.rs`, in `Effects`):** Flammen am Motorraum mit wachsender Hitze, Rauch, flackerndes
+  Licht; Explosion = Kernblitz, 40 Flammen (schnelle kleine, langsame große), Druckwellenring, 16 Trümmer, 12
+  Rauchwolken, Lichtblitz; Brandfleck 2 min am Boden; ausgebrannte Wracks verkohlt (`0x1a1817`) und glimmen 30 s.
+  Streuung nur aus Hashes.
+- **Klang:** `Sfx::Explosion` (zwei Varianten, Pegel 0,17) und `Sfx::FireCrackle` (alle 2,2 s, solange es brennt)
+  aus Freesound-Aufnahmen (CC0), Rezepte `explosion`/`fire_crackle` in `tools/audio/sfx_recipes.json`; synthetischer
+  Ersatz ohne Samples. Vibration nach Entfernung (`rumble.rs`).
+- **Befehl `sprengen`:** `World::ignite_nearest` – nächstes heiles fremdes Fahrzeug (nie das eigene oder das von
+  Spieler 2) brennt, explodiert nach 0,8 s.
+

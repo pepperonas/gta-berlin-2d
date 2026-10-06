@@ -45,6 +45,8 @@ pub struct Listener {
     sample_npc: HashMap<u32, (EngineSound, f64)>,
     /// Koop: Motor aus Aufnahmen für das Auto von Spieler 2 (eigene Stimme, nicht aus dem Verkehr)
     sample_p2: Option<(u32, EngineSound)>,
+    /// brennende Wracks: wann das Knistern zuletzt neu angesetzt wurde (Spielzeit)
+    crackle: HashMap<u32, f64>,
     pub engine_override: Option<EngineOverride>,
     pub reference: Option<std::sync::Arc<[f32]>>,
     pub engine_view: EngineView,
@@ -142,6 +144,15 @@ impl Listener {
                 Event::WeaponSwitch { .. } => Some((Sfx::WeaponSwitch, 1.)),
                 // Absprung und Landung: Schritte auf dem Untergrund (unten, braucht die Stadt)
                 Event::Jump { .. } | Event::Land { .. } => None,
+                // Knall: weit hörbar (wie ein Schuss), nah mit voller Wucht
+                Event::Explosion { x, y, strength, .. } => {
+                    let k = (1. - dist(x, y) / (EVENT_HEAR * 3.)).clamp(0., 1.) as f32;
+                    Some((
+                        Sfx::Explosion((0.7 + 0.3 * strength as f32) * k.powf(0.7)),
+                        1.,
+                    ))
+                }
+                Event::CarFire { x, y, .. } => Some((Sfx::FireCrackle(1.), near(x, y))),
                 Event::Wreck { .. }
                 | Event::Notice(_)
                 | Event::Blood { .. }
@@ -161,10 +172,26 @@ impl Listener {
                     Sfx::Punch(k) => Sfx::Punch(k * gain),
                     Sfx::Thud(k) => Sfx::Thud(k * gain),
                     Sfx::Impact(k) => Sfx::Impact(k * gain),
+                    Sfx::FireCrackle(k) => Sfx::FireCrackle(k * gain),
                     s => s,
                 });
             }
         }
+        // brennende Wracks knistern, solange sie brennen (alle 2,2 s neu angesetzt, nach Entfernung leiser)
+        let mut live = Vec::new();
+        for c in &w.cars {
+            if c.burn.is_none() || c.exploded {
+                continue;
+            }
+            live.push(c.id);
+            let g = near(c.x, c.y);
+            let last = self.crackle.entry(c.id).or_insert(w.time);
+            if w.time - *last >= 2.2 && g > 0.02 {
+                *last = w.time;
+                f.sfx.push(Sfx::FireCrackle(g));
+            }
+        }
+        self.crackle.retain(|id, _| live.contains(id));
         // eigenes Fahrzeug
         let (wet, snow) = (w.weather.wet, w.weather.snow);
         let hops: Vec<(f64, f64, f32)> = w

@@ -565,6 +565,13 @@ pub const COMMANDS: &[Command] = &[
         args: &[arg("art", true, Values::Vehicles)],
     },
     Command {
+        name: "sprengen",
+        aliases: &["explode", "boom", "explosion", "explodieren"],
+        help: "nächstes Auto in Brand setzen – es explodiert gleich",
+        cheat: true,
+        args: &[],
+    },
+    Command {
         name: "reparieren",
         aliases: &["repair"],
         help: "eigenes Auto reparieren",
@@ -1276,6 +1283,13 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             match w.spawn_vehicle(kind, None) {
                 Some(_) => ok(format!("{label} steht bereit")),
                 None => err("Kein Platz für ein Fahrzeug"),
+            }
+        }
+        "sprengen" => {
+            let (x, y) = (w.player.x, w.player.y);
+            match w.ignite_nearest(x, y, 600., 0.8) {
+                Some(_) => ok("Gleich knallt's – Abstand halten"),
+                None => err("Kein Auto in der Nähe"),
             }
         }
         "reparieren" => {

@@ -3312,6 +3312,7 @@ impl Play {
         }
         self.fx.step(dt as f32);
         self.fx.tires(&mut self.world, dt as f32);
+        self.fx.fires(&self.world, dt as f32);
         self.trails
             .record(&self.world.cars, self.world.time, self.world.weather.snow);
         // alle Ausschnitte umfassen (Koop: die Bahnen gibt es ohnehin nur um die Spieler)
@@ -3783,7 +3784,13 @@ impl Game for Play {
                         lying,
                         braking: c.controls.brake > 0.1 && c.speed() > 2.,
                         rider: c.driver.is_some() && !c.wrecked,
-                        paint: if c.wrecked { 0x3b332d } else { c.color },
+                        paint: if c.exploded {
+                            0x1a1817
+                        } else if c.wrecked {
+                            0x3b332d
+                        } else {
+                            c.color
+                        },
                         jacket,
                         helmet,
                         depth,
@@ -3842,7 +3849,10 @@ impl Game for Play {
             }
             // Pkw und Nutzfahrzeuge: Bild aus dem Fahrzeug-Atlas (vehicles.js drawCarBody)
             let model = c.model_name();
-            let tint = if c.wrecked {
+            let tint = if c.exploded {
+                // ausgebrannt: verkohlt
+                0x1a1817
+            } else if c.wrecked {
                 0x3b332d
             } else if model == "taxi" {
                 0xf1e9c8
@@ -4431,7 +4441,7 @@ impl Game for Play {
         if k <= 0. {
             return;
         }
-        self.fx.lights(out, k);
+        self.fx.lights(out, k, self.world.time as f32);
         let rgb = |c: [u8; 3]| c.map(|v| v as f32 / 255.);
         let push =
             |out: &mut Vec<LightSource>, x: f64, y: f64, radius: f32, color: [f32; 3], a: f32| {

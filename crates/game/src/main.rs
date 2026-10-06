@@ -10,6 +10,7 @@ mod effects;
 mod enginedebug;
 mod figart;
 mod figure;
+mod firefx;
 mod fps;
 mod gunfx;
 mod hud;

@@ -304,6 +304,8 @@ pub struct World {
     spawn_turn: bool,
     /// Spieler 2 (lokaler Koop, coop.rs); `None` = Einzelspiel
     pub p2: Option<Box<crate::coop::Seat>>,
+    /// Wracks brennen und explodieren (fire.rs); aus = Wracks bleiben einfach liegen
+    pub explosions: bool,
 }
 
 fn spot_free_static(city: &mut City, knocked: &Knocked, x: f64, y: f64, r: f64, lvl: i8) -> bool {
@@ -429,6 +431,7 @@ impl World {
             focus_key: "world".into(),
             p2: None,
             spawn_turn: false,
+            explosions: true,
         };
         w.spawn_player_and_car();
         if let Some(pc) = w.city.places.parked.first().copied() {
@@ -3141,6 +3144,7 @@ impl World {
                 self.fleeing_driver(i, x, y, 3.);
             }
         }
+        self.update_fires(dt);
         let (pid, inc) = (self.player_car_id, self.player.in_car);
         let (pid2, inc2) = self
             .p2

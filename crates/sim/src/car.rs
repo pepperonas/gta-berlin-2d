@@ -64,6 +64,9 @@ pub struct Car {
     pub health: f64,
     pub wrecked: bool,
     pub wreck_t: f64,
+    /// brennendes Wrack: Sekunden bis zur Explosion; danach `exploded` (ausgebrannt)
+    pub burn: Option<f64>,
+    pub exploded: bool,
     pub driver: Option<Driver>,
     pub role: Role,
     pub color: u32,
@@ -156,6 +159,8 @@ impl Car {
             health: HEALTH,
             wrecked: false,
             wreck_t: 0.,
+            burn: None,
+            exploded: false,
             driver: None,
             role,
             color,

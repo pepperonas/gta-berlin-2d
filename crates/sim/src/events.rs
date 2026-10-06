@@ -20,6 +20,19 @@ pub enum Event {
         y: f64,
         car: u32,
     },
+    /// Wrack fängt Feuer (explodiert nach `car::BURN_S`)
+    CarFire {
+        x: f64,
+        y: f64,
+        car: u32,
+    },
+    /// Fahrzeug explodiert (Druckwelle schon angewandt); `strength` 0…1 nach Fahrzeuggröße
+    Explosion {
+        x: f64,
+        y: f64,
+        car: u32,
+        strength: f64,
+    },
     /// Rad fährt über einen Bordstein (Fahrphysik)
     Curb {
         x: f64,

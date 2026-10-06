@@ -464,6 +464,30 @@
       "sha256": "2790348ce50dc6be30767050b91ea5f5c810927600f0dd4fb4a4449cae03482b",
       "lizenz": "CC0 1.0",
       "urheber": "dasBUTCHER84"
+    },
+    "fs_235968": {
+      "freesound": 235968,
+      "titel": "Explosion_01.wav",
+      "seite": "https://freesound.org/people/tommccann/sounds/235968/",
+      "sha256": "263dd9686db53bc93fef1412428288a627cead5a180dcdb325108bb9e521e00c",
+      "lizenz": "CC0 1.0",
+      "urheber": "tommccann"
+    },
+    "fs_186932": {
+      "freesound": 186932,
+      "titel": "fire_explosion.wav",
+      "seite": "https://freesound.org/people/ReadeOnly/sounds/186932/",
+      "sha256": "3ac052d62ff8938e5a001736010c07a8b851c0bc666c3644945a2375b8ce41ce",
+      "lizenz": "CC0 1.0",
+      "urheber": "ReadeOnly"
+    },
+    "fs_422742": {
+      "freesound": 422742,
+      "titel": "Fire_Crackle_1.wav",
+      "seite": "https://freesound.org/people/KieranKeegan/sounds/422742/",
+      "sha256": "d3ff653d2c7dd55b1f27754158923cf68226cc20911b9ae64b4959fe958be0a9",
+      "lizenz": "CC0 1.0",
+      "urheber": "KieranKeegan"
     }
   },
   "klaenge": {
@@ -1645,6 +1669,46 @@
       "laenge_s": 0.5,
       "fade_s": 0.05,
       "hochpass_hz": 120
+    },
+    "explosion": {
+      "zweck": "Fahrzeug explodiert: Knall mit Nachhall (zwei Aufnahmen)",
+      "quelle": "fs_235968",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_235968",
+            "datei": "*",
+            "at": 0
+          }
+        ],
+        [
+          {
+            "quelle": "fs_186932",
+            "datei": "*",
+            "at": 0,
+            "von_s": 1.0
+          }
+        ]
+      ],
+      "laenge_s": 4.5,
+      "fade_s": 1.2,
+      "hochpass_hz": 25
+    },
+    "fire_crackle": {
+      "zweck": "brennendes Wrack: Knistern und Prasseln",
+      "quelle": "fs_422742",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_422742",
+            "datei": "*",
+            "at": 0
+          }
+        ]
+      ],
+      "laenge_s": 2.4,
+      "fade_s": 0.25,
+      "hochpass_hz": 150
     }
   }
 }
