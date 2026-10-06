@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **eigene Versionsnummer, die automatisch hochzählt.** Die Version der Rust-Fassung ist die des
+  Cargo-Arbeitsbereichs (Start 0.1.x); der Pre-commit-Hook (`tools/rust-version.mjs`) erhöht die letzte Stelle bei
+  jedem Commit, der die Rust-Fassung ändert (Crates, Daten, Cargo-Dateien), samt den eigenen Paketen in `Cargo.lock`.
+  Angezeigt im Titelbild („v0.46.0 · Rust 0.1.x“), unter „Über das Spiel“ und als README-Badge.
 - Grafik-Überarbeitung: **Wegweiser stehen in der Welt** statt als Einblendung darüber – Tafel, gelbe und weiße
   Zeilen, Pfeile, Nummernkästchen und Schrift (Inter) gehören zur Szene: Dächer und Baumkronen verdecken sie, nachts
   werden sie dunkel wie alles andere. **Laternen spiegeln sich nachts im Autolack** (schwacher, warmer Schimmer,

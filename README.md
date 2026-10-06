@@ -3,6 +3,7 @@
 <!-- Badges: erzeugt von tools/badges.mjs, aktualisiert vom Commit-Hook tools/githooks/pre-commit -->
 <p>
 <img src="docs/badges/version.svg" alt="Version">
+<img src="docs/badges/version-rust.svg" alt="Version der Rust-Fassung">
 <img src="docs/badges/status.svg" alt="Status">
 <img src="docs/badges/semver.svg" alt="SemVer">
 <img src="docs/badges/changelog.svg" alt="Changelog">

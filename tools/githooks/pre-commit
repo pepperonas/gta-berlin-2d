@@ -1,7 +1,10 @@
 #!/bin/sh
 # Hält generierte Dateien bei jedem Commit aktuell. Einrichten (einmal je Klon): git config core.hooksPath tools/githooks
+# - Version der Rust-Fassung (Cargo.toml [workspace.package]): Patch +1, wenn der Commit die Rust-Fassung ändert
+#   (tools/rust-version.mjs; von Hand angehobene Versionen bleiben).
 # - README-Badges (docs/badges/): Codezeilen, Tests, Versionen. Gezählt wird der Arbeitsbaum, nicht der Index.
 # - Lizenzliste der Rust-Pakete (crates/game/src/thirdparty.tsv), wenn Cargo.lock im Commit steckt.
+node tools/rust-version.mjs || exit 1
 node tools/badges.mjs || exit 1
 git add docs/badges
 if git diff --cached --name-only | grep -qx Cargo.lock; then

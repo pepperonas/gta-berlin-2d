@@ -2184,3 +2184,14 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   Sonderweg.
 - **Fehler behoben:** `set_graphics` prüfte „Abtastzahl geändert“ erst nach dem Neubau der Pipelines; Niedrig → Hoch
   ließ die Szenenziele bei einer Abtastung.
+
+## Versionsnummer der Rust-Fassung (06.10.2026)
+
+Die Rust-Fassung zählt ihre Version selbst: `Cargo.toml [workspace.package] version` (alle Crates erben sie), die
+Patch-Stelle steigt im Pre-commit-Hook (`tools/githooks/pre-commit` → `tools/rust-version.mjs`), sobald der Commit
+`crates/`, `tools/physics-calibrate/`, `data/`, `Cargo.toml` oder `Cargo.lock` berührt. Der Hook schreibt `Cargo.toml` und
+die eigenen Pakete in `Cargo.lock` (Blöcke ohne `source`) und staged beide; hat der Commit die Version schon von Hand
+geändert (Minor/Major), zählt er nichts dazu. Ungestagte Änderungen an den beiden Dateien lassen ihn abbrechen, damit
+`git add` nichts Fremdes mitnimmt. Anzeige: `about::native_version()` (Titelbild „Rust x.y.z“, Über das Spiel),
+Badge `version-rust`. Tests: `tests/rust-version.test.js` (Auswahl der Pfade, Anheben, Cargo.lock in Einklang).
+Die Versionsnummer des Browser-Spiels (`package.json`) bleibt davon getrennt.

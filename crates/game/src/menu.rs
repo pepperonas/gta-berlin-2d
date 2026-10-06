@@ -489,7 +489,11 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f3
     }
     let grey = [0.6, 0.6, 0.6, 1.];
     h.text(
-        &format!("v{} · native Fassung", crate::about::game_version()),
+        &format!(
+            "v{} · Rust {}",
+            crate::about::game_version(),
+            crate::about::native_version()
+        ),
         vw - 36.,
         720. - 16.,
         14.,
@@ -857,7 +861,11 @@ mod tests {
         let mut h = Hud::new([1280., 720.]);
         let r = draw_title(&mut h, &title_menu(true), false, false);
         let ver = h.text_width(
-            &format!("v{} · native Fassung", crate::about::game_version()),
+            &format!(
+                "v{} · Rust {}",
+                crate::about::game_version(),
+                crate::about::native_version()
+            ),
             14.,
         );
         assert!(

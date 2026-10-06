@@ -12,7 +12,13 @@ const PACKAGE_JSON: &str = include_str!("../../../package.json");
 const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
 const THIRDPARTY: &str = include_str!("thirdparty.tsv");
 
-/// Spielversion nach SemVer (wie im Browser-Spiel, `package.json`); die Crate-Version ist intern.
+/// Version der Rust-Fassung (Cargo-Arbeitsbereich); zählt bei jedem Commit an der Rust-Fassung automatisch hoch
+/// (`tools/rust-version.mjs` im Pre-commit-Hook).
+pub fn native_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Spielversion nach SemVer (wie im Browser-Spiel, `package.json`).
 pub fn game_version() -> &'static str {
     PACKAGE_JSON
         .lines()
@@ -186,7 +192,11 @@ fn about_blocks() -> Vec<Block> {
     let n = packages().len();
     let b = |s: &str| Block::Bullet(s.to_owned());
     vec![
-        Block::Head(format!("GTA Berlin · Version {}", game_version())),
+        Block::Head(format!(
+            "GTA Berlin · Version {} · Rust-Fassung {}",
+            game_version(),
+            native_version()
+        )),
         Block::Text(
             "Top-down-Open-World in ganz Berlin im Maßstab 1:1, gebaut aus OpenStreetMap. Native Fassung in \
              Rust; die Browser-Fassung (HTML5 Canvas, Web Audio) bleibt die Referenz."
@@ -747,6 +757,9 @@ mod tests {
             "{v}"
         );
         assert!(PACKAGE_JSON.contains(&format!("\"version\": \"{v}\"")));
+        // Rust-Fassung: eigene Nummer aus dem Cargo-Arbeitsbereich
+        let n = native_version();
+        assert!(include_str!("../../../Cargo.toml").contains(&format!("version = \"{n}\"")));
     }
 
     #[test]

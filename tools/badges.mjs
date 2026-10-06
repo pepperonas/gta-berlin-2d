@@ -120,6 +120,7 @@ export function collect(root = ROOT) {
   const m = index.meta;
   return {
     version: pkg.version,
+    native: crate('gta-berlin'),
     loc,
     tests,
     edition: (cargo.match(/edition = "(\d+)"/) || [])[1] || '?',
@@ -141,6 +142,7 @@ export function badges(v) {
   const code = v.loc.rust + v.loc.wgsl + v.loc.js + v.loc.csharp;
   return [
     ['version', 'Version', v.version, '#0b57d0'],
+    ['version-rust', 'Rust-Fassung', v.native, '#b7410e'],
     ['status', 'Status', 'Prototyp (0.x)', '#e67e22'],
     ['loc', 'Codezeilen', short(code), '#2e7d32'],
     ['loc-rust', 'Rust', short(v.loc.rust) + ' LoC', '#b7410e'],

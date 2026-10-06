@@ -44,5 +44,6 @@ test('Werte aus dem Repo: Version wie package.json, alle Badges eindeutig benann
   const b = badges(v);
   assert.equal(new Set(b.map((x) => x[0])).size, b.length);
   assert.equal(b.find((x) => x[0] === 'version')[2], v.version);
+  assert.match(b.find((x) => x[0] === 'version-rust')[2], /^\d+\.\d+\.\d+$/, 'Rust-Fassung aus Cargo.lock');
   assert.equal(b.find((x) => x[0] === 'tests')[2], String(v.tests.rust + v.tests.js));
 });

@@ -426,6 +426,14 @@ each clone needs `git config core.hooksPath tools/githooks`. The repo is private
 
 ## Versioning and releases
 
+**Rust implementation:** its own SemVer number is the Cargo workspace version (`Cargo.toml [workspace.package] version`,
+shown as „Rust x.y.z“ on the title screen and in „Über das Spiel“, badge `version-rust`). The pre-commit hook
+(`tools/rust-version.mjs`) raises the patch level automatically whenever a commit touches `crates/`,
+`tools/physics-calibrate/`, `data/`, `Cargo.toml` or `Cargo.lock`, and updates the own packages in `Cargo.lock`. Never
+bump the patch by hand; for a minor/major bump edit `Cargo.toml` yourself (the hook then leaves it alone). Two sessions
+committing in parallel will both bump – on a rebase conflict in `Cargo.toml`/`Cargo.lock` take the higher number + 1.
+The browser game's version below stays separate.
+
 SemVer, started at 0.0.1 (0.x = prototype, formats may break). The version lives in **three places that must match**:
 `package.json`, `web/src/version.js` (shown on the title screen) and `xbox/GtaBerlin/Package.appxmanifest`
 (`Identity Version="X.Y.Z.0"`); `CHANGELOG.md` needs a dated `## [X.Y.Z] – YYYY-MM-DD` entry on top.
