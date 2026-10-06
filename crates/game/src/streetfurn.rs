@@ -1,13 +1,12 @@
 //! Straßenmöbel (Port von `render.js drawLamp`, `drawSign`/`signBoard`): Laternen mit Mast, Ausleger und Kopf
 //! (Berliner Gaslaternen mit dunklem Dach), der nachts leuchtet; Wegweiser an Kreuzungszufahrten mit zwei Pfosten und
 //! einer Tafel – gelbe Zeilen für Orte, weiße für Straßen, Pfeil in Richtung der Ausfahrt, Bundesstraßen als gelbes
-//! Kästchen. Tafel und Pfosten liegen in der Szene (Dächer verdecken sie), Schrift und Pfeile im HUD darüber.
+//! Kästchen. Alles liegt in der Welt (Dächer und Kronen verdecken es, nachts wird es dunkel): Pfosten, Tafel, Zeilen,
+//! Pfeile als Körper, der Text als SDF-Zeichen der HUD-Schrift (`hud::world_glyph`, Body-Form 8).
 use berlin_engine::Body;
-use berlin_engine::camera::Camera;
-use berlin_engine::hud::{Align, Hud};
+use berlin_engine::hud;
 use berlin_sim::city::Sign;
 use berlin_sim::lamps::Lamp;
-use glam::Vec2;
 
 /// Masthöhe in der Schrägansicht (8 m × heightScale / 2), Pfostenhöhe des Wegweisers
 pub const LAMP_H: f32 = 20.;
@@ -16,8 +15,55 @@ const SIGN_FONT: f32 = 10.;
 const PAD: f32 = 3.;
 const ROW_H: f32 = SIGN_FONT + 5.;
 const ARROW_W: f32 = 13.;
-/// Breite eines Zeichens der Bitmapschrift bei Größe `SIGN_FONT` (Welt-px), grob
-const CHAR_W: f32 = 6.2;
+/// Großbuchstabenhöhe der Schildschrift (Welt-px), wie früher die Bitmapschrift (7/8 der Größe)
+const SIGN_CAP: f32 = SIGN_FONT * 0.875;
+const INK: [f32; 4] = [0.067, 0.067, 0.067, 1.];
+const YELLOW: [f32; 4] = [0.96, 0.77, 0.09, 1.];
+
+/// Schriftgröße (em in Welt-px) der Schildschrift
+fn sign_em() -> f32 {
+    SIGN_CAP / hud::cap_height()
+}
+/// Breite eines Texts in Welt-px (Laufweiten der Schrift; fehlende Zeichen mit einem halben em)
+fn text_w(t: &str) -> f32 {
+    let em = sign_em();
+    t.chars()
+        .map(|c| hud::world_glyph(c).map_or(0.5, |g| g.adv) * em)
+        .sum()
+}
+/// Text als SDF-Zeichen (Body-Form 8: die Farbe trägt das Atlas-Rechteck, die Tinte ist im Shader fest)
+fn text_bodies(t: &str, x: f32, base: f32, depth: f32, out: &mut Vec<Body>) {
+    let em = sign_em();
+    let mut pen = x;
+    for c in t.chars() {
+        let Some(g) = hud::world_glyph(c) else {
+            pen += 0.5 * em;
+            continue;
+        };
+        if g.rect[2] > 0. {
+            let (w, h) = (g.w * em, g.h * em);
+            out.push(Body {
+                center: [pen + g.left * em + w / 2., base + g.top * em + h / 2.],
+                half: [w / 2., h / 2.],
+                angle: 0.,
+                shape: 8.,
+                depth,
+                color: g.rect,
+            });
+        }
+        pen += g.adv * em;
+    }
+}
+fn rect(cx: f32, cy: f32, hw: f32, hh: f32, depth: f32, color: [f32; 4], out: &mut Vec<Body>) {
+    out.push(Body {
+        center: [cx, cy],
+        half: [hw, hh],
+        angle: 0.,
+        shape: 4.,
+        depth,
+        color,
+    });
+}
 
 fn rgba(c: u32, a: f32) -> [f32; 4] {
     [
@@ -141,19 +187,14 @@ pub fn board(sg: &Sign) -> Board {
         if r.refn.is_empty() {
             0.
         } else {
-            r.refn.chars().count() as f32 * CHAR_W + 5.
+            text_w(&r.refn) + 5.
         }
     };
     let w = sg
         .rows
         .iter()
         .zip(&texts)
-        .map(|(r, t)| {
-            ARROW_W
-                + 4.
-                + t.chars().count() as f32 * CHAR_W
-                + if r.refn.is_empty() { 0. } else { ref_w(r) + 4. }
-        })
+        .map(|(r, t)| ARROW_W + 4. + text_w(t) + if r.refn.is_empty() { 0. } else { ref_w(r) + 4. })
         .fold(50f32, f32::max)
         .ceil()
         + 2. * PAD;
@@ -177,7 +218,8 @@ pub fn board(sg: &Sign) -> Board {
     }
 }
 
-/// Pfosten in der Szene (die Tafel selbst zeichnet das HUD, damit sie zur Bitmapschrift passt)
+/// Wegweiser in der Welt: Schatten, Pfosten, Tafel mit Rahmen, je Zeile Grund (gelb Orte, weiß Straßen), Pfeil in
+/// Kartenrichtung der Ausfahrt (Norden oben), Ziele und Nummernkästchen.
 pub fn sign_bodies(signs: &[Sign], out: &mut Vec<Body>) {
     for sg in signs.iter().filter(|s| s.vis && !s.rows.is_empty()) {
         let (x, y) = (sg.x as f32, sg.y as f32);
@@ -197,103 +239,65 @@ pub fn sign_bodies(signs: &[Sign], out: &mut Vec<Body>) {
             depth: 0.6,
             color: rgba(0x6b7078, 1.),
         });
-    }
-}
-
-/// Tafeln im Bildschirm über dem Pfosten: Rahmen, Zeilen (gelb Orte, weiß Straßen), Pfeil, Ziele, Nummernkästchen.
-/// Ausgemessen mit der Breite der tatsächlich gezeichneten Bitmapschrift.
-pub fn sign_texts(signs: &[Sign], camera: &Camera, viewport: Vec2, h: &mut Hud) {
-    let ink = [0.067, 0.067, 0.067, 1.];
-    let sc = h.scale;
-    for sg in signs.iter().filter(|s| s.vis && !s.rows.is_empty()) {
         let b = board(sg);
-        let to = |x: f32, y: f32| camera.world_to_screen(Vec2::new(x, y), 0., viewport) / sc;
-        let post = to(sg.x as f32, sg.y as f32 - SIGN_POST);
-        let k = (to(sg.x as f32 + 100., sg.y as f32).x - to(sg.x as f32, sg.y as f32).x) / 100.;
-        if k < 0.35 {
-            continue; // zu klein zum Lesen
-        }
-        let size = SIGN_FONT * k;
-        let (pad, row_h, arrow) = (PAD * k, ROW_H * k, ARROW_W * k);
-        let ref_w = |h: &Hud, r: &berlin_sim::city::SignRow| {
-            if r.refn.is_empty() {
-                0.
-            } else {
-                h.text_width(&r.refn, size) + 5. * k
-            }
-        };
-        let w = sg
-            .rows
-            .iter()
-            .zip(&b.texts)
-            .map(|(r, t)| {
-                let rw = ref_w(h, r);
-                arrow + 4. * k + h.text_width(t, size) + if rw > 0. { rw + 4. * k } else { 0. }
-            })
-            .fold(50. * k, f32::max)
-            + 2. * pad;
-        let hgt = sg.rows.len() as f32 * row_h + 2. * pad;
-        let rx = -(sg.angle as f32).sin();
-        let left = if rx > 0.35 {
-            post.x - 6. * k
-        } else if rx < -0.35 {
-            post.x - w + 6. * k
-        } else {
-            post.x - w / 2.
-        };
-        let top = post.y - hgt;
-        if left + w < 0. || left > h.width || top + hgt < 0. || top > 720. {
-            continue;
-        }
-        h.rect(left, top, w, hgt, [0.11, 0.11, 0.11, 1.], 1.);
+        let d = 0.6 - 0.0002;
+        rect(
+            b.left + b.w / 2.,
+            b.top + b.h / 2.,
+            b.w / 2.,
+            b.h / 2.,
+            d,
+            [0.11, 0.11, 0.11, 1.],
+            out,
+        );
         for (i, r) in sg.rows.iter().enumerate() {
-            let y0 = top + pad + i as f32 * row_h;
+            let y0 = b.top + PAD + i as f32 * ROW_H;
+            let yc = y0 + ROW_H / 2.;
             let bg = if r.street() {
                 [0.957, 0.957, 0.94, 1.]
             } else {
-                [0.96, 0.77, 0.09, 1.]
+                YELLOW
             };
-            h.rect(left + k, y0, w - 2. * k, row_h - k, bg, 0.);
-            let yc = y0 + row_h / 2.;
-            // Pfeil zeigt in die Kartenrichtung der Ausfahrt (Norden oben)
-            h.triangle(left + pad + arrow / 2., yc, 4.5 * k, r.dir as f32, ink);
-            h.text(
-                &b.texts[i],
-                left + pad + arrow + 4. * k,
-                yc + 3.5 * k,
-                size,
-                ink,
-                Align::Left,
-                false,
+            rect(
+                b.left + b.w / 2.,
+                yc - 0.5,
+                b.w / 2. - 1.,
+                (ROW_H - 1.) / 2.,
+                d - 0.00005,
+                bg,
+                out,
             );
-            let rw = ref_w(h, r);
-            if rw > 0. {
-                let rx0 = left + w - pad - rw;
-                h.rect(
-                    rx0 - k,
-                    y0 + 1.5 * k - k,
-                    rw + 2. * k,
-                    row_h - 4. * k + 2. * k,
-                    ink,
-                    0.,
+            out.push(Body {
+                center: [b.left + PAD + ARROW_W / 2., yc],
+                half: [4.5, 4.5],
+                angle: r.dir as f32,
+                shape: 9.,
+                depth: d - 0.0001,
+                color: INK,
+            });
+            let base = yc + SIGN_CAP / 2.;
+            text_bodies(
+                &b.texts[i],
+                b.left + PAD + ARROW_W + 4.,
+                base,
+                d - 0.00015,
+                out,
+            );
+            if !r.refn.is_empty() {
+                let rw = text_w(&r.refn) + 5.;
+                let rx0 = b.left + b.w - PAD - rw;
+                let (cy, hh) = (y0 + 1.5 + (ROW_H - 4.) / 2., (ROW_H - 4.) / 2.);
+                rect(
+                    rx0 + rw / 2.,
+                    cy,
+                    rw / 2. + 1.,
+                    hh + 1.,
+                    d - 0.0001,
+                    INK,
+                    out,
                 );
-                h.rect(
-                    rx0,
-                    y0 + 1.5 * k,
-                    rw,
-                    row_h - 4. * k,
-                    [0.96, 0.77, 0.09, 1.],
-                    0.,
-                );
-                h.text(
-                    &r.refn,
-                    rx0 + 2.5 * k,
-                    yc + 3.5 * k,
-                    size,
-                    ink,
-                    Align::Left,
-                    false,
-                );
+                rect(rx0 + rw / 2., cy, rw / 2., hh, d - 0.00012, YELLOW, out);
+                text_bodies(&r.refn, rx0 + 2.5, base, d - 0.00015, out);
             }
         }
     }
@@ -340,6 +344,33 @@ mod tests {
         let n = board(&sign(-std::f64::consts::FRAC_PI_2));
         assert!((n.left - 94.).abs() < 1e-3, "{}", n.left);
         assert!(!sign(0.).rows[0].street() && sign(0.).rows[1].street());
+    }
+
+    #[test]
+    fn sign_text_lies_on_the_board() {
+        let sg = sign(0.);
+        let b = board(&sg);
+        let mut out = Vec::new();
+        sign_bodies(&[sg], &mut out);
+        let glyphs: Vec<_> = out.iter().filter(|g| g.shape == 8.).collect();
+        // "Zentrum · Westend", "B 2", "Wilhelmstraße" ohne Leerzeichen
+        assert!(glyphs.len() >= 25, "{}", glyphs.len());
+        for g in &glyphs {
+            assert!(
+                g.center[0] - g.half[0] >= b.left - 0.5
+                    && g.center[0] + g.half[0] <= b.left + b.w + 0.5
+            );
+            assert!(
+                g.center[1] - g.half[1] >= b.top - 0.5
+                    && g.center[1] + g.half[1] <= b.top + b.h + 0.5
+            );
+            assert!(g.depth < 0.6, "vor dem Pfosten");
+        }
+        assert_eq!(
+            out.iter().filter(|g| g.shape == 9.).count(),
+            2,
+            "ein Pfeil je Zeile"
+        );
     }
 
     #[test]

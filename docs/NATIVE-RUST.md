@@ -2126,3 +2126,22 @@ Baseline (M1 Pro, 2560 × 1440): GPU 2,7–6,2 ms Median, CPU 1,2–2,0 ms; Rege
   sind unverändert (`figart::half` rechnet die Zeichnungsgröße auf die Body-Größe um).
 - Vorschau der Teile: `GTA_FIG_DUMP=x.ppm cargo test -p gta-berlin dump_figures -- --ignored`; Bilder unter
   `docs/images/native/grafik/06b-figuren/`.
+
+## Grafik HD/Pixel: Wegweiser in der Welt, Laternenglanz im Lack (06.10.2026)
+
+- **Körper-Durchgang mit zwei Zusatzgruppen:** eigenes Pipeline-Layout `body_layout` für Körper, Silhouetten und
+  Effekte: Gruppe 2 = Schriftatlas der HUD-Schrift (`world_font`, Bindung 4 – die Bodenmaterialien belegen in Gruppe 2
+  die Bindungen 0–3 in anderen Pipelines), Gruppe 3 = Lichtkarte (`aux_tex`/`aux_samp`; im Post ist es das Bloom-Bild,
+  daher der neutrale Name). Vor Körpern, Silhouetten und Effekten werden die Gruppen 1–3 gesetzt (`body_groups`).
+- **Wegweiser (`game/streetfurn.rs sign_bodies`):** Tafel, Zeilen, Pfeile (Body-Form 9 = Dreieck), Nummernkästchen
+  als Körper vor dem Pfosten; Text als SDF-Zeichen (Body-Form 8). `Body` hat kein Zusatzfeld – bei Form 8 trägt
+  `color` das Atlas-Rechteck in Bildpunkten, die Tinte ist im Shader fest (Schilder sind immer schwarz beschriftet).
+  Laufweiten aus `hud::world_glyph`/`cap_height`, Großbuchstaben 8,75 Welt-px wie vorher. Die Tafelbreite
+  (`board`) rechnet jetzt mit den echten Laufweiten statt einer Zeichenbreite. `sign_texts` (HUD) entfällt.
+- **Laternenglanz (`scene.wgsl lamp_glint`):** nur bei Dunkelheit (die Lichtkarte ist sonst veraltet): Lichtkarte an
+  der Bildstelle minus Umgebungslicht, mal Glanzanteil des Fahrzeugs; schwach (Lack 0,22, Glas 0,12, Chrom 0,45),
+  weil die Lichtkarte das Auto danach ohnehin multipliziert. A/B-Aufnahme unter `docs/images/native/grafik/10-schilder-glanz/`.
+- **Pixel-Modus:** Schildtext ist bei 1/5 der Auflösung kaum lesbar und wird von der Streuung körnig – gewollt kein
+  Sonderweg.
+- **Fehler behoben:** `set_graphics` prüfte „Abtastzahl geändert“ erst nach dem Neubau der Pipelines; Niedrig → Hoch
+  ließ die Szenenziele bei einer Abtastung.

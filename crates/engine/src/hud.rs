@@ -137,6 +137,32 @@ fn sdf() -> &'static Sdf {
         }
     })
 }
+/// Ein Zeichen der SDF-Schrift für Text in der Welt (Schilder): Atlas-Rechteck in Bildpunkten, Lage zum Ursprung
+/// auf der Grundlinie, Größe und Vorschub in em. `None` = fehlt der Schrift.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorldGlyph {
+    pub rect: [f32; 4],
+    pub left: f32,
+    pub top: f32,
+    pub w: f32,
+    pub h: f32,
+    pub adv: f32,
+}
+pub fn world_glyph(c: char) -> Option<WorldGlyph> {
+    let s = sdf();
+    s.glyphs.get(&c).map(|g| WorldGlyph {
+        rect: g.rect,
+        left: g.left,
+        top: g.top,
+        w: g.rect[2] / s.em,
+        h: g.rect[3] / s.em,
+        adv: g.adv,
+    })
+}
+/// Höhe der Großbuchstaben in em
+pub fn cap_height() -> f32 {
+    sdf().cap
+}
 /// Schriftgröße der SDF-Schrift in em je Basiseinheit `size`: Großbuchstaben so hoch wie die der Bitmapschrift
 /// (7 von 8 Zeilen).
 fn sdf_em(size: f32) -> f32 {

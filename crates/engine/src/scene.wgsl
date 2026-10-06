@@ -15,6 +15,8 @@ struct MatParams { a: array<vec4<f32>, 32>, b: array<vec4<f32>, 32> };
 @group(2) @binding(1) var mat_nr: texture_2d_array<f32>;
 @group(2) @binding(2) var mat_sampler: sampler;
 @group(2) @binding(3) var<uniform> mat: MatParams;
+// Körper-Durchgang: Schriftatlas der HUD-Schrift (SDF oben), für Schildtext in der Welt (body_fs, Form 8)
+@group(2) @binding(4) var world_font: texture_2d<f32>;
 struct Out {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec3<f32>, @location(1) normal: vec3<f32>,
@@ -565,6 +567,30 @@ fn body_gloss(nl: vec2<f32>, rot: vec2<f32>, g: vec3<f32>) -> vec3<f32> {
     let sun_col = mix(vec3(1.0, 0.86, 0.66), vec3(1.0, 0.98, 0.94), clamp(camera.sun.z * 2.0, 0.0, 1.0));
     return min((sun_col * spec + env) * g.x * g.z, vec3(1.5));
 }
+// Laternen im Lack (nachts): das Licht der Lichtkarte über dem Umgebungslicht an dieser Stelle, auf die glänzende
+// Fläche gelegt. Die Lichtkarte ist nur bei Dunkelheit gezeichnet (sonst veraltet) – daher das Tor.
+fn lamp_glint(frag: vec2<f32>, g: vec3<f32>) -> vec3<f32> {
+    if camera.ambient.w < 0.02 { return vec3(0.0); }
+    let lm = textureSampleLevel(aux_tex, aux_samp, frag / camera.viewport, 0.0).rgb;
+    let extra = max(lm - linear_color(camera.ambient.rgb), vec3(0.0));
+    // schwach: das Licht der Karte multipliziert das Auto danach ohnehin noch einmal; Glas spiegelt weniger
+    // (Scheiben sollen dunkel bleiben), Chrom mehr
+    let chrome = smoothstep(0.75, 0.95, g.y);
+    let glass = clamp(1.0 - abs(g.y - VEH_MAT_GLASS) * 4.0, 0.0, 1.0);
+    let k = mix(mix(0.22, 0.12, glass), 0.45, chrome);
+    return min(extra * g.x * g.z * k * clamp(camera.ambient.w * 1.5, 0.0, 1.0), vec3(0.6));
+}
+// Abstandsfeld des Schriftatlas bilinear (textureLoad)
+fn font_texel(p: vec2<f32>) -> f32 {
+    let q = p - 0.5;
+    let i = vec2<i32>(floor(q));
+    let f = fract(q);
+    let a = textureLoad(world_font, i, 0).r;
+    let b = textureLoad(world_font, i + vec2(1, 0), 0).r;
+    let c = textureLoad(world_font, i + vec2(0, 1), 0).r;
+    let e = textureLoad(world_font, i + vec2(1, 1), 0).r;
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
 // Wölbung einer Karosserie: flache Mitte (Dach, Haube), die Ränder fallen nach außen ab – längs weniger als quer.
 fn car_slope(q: vec2<f32>) -> vec2<f32> {
     return vec2(sign(q.x) * smoothstep(0.62, 1.0, abs(q.x)) * 0.55, sign(q.y) * smoothstep(0.3, 1.0, abs(q.y)) * 0.9);
@@ -648,7 +674,27 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
             return vec4(linear_color(v.color.rgb * light) + shine, v.color.a);
         }
         let shine = body_gloss(car_slope(q), in.rot, v.gloss);
-        return vec4(linear_color(v.color.rgb) + shine, v.color.a);
+        return vec4(linear_color(v.color.rgb) + shine + lamp_glint(in.position.xy, v.gloss), v.color.a);
+    }
+    if in.shape == 8.0 {
+        // Schildtext in der Welt: SDF-Zeichen, Atlas-Rechteck (Pixel) in in.color, Tinte fest dunkel
+        let q = in.local / in.extent;
+        if abs(q.x) > 1.0 || abs(q.y) > 1.0 { discard; }
+        let p = in.color.xy + (q * 0.5 + 0.5) * in.color.zw;
+        let d = font_texel(p);
+        let w = max(fwidth(d) * 0.75, 1e-4);
+        let a = smoothstep(0.5 - w, 0.5 + w, d);
+        if a < 0.02 { discard; }
+        return vec4(linear_color(vec3(0.067)), a);
+    }
+    if in.shape == 9.0 {
+        // Dreieck (Wegweiserpfeil): Spitze bei +extent.x, Basis bei −extent.x
+        let u = (in.local.x + in.extent.x) / (2.0 * in.extent.x);
+        let half_w = (1.0 - u) * in.extent.y;
+        let dd = max(abs(in.local.y) - half_w, abs(in.local.x) - in.extent.x);
+        let a = clamp(0.5 - dd / max(fwidth(dd), 1e-4), 0.0, 1.0) * in.color.a;
+        if a < 0.01 { discard; }
+        return vec4(linear_color(clamp(in.color.rgb, vec3(0.0), vec3(1.0))), a);
     }
     var d: f32;
     if in.shape == 3.0 {

@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Grafik-Überarbeitung: **Wegweiser stehen in der Welt** statt als Einblendung darüber – Tafel, gelbe und weiße
+  Zeilen, Pfeile, Nummernkästchen und Schrift (Inter) gehören zur Szene: Dächer und Baumkronen verdecken sie, nachts
+  werden sie dunkel wie alles andere. **Laternen spiegeln sich nachts im Autolack** (schwacher, warmer Schimmer,
+  Scheiben bleiben dunkel, Chrom stärker).
+- Behoben: Wechsel der Qualität von „Niedrig“ auf „Mittel“/„Hoch“ baute die Szenenziele nicht neu (Abtastzahl passte
+  nicht zur Pipeline).
 - Grafik-Überarbeitung, Figuren (Phase 6, Variante B): **Passanten aus gemalten Teilen** statt flacher Ellipsen –
   Oberkörper in drei Staturen mit Nähten und Falten, Kopf mit Ohren und Nase, sechs Frisuren (kurz, lang, Dutt,
   Locken, Irokese, Pferdeschwanz), fünf Kopfbedeckungen (Kappe, Mütze, Helm, Kopftuch, Sonnenhut), Umhängetasche,

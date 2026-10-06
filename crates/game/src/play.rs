@@ -285,7 +285,6 @@ impl Play {
             crate::weatherfx::overlay(&self.world, out);
             crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
             crate::underground::entrance_letters(&self.world, camera, viewport, out);
-            crate::streetfurn::sign_texts(&self.street_signs, camera, viewport, out);
             crate::neon::draw(&self.neon, camera, viewport, out);
             crate::hud::ped_health_bars(&self.world, camera, viewport, out);
         }

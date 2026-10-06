@@ -105,7 +105,13 @@ pub(crate) struct ScenePipes {
 
 impl ScenePipes {
     /// `tiles` = Kontext mit Materialgruppe (Gruppe 2) für die Kachel-Pipeline.
-    pub fn new(cx: &lightpass::Ctx, tiles: &lightpass::Ctx, samples: u32) -> Self {
+    /// `bodies` = Kontext der Körper-Pipelines (Gruppe 2 Schriftatlas, Gruppe 3 Lichtkarte).
+    pub fn new(
+        cx: &lightpass::Ctx,
+        tiles: &lightpass::Ctx,
+        bodies: &lightpass::Ctx,
+        samples: u32,
+    ) -> Self {
         use wgpu::CompareFunction::{Greater, LessEqual};
         let alpha = Some(wgpu::BlendState::ALPHA_BLENDING);
         let p = |label, vs, fs, layout: wgpu::VertexBufferLayout, blend, write, compare| {
@@ -115,6 +121,20 @@ impl ScenePipes {
                 vs,
                 fs,
                 &[layout],
+                SCENE_FORMAT,
+                samples,
+                blend,
+                write,
+                compare,
+            )
+        };
+        let b = |label, fs, blend, write, compare| {
+            pipeline(
+                bodies,
+                label,
+                "body_vs",
+                fs,
+                &[body_layout()],
                 SCENE_FORMAT,
                 samples,
                 blend,
@@ -167,37 +187,13 @@ impl ScenePipes {
                 true,
                 LessEqual,
             ),
-            bodies: p(
-                "Berlin instanced bodies",
-                "body_vs",
-                "body_fs",
-                body_layout(),
-                alpha,
-                true,
-                LessEqual,
-            ),
+            bodies: b("Berlin instanced bodies", "body_fs", alpha, true, LessEqual),
             // Silhouetten: dieselben Körper, aber nur wo Näheres davor liegt (Tiefe größer als gespeichert)
-            silhouettes: p(
-                "Berlin silhouettes",
-                "body_vs",
-                "silhouette_fs",
-                body_layout(),
-                alpha,
-                false,
-                Greater,
-            ),
+            silhouettes: b("Berlin silhouettes", "silhouette_fs", alpha, false, Greater),
             // Durchscheinende Effekte (Qualm, Gischt, Leuchtspuren, Mündungsfeuer): nach Licht und Silhouetten, mit
             // Tiefentest (Dächer bleiben davor), aber ohne Tiefe zu schreiben – sonst zählten sie als Verdeckung und
             // der Silhouetten-Durchgang zeichnete das Auto unter einer Reifenwolke als Umriss.
-            effects: p(
-                "Berlin effects",
-                "body_vs",
-                "body_fs",
-                body_layout(),
-                alpha,
-                false,
-                LessEqual,
-            ),
+            effects: b("Berlin effects", "body_fs", alpha, false, LessEqual),
             comp: lightpass::composites(cx, SCENE_FORMAT, samples),
         }
     }

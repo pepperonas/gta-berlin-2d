@@ -162,8 +162,9 @@ fn grade_factor(uv: vec2<f32>) -> vec3<f32> {
 // Bloom aus dem HDR-Szenenbild: helle Stellen über einer Schwelle (nachts niedriger) werden auf ½ und ¼ verkleinert,
 // zurück auf ½ addiert und im Post dazugemischt. Qualität (camera.padding2.y): 0 = Niedrig/Pixel (alter
 // Lichtkarten-Bloom im Szenendurchgang, kein Tonemapping-Bloom), 1 = Mittel (nur ½), 2 = Hoch (½ + ¼).
-@group(3) @binding(0) var bloom_tex: texture_2d<f32>;
-@group(3) @binding(1) var bloom_samp: sampler;
+// Zusatzbild in Gruppe 3: im Post das Bloom-Bild ½, im Körper-Durchgang die Lichtkarte (body_fs)
+@group(3) @binding(0) var aux_tex: texture_2d<f32>;
+@group(3) @binding(1) var aux_samp: sampler;
 fn bloom_threshold() -> f32 {
     return mix(1.05, 0.55, clamp(camera.ambient.w * 1.4, 0.0, 1.0));
 }
@@ -243,7 +244,7 @@ fn agx(c: vec3<f32>) -> vec3<f32> {
     var c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
     if camera.padding2.y >= 1.0 {
         let strength = 0.1 + 0.8 * clamp(camera.ambient.w, 0.0, 1.0);
-        c += textureSample(bloom_tex, bloom_samp, in.uv).rgb * strength;
+        c += textureSample(aux_tex, aux_samp, in.uv).rgb * strength;
     }
     c *= grade_factor(in.uv);
     return vec4(agx(c * AGX_EXPOSURE), 1.0);

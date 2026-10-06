@@ -38,6 +38,9 @@ pub(crate) struct Renderer {
     /// Szenendurchgang (HD-Pfad): Pipelines und Ziele, je nach Abtastzahl der Qualitätsstufe
     pipes: ScenePipes,
     targets: SceneTargets,
+    /// Layout und Gruppe 2 der Körper-Pipelines (Schriftatlas für Schilder in der Welt)
+    body_layout: wgpu::PipelineLayout,
+    world_font: wgpu::BindGroup,
     graphics: GraphicsSettings,
     /// Minikarte: Kacheln direkt ins Ausgabebild (Ausgabeformat, ohne Kantenglättung)
     map_pipeline: wgpu::RenderPipeline,
@@ -445,7 +448,44 @@ impl Renderer {
         let light =
             lightpass::LightPass::new(&cx, scenepass::sprite_layout(), size.width, size.height);
         let graphics = GraphicsSettings::default();
-        let pipes = ScenePipes::new(&cx, &tile_cx, graphics.msaa());
+        // Körper (Autos, Personen, Schilder): Gruppe 2 = Schriftatlas (Schildtext in der Welt), Gruppe 3 = Lichtkarte
+        // (Laternen spiegeln sich nachts im Lack)
+        let world_font_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Schrift in der Welt"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        });
+        let world_font = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Schrift in der Welt"),
+            layout: &world_font_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(&font_view),
+            }],
+        });
+        let body_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Körper mit Schrift und Lichtkarte"),
+            bind_group_layouts: &[
+                Some(&camera_layout),
+                Some(&atlas_layout),
+                Some(&world_font_layout),
+                Some(&atlas_layout),
+            ],
+            immediate_size: 0,
+        });
+        let body_cx = lightpass::Ctx {
+            layout: &body_layout,
+            ..cx
+        };
+        let pipes = ScenePipes::new(&cx, &tile_cx, &body_cx, graphics.msaa());
         let targets = SceneTargets::new(&device, &atlas_layout, &sampler, size, graphics.msaa());
         let map_pipeline = scenepass::pipeline(
             &tile_cx,
@@ -524,6 +564,8 @@ impl Renderer {
             config,
             pipes,
             targets,
+            body_layout,
+            world_font,
             graphics,
             map_pipeline,
             post_pipeline,
@@ -705,16 +747,23 @@ impl Renderer {
         }
         let samples = graphics.msaa();
         let mode_changed = graphics.mode != self.graphics.mode;
+        // vor dem Neubau der Pipelines merken: danach stimmt `pipes.samples` schon (Niedrig → Hoch baute sonst die
+        // Ziele nicht neu und die Abtastzahlen passten nicht zusammen)
+        let samples_changed = samples != self.pipes.samples;
         self.graphics = graphics;
-        if samples != self.pipes.samples {
+        if samples_changed {
             let cx = self.ctx();
             let tile_cx = lightpass::Ctx {
                 layout: &self.tile_layout,
                 ..cx
             };
-            self.pipes = ScenePipes::new(&cx, &tile_cx, samples);
+            let body_cx = lightpass::Ctx {
+                layout: &self.body_layout,
+                ..cx
+            };
+            self.pipes = ScenePipes::new(&cx, &tile_cx, &body_cx, samples);
         }
-        if samples != self.pipes.samples || mode_changed || self.pixel_bind.is_none() {
+        if samples_changed || mode_changed || self.pixel_bind.is_none() {
             self.rebuild_targets();
         }
     }
@@ -1008,8 +1057,14 @@ impl Renderer {
                 pass.draw(0..6, 0..tile.source.sprites.len() as u32);
             }
         }
-        if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
+        // Körper: Schriftatlas (Gruppe 2), Lichtkarte (Gruppe 3; ohne Nacht ungenutzt, der Shader fragt die Dunkelheit)
+        let body_groups = |pass: &mut wgpu::RenderPass| {
             pass.set_bind_group(1, &self.vehicle_bind, &[]);
+            pass.set_bind_group(2, &self.world_font, &[]);
+            pass.set_bind_group(3, &self.light.lightmap.bind, &[]);
+        };
+        if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
+            body_groups(&mut pass);
             pass.set_pipeline(&self.pipes.bodies);
             pass.set_vertex_buffer(0, bodies.slice(..));
             pass.draw(0..6, 0..self.body_count);
@@ -1042,13 +1097,13 @@ impl Renderer {
             .as_ref()
             .filter(|_| self.silhouette_count > 0)
         {
-            pass.set_bind_group(1, &self.vehicle_bind, &[]);
+            body_groups(&mut pass);
             pass.set_pipeline(&self.pipes.silhouettes);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.silhouette_count);
         }
         if let Some(buffer) = self.effects.as_ref().filter(|_| self.effect_count > 0) {
-            pass.set_bind_group(1, &self.vehicle_bind, &[]);
+            body_groups(&mut pass);
             pass.set_pipeline(&self.pipes.effects);
             pass.set_vertex_buffer(0, buffer.slice(..));
             pass.draw(0..6, 0..self.effect_count);
