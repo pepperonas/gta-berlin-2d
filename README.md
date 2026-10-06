@@ -712,7 +712,7 @@ Kommentarzeilen aus allen versionierten Quelldateien, Tests statisch: Rust `#[te
 `tools/githooks/pre-commit` schreibt sie bei jedem Commit neu; einmal je Klon einrichten mit
 `git config core.hooksPath tools/githooks`. `node tools/badges.mjs --check` meldet veraltete Badges.
 
-**Aktueller Prüfstand vom 04.10.2026:** `npm test` vollständig grün, **471 von 471 Tests**. Die 18 Fehlschläge vom
+**Aktueller Prüfstand vom 06.10.2026:** `npm test` vollständig grün, **488 von 488 Tests**. Die 18 Fehlschläge vom
 01.10. sind aufgelöst: 17 Tests prüften noch Regeln von vor dem Umbau (Verletzte fallen nicht um, Einsteigen und
 Bahnhöfe per F, ESP für alle Autos, neue Klangpegel, sichtbare Zaunkollision, neue Befehlszeile) und wurden
 umgestellt; einer deckte einen echten Verkehrsfehler auf (Gegenverkehr in einer Engstelle, wenn ein neues Auto

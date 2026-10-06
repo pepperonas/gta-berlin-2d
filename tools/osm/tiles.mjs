@@ -38,7 +38,7 @@ export function tileCity(g, { tile, meta, places }) {
     const k = `${tx}_${ty}`;
     let t = tiles.get(k);
     if (!t) tiles.set(k, t = { tx, ty, names: [], nameIdx: new Map(), vmap: new Map(), vid: [], vxy: [], vtrim: [],
-      edges: [], junctions: [], paths: [], rails: [], buildings: [], water: [], areas: [], walls: [], fences: [],
+      edges: [], junctions: [], plates: [], paths: [], rails: [], buildings: [], water: [], areas: [], walls: [], fences: [],
       trees: { xy: [], g: [], c: [], r: [] }, barriers: [], posts: [], crossings: [], signals: [], turnBans: [], pois: [], signs: [], portals: [], addresses: { xy: [], street: [], nr: [] }, furn: [], dens: null });
     return t;
   };
@@ -59,9 +59,19 @@ export function tileCity(g, { tile, meta, places }) {
     const flags = ed.br | (ed.in << 1) | ((ed.blocked ? 1 : 0) << 2) | (ed.pass << 3) | (packLvl(ed.lvl ?? 0) << 4); // Ebene: Bits 4–6
     const x = ed.c <= 8 ? ed.x : [ed.x[10], ed.x[11]]; // Nebenwege: nur Tempo + Belag
     each(bboxOf(pts, ed.w / 10 * S / 2 + S), (t) => {
-      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1), ...(ed.fill ? [Math.round(ed.fill / S * 10)] : [])]);
+      // Kürzung an Kreuzungsflächen (px, [vorn, hinten]) als Feld 12; davor ggf. die Brückenlücke als Platzhalter
+      const tr = g.plateTrim ? g.plateTrim(ed) : [0, 0];
+      const extra = tr[0] || tr[1] ? [Math.round((ed.fill ?? 0) / S * 10), tr] : ed.fill ? [Math.round(ed.fill / S * 10)] : [];
+      t.edges.push([gid, vtx(t, ed.a), vtx(t, ed.b), ed.c, ed.w, nm(t, g.names[ed.n]), ed.o, flags, ed.p.length ? delta(ed.p) : [], x, Math.round((ed.dtv ?? 0) / 100) * (ed.dtvMeasured ? 1 : -1), ...extra]);
     });
   });
+  // Kreuzungsflächen mit echten Ecken (plates.mjs, nur Darstellung): [Knoten-gid, Ebene, Belag, Eckzüge (je delta),
+  // weitere Knoten der Gruppe (optional; deren Scheiben entfallen ebenfalls)].
+  // Jeder Eckzug läuft von der linken Mündungskante einer Straße zur rechten der nächsten; aneinandergereiht ergeben
+  // sie den Umriss der Fläche. Abgelegt in jeder Kachel, die die Eckzüge berühren (+ Gehwegbreite).
+  for (const p of g.plates ?? []) {
+    each(bboxOf(p.corners.flat(), 2.2 * S), (t) => t.plates.push([p.v, packLvl(p.lvl), p.surface, p.corners.map(delta), ...(p.also?.length ? [p.also] : [])]));
+  }
   // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1 | höchste Ebene << 2 | tiefste Ebene << 5, kleinste Klasse]
   for (const j of g.junctions) each([j.x - j.r, j.y - j.r, j.x + j.r, j.y + j.r], (t) => { vtx(t, j.v); t.junctions.push([j.v, j.x, j.y, j.r, j.bridge | (j.cobble << 1) | (packLvl(j.hi ?? 0) << 2) | (packLvl(j.lo ?? 0) << 5), j.cls]); });
 
@@ -148,7 +158,7 @@ export function tileCity(g, { tile, meta, places }) {
     out.set(k, {
       v: 3, t: [t.tx, t.ty], names: t.names,
       vertices: { id: t.vid, xy: delta(t.vxy), trim: t.vtrim },
-      edges: t.edges, junctions: t.junctions, paths: t.paths, rails: t.rails, buildings: t.buildings, water: t.water, areas: t.areas,
+      edges: t.edges, junctions: t.junctions, plates: t.plates, paths: t.paths, rails: t.rails, buildings: t.buildings, water: t.water, areas: t.areas,
       walls: t.walls, fences: t.fences,
       trees: { xy: delta(t.trees.xy), g: t.trees.g, c: t.trees.c, r: t.trees.r },
       barriers: t.barriers, posts: t.posts, crossings: t.crossings, signals: t.signals, turnBans: t.turnBans,

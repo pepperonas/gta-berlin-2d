@@ -2470,3 +2470,28 @@ Menüs kennen links/rechts (`MenuKeys::left/right`: Pfeile, A/D, Steuerkreuz, li
 stellt ±10 % ohne Überlauf. In der Pause spielt der Sender des Autos als Hörprobe, solange dieser Eintrag gewählt ist
 (`Play::radio_preview`).
 
+
+## Kreuzungsflächen mit echten Ecken (06.10.2026)
+
+- **Bau (`tools/osm/plates.mjs`, nach osm2streets/A/B Street, Apache-2.0):** je Knoten (alle Straßen ≤ Klasse 9, eine
+  Ebene, keine Durchfahrten) die Straßen nach Winkel sortiert; linke Fahrbahnkante von i mit rechter von i+1
+  geschnitten, Ecke mit `CORNER_R(Klasse)` gerundet (Berührabstand R/tan(φ/2), Gehrung höchstens `MITER_MAX`·breiteste
+  halbe Fahrbahn, sonst abgeschrägt); Kürzung je Straße = Eckabstand + Bogen, höchstens 45 % ihrer Länge.
+  Zwei-Straßen-Knoten nur bei Knick ≥ `BEND_MIN` oder Breitensprung. **Knotengruppen:** über Straßen < `MERGE_M`
+  (8 m) verbundene Knoten bilden eine Fläche (Union-Find, kürzeste zuerst, Ausdehnung ≤ `MERGE_SPAN_M` 14 m); die
+  inneren Straßen werden über ihre ganze Länge gekürzt und entfallen. Geht die Gruppenfläche nicht auf, bekommt jeder
+  Knoten seine eigene.
+- **Kachelformat:** Kantenzeile Feld 12 = Kürzung [vorn, hinten] in px (Feld 11 dann Brückenlücke, ggf. 0). Neue
+  Ebene `plates`: `[Knoten, Ebene, Belag, Eckzüge (delta), weitere Knoten?]`, in jeder Kachel, die die Eckzüge plus
+  Gehwegbreite berühren. Belag = der der breitesten Straße.
+- **Lader (`format.rs`, `mesh.rs`):** `Road::trim`, `geom::trim_polyline` (Bogenlänge, wie `pointAt`; zu kurz ⇒ leer =
+  Straße entfällt), `Feature::Plate` → `plate_mesh`: Asphalt im Umriss (Eckzüge aneinandergereiht, triangulieren) bei
+  Tiefe −0,0001 wie die Scheibe, je Eckzug die Bänder der Straße (Randstreifen, Gehweg, Bordstein, Rinne) mittig auf
+  der Kante. `Junction::plated` ⇒ keine Scheibe. Die Simulation liest weder Kürzung noch Flächen (Fingerabdruck
+  unverändert).
+- **Tests:** `tests/plates.test.js` (Kreuz, T, spitzes Y, Knick, kurze Straße, Gruppe, Kette), `crates/map_loader/tests/
+  plates.rs` (echte Kacheln: jede gekürzte Mündung trifft eine Ecke ihrer Fläche auf < 1,5 px; nur Mündungen innerhalb
+  der Kachel, weil Flächen nur dort liegen, wo sie hineinragen). Fallstrick: Flächeninhalt in f32 bei Weltkoordinaten
+  (~1,7·10⁵ px) nur relativ zu einem Punkt rechnen. Karte 145 → 163 MB (den Umriss nicht ablegen – er ist die
+  Aneinanderreihung der Eckzüge, ein früher Stand mit Umriss lag bei 189 MB). Bildzeit unverändert (GPU-Median 8,4
+  statt 8,2 ms, Mehringdamm 2560×1440).

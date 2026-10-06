@@ -9,6 +9,7 @@ import { crossSection, maxspeedOf, surfaceOf } from './crosssection.mjs';
 import { makeProjection, pointInRing, ringArea, simplify, segDist2, joinRings, unionOutline, bboxOfFeatures } from './geo.mjs';
 import { storeFromPbf, storeFromElements } from './store.mjs';
 import { tileCity, TILE_PX } from './tiles.mjs';
+import { platesOf } from './plates.mjs';
 import { buildingLook } from './looks.mjs';
 import { levelOf, isBridge } from './levels.mjs';
 import { buildSigns, destinationRelations } from './signs.mjs';
@@ -545,6 +546,9 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
 
   // --- Spurkürzung je Knoten (Kreuzungsflächen siehe oben; Spiel und Baumregel nutzen dieselben Werte) ----------
   const trim = laneTrim(edges, vertices, S, edgePts);
+  // Kreuzungsflächen mit echten Ecken (nur Darstellung der nativen Fassung; Simulation nutzt junctions)
+  const plateData = platesOf(edges, edgePts, S);
+  step(`Kreuzungsflächen ${plateData.plates.length}`);
   const postStats = keepPostsOffCarriageway(access.out, { edges, vertices, junctions, S });
   access.stats.pollerVerschoben = postStats.moved; access.stats.pollerEntfernt = postStats.dropped;
 
@@ -599,6 +603,7 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
 
   const g = {
     S, W, H, names, vertices, edges, paths, rails, buildings, water, areas, walls, wallKind, wallLvl, trees, kieze, pois, addresses, junctions, trim, furniture, dens,
+    plates: plateData.plates, plateTrim: plateData.trimOf,
     border, bezirke, districts, access: access.out, signs, portals,
   };
   const meta = {

@@ -339,3 +339,57 @@ mod tests {
         assert!(undelta(&[1.]).is_err());
     }
 }
+
+/// Zug um `a` am Anfang und `b` am Ende (Bogenlänge) kürzen – wie `tools/osm/plates.mjs pointAt`, damit die
+/// Mündungen der Kreuzungsflächen genau auf die gekürzten Straßen treffen. Reicht die Länge nicht (eine Straße
+/// innerhalb einer Knotengruppe, die die Fläche ganz deckt), bleibt nichts übrig.
+pub fn trim_polyline(points: &[Vec2], a: f32, b: f32) -> Vec<Vec2> {
+    if (a <= 0. && b <= 0.) || points.len() < 2 {
+        return points.to_vec();
+    }
+    let len: f32 = points.windows(2).map(|w| w[0].distance(w[1])).sum();
+    if a + b >= len - 0.01 {
+        return Vec::new();
+    }
+    let cut_front = |pts: &[Vec2], d: f32| -> Vec<Vec2> {
+        if d <= 0. {
+            return pts.to_vec();
+        }
+        let mut acc = 0.;
+        for i in 0..pts.len() - 1 {
+            let l = pts[i].distance(pts[i + 1]);
+            if l > 0. && acc + l >= d {
+                let u = ((d - acc) / l).clamp(0., 1.);
+                let mut out = vec![pts[i] + (pts[i + 1] - pts[i]) * u];
+                out.extend_from_slice(&pts[i + 1..]);
+                return out;
+            }
+            acc += l;
+        }
+        pts.to_vec()
+    };
+    let front = cut_front(points, a);
+    let mut rev: Vec<Vec2> = front.into_iter().rev().collect();
+    rev = cut_front(&rev, b);
+    rev.reverse();
+    rev
+}
+
+#[cfg(test)]
+mod trim_tests {
+    use super::*;
+    #[test]
+    fn trims_by_arc_length_from_both_ends() {
+        let pts = [Vec2::ZERO, Vec2::new(10., 0.), Vec2::new(10., 10.)];
+        let t = trim_polyline(&pts, 4., 3.);
+        assert_eq!(t.first().copied(), Some(Vec2::new(4., 0.)));
+        assert_eq!(t.last().copied(), Some(Vec2::new(10., 7.)));
+        assert_eq!(t.len(), 3, "Knick bleibt");
+        // über den Knick hinaus
+        let t = trim_polyline(&pts, 12., 0.);
+        assert_eq!(t, vec![Vec2::new(10., 2.), Vec2::new(10., 10.)]);
+        // ganz weggekürzt
+        assert!(trim_polyline(&pts, 15., 6.).is_empty());
+        assert_eq!(trim_polyline(&pts, 0., 0.), pts.to_vec());
+    }
+}

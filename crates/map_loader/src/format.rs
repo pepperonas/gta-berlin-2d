@@ -154,6 +154,8 @@ pub struct Road {
     pub cycle: [f32; 2],
     pub track: [f32; 2],
     pub fill: f32,
+    /// Kürzung an Kreuzungsflächen (px) am Anfang und Ende (`tools/osm/plates.mjs`): die Fläche übernimmt dort
+    pub trim: [f32; 2],
 }
 #[derive(Debug, Clone)]
 pub enum Feature {
@@ -174,6 +176,15 @@ pub enum Feature {
         radius: f32,
         level: i8,
         cobble: bool,
+        /// eine Kreuzungsfläche mit echten Ecken (`Plate`) ersetzt die Scheibe in der Darstellung
+        plated: bool,
+    },
+    /// Kreuzungsfläche mit echten Ecken (`tools/osm/plates.mjs`): Eckzüge von Mündung zu Mündung; aneinandergereiht
+    /// ergeben sie den Umriss. Belag wie im Querschnitt (0 Asphalt, 1 Pflaster, 2 Platten, 3 unbefestigt).
+    Plate {
+        corners: Vec<Vec<Vec2>>,
+        level: i8,
+        surface: u8,
     },
     Line {
         points: Vec<Vec2>,
@@ -237,6 +248,8 @@ struct RawTile {
     edges: Vec<Value>,
     #[serde(default)]
     junctions: Vec<Value>,
+    #[serde(default)]
+    plates: Vec<Value>,
     #[serde(default)]
     paths: Vec<Value>,
     #[serde(default)]
@@ -375,6 +388,15 @@ impl Tile {
                         [c(13) * scale / 10., c(14) * scale / 10.]
                     },
                     fill: r.get(11).map(number).transpose()?.unwrap_or(0.) * scale / 10.,
+                    trim: match r.get(12) {
+                        Some(v) => {
+                            let t = array(v)?;
+                            let n =
+                                |i: usize| t.get(i).and_then(Value::as_f64).unwrap_or(0.) as f32;
+                            [n(0), n(1)]
+                        }
+                        None => [0.; 2],
+                    },
                 }),
             });
         }
@@ -386,16 +408,43 @@ impl Tile {
             &raw.vertices,
             scale,
         ));
+        // Kreuzungsflächen (Knoten-gid, Ebene, Belag, Eckzüge, weitere Knoten einer Gruppe)
+        let mut plated = std::collections::HashSet::new();
+        for p in raw.plates {
+            let r = row(&p, 4)?;
+            let node = integer(&r[0])?;
+            let corners = array(&r[3])?
+                .iter()
+                .map(coords)
+                .collect::<Result<Vec<_>>>()?;
+            ensure!(corners.len() >= 2, "Kreuzungsfläche mit zu wenigen Ecken");
+            plated.insert(node);
+            if let Some(also) = r.get(4) {
+                for v in array(also)? {
+                    plated.insert(integer(v)?);
+                }
+            }
+            items.push(Item {
+                id: Some(FeatureId(3, node)),
+                feature: Feature::Plate {
+                    corners,
+                    level: unpack_lvl(integer(&r[1])? as u32),
+                    surface: code(&r[2])?,
+                },
+            });
+        }
         for j in raw.junctions {
             let r = row(&j, 6)?;
             let flags = integer(&r[4])? as u32;
+            let node = integer(&r[0])?;
             items.push(Item {
-                id: Some(FeatureId(2, integer(&r[0])?)),
+                id: Some(FeatureId(2, node)),
                 feature: Feature::Junction {
                     point: Vec2::new(number(&r[1])?, number(&r[2])?),
                     radius: number(&r[3])?,
                     level: unpack_lvl(flags >> 2),
                     cobble: flags & 2 != 0,
+                    plated: plated.contains(&node),
                 },
             });
         }
@@ -719,6 +768,7 @@ mod mark_tests {
                 cycle: [0.; 2],
                 track: [0.; 2],
                 fill: 0.,
+                trim: [0.; 2],
             }),
         }
     }

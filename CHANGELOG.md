@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Kreuzungen mit echten Ecken.** Statt runder Scheiben, an die die Straßen eckig heranliefen (mit
+  Lücken und überstehenden Zungen an stumpfen und spitzen Winkeln), bekommt jeder Knoten eine Fläche nach dem
+  osm2streets-Verfahren: Fahrbahnkanten benachbarter Straßen werden geschnitten, die Ecke mit einem Bordsteinbogen
+  nach Straßenart gerundet (Hauptstraßen 6 m, Wohnstraßen 3,5 m), Bordstein, Rinne und Gehweg laufen um die Ecke;
+  die Straßen enden genau an der Fläche. Knoten, die nur wenige Meter auseinanderliegen, teilen sich eine Fläche (kein
+  Stummel mit fremdem Belag dazwischen). Die Karte ist neu gebaut; die Simulation nutzt weiter die alten Scheiben und
+  ist unverändert.
 - Native Fassung: **Radiolautstärke einstellbar** – Pausenmenü „Radio-Lautstärke“: Pfeiltasten links/rechts (auch A/D),
   Steuerkreuz bzw. linker Stick regeln in 10-%-Schritten zwischen aus und 100 %; steht die Auswahl dort, spielt der
   Sender des Autos in der Pause zur Hörprobe; Bestätigen schaltet weiter (+10 %, nach 100 % aus),

@@ -651,6 +651,62 @@ fn curb(mesh: &mut Mesh, points: &[Vec2], width: f32, depth: f32, scale: f32) {
         Surface::ground(0x3d3b37, 0., depth + 0.005),
     );
 }
+/// Kreuzungsfläche (`Feature::Plate`): Asphalt im Umriss (die Eckzüge aneinandergereiht) im Belag der Straßen,
+/// vor deren Enden; entlang jedes Eckzugs dieselben Bänder wie an den Straßen (Randstreifen, Gehweg, Bordstein,
+/// Rinne), mittig auf der Fahrbahnkante – die innere Hälfte verdeckt der Asphalt, die äußere ist der Gehweg um die Ecke.
+fn plate_mesh(mesh: &mut Mesh, corners: &[Vec<Vec2>], level: i8, surface: u8, scale: f32) {
+    let depth = if level > 0 {
+        0.68 - level as f32 * 0.03
+    } else if level < 0 {
+        0.935
+    } else {
+        0.85
+    };
+    let sidewalk = 2. * scale;
+    for line in corners {
+        mesh.stroke(
+            line,
+            2. * (sidewalk + 0.12 * scale),
+            Surface::ground(0x85827a, 3., depth + 0.031),
+        );
+        mesh.stroke(
+            line,
+            2. * sidewalk,
+            Surface::ground(0xa8a59d, 3., depth + 0.03),
+        );
+        curb(mesh, line, 0., depth, scale);
+    }
+    let mut ring: Vec<Vec2> = Vec::new();
+    for p in corners.iter().flatten() {
+        if ring.last().is_none_or(|q| q.distance(*p) > 0.05) {
+            ring.push(*p);
+        }
+    }
+    if ring.len() > 2 && ring[0].distance(ring[ring.len() - 1]) < 0.05 {
+        ring.pop();
+    }
+    let (color, material) = road_surface(surface);
+    let polygon = Polygon {
+        rings: vec![ring],
+        outer: vec![true],
+    };
+    // entartet (sollte der Kartenbau ausschließen): nur die Bänder, kein Asphalt
+    let _ = polygon_fill(
+        mesh,
+        &polygon,
+        Surface::ground(color, material, depth - 0.0001),
+        None,
+    );
+}
+/// Farbe und Material der Fahrbahn je Belag (0 Asphalt, 1 Pflaster, 2 Platten, 3 unbefestigt).
+fn road_surface(surface: u8) -> (u32, f32) {
+    match surface {
+        1 => (0x72716b, 2.),
+        2 => (0x949087, 3.),
+        3 => (0x9b9276, 10.),
+        _ => (0x454d50, 1.),
+    }
+}
 /// Breite des Bordsteins in Metern.
 pub const CURB_M: f32 = 0.3;
 /// Material-ID des Rasenrands (Streifen entlang von Rasenflächen, ausgefranst; `center.x` = Lage quer 0 außen … 1 innen).
@@ -707,6 +763,20 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
     if r.passage {
         return;
     }
+    // an Kreuzungsflächen gekürzt: die Fläche übernimmt Fahrbahn, Bordstein und Gehweg um die Ecke
+    let trimmed;
+    let r = if r.trim[0] > 0. || r.trim[1] > 0. {
+        trimmed = Road {
+            points: crate::geom::trim_polyline(&r.points, r.trim[0], r.trim[1]),
+            ..r.clone()
+        };
+        if trimmed.points.len() < 2 {
+            return;
+        }
+        &trimmed
+    } else {
+        r
+    };
     let depth = if r.level > 0 {
         0.68 - r.level as f32 * 0.03
     } else if r.level < 0 {
@@ -731,12 +801,7 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
     if sidewalk > 0. {
         curb(mesh, &r.points, r.width, depth, scale);
     }
-    let (color, material) = match r.surface {
-        1 => (0x72716b, 2.),
-        2 => (0x949087, 3.),
-        3 => (0x9b9276, 10.),
-        _ => (0x454d50, 1.),
-    };
+    let (color, material) = road_surface(r.surface);
     mesh.stroke(&r.points, r.width, Surface::ground(color, material, depth));
     if r.fill > 0. {
         let shifted = crate::geom::offset_polyline(&r.points, r.width * 0.5 + r.fill * 0.5);
@@ -960,11 +1025,18 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
             }
         }
         Feature::Road(r) => road_mesh(&mut mesh, r, scale),
+        Feature::Junction { plated: true, .. } => {}
+        Feature::Plate {
+            corners,
+            level,
+            surface,
+        } => plate_mesh(&mut mesh, corners, *level, *surface, scale),
         Feature::Junction {
             point,
             radius,
             level,
             cobble,
+            plated: false,
         } => {
             let depth = if *level > 0 {
                 0.68 - *level as f32 * 0.03
