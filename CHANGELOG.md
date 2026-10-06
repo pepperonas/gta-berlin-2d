@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Controller im Fahrzeug neu belegt:** A = Handbremse (vorher B), B = ESP an/aus (vorher
+  Steuerkreuz oben), die Aktion im Fahrzeug (Einladen, Türen als Zugführer) liegt auf Steuerkreuz rechts, kräftig
+  treten auf dem Fahrrad auf Steuerkreuz oben. Zu Fuß bleibt alles, wie es war; Zoom am Steuerkreuz gilt nur noch zu
+  Fuß (Tasten zoomen weiter überall). Eigene Belegungen bleiben erhalten.
 - Native Fassung: **Einstellungen im Menü mit links/rechts.** Grafik (HD/Pixel), die neue Zeile „Qualität“
   (niedrig/mittel/hoch, vorher nur über die Konsole), Radiolautstärke und im Koop die Geräte-Aufteilung lassen sich
   im Titel- und Pausenmenü mit ←/→, A/D, Steuerkreuz oder linkem Stick verstellen; Bestätigen schaltet weiter wie

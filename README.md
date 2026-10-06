@@ -68,7 +68,7 @@ erledigten Auftrag wird automatisch gespeichert. F8 schaltet die Grafik zwischen
 Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–8 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller zu Fuß: A sprinten (tippen = Aktion), X springen, Y einsteigen (das Fahrzeug schimmert dann
 dezent), B nachladen, RT angreifen, RB treten, LB nächste Waffe, rechten Stick gedrückt halten = Waffenrad (Stick
-wählt, Loslassen nimmt, Stick in der Mitte lässt die Waffe, B bricht ab). Im Auto: RT/LT Gas/Bremse, B Handbremse, Y aussteigen, X hupen, RB/LB Radiosender
+wählt, Loslassen nimmt, Stick in der Mitte lässt die Waffe, B bricht ab). Im Auto: RT/LT Gas/Bremse, A Handbremse, B ESP an/aus, Steuerkreuz rechts Aktion (Einladen), Steuerkreuz oben auf dem Fahrrad kräftig treten, Y aussteigen, X hupen, RB/LB Radiosender
 (in Polizei- und Rettungswagen lang halten = Sirene), rechten Stick drücken = Fahrhilfen-Rad (ESP, ABS, Sirene).
 Stadtplan: linker Stick verschieben, rechter Stick bzw. RT/LT zoomen, A Wegpunkt, X Teleport, B zurück;
 Teleport-Rückfrage mit Stick/Steuerkreuz wählen, A bestätigt.
@@ -309,15 +309,15 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Sprinten | A halten oder Stick voll | Umschalt |
 | Springen (zu Fuß) | – | Leertaste (am Boden) |
 | Gas / Bremse, Rückwärts | RT / LT | W / S |
-| Handbremse | RB oder B | Leertaste |
-| ESP im Auto umschalten | – | X |
-| ABS im Auto umschalten | – | Y |
+| Handbremse | A | Leertaste |
+| ESP im Auto umschalten | B | X |
+| ABS im Auto umschalten | Steuerkreuz unten | Y |
 | Ein-/Aussteigen | Y | F |
-| Aktion (Auftrag, Einladen, Abliefern) | A | E |
+| Aktion (Auftrag, Einladen, Abliefern) | A, im Fahrzeug Steuerkreuz rechts | E |
 | Mitfahren / Aussteigen (Bus, Straßenbahn, S-, U-Bahn) | Steuerkreuz unten | G |
 | Bahn führen (am Führerstand vorn) / aussteigen | Y | F |
-| Als Zugführer: Fahrt / Bremse / Notbremse | RT / LT / B | W / S / Leertaste |
-| Als Zugführer: Türen auf/zu, am Endhalt wenden | A | E |
+| Als Zugführer: Fahrt / Bremse / Notbremse | RT / LT / A | W / S / Leertaste |
+| Als Zugführer: Türen auf/zu, am Endhalt wenden | Steuerkreuz rechts | E |
 | Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
 | Hupe | X | H |
 | Radio: nächster / vorheriger Sender (im Auto, AUS gehört zur Runde; Lautstärke im Pausenmenü) | RB / LB | R / Q |

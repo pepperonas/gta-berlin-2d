@@ -1976,8 +1976,13 @@ pub fn input_from(keys: &Keys, driving: bool, b: &crate::bindings::Bindings) -> 
     Input {
         move_x: if driving { 0. } else { lx },
         move_y: if driving { 0. } else { ly },
-        // zu Fuß und auf dem Fahrrad (Ausdauer)
-        sprint: b.held(keys, A::Sprint),
+        // zu Fuß sprinten, auf dem Fahrrad kräftig treten (Ausdauer); im Fahrzeug eigene Aktion, A ist dort die
+        // Handbremse
+        sprint: if driving {
+            b.held(keys, A::PedalSprint)
+        } else {
+            b.held(keys, A::Sprint)
+        },
         walk_slow: !driving && b.held(keys, A::Slow),
         throttle: if driving {
             pedal(b, keys, A::Throttle, THROTTLE_GAMMA)
@@ -1993,8 +1998,8 @@ pub fn input_from(keys: &Keys, driving: bool, b: &crate::bindings::Bindings) -> 
         handbrake: driving && b.held(keys, A::Handbrake),
         horn: driving && b.held(keys, A::Horn),
         enter_exit: b.pressed(keys, A::EnterExit),
-        action: b.pressed(keys, A::Use),
-        action_held: b.held(keys, A::Use),
+        action: b.pressed(keys, if driving { A::UseCar } else { A::Use }),
+        action_held: b.held(keys, if driving { A::UseCar } else { A::Use }),
         esp_toggle: driving && b.pressed(keys, A::Esp),
         abs_toggle: driving && b.pressed(keys, A::Abs),
         ride: !driving && b.pressed(keys, A::Ride),
@@ -3402,7 +3407,15 @@ impl Play {
             input.combat.aim_world = world_pt;
         }
         // Kamera näher/weiter (gehalten, sanft; Mausrad zoomt in der Engine zusätzlich)
-        let zoom = bind.held(keys, Bind::ZoomIn) as i32 - bind.held(keys, Bind::ZoomOut) as i32;
+        // im Fahrzeug nur die Tasten: das Steuerkreuz trägt dort die Aktion bzw. die Fahrhilfen
+        let zoom_held = |a| {
+            if on_foot {
+                bind.held(keys, a)
+            } else {
+                bind.key_held(keys, a)
+            }
+        };
+        let zoom = zoom_held(Bind::ZoomIn) as i32 - zoom_held(Bind::ZoomOut) as i32;
         if zoom != 0 && !self.bigmap.open {
             self.zoom_user =
                 (self.zoom_user * (zoom as f32 * 1.4 * dt as f32).exp()).clamp(0.6, 1.8);
@@ -5061,8 +5074,9 @@ mod tests {
         );
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
     }
-    /// Controller-Belegung nach dem Notizblatt: zu Fuß A sprinten, X springen, Y einsteigen, B nachladen; im Auto
-    /// B Handbremse, Y aussteigen, X hupen; der rechte Stick öffnet zu Fuß das Waffenrad, im Auto das Fahrhilfen-Rad.
+    /// Controller-Belegung nach den Notizblättern: zu Fuß A sprinten, X springen, Y einsteigen, B nachladen; im Auto
+    /// A Handbremse, B ESP an/aus, Steuerkreuz rechts Aktion, Y aussteigen, X hupen (Blatt vom 06.10.2026); der
+    /// rechte Stick öffnet zu Fuß das Waffenrad, im Auto das Fahrhilfen-Rad.
     #[test]
     fn controller_layout_follows_the_note() {
         use crate::bindings::{Action as A, Bindings, PadButton as P};
@@ -5072,7 +5086,9 @@ mod tests {
         assert_eq!(b.pad_of(A::EnterExit), Some(P::Y));
         assert_eq!(b.pad_of(A::Reload), Some(P::B));
         assert_eq!(b.pad_of(A::WeaponWheel), Some(P::RS));
-        assert_eq!(b.pad_of(A::Handbrake), Some(P::B));
+        assert_eq!(b.pad_of(A::Handbrake), Some(P::A));
+        assert_eq!(b.pad_of(A::Esp), Some(P::B));
+        assert_eq!(b.pad_of(A::UseCar), Some(P::Right));
         assert_eq!(b.pad_of(A::Horn), Some(P::X));
         assert_eq!(b.pad_of(A::AssistWheel), Some(P::RS));
         assert!(
@@ -5109,9 +5125,31 @@ mod tests {
         let foot_b = input_from(&keys(bb), false, &b);
         assert!(foot_b.combat.reload && !foot_b.combat.kick);
         let car_b = input_from(&keys(bb), true, &b);
-        assert!(car_b.handbrake);
+        assert!(car_b.esp_toggle && !car_b.handbrake);
         let car_x = input_from(&keys(x), true, &b);
         assert!(car_x.horn && !car_x.jump);
+        // A im Fahrzeug: nur Handbremse – kein Einladen, kein kräftiges Treten auf dem Fahrrad
+        let a = Pad {
+            a: true,
+            ..Default::default()
+        };
+        let mut ka = keys(a);
+        ka.pad.a = true;
+        let car_a = input_from(&ka, true, &b);
+        assert!(car_a.handbrake && !car_a.action && !car_a.sprint);
+        let foot_a = input_from(&ka, false, &b);
+        assert!(foot_a.action && foot_a.sprint && !foot_a.handbrake);
+        let right = Pad {
+            right: true,
+            ..Default::default()
+        };
+        let mut kr = keys(right);
+        kr.pad.right = true;
+        assert!(
+            input_from(&kr, true, &b).action,
+            "Aktion im Fahrzeug: Steuerkreuz rechts"
+        );
+        assert!(!input_from(&kr, false, &b).action);
     }
     /// LB + RB gleichzeitig öffnen die Befehlszeile mit Bildschirmtastatur; A tippt, B leert bzw. schließt. Ein
     /// einzelner LB-Druck wechselt weiterhin die Waffe (leicht verzögert).

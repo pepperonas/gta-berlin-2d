@@ -2503,3 +2503,9 @@ nimmt jetzt `GraphicsSettings`. `Play::pause_menu_now` baut das Pausenmenü mit 
 der Rückweg von einer Tafel die Radiolautstärke). Start (`Bind::Pause` am Pad, im Koop auch Pad 2) schließt Pause
 und die daraus geöffneten Tafeln (nicht die Belegungstafel, dort könnte Start gerade belegt werden).
 `PAUSE_MENU_Y` = 236, Abstände ab 12 Einträgen 33/28, ab 8 Einträgen 44/38.
+
+**Controller im Fahrzeug (06.10.2026, Notizblatt):** `Handbrake` = A, `Esp` = B. Damit A im Fahrzeug nur bremst, gibt es
+zwei neue Aktionen im Bereich `Car`: `UseCar` (E, Steuerkreuz rechts) und `PedalSprint` (Umschalt, Steuerkreuz oben);
+`Use` und die Zoom-Aktionen sind jetzt `Foot`. `input_from` wählt `Use`/`UseCar` und `Sprint`/`PedalSprint` nach
+`driving` (auch Zugführer), der Zoom liest im Fahrzeug nur die Tasten. `settings.json` speichert nur Abweichungen –
+neue Standards wirken für alle, die die betroffenen Tasten nicht selbst belegt haben.

@@ -29,6 +29,8 @@ pub enum Action {
     Left,
     Right,
     Sprint,
+    /// Fahrrad: kräftig treten (Ausdauer) – im Fahrzeug getrennt vom Sprinten, weil A dort die Handbremse ist
+    PedalSprint,
     Slow,
     Throttle,
     Brake,
@@ -43,6 +45,8 @@ pub enum Action {
     AssistWheel,
     EnterExit,
     Use,
+    /// Aktion im Fahrzeug (Auftrag, Einladen): am Controller nicht auf A, das ist im Fahrzeug die Handbremse
+    UseCar,
     Ride,
     /// Springen (zu Fuß): über Zäune, Poller, Kisten
     Jump,
@@ -262,6 +266,14 @@ pub const ACTIONS: &[Info] = &[
         None,
     ),
     info(
+        A::PedalSprint,
+        "Kräftig treten (Fahrrad)",
+        Car,
+        [Some(KeyCode::ShiftLeft), Some(KeyCode::ShiftRight)],
+        Some(P::Up),
+        None,
+    ),
+    info(
         A::Slow,
         "Langsam / ruhig zielen",
         Foot,
@@ -290,7 +302,7 @@ pub const ACTIONS: &[Info] = &[
         "Handbremse",
         Car,
         [Some(KeyCode::Space), None],
-        Some(P::B),
+        Some(P::A),
         None,
     ),
     info(
@@ -322,7 +334,7 @@ pub const ACTIONS: &[Info] = &[
         "ESP an/aus",
         Car,
         [Some(KeyCode::KeyX), None],
-        Some(P::Up),
+        Some(P::B),
         None,
     ),
     info(
@@ -352,9 +364,17 @@ pub const ACTIONS: &[Info] = &[
     info(
         A::Use,
         "Aktion (Auftrag, Einladen)",
-        Both,
+        Foot,
         [Some(KeyCode::KeyE), None],
         Some(P::A),
+        None,
+    ),
+    info(
+        A::UseCar,
+        "Aktion im Fahrzeug (Auftrag, Einladen)",
+        Car,
+        [Some(KeyCode::KeyE), None],
+        Some(P::Right),
         None,
     ),
     info(
@@ -416,7 +436,7 @@ pub const ACTIONS: &[Info] = &[
     info(
         A::ZoomIn,
         "Kamera näher",
-        Both,
+        Foot,
         [Some(KeyCode::Equal), Some(KeyCode::NumpadAdd)],
         Some(P::Right),
         None,
@@ -424,7 +444,7 @@ pub const ACTIONS: &[Info] = &[
     info(
         A::ZoomOut,
         "Kamera weiter",
-        Both,
+        Foot,
         [Some(KeyCode::Minus), Some(KeyCode::NumpadSubtract)],
         Some(P::Left),
         None,

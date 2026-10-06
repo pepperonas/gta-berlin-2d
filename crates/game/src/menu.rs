@@ -863,10 +863,12 @@ pub fn control_rows(b: &crate::bindings::Bindings) -> Vec<(String, String, Strin
             [A::Up, A::Left, A::Down, A::Right].map(key).join(" "),
         ),
         both("Sprinten · langsam/ruhig zielen", &[A::Sprint, A::Slow]),
+        both("Fahrrad: kräftig treten", &[A::PedalSprint]),
         both("Gas · Bremse/rückwärts", &[A::Throttle, A::Brake]),
         both("Handbremse · Hupe", &[A::Handbrake, A::Horn]),
         both("ESP · ABS (im Auto)", &[A::Esp, A::Abs]),
         both("Ein-/Aussteigen · Aktion", &[A::EnterExit, A::Use]),
+        both("Aktion im Fahrzeug", &[A::UseCar]),
         both("Mitfahren (Bus, Bahn)", &[A::Ride]),
         both(
             "Angreifen · Treten · Nachladen",
@@ -880,7 +882,7 @@ pub fn control_rows(b: &crate::bindings::Bindings) -> Vec<(String, String, Strin
             (l, p, format!("{k} · 1–6"))
         },
         ("Zielen".into(), "Rechter Stick".into(), "Maus".into()),
-        both("Kamera näher · weiter", &[A::ZoomIn, A::ZoomOut]),
+        both("Kamera näher · weiter (zu Fuß)", &[A::ZoomIn, A::ZoomOut]),
         both(
             "Stadtplan · Pause · Befehlszeile",
             &[A::Map, A::Pause, A::Console],
