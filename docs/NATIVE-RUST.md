@@ -2547,3 +2547,8 @@ dreht den Oberkörper bis 0,55 rad zur Stoßseite, zieht die Hände zur Brust un
 Nebel `Kick::Mist` in eigener Liste `Effects::mist` (altert in `step`, Effekt-Durchgang); Lache aus vier Lappen mit
 `Splat::grow` (√-Wachstum über 4–7 s); `blood_color(age)` (trocknet über `BLOOD_DRY` = 45 s), je Fleck Rand + Kern,
 frisch (< 8 s) ein Glanzfleck.
+
+**Passanten-Tempo und Gangbild (06.10.2026):** `sim::figure::pace(id)` (0,78 / 0,92–1,08 / 1,32, aus der Nummer) wirkt
+in `World::assign_kind` aufs Tempo – eine Simulationsänderung: der Einzelspieler-Fingerabdruck ist neu aufgenommen,
+mit `PACE_ON = false` ergibt sich nachweislich der alte. Darstellung: `game::figure::gait_of(Tempo/WALK)` →
+`Who::amp`/`run` statt An/Aus, Größe ±8 % je Person in `look_of`, Gewichtsverlagerung im Stand.

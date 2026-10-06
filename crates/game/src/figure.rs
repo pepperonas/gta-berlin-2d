@@ -265,6 +265,8 @@ pub fn look_of(p: &Ped) -> Look {
             l.acc_color = DOGS[p.id as usize % 5];
         }
     }
+    // Körpergröße streut je Person (±8 %), über die Größe des Typs hinaus
+    l.scale *= 0.92 + 0.16 * h(30.) as f32;
     l
 }
 
@@ -300,6 +302,12 @@ pub struct Who {
     pub hit: Option<(f32, f32)>,
 }
 
+/// Gangbild aus dem Tempo relativ zum normalen Gehen (`q` = Tempo / `WALK`): (Ausschlag, Anteil Laufbewegung).
+pub fn gait_of(q: f32) -> (f32, f32) {
+    let amp = (0.75 + 0.45 * (q - 0.8)).clamp(0.65, 1.3);
+    let brisk = ((q - 1.15) / 0.5).clamp(0., 0.4);
+    (amp, brisk)
+}
 /// Wie lange ein Treffer sichtbar nachwirkt (s)
 pub const HIT_REACT_S: f32 = 0.45;
 /// Stärke der Treffer-Reaktion über die Zeit: in 50 ms voll ausgeschlagen (der Ruck), dann federnd zurück (0 … 1).
@@ -319,13 +327,22 @@ impl Who {
         use berlin_sim::pedestrians::PedState as S;
         let moving = matches!(p.state, S::Walk | S::Cross | S::Flee | S::Return);
         let run = p.state == S::Flee || p.kind == Kind::Jogger;
+        // Gangbild nach dem eigenen Tempo: Bummler mit kurzem Schritt, Eilige ausgreifend und mit Schwung
+        let q = (p.speed / berlin_sim::world::WALK) as f32;
+        let (amp, brisk) = gait_of(q);
         Self {
             x: p.x,
             y: p.y,
             facing: p.facing,
             step: p.step,
-            amp: if moving { 1. } else { 0. },
-            run: if moving && run { 1. } else { 0. },
+            amp: if moving { amp } else { 0. },
+            run: if moving && run {
+                1.
+            } else if moving {
+                brisk
+            } else {
+                0.
+            },
             skin: p.skin,
             hold: None,
             // getroffen und noch auf den Beinen: Richtung vom Angreifer weg
@@ -417,6 +434,14 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
     let (mut x, mut y, a) = (who.x as f32, who.y as f32, who.facing as f32);
     let k = look.scale;
     let (feet, mut hands, mut twist) = pose(who, look.acc);
+    // wer steht, verlagert langsam das Gewicht (Phase je Person aus der Lage)
+    if who.amp < 0.05 && who.hold.is_none() {
+        let ph = (who.x * 0.37 + who.y * 0.71) as f32;
+        let sway = (t as f32 * 1.1 + ph).sin();
+        x += -a.sin() * sway * 0.35 * k;
+        y += a.cos() * sway * 0.35 * k;
+        twist += sway * 0.05;
+    }
     // Treffer: der Körper ruckt vom Angreifer weg, der Oberkörper dreht ab, die Arme zucken zur Brust
     let hit = who.hit.map_or(0., |(_, t)| hit_react(t));
     if let Some((dir, _)) = who.hit {
@@ -794,5 +819,18 @@ mod tests {
         // tot oder lange her: keine Reaktion
         p.hurt_t = 5.;
         assert!((torso_x(&p) - calm).abs() < 1e-4);
+    }
+
+    #[test]
+    fn gait_follows_the_walking_pace() {
+        let (slow, _) = gait_of(0.7);
+        let (norm, nb) = gait_of(1.);
+        let (fast, fb) = gait_of(1.4);
+        assert!(slow < norm && norm < fast, "{slow} {norm} {fast}");
+        assert_eq!(nb, 0., "normales Gehen ohne Laufbewegung");
+        assert!(
+            fb > 0. && fb <= 0.4,
+            "Eilige gehen zügig, rennen aber nicht"
+        );
     }
 }

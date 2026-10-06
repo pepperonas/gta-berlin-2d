@@ -214,6 +214,24 @@ impl Kind {
 }
 
 /// Reiner Hash 0…1 aus Nummer und Kanal (`figure.js h01`, `sin`-Hash wie in JS).
+/// Gehtempo-Temperament je Person (aus der Nummer, kein Welt-Zufall): etwa jede achte bummelt (×0,78), jede siebte
+/// hat es eilig (×1,32), die übrigen streuen um 1. Multipliziert sich mit dem Tempo des Typs.
+pub fn pace(id: u32) -> f64 {
+    if !PACE_ON {
+        return 1.;
+    }
+    let h = h01(f64::from(id), 41.);
+    if h < 0.12 {
+        0.78
+    } else if h > 0.86 {
+        1.32
+    } else {
+        0.92 + 0.16 * (h - 0.12) / 0.74
+    }
+}
+/// Schalter für den Nachweis, dass nur das Temperament den Einzelspieler-Ablauf ändert (Test-Fingerabdruck)
+const PACE_ON: bool = true;
+
 pub fn h01(id: f64, k: f64) -> f64 {
     let x = (id * 127.1 + k * 311.7).sin() * 43758.5453;
     x - x.floor()
@@ -344,6 +362,17 @@ pub const JOG_SHIRTS: [u32; 5] = [0xe84393, 0x00b894, 0x0984e3, 0xfdcb6e, 0xd630
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn people_walk_at_their_own_pace() {
+        let paces: Vec<f64> = (0..4000).map(pace).collect();
+        let slow = paces.iter().filter(|&&p| p < 0.8).count() as f64 / 4000.;
+        let fast = paces.iter().filter(|&&p| p > 1.3).count() as f64 / 4000.;
+        assert!((0.08..0.16).contains(&slow), "Bummler {slow}");
+        assert!((0.1..0.18).contains(&fast), "Eilige {fast}");
+        assert!(paces.iter().all(|p| (0.75..=1.35).contains(p)));
+        assert_eq!(pace(77), pace(77), "fest je Nummer");
+    }
 
     #[test]
     fn weights_follow_place_and_time() {

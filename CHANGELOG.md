@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Passanten gehen unterschiedlich schnell und bewegen sich lebendiger.** Jede Person hat ein festes
+  Temperament: etwa jede achte bummelt, jede siebte hat es eilig, der Rest streut um das normale Tempo. Das Gangbild
+  folgt dem eigenen Tempo (Bummler mit kurzem Schritt, Eilige ausgreifend mit kräftigem Armschwung), wer steht,
+  verlagert langsam das Gewicht, und die Körpergröße streut je Person.
 - Native Fassung: **Realistischeres Blut.** Spritzer mit vielen kleinen und wenigen großen Tropfen, die mit der
   Flugweite länglicher werden, Satellitentropfen vor den großen, ein kurzer Blutnebel in Schussrichtung; nach dem
   Tod eine unregelmäßige Lache, die sich über einige Sekunden ausbreitet. Frisches Blut glänzt nass, gerinnt am Rand

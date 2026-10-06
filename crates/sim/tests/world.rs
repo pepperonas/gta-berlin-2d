@@ -2869,7 +2869,9 @@ fn single_player_fingerprint_is_stable() {
 }
 /// Neu aufgezeichnet am 06.10.2026 nach einer gewollten Änderung (schnelleres Anfahren: `anfahr_zuschlag` in
 /// feel.json, straffere Gasregelung der KI); mit beiden zurückgesetzt ergab sich der alte Wert 0xe6fa_c4f9_2b60_2bd6.
-const FINGERPRINT: u64 = 0xdad4_3a11_ba09_8830;
+/// Erneut am 06.10.2026 (abends) nach dem Gehtempo-Temperament der Passanten (`figure::pace`): mit
+/// `PACE_ON = false` ergibt sich wieder 0xdad4_3a11_ba09_8830.
+const FINGERPRINT: u64 = 0xdb24_95a5_9ec7_3bb0;
 
 /// Sirene: im Polizeiwagen schaltet `siren_toggle` sie an und wieder aus; im normalen Auto geschieht nichts.
 #[test]

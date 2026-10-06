@@ -1488,7 +1488,7 @@ impl World {
                 },
             ),
         };
-        p.speed *= p.kind.speed();
+        p.speed *= p.kind.speed() * crate::figure::pace(p.id);
     }
 
     fn manage_population(&mut self) {
