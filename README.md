@@ -37,6 +37,31 @@
 <img src="docs/badges/osm.svg" alt="OSM-Stand">
 </p>
 
+## So sieht es aus
+
+Echte Aufnahmen der nativen Fassung (HD, 2560 × 1440), in selbst gezeichneten Geräterahmen:
+
+<p align="center">
+<img src="docs/images/mockups/laptop.jpg" alt="GTA Berlin auf dem Laptop – Mehringdamm am Vormittag" width="49%">
+<img src="docs/images/mockups/tv.jpg" alt="GTA Berlin am Fernseher mit Controller – Koop im geteilten Bild am Kurfürstendamm" width="49%">
+</p>
+
+<table>
+<tr>
+<td width="33%"><img src="docs/images/screens/tag.jpg" alt="Mehringdamm am Vormittag"><br><sub>Mehringdamm am Vormittag: Kreuzungen mit echten Ecken, Wegweiser, Verkehr</sub></td>
+<td width="33%"><img src="docs/images/screens/nacht.jpg" alt="Hermannplatz bei Nacht"><br><sub>Hermannplatz bei Nacht: Straßenlicht, erleuchtete Fenster, Leuchtreklame</sub></td>
+<td width="33%"><img src="docs/images/screens/regen.jpg" alt="Kreuzberg im Regen"><br><sub>Kreuzberg im Regen: nasse Straßen, Wolkenschatten</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/screens/koop.jpg" alt="Koop am Kurfürstendamm"><br><sub>Koop zu zweit: das Bild teilt sich, wenn die Spieler auseinandergehen</sub></td>
+<td><img src="docs/images/screens/pixel.jpg" alt="Pixel-Grafik"><br><sub>Grafikmodus „Pixel“ (F8 oder Menü)</sub></td>
+<td><img src="docs/images/screens/pause.jpg" alt="Pausenmenü"><br><sub>Pausenmenü: Einstellungen mit ← / →, Radio mit Titel und Interpret</sub></td>
+</tr>
+</table>
+
+Aufnahmen neu erzeugen: Szenen mit `--fenster 2560x1440 --capture …` (siehe `tools/gfx/captures.sh`), dann
+`python3 tools/gfx/build_mockups.py` für die Geräterahmen.
+
 ## Native Rust-Portierung – Phase 5
 
 Die native Fassung läuft mit `cargo run` (macOS: Metal, Windows: DX12) und ist

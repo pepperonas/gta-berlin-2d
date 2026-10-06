@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- **README zeigt das Spiel:** neuer Abschnitt „So sieht es aus“ mit zwei Mockups (Laptop, Fernseher mit Controller)
+  aus echten Aufnahmen der nativen Fassung und einer Galerie aus sechs Szenen (Tag, Nacht, Regen, Koop, Pixel,
+  Pausenmenü). Geräterahmen gezeichnet von `tools/gfx/build_mockups.py`.
 - **App-Icon:** Fernsehturm in Gold-Orange über der Berliner Dachlinie mit erleuchteten Fenstern, Abendhimmel. Gilt als
   Fenster-Icon der nativen Fassung, als Dock-/Finder-Icon der neuen Mac-App (`tools/macos-app.sh` baut „GTA
   Berlin.app“), für die Xbox-Paketlogos (Kacheln, Store, Splash) und als Favicon im Browser. Erzeugt von
