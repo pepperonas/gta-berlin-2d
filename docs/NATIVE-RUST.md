@@ -2533,3 +2533,8 @@ Blockieren (`State::lock_t`). Kalibrierung unverändert (186/210).
 **Überfahren (06.10.2026):** `world::RUN_OVER_MIN` (22 px/s) und `run_over_damage` ((v − 22) · 1,25; 100 = tot) gelten
 für Autos, in denen ein Spieler sitzt; der Passant geht in `PedState::Down` (1,2 s + Schaden/45). KI-Autos behalten
 die alte Regel (ab 55 px/s, Tempo × 0,32, Flucht) – sonst änderte sich der Einzelspieler-Fingerabdruck.
+
+**Waffen in der Hand (06.10.2026):** `game/weaponart.rs` (Teile je Schusswaffe im Figur-System, `hands`), Zeichnung in
+`play.rs weapon_bodies`, Haltung über `figure::Who::hold` (Hände vor der Waffe, kein Hüftschwung). Mündung als eine
+Quelle: `sim::combat::muzzle`/`muzzle_at` – `Event::Shot` startet dort, ein Test prüft, dass das Laufende der
+Zeichnung auf ihr liegt. Konsole `waffe`.

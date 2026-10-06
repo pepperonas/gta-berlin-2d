@@ -348,6 +348,7 @@ pub enum Values {
     TimeWords,
     Weekdays,
     Vehicles,
+    Weapons,
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Arg {
@@ -539,6 +540,13 @@ pub const COMMANDS: &[Command] = &[
         help: "alle Magazine voll",
         cheat: true,
         args: &[],
+    },
+    Command {
+        name: "waffe",
+        aliases: &["weapon", "ausruesten"],
+        help: "Waffe in die Hand nehmen (Name oder Nummer 1–8)",
+        cheat: true,
+        args: &[arg("waffe", false, Values::Weapons)],
     },
     Command {
         name: "begrenzer",
@@ -912,6 +920,10 @@ fn values_of(v: Values) -> Vec<Item> {
             .enumerate()
             .map(|(i, d)| item(d, &format!("{} · {}", &d[..2], i + 1)))
             .collect(),
+        Values::Weapons => berlin_sim::combat::WEAPONS
+            .iter()
+            .map(|wp| item(wp.id, wp.name))
+            .collect(),
         Values::Vehicles => berlin_sim::carmodels::CAR_MODELS
             .iter()
             .map(|(m, _)| item(m, berlin_sim::carmodels::spec_of(m).label))
@@ -1271,6 +1283,34 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             }
             w.player.combat.reload_t = 0.;
             ok("Magazine voll")
+        }
+        "waffe" => {
+            use berlin_sim::combat::WEAPONS;
+            let q = a0.map(norm).unwrap_or_default();
+            let i = q
+                .parse::<usize>()
+                .ok()
+                .filter(|n| (1..=WEAPONS.len()).contains(n))
+                .map(|n| n - 1)
+                .or_else(|| {
+                    WEAPONS
+                        .iter()
+                        .position(|wp| norm(wp.id) == q || norm(wp.name) == q)
+                });
+            match i {
+                Some(i) => {
+                    w.player.combat.weapon = i;
+                    ok(format!("{} in der Hand", WEAPONS[i].name))
+                }
+                None => err(format!(
+                    "Waffe: {}",
+                    WEAPONS
+                        .iter()
+                        .map(|wp| wp.id)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )),
+            }
         }
         "esp" => match on_off(a0, w.esp) {
             Some(on) => {

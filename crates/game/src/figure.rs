@@ -293,6 +293,9 @@ pub struct Who {
     /// 0 geht … 1 rennt
     pub run: f32,
     pub skin: u32,
+    /// Hände an einer Schusswaffe ([links, rechts] als (vor, quer) in px, `weaponart::hands`): Arme gestreckt, Hände
+    /// vor der Waffe, der Oberkörper dreht nicht mit dem Schritt
+    pub hold: Option<[[f32; 2]; 2]>,
 }
 impl Who {
     pub fn of(p: &Ped) -> Self {
@@ -307,6 +310,7 @@ impl Who {
             amp: if moving { 1. } else { 0. },
             run: if moving && run { 1. } else { 0. },
             skin: p.skin,
+            hold: None,
         }
     }
 }
@@ -388,7 +392,13 @@ pub fn pose(who: &Who, acc: Acc) -> ([f32; 2], [[f32; 2]; 2], f32) {
 pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<Body>) {
     let (x, y, a) = (who.x as f32, who.y as f32, who.facing as f32);
     let k = look.scale;
-    let (feet, hands, twist) = pose(who, look.acc);
+    let (feet, mut hands, mut twist) = pose(who, look.acc);
+    if let Some(h) = who.hold {
+        hands = [[h[0][0] / k, h[0][1] / k], [h[1][0] / k, h[1][1] / k]];
+        twist = 0.;
+    }
+    // Hände an der Waffe liegen vor ihr (sonst unter dem Oberkörper)
+    let hand_d = if who.hold.is_some() { -0.0004 } else { 0. };
     let (c, s) = (a.cos(), a.sin());
     // Punkt im Personenrahmen: f nach vorn, r nach rechts
     let at = |f: f32, r: f32| [x + c * f - s * r, y + s * f + c * r];
@@ -533,14 +543,14 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
                 });
             };
         seg(out, sh, el, 1.25 * k, shade(top, 0.92), 0.00006);
-        seg(out, el, hd, 1.05 * k, shade(top, 0.85), 0.00005);
+        seg(out, el, hd, 1.05 * k, shade(top, 0.85), 0.00005 + hand_d);
         let h = tat(hd[0], hd[1]);
         out.push(Body {
             center: h,
             half: [1.05 * k, 1.05 * k],
             angle: 0.,
             shape: 1.,
-            depth: depth + 0.00004,
+            depth: depth + 0.00004 + hand_d,
             color: skin,
         });
     }

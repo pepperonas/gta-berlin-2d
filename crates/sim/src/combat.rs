@@ -765,6 +765,23 @@ fn gauss(rng: &mut Rng) -> f64 {
     (rng.float() + rng.float() + rng.float() - 1.5) * 0.8
 }
 
+/// Mündung der Waffe in der Hand (px, Figur-System): (vor der Figur, quer; + = rechts). Die Zeichnung
+/// (`game/weaponart.rs`) legt das Laufende genau hierhin, der Schuss beginnt hier.
+pub fn muzzle(weapon: &str) -> (f64, f64) {
+    match weapon {
+        "pistol" => (13., 0.4),
+        "smg" => (16.5, 0.9),
+        "shotgun" => (20., 1.),
+        _ => (10., 0.),
+    }
+}
+/// Mündung in Weltkoordinaten für eine Figur bei (x, y), die in Richtung `ang` zielt.
+pub fn muzzle_at(weapon: &str, x: f64, y: f64, ang: f64) -> (f64, f64) {
+    let (f, r) = muzzle(weapon);
+    let (c, s) = (ang.cos(), ang.sin());
+    (x + c * f - s * r, y + s * f + c * r)
+}
+
 /// Schuss (eine Salve; die Schrotflinte fächert `pellets` Kugeln).
 pub fn shoot(w: &mut World, wp: &Weapon, ang: f64, spread_k: f64) {
     let (px, py, lvl) = (w.player.x, w.player.y, w.player.level.lvl);
@@ -814,9 +831,11 @@ pub fn shoot(w: &mut World, wp: &Weapon, ang: f64, spread_k: f64) {
             None => {}
         }
     }
+    // Mündungsfeuer und Leuchtspur beginnen am Laufende
+    let (mx, my) = muzzle_at(wp.id, px, py, ang);
     w.events.push(Event::Shot {
-        x: px + ang.cos() * 10.,
-        y: py + ang.sin() * 10.,
+        x: mx,
+        y: my,
         a: ang,
         weapon: wp.id,
         traces,

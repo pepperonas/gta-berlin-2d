@@ -3045,6 +3045,21 @@ fn weapon_bodies(
         }
         return;
     }
+    // Schusswaffen: aus Teilen, in beiden Händen (`weaponart`); das Laufende ist die Mündung des Schusses
+    if let Some(parts) = crate::weaponart::parts(wp.id) {
+        let (c, s) = (fx, fy);
+        for (i, q) in parts.iter().enumerate() {
+            out.push(Body {
+                center: [at.0 + c * q.f - s * q.r, at.1 + s * q.f + c * q.r],
+                half: [q.hf, q.hr],
+                angle: a,
+                shape: q.shape,
+                depth: depth - 0.0003 - i as f32 * 0.00001,
+                color: rgba(q.color, 1.),
+            });
+        }
+        return;
+    }
     let wa = a + swing * 1.2 - 0.6 * swing.signum();
     let (wx, wy) = (wa.cos(), wa.sin());
     let side = (-fy * 3.5, fx * 3.5);
@@ -4014,6 +4029,7 @@ fn player_figure(
             amp: (pl.move_speed / 40.).clamp(0., 1.) as f32,
             run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
             skin: 0xf2d0b1,
+            hold: crate::weaponart::hands(pl.combat.weapon().id),
         };
         let fig0 = out.len();
         crate::figure::person_bodies(&who, look, depth, time, out);

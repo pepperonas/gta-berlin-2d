@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Schusswaffen in der Hand sehen echt aus, Kugeln kommen aus dem Lauf.** Pistole, Maschinenpistole
+  und Schrotflinte sind aus Teilen gezeichnet (Griff, Verschluss bzw. Gehäuse, Lauf mit Mündung, Holzschaft und
+  Vorderschaft) und werden beidhändig gehalten – Arme gestreckt, die Schrotflinte an der Schulter. Mündungsfeuer und
+  Leuchtspur beginnen genau am Laufende (vorher an einem Punkt vor der Brust). Neuer Befehl `waffe <name|1–8>`.
 - Native Fassung: **Überfahren mit dem eigenen Fahrzeug wirkt schon bei Stadttempo.** Ab etwa 8 km/h wirft das Auto
   einen Passanten um (er liegt je nach Wucht ein paar Sekunden am Boden und flieht dann), ab etwa 40 km/h ist es
   tödlich (vorher erst ab weit über 100 km/h, darunter liefen alle einfach weg). Unfälle der KI bleiben wie gehabt.

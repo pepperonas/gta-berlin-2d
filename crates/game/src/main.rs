@@ -32,6 +32,7 @@ mod sound;
 mod streetfurn;
 mod throwaim;
 mod underground;
+mod weaponart;
 mod weatherfx;
 mod wheel;
 use anyhow::{Context, Result, ensure};
