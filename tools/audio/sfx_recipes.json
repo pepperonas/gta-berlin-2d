@@ -512,6 +512,46 @@
       "sha256": "047ad7ed1dd904ee0deda0aa7070b10697b7162f1039f40de8ae1a7cae6ad355",
       "lizenz": "CC0 1.0",
       "urheber": "EpicSoundEffects"
+    },
+    "fs_478991": {
+      "freesound": 478991,
+      "titel": "Car-Burning.wav",
+      "seite": "https://freesound.org/people/DanielVega/sounds/478991/",
+      "sha256": "d3d98e2c250cf3e109e311da4e5eef25506a3e626a68276819a707eaf066ecf0",
+      "lizenz": "CC0 1.0",
+      "urheber": "DanielVega"
+    },
+    "fs_843250": {
+      "freesound": 843250,
+      "titel": "Explosion 4 (Burning Car rec by Ñado)",
+      "seite": "https://freesound.org/people/qubodup/sounds/843250/",
+      "sha256": "722d871f4eafeb11306e911b4fa1773703ee946dd79fa53fb6fb28c5855d9ab4",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_67469": {
+      "freesound": 67469,
+      "titel": "Fragmentation Grenade Explosion Military M67 1.flac",
+      "seite": "https://freesound.org/people/qubodup/sounds/67469/",
+      "sha256": "6f78be810eb078d0a3784cc9757e87f7f4772a48d743763eeafd7e3773113bcf",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_337298": {
+      "freesound": 337298,
+      "titel": "Explosion008.wav",
+      "seite": "https://freesound.org/people/klangfabrik/sounds/337298/",
+      "sha256": "b9048be320cfe2daa6fd5edb6750fea06fdefe0d6280194d402996e4d8694a96",
+      "lizenz": "CC0 1.0",
+      "urheber": "klangfabrik"
+    },
+    "fs_452670": {
+      "freesound": 452670,
+      "titel": "window small trailer rv glass smash with an axe debris fall metal grill.wav",
+      "seite": "https://freesound.org/people/kyles/sounds/452670/",
+      "sha256": "bf4d9827ebed262f4536ece31368a09e48ba060f3c74b22314f3cc54aa32f944",
+      "lizenz": "CC0 1.0",
+      "urheber": "kyles"
     }
   },
   "klaenge": {
@@ -1695,7 +1735,7 @@
       "hochpass_hz": 120
     },
     "explosion": {
-      "zweck": "Fahrzeug explodiert: Knall mit Nachhall (zwei Aufnahmen)",
+      "zweck": "Fahrzeug explodiert: Knall mit Nachhall, darunter Trümmer aus Glas und Metall (drei Varianten)",
       "quelle": "fs_235968",
       "varianten": [
         [
@@ -1703,6 +1743,12 @@
             "quelle": "fs_235968",
             "datei": "*",
             "at": 0
+          },
+          {
+            "quelle": "fs_452670",
+            "datei": "*",
+            "at": 0.32,
+            "db": -10
           }
         ],
         [
@@ -1711,6 +1757,31 @@
             "datei": "*",
             "at": 0,
             "von_s": 1.0
+          },
+          {
+            "quelle": "fs_452670",
+            "datei": "*",
+            "at": 0.28,
+            "db": -10
+          }
+        ],
+        [
+          {
+            "quelle": "fs_843250",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_235968",
+            "datei": "*",
+            "at": 0.04,
+            "db": -5
+          },
+          {
+            "quelle": "fs_452670",
+            "datei": "*",
+            "at": 0.3,
+            "db": -10
           }
         ]
       ],
@@ -1768,6 +1839,59 @@
       "laenge_s": 2.2,
       "fade_s": 0.6,
       "hochpass_hz": 60
+    },
+    "grenade": {
+      "zweck": "Handgranate: trockener, scharfer Knall mit kurzem Nachhall",
+      "quelle": "fs_67469",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_67469",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_337298",
+            "datei": "*",
+            "at": 0.02,
+            "db": -6
+          }
+        ],
+        [
+          {
+            "quelle": "fs_337298",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_67469",
+            "datei": "*",
+            "at": 0,
+            "db": -3
+          }
+        ]
+      ],
+      "laenge_s": 2.6,
+      "fade_s": 0.8,
+      "hochpass_hz": 30
+    },
+    "amb_fire": {
+      "zweck": "Brand: brennendes Auto, Fauchen und Prasseln (Schleife)",
+      "quelle": "fs_478991",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_478991",
+            "datei": "*",
+            "at": 0,
+            "von_s": 2.0
+          }
+        ]
+      ],
+      "ausrichten": false,
+      "laenge_s": 20,
+      "schleife_blende_s": 0.6,
+      "hochpass_hz": 50
     }
   }
 }

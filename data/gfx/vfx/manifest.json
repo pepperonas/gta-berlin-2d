@@ -1,0 +1,129 @@
+{
+  "_hinweis": "Erzeugt von tools/gfx/build_vfx.py – nicht von Hand ändern.",
+  "quelle": "Free VFX Image Sequences & Flipbooks (Unity Labs Paris)",
+  "seite": "https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks",
+  "urheber": "Thomas Iché, Unity Technologies",
+  "lizenz": "CC0 1.0",
+  "atlas": 2048,
+  "folgen": [
+    {
+      "name": "explosion_a",
+      "zweck": "Fahrzeug explodiert (Variante A)",
+      "paket": "Explosion00",
+      "datei": "Explosion00_5x5.tga",
+      "sha256": "5931820e3e8f5062446b059bf4b0489a8fc56df5de35170721fe9cd4139d6d42",
+      "x": 0,
+      "y": 0,
+      "zelle": [
+        200,
+        200
+      ],
+      "spalten": 5,
+      "bilder": 25,
+      "mischart": "alpha",
+      "leuchten": 1.0
+    },
+    {
+      "name": "explosion_b",
+      "zweck": "Fahrzeug explodiert (Variante B)",
+      "paket": "Explosion01",
+      "datei": "Explosion01_5x5.tga",
+      "sha256": "496a212733eb4e93c230f654f1fc1460e8a6389d2f1b13f2b945ec124a375742",
+      "x": 1024,
+      "y": 0,
+      "zelle": [
+        200,
+        200
+      ],
+      "spalten": 5,
+      "bilder": 25,
+      "mischart": "alpha",
+      "leuchten": 1.0
+    },
+    {
+      "name": "blast",
+      "zweck": "Handgranate: kompakter Blitz, dann Rauch",
+      "paket": "Explosion02",
+      "datei": "Explosion02_5x5.tga",
+      "sha256": "1426be2dcfc9008b8b8f0c7d54a241da3f611725aa3c84fc33f919f56036f538",
+      "x": 0,
+      "y": 1024,
+      "zelle": [
+        128,
+        128
+      ],
+      "spalten": 5,
+      "bilder": 25,
+      "mischart": "alpha",
+      "leuchten": 1.0
+    },
+    {
+      "name": "fireball",
+      "zweck": "Glutkern eines Brandes (Schleife)",
+      "paket": "FireBall03",
+      "datei": "FireBall03_8x8.tga",
+      "sha256": "2128c99e763974c83a64d590389398b078aecd5a088287409644fa4a65f3f3c3",
+      "x": 640,
+      "y": 1024,
+      "zelle": [
+        48,
+        48
+      ],
+      "spalten": 8,
+      "bilder": 64,
+      "mischart": "add",
+      "leuchten": 1.0
+    },
+    {
+      "name": "flame",
+      "zweck": "Flammenzunge, groß (Schleife)",
+      "paket": "Flame02",
+      "datei": "Flame02_16x4.tga",
+      "sha256": "f37b12cdae090591d537ed3bb50396f03833a49864362bf665d6817b7282c954",
+      "x": 1024,
+      "y": 1024,
+      "zelle": [
+        64,
+        128
+      ],
+      "spalten": 16,
+      "bilder": 64,
+      "mischart": "alpha",
+      "leuchten": 1.0
+    },
+    {
+      "name": "flame_small",
+      "zweck": "Flammenzunge, klein (Schleife)",
+      "paket": "Flame03",
+      "datei": "Flame03_16x4.tga",
+      "sha256": "248c2d09c6599ded36085633d4c7fdb9a9a05bdf1a98ab34b8f14d282cef87a9",
+      "x": 1536,
+      "y": 1536,
+      "zelle": [
+        32,
+        64
+      ],
+      "spalten": 16,
+      "bilder": 64,
+      "mischart": "alpha",
+      "leuchten": 1.0
+    },
+    {
+      "name": "smoke",
+      "zweck": "Rauchschwaden (Schleife)",
+      "paket": "WispySmoke01",
+      "datei": "WispySmoke01_8x8.tga",
+      "sha256": "f9bdc88948ff18a7d3e6332b68f2f2ff17e9a64c6feb821e05388f4f23dbcff0",
+      "x": 1024,
+      "y": 1536,
+      "zelle": [
+        64,
+        64
+      ],
+      "spalten": 8,
+      "bilder": 64,
+      "mischart": "alpha",
+      "leuchten": 0.0
+    }
+  ]
+}

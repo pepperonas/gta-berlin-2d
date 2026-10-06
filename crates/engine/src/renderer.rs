@@ -480,26 +480,63 @@ impl Renderer {
         let graphics = GraphicsSettings::default();
         // Körper (Autos, Personen, Schilder): Gruppe 2 = Schriftatlas (Schildtext in der Welt), Gruppe 3 = Lichtkarte
         // (Laternen spiegeln sich nachts im Lack)
+        // dazu der Flipbook-Atlas für Feuer, Explosionen und Rauch (vfx.rs) mit eigenem Sampler (Mips, Rand geklemmt)
         let world_font_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Schrift in der Welt"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 4,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
+            label: Some("Schrift und Flipbooks in der Welt"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let vfx_view = crate::vfx::texture(&device, &queue)?;
+        let vfx_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("VFX-Atlas"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            ..Default::default()
         });
         let world_font = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Schrift in der Welt"),
+            label: Some("Schrift und Flipbooks in der Welt"),
             layout: &world_font_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::TextureView(&font_view),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&font_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&vfx_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::Sampler(&vfx_sampler),
+                },
+            ],
         });
         let body_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Körper mit Schrift und Lichtkarte"),
@@ -1587,6 +1624,7 @@ pub(crate) fn shader_source() -> String {
         atlas::shader_constants().as_str(),
         crate::facade::shader_constants().as_str(),
         crate::vehatlas::shader_constants().as_str(),
+        crate::vfx::shader_constants().as_str(),
         crate::palette::shader_constants().as_str(),
         hud::shader_constants().as_str(),
         include_str!("scene.wgsl"),

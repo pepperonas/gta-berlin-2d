@@ -15,6 +15,7 @@ mod renderer;
 mod scenepass;
 pub mod split;
 pub mod vehatlas;
+pub mod vfx;
 use anyhow::Result;
 use berlin_map_loader::{
     format::Index,

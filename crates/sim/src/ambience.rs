@@ -36,6 +36,39 @@ pub struct Mix {
     pub rumble: f64,
     /// im U-Bahnhof (gedämpfte Halle)
     pub station: bool,
+    /// Brände in der Nähe (brennende und glimmende Wracks, Molotow-Feuer): Fauchen und Prasseln, 0…1,5
+    pub fire: f64,
+}
+
+/// Hörweite eines Brandes (px)
+pub const FIRE_HEAR: f64 = 520.;
+
+/// Lautstärke der Brände um (x, y): je Brandherd nach Abstand (quadratisch abfallend), brennende Wracks voll,
+/// glimmende schwächer, Molotow-Feuer nach ihrer Größe; gedeckelt bei 1,5.
+pub fn fire_level(w: &World, x: f64, y: f64) -> f64 {
+    let near = |px: f64, py: f64| {
+        let d = (px - x).hypot(py - y);
+        if d < FIRE_HEAR {
+            (1. - d / FIRE_HEAR).powi(2)
+        } else {
+            0.
+        }
+    };
+    let mut f = 0.;
+    for c in &w.cars {
+        let k = if c.burn.is_some() && !c.exploded {
+            1.
+        } else if c.exploded && c.wreck_t < 30. {
+            0.35 * (1. - c.wreck_t / 30.)
+        } else {
+            continue;
+        };
+        f += k * near(c.x, c.y);
+    }
+    for fl in &w.flames {
+        f += 0.8 * (fl.r() / crate::throw::FLAME_R) * near(fl.x, fl.y);
+    }
+    f.min(1.5)
 }
 
 /// Hochbahn-Hörweite, Takt und Dauer eines Zuges ohne Fahrplan (`ambience.js AMB`)
@@ -263,6 +296,7 @@ pub fn ambience_at(w: &mut World) -> Mix {
         fixed_rumble(w.time, hochbahn)
     };
     Mix {
+        fire: fire_level(w, cx, cy),
         rumble: rumble.clamp(0., 1.),
         station: false,
         bar: bar.max(nl.crowd).clamp(0., 1.),

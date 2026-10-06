@@ -206,3 +206,22 @@ fn console_ignite_never_picks_the_own_car() {
     assert!(c.wrecked && c.burn.is_some());
     assert!(!w.car(pc).unwrap().wrecked);
 }
+
+#[test]
+fn a_fire_is_heard_nearby_and_fades_with_distance() {
+    use berlin_sim::ambience::{FIRE_HEAR, fire_level};
+    let mut w = world(47);
+    let pc = w.player_car_id.unwrap();
+    let (x, y) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+    assert_eq!(fire_level(&w, x, y), 0., "ohne Brand still");
+    let i = w.cars.iter().position(|c| c.id == pc).unwrap();
+    w.cars[i].health = 0.;
+    w.cars[i].wrecked = true;
+    w.update(&Input::default(), DT);
+    assert!(w.car(pc).unwrap().burn.is_some());
+    let near = fire_level(&w, x, y);
+    let mid = fire_level(&w, x + FIRE_HEAR * 0.5, y);
+    assert!(near > 0.9, "direkt daneben laut: {near}");
+    assert!(mid > 0. && mid < near * 0.5, "halbe Hörweite leiser: {mid}");
+    assert_eq!(fire_level(&w, x + FIRE_HEAR + 10., y), 0.);
+}

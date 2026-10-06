@@ -82,8 +82,9 @@ pub const CRASH_LIGHT: SfxSpec = spec("crash_light", 0.783, 0.08, true);
 pub const CRASH_HEAVY_AT: f32 = 0.45;
 pub const HORN: SfxSpec = spec("horn", 0.168, 0.02, true);
 /// Fahrzeug-Explosion (Knall mit Nachhall) und Knistern eines brennenden Wracks
-pub const EXPLOSION: SfxSpec = spec("explosion", 0.653, 0.06, true);
+pub const EXPLOSION: SfxSpec = spec("explosion", 0.775, 0.06, true);
 pub const FIRE_CRACKLE: SfxSpec = spec("fire_crackle", 0.893, 0.08, true);
+pub const GRENADE: SfxSpec = spec("grenade", 0.92, 0.06, true);
 pub const MOLOTOV: SfxSpec = spec("molotov", 0.7, 0.06, true);
 pub const DOOR: SfxSpec = spec("door", 0.229, 0.05, true);
 pub const KNOCK: SfxSpec = spec("knock", 0.408, 0.08, true);
@@ -110,6 +111,8 @@ pub const AMB_WHISTLE: f32 = 0.181;
 pub const AMB_BIRDS: f32 = 0.0197;
 pub const AMB_BAR: f32 = 0.0422;
 pub const AMB_CLUB: f32 = 0.288;
+/// Brand (brennendes Auto) bei Pegel 1: etwa so laut wie mittlerer Regen
+pub const AMB_FIRE: f32 = 0.9;
 pub const THUNDER_NEAR: SfxSpec = spec("thunder_near", 0.218, 0.08, false);
 pub const THUNDER_FAR: SfxSpec = spec("thunder_far", 0.0732, 0.1, false);
 /// Bahn aus Aufnahmen: Pegel je Schicht (Test `rail_loops_match_the_synth_layers`)
@@ -148,6 +151,8 @@ pub enum Sfx {
     FireCrackle(f32),
     /// Molotow zerschellt: Glas und auflodernde Flamme
     Molotov(f32),
+    /// Handgranate explodiert: trockener, scharfer Knall
+    Grenade(f32),
     Hit,
     Horn(f32),
     Knock(f32),
@@ -550,6 +555,8 @@ struct Ambience {
     rumble_loop: Option<LoopLayer>,
     next_chirp: f64,
     drops: f64,
+    /// Bruchteil der Brand-Knackser (ohne Aufnahmen)
+    crackle: f64,
     last: f64,
     /// Nachtleben: Stimmengewirr in drei Formantbändern, Richtung, Silbentakt, Lachen, Gläser, Club-Takt
     babble: [NoiseLayer; 3],
@@ -575,6 +582,7 @@ struct AmbLoops {
     birds: LoopLayer,
     bar: LoopLayer,
     club: LoopLayer,
+    fire: LoopLayer,
 }
 impl AmbLoops {
     fn new() -> Option<Self> {
@@ -589,9 +597,10 @@ impl AmbLoops {
             birds: LoopLayer::new("amb_birds")?,
             bar: LoopLayer::new("amb_bar")?,
             club: LoopLayer::new("amb_club")?,
+            fire: LoopLayer::new("amb_fire")?,
         })
     }
-    fn layers(&mut self) -> [&mut LoopLayer; 10] {
+    fn layers(&mut self) -> [&mut LoopLayer; 11] {
         [
             &mut self.hum,
             &mut self.traffic,
@@ -603,6 +612,7 @@ impl AmbLoops {
             &mut self.birds,
             &mut self.bar,
             &mut self.club,
+            &mut self.fire,
         ]
     }
 }
@@ -735,6 +745,7 @@ impl Synth {
             loops: AmbLoops::new(),
             next_chirp: 0.,
             drops: 0.,
+            crackle: 0.,
             last: 0.,
             babble: [
                 l(Bandpass, 480., 3.),
@@ -1303,6 +1314,7 @@ impl Synth {
                 l.birds.set(AMB_BIRDS * m.birds.min(1.) as f32, 1., 0.6, sr);
                 l.bar.set(AMB_BAR * m.bar as f32, 1., 0.3, sr);
                 l.club.set(AMB_CLUB * m.music as f32, 1., 0.3, sr);
+                l.fire.set(AMB_FIRE * m.fire as f32, 1., 0.4, sr);
                 a.bar_pan.set((m.bar_pan * 0.7) as f32, 0.3, sr);
                 a.last = self.t;
                 self.muffle_f
@@ -1326,6 +1338,23 @@ impl Synth {
             );
             let gain = 0.012 + self.rng.unit() * 0.02 * rain.min(1.) as f32;
             self.burst(d, f, gain, FilterType::Bandpass, 3., at, 0., Dest::Outside);
+        }
+        // ohne Aufnahmen: Brände prasseln als Folge kurzer Knackser
+        self.amb.crackle += m.fire.min(1.5) * 30. * since;
+        while self.amb.crackle >= 1. {
+            self.amb.crackle -= 1.;
+            let (at, f) = (self.rng.unit() * 0.25, 1500. + self.rng.unit() * 3500.);
+            let gain = (0.03 + self.rng.unit() * 0.06) * m.fire.min(1.) as f32;
+            self.burst(
+                0.02,
+                f,
+                gain,
+                FilterType::Bandpass,
+                1.2,
+                at,
+                0.001,
+                Dest::Outside,
+            );
         }
         self.muffle_f
             .set(18000. * 0.04f32.powf(m.muffle as f32), 0.3, sr);
@@ -1576,6 +1605,12 @@ impl Synth {
                 self.burst(2.2, 700., 0.9 * k, Lowpass, 0.6, 0., 0.004, M);
                 self.burst(0.35, 2600., 0.5 * k, Lowpass, 0.7, 0., 0.002, M);
                 self.tone(55., 0.9, Sine, 0.6 * k, 0., -30., 0., M);
+            }
+            Sfx::Grenade(k) if self.sample(GRENADE, k, M) => {}
+            Sfx::Grenade(k) => {
+                // ohne Aufnahme: harter Schlag, kurzes Rauschen
+                self.burst(0.9, 1400., 0.8 * k, Lowpass, 0.7, 0., 0.002, M);
+                self.tone(70., 0.5, Sine, 0.5 * k, 0., -40., 0., M);
             }
             Sfx::Molotov(k) if self.sample(MOLOTOV, k, M) => {}
             Sfx::Molotov(k) => {
@@ -2175,6 +2210,7 @@ mod tests {
             (Sfx::Explosion(1.), "explosion", 0.17),
             (Sfx::FireCrackle(1.), "fire_crackle", 0.02),
             (Sfx::Molotov(1.), "molotov", 0.08),
+            (Sfx::Grenade(1.), "grenade", 0.15),
             (Sfx::Crash(0.3), "crash_light", 0.0342),
             (Sfx::Horn(1.), "horn", 0.03),
             (Sfx::Door, "door", 0.0376),

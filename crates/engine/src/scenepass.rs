@@ -193,7 +193,14 @@ impl ScenePipes {
             // Durchscheinende Effekte (Qualm, Gischt, Leuchtspuren, Mündungsfeuer): nach Licht und Silhouetten, mit
             // Tiefentest (Dächer bleiben davor), aber ohne Tiefe zu schreiben – sonst zählten sie als Verdeckung und
             // der Silhouetten-Durchgang zeichnete das Auto unter einer Reifenwolke als Umriss.
-            effects: b("Berlin effects", "body_fs", alpha, false, LessEqual),
+            // vormultipliziert: Flipbook-Feuer mischt additiv (Deckkraft 0), Rauch und alle anderen Formen deckend
+            effects: b(
+                "Berlin effects",
+                "effect_fs",
+                Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                false,
+                LessEqual,
+            ),
             comp: lightpass::composites(cx, SCENE_FORMAT, samples),
         }
     }

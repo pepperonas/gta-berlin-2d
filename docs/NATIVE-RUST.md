@@ -2375,3 +2375,32 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
 - **Befehl `werfen [granate|molotow] [grad]`:** wirft 15 m weit in Blickrichtung oder in die Richtung in Grad
   (0 = Osten, 90 = Süden). Tests: `crates/sim/tests/throw.rs`.
 
+## Feuer, Explosionen und Rauch aus Flipbooks (06.10.2026)
+
+- **Vorlagen:** „Free VFX Image Sequences & Flipbooks“ von Unity Labs Paris (Thomas Iché), in Houdini simuliert, CC0
+  ([Blog](https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks)). Verglichen mit OpenGameArt
+  (handgemalt/cartoonhaft) und kostenpflichtigen Paketen die einzige realistische, freie Quelle. Verwendet:
+  Explosion00/01 (Fahrzeug), Explosion02 (Granate), FireBall03 (additiver Glutkern, Schleife), Flame02/03
+  (Flammenzungen), WispySmoke01 (Rauch).
+- **Bau (`tools/gfx/build_vfx.py`):** lädt die Pakete (SHA-256 geprüft, Zwischenspeicher `tools/gfx/.cache`),
+  schneidet die Bilder aus, verkleinert vormultipliziert und packt alle Folgen in `data/gfx/vfx/vfx_atlas.png`
+  (2048², 3,1 MB) plus `manifest.json` (Raster je Folge, Mischart, Leuchtanteil, Lizenz). Nie von Hand ändern.
+- **Engine (`engine/vfx.rs`):** liest das Manifest, erzeugt die Shader-Konstanten (`vfx_rect`/`vfx_meta`, Zahlen als
+  `f32(n)`), lädt den Atlas als `Rgba8UnormSrgb` linear vormultipliziert mit 5 eigenen Mip-Stufen (keine dunklen
+  Säume). Bindung: Gruppe 2 der Körper-Pipelines, Bindungen 5/6. Ein Effekt-Körper mit **negativer Form** zeigt ein
+  Flipbook-Bild: `vfx::shape(folge, bild)` kodiert Folge und gebrochene Bildnummer, `effect_fs` blendet zwischen zwei
+  Bildern über. Der Effekt-Durchgang mischt jetzt **vormultipliziert** (additive Folgen tragen Deckkraft 0); helle
+  Bildteile leuchten selbst (`VFX_GLOW` 1,3, wärmer getönt), dunkle nehmen die Tönung des Körpers an (Rauch im
+  Umgebungslicht).
+- **Darstellung (`game/firefx.rs`):** Explosion = Flipbook (2,6 s, schneller Anfang) plus Nachdetonationen, Funken,
+  Trümmer, abziehender Rauch, Lichtblitz und Brandfleck. Brennendes Wrack = gedämpfter additiver Glutkern + 2–6
+  Flammenzungen (vom Motorraum zum Heck, mit der Hitze), Ölrauch als Rauch-Flipbook; glimmend kleine Flammen.
+  Molotow = Glutteppich + 14 Flammenzungen über die Fläche (ohne Glutkern: dessen Vorlage füllt die Zelle und läge
+  als flache Scheibe am Boden). Alle Phasen aus Hashes. Pixel-Modus nutzt dieselben Bilder (Palette quantisiert).
+- **Kosten:** 1080p, Nacht, M1 Pro: GPU-Median 3,8 ms ohne, 4,3 ms mit Auto-Explosion, 3,9 ms mit Molotow.
+- **Klang:** `amb_fire` (Schleife aus „Car-Burning“, DanielVega) in der Umgebungsmischung, Pegel aus
+  `ambience::fire_level` (Hörweite 52 m, glimmend schwächer, Molotow nach Größe) – ersetzt das alle 2,2 s neu
+  angesetzte Knistern; ohne Aufnahmen prasseln Knackser aus der Synthese. `explosion` jetzt drei Varianten mit
+  Trümmerregen (kyles) und einem Knall eines brennenden Autos (qubodup); `grenade` eigener Knall (qubodup M67 +
+  klangfabrik). Pegel gegen die Synthese kalibriert.
+

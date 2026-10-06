@@ -20,6 +20,9 @@ struct MatParams { a: array<vec4<f32>, 32>, b: array<vec4<f32>, 32> };
 @group(2) @binding(3) var<uniform> mat: MatParams;
 // Körper-Durchgang: Schriftatlas der HUD-Schrift (SDF oben), für Schildtext in der Welt (body_fs, Form 8)
 @group(2) @binding(4) var world_font: texture_2d<f32>;
+// Effekt-Durchgang: Flipbook-Atlas (vfx.rs; sRGB-Textur, Farbe linear vormultipliziert) und sein Sampler
+@group(2) @binding(5) var vfx_tex: texture_2d<f32>;
+@group(2) @binding(6) var vfx_sampler: sampler;
 struct Out {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec3<f32>, @location(1) normal: vec3<f32>,
@@ -668,6 +671,61 @@ fn sprite_cover(shape: f32, q: vec2<f32>) -> f32 {
     // Ableitungen vor jeder Verzweigung (einheitlicher Kontrollfluss)
     let gx = dpdx(in.local);
     let gy = dpdy(in.local);
+    return body_color(in, gx, gy);
+}
+// Leuchtkraft der selbst leuchtenden Flipbook-Teile (linear, über 1: der Bloom greift)
+const VFX_GLOW: f32 = 1.3;
+// Flipbook-Bild (Form < 0, vfx.rs shape): Folge und gebrochene Bildnummer aus der Form, zwei Bilder überblendet.
+// Ergebnis linear und vormultipliziert. Helle Teile leuchten selbst (Feuer), dunkle nehmen die Tönung des Körpers an
+// (Rauch im Umgebungslicht); additive Folgen tragen keine Deckkraft.
+fn vfx_color(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> vec4<f32> {
+    let q = in.local / in.extent;
+    if abs(q.x) > 1.0 || abs(q.y) > 1.0 { discard; }
+    let g = -in.shape - 1.0;
+    let s = floor(g / VFX_STRIDE);
+    let f = g - s * VFX_STRIDE;
+    let r = vfx_rect(u32(s));
+    let m = vfx_meta(u32(s));
+    let f0 = floor(f);
+    let t = f - f0;
+    let f1 = (f0 + 1.0) % m.y;
+    let cell = r.zw;
+    let uv = clamp(q * 0.5 + 0.5, vec2(1.5) / cell, vec2(1.0) - vec2(1.5) / cell);
+    let p0 = (r.xy + (vec2(f0 % m.x, floor(f0 / m.x)) + uv) * cell) / VFX_ATLAS;
+    let p1 = (r.xy + (vec2(f1 % m.x, floor(f1 / m.x)) + uv) * cell) / VFX_ATLAS;
+    let k = 0.5 * cell / VFX_ATLAS;
+    let dx = gx / in.extent * k;
+    let dy = gy / in.extent * k;
+    let c = mix(
+        textureSampleGrad(vfx_tex, vfx_sampler, p0, dx, dy),
+        textureSampleGrad(vfx_tex, vfx_sampler, p1, dx, dy),
+        t
+    );
+    let op = in.color.a;
+    if m.z > 0.5 {
+        let rgb = c.rgb * in.color.rgb * op * VFX_GLOW;
+        if max(rgb.r, max(rgb.g, rgb.b)) < 0.002 { discard; }
+        return vec4(rgb, 0.0);
+    }
+    if c.a * op < 0.003 { discard; }
+    let straight = c.rgb / max(c.a, 1e-4);
+    let lum = dot(straight, vec3(0.2126, 0.7152, 0.0722));
+    let e = m.w * smoothstep(0.06, 0.4, lum);
+    // Feuer etwas wärmer als die Vorlage (die cremeweiß rendert)
+    let light = mix(in.color.rgb, VFX_GLOW * vec3(1.0, 0.8, 0.6), e);
+    return vec4(c.rgb * light * op, c.a * op);
+}
+// Effekt-Durchgang (vormultiplizierte Mischung): Flipbooks direkt, alle anderen Formen wie body_fs.
+@fragment fn effect_fs(in: BodyOut) -> @location(0) vec4<f32> {
+    let gx = dpdx(in.local);
+    let gy = dpdy(in.local);
+    if in.shape < 0.0 {
+        return vfx_color(in, gx, gy);
+    }
+    let c = body_color(in, gx, gy);
+    return vec4(c.rgb * c.a, c.a);
+}
+fn body_color(in: BodyOut, gx: vec2<f32>, gy: vec2<f32>) -> vec4<f32> {
     if in.shape >= 16.0 {
         let v = vehicle(in, gx, gy);
         if v.color.a < 0.03 { discard; }

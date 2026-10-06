@@ -8,6 +8,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Feuer, Explosionen und Rauch aus gerenderten Vorlagen.** Statt runder Partikel spielen jetzt
+  in Houdini simulierte Flipbooks (CC0, Unity Labs Paris): Auto-Explosionen als Feuerball, der in schwarzen Ölrauch
+  übergeht (zwei Varianten, dazu zwei kleinere Nachdetonationen), Granaten als kompakter Blitz, brennende Wracks und
+  Molotow-Feuer mit züngelnden Flammen in versetzter Phase, Rauchschwaden als eigenes Flipbook. Feuer leuchtet selbst,
+  Rauch nimmt das Umgebungslicht an, beides auch im Pixel-Modus. Dazu neue Aufnahmen (Freesound, CC0): Brände
+  fauchen und prasseln als durchgehende Schleife (brennendes Auto, DanielVega), Auto-Explosionen haben einen
+  Trümmerregen aus Glas und Metall und eine dritte Variante (Knall eines brennenden Autos), Granaten einen eigenen
+  trockenen Knall. Der blasse Druckwellenring entfällt.
 - Native Fassung: **Handgranate und Molotowcocktail** (Waffen 7 und 8, Waffenrad). Granaten fliegen im Bogen zum
   Zeiger, prallen von Wänden ab, rollen aus und explodieren nach 2,4 s mit derselben Druckwelle wie ein Auto (Zünder
   blinkt am Ende). Molotows zerschellen und setzen den Boden 8 s lang in Brand: Menschen brennen, Autos werden zum

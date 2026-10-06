@@ -45,8 +45,6 @@ pub struct Listener {
     sample_npc: HashMap<u32, (EngineSound, f64)>,
     /// Koop: Motor aus Aufnahmen für das Auto von Spieler 2 (eigene Stimme, nicht aus dem Verkehr)
     sample_p2: Option<(u32, EngineSound)>,
-    /// brennende Wracks: wann das Knistern zuletzt neu angesetzt wurde (Spielzeit)
-    crackle: HashMap<u32, f64>,
     pub engine_override: Option<EngineOverride>,
     pub reference: Option<std::sync::Arc<[f32]>>,
     pub engine_view: EngineView,
@@ -145,10 +143,22 @@ impl Listener {
                 // Absprung und Landung: Schritte auf dem Untergrund (unten, braucht die Stadt)
                 Event::Jump { .. } | Event::Land { .. } => None,
                 // Knall: weit hörbar (wie ein Schuss), nah mit voller Wucht
-                Event::Explosion { x, y, strength, .. } => {
+                Event::Explosion {
+                    x,
+                    y,
+                    strength,
+                    car,
+                    ..
+                } => {
                     let k = (1. - dist(x, y) / (EVENT_HEAR * 3.)).clamp(0., 1.) as f32;
+                    let g = (0.7 + 0.3 * strength as f32) * k.powf(0.7);
+                    // Fahrzeug: Knall mit Trümmerregen; Handgranate: trockener Knall
                     Some((
-                        Sfx::Explosion((0.7 + 0.3 * strength as f32) * k.powf(0.7)),
+                        if car.is_some() {
+                            Sfx::Explosion(g)
+                        } else {
+                            Sfx::Grenade(g)
+                        },
                         1.,
                     ))
                 }
@@ -183,32 +193,7 @@ impl Listener {
                 });
             }
         }
-        // brennende Wracks knistern, solange sie brennen (alle 2,2 s neu angesetzt, nach Entfernung leiser)
-        let mut live = Vec::new();
-        for c in &w.cars {
-            if c.burn.is_none() || c.exploded {
-                continue;
-            }
-            live.push(c.id);
-            let g = near(c.x, c.y);
-            let last = self.crackle.entry(c.id).or_insert(w.time);
-            if w.time - *last >= 2.2 && g > 0.02 {
-                *last = w.time;
-                f.sfx.push(Sfx::FireCrackle(g));
-            }
-        }
-        // Molotow-Feuer ebenso (eigene Schlüssel neben den Fahrzeugnummern)
-        for fl in &w.flames {
-            let key = (1 << 31) | fl.id;
-            live.push(key);
-            let g = near(fl.x, fl.y) * 0.8;
-            let last = self.crackle.entry(key).or_insert(w.time - 1.4);
-            if w.time - *last >= 2.2 && g > 0.02 {
-                *last = w.time;
-                f.sfx.push(Sfx::FireCrackle(g));
-            }
-        }
-        self.crackle.retain(|id, _| live.contains(id));
+        // Brände: Dauerschleife in der Umgebungsmischung (`ambience::fire_level`)
         // eigenes Fahrzeug
         let (wet, snow) = (w.weather.wet, w.weather.snow);
         let hops: Vec<(f64, f64, f32)> = w

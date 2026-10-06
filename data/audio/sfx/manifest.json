@@ -30,6 +30,13 @@
       ],
       "quelle": "fs_870504"
     },
+    "amb_fire": {
+      "zweck": "Brand: brennendes Auto, Fauchen und Prasseln (Schleife)",
+      "dateien": [
+        "amb_fire_1.wav"
+      ],
+      "quelle": "fs_478991"
+    },
     "amb_hum": {
       "zweck": "Stadtbrummen in der Ferne (Schleife)",
       "dateien": [
@@ -148,14 +155,17 @@
       "quelle": "fs_709572"
     },
     "explosion": {
-      "zweck": "Fahrzeug explodiert: Knall mit Nachhall (zwei Aufnahmen)",
+      "zweck": "Fahrzeug explodiert: Knall mit Nachhall, darunter Trümmer aus Glas und Metall (drei Varianten)",
       "dateien": [
         "explosion_1.wav",
-        "explosion_2.wav"
+        "explosion_2.wav",
+        "explosion_3.wav"
       ],
       "quelle": "fs_235968",
       "weitere_quellen": [
-        "fs_186932"
+        "fs_186932",
+        "fs_452670",
+        "fs_843250"
       ]
     },
     "fire_crackle": {
@@ -164,6 +174,17 @@
         "fire_crackle_1.wav"
       ],
       "quelle": "fs_422742"
+    },
+    "grenade": {
+      "zweck": "Handgranate: trockener, scharfer Knall mit kurzem Nachhall",
+      "dateien": [
+        "grenade_1.wav",
+        "grenade_2.wav"
+      ],
+      "quelle": "fs_67469",
+      "weitere_quellen": [
+        "fs_337298"
+      ]
     },
     "hit": {
       "zweck": "Körper prallt auf (Sturz, Rempler, vom Rad gefallen)",
@@ -930,6 +951,36 @@
       "seite": "https://freesound.org/people/EpicSoundEffects/sounds/475879/",
       "lizenz": "CC0 1.0",
       "urheber": "EpicSoundEffects"
+    },
+    "fs_478991": {
+      "titel": "Car-Burning.wav",
+      "seite": "https://freesound.org/people/DanielVega/sounds/478991/",
+      "lizenz": "CC0 1.0",
+      "urheber": "DanielVega"
+    },
+    "fs_843250": {
+      "titel": "Explosion 4 (Burning Car rec by Ñado)",
+      "seite": "https://freesound.org/people/qubodup/sounds/843250/",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_67469": {
+      "titel": "Fragmentation Grenade Explosion Military M67 1.flac",
+      "seite": "https://freesound.org/people/qubodup/sounds/67469/",
+      "lizenz": "CC0 1.0",
+      "urheber": "qubodup"
+    },
+    "fs_337298": {
+      "titel": "Explosion008.wav",
+      "seite": "https://freesound.org/people/klangfabrik/sounds/337298/",
+      "lizenz": "CC0 1.0",
+      "urheber": "klangfabrik"
+    },
+    "fs_452670": {
+      "titel": "window small trailer rv glass smash with an axe debris fall metal grill.wav",
+      "seite": "https://freesound.org/people/kyles/sounds/452670/",
+      "lizenz": "CC0 1.0",
+      "urheber": "kyles"
     }
   }
 }

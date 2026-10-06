@@ -308,6 +308,29 @@ fn material_credits() -> Vec<String> {
         .collect()
 }
 
+/// Feuer-, Explosions- und Rauch-Flipbooks aus dem Manifest von tools/gfx/build_vfx.py: eine Zeile für alle Folgen.
+fn vfx_credit() -> String {
+    let man: serde_json::Value =
+        serde_json::from_str(berlin_engine::vfx::MANIFEST).unwrap_or_default();
+    let s = |k: &str| man[k].as_str().unwrap_or("").to_string();
+    let names: Vec<String> = man["folgen"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|f| f["paket"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    format!(
+        "Feuer, Explosionen und Rauch ({}): „{}“, {}, {} – {}",
+        names.join(", "),
+        s("quelle"),
+        s("urheber"),
+        s("lizenz"),
+        s("seite").trim_start_matches("https://")
+    )
+}
+
 /// HD-Schrift aus ihrem Manifest (Name, Urheber, Lizenz, Seite).
 fn font_credit() -> String {
     font_line("schrift", "HD-Modus")
@@ -357,6 +380,7 @@ fn license_blocks() -> Vec<Block> {
     out.extend(sfx_credits().into_iter().map(Block::Bullet));
     out.extend(engine_credits().into_iter().map(Block::Bullet));
     out.extend(material_credits().into_iter().map(Block::Bullet));
+    out.push(Block::Bullet(vfx_credit()));
     out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),
@@ -722,6 +746,11 @@ mod tests {
         assert!(
             t.contains("Anton") && t.contains("Open Font License"),
             "{t}"
+        );
+        let v = vfx_credit();
+        assert!(
+            v.contains("Explosion00") && v.contains("CC0 1.0") && v.contains("Unity"),
+            "{v}"
         );
         let c = material_credits();
         let man: serde_json::Value =
