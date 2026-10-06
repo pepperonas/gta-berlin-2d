@@ -21,6 +21,8 @@ PROBE_FENCE=1 cargo run --release -p berlin-probe --example mac    # wie auf der
 ```
 
 M1 Pro (05.10.2026, Zeitstempel): Float 4× MSAA 4,46 ms · Float ohne MSAA 5,34 ms · 8 Bit 4,95 ms (GPU-Median).
+M1 Pro (06.10.2026, Fence wie auf der Xbox): Float 4× MSAA 6,95 ms · Float ohne MSAA 6,98 ms · 8 Bit 6,92 ms (Median).
+Series X als App (06.10.2026, Fence): Float 4× MSAA 53 ms, P95 193 ms – im App-Modus gedeckelt, nicht vergleichbar.
 
 ## In der Windows-VM bauen
 

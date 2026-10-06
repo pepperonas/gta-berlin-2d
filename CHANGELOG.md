@@ -469,7 +469,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
     (Last einzeln abschicken, Zeit bis die GPU fertig ist); auf dem Mac vergleichbar mit `PROBE_FENCE=1`.
   Dazu: Prüfpunkte im Aufbau mit Geräteverlust-Rückruf und DX12-Grund (`GetDeviceRemovedReason`), ein zweiter Versuch
   nach 10 s Pause, Standardschrift statt Consolas (fehlt auf der Konsole). Erste Messung lief noch als *App* (laut
-  Microsoft höchstens 45 % der GPU, geteilt): Float 4× MSAA 53 ms Median, P95 193 ms. Die Messung im Spielmodus steht
+  Microsoft höchstens 45 % der GPU, geteilt): Float 4× MSAA 53 ms Median, P95 193 ms. Der Mac braucht für dieselbe Last,
+  ebenso per Fence gemessen, 6,95 ms – der Abstand spiegelt die Zuteilung im App-Modus, nicht die Leistung der Konsole. Die Messung im Spielmodus steht
   aus; den Schalter „App type: Game“ aus den bekannten Anleitungen gibt es in Dev Home auf dieser Systemversion nicht.
 - Native Fassung: Über Zäune springen klappt jetzt auch im Gehtempo und mit der Maussteuerung. Der Absprung trägt die
   Figur mit Schwung weiter (vorher landete sie im Gehtempo mitten im Zaun und wurde zurückgeschoben – 1 von 85

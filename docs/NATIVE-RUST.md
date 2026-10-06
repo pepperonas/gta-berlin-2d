@@ -220,7 +220,14 @@ Was auf der Konsole scheiterte und für das Spiel gilt:
 
 **Messung (Fence: Last einzeln abschicken, Zeit bis die GPU fertig ist; 8 Schichten in 2560×1440, Float, 4× MSAA):**
 **53 ms Median, P95 193 ms** – noch im **App-Modus** (laut Microsoft höchstens 45 % der GPU, geteilt, 1 GB). Mac-Vergleich mit
-Zeitstempeln 4,46 ms; vergleichbarer Mac-Wert per `PROBE_FENCE=1 cargo run --release -p berlin-probe --example mac` steht aus.
+Zeitstempeln 4,46 ms; vergleichbar per Fence (`PROBE_FENCE=1 cargo run --release -p berlin-probe --example mac`, 06.10.2026,
+M1 Pro, Fenster 1920×1080, Windows-VM lief nebenher): **Float 4× MSAA 6,95 ms**, Float ohne MSAA 6,98 ms, 8 Bit 6,92 ms
+(Median; P95 9,3–11,4 ms).
+
+**Einordnung:** Rechnerisch wäre die Konsole damit 7,6× langsamer als der M1 Pro – das passt nicht zur Hardware (Series X
+≈ 12 TFLOPS gegen ≈ 5 TFLOPS). Die 53 ms messen im App-Modus vor allem die **Zuteilung**: höchstens 45 % der GPU in
+Zeitscheiben, die Fence-Zeit enthält das Warten auf die nächste Scheibe (darauf deutet auch P95 193 ms). Auf das Spiel
+übertragen lässt sich daraus nichts; dafür braucht es die Messung im Spielmodus.
 
 **Offen:** Spielmodus. Der in allen Anleitungen beschriebene Schalter (Dev Home → Ansichtstaste → *View details* → *App type:
 Game*) existiert auf dieser Systemversion nicht; die sideloadete App steht unter „Apps“. Noch nicht probiert: Device Portal
