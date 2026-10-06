@@ -155,12 +155,28 @@ impl Nav {
             self.clear();
             return false;
         }
+        self.set(at);
+        true
+    }
+    /// Wegpunkt setzen (Route wird neu gerechnet).
+    pub fn set(&mut self, at: (f64, f64)) {
         self.waypoint = Some(at);
         self.route = None;
         self.progress = 0;
         self.failed = false;
         self.last_calc = f64::NEG_INFINITY;
-        true
+    }
+    /// Koop: derselbe Wegpunkt wie `other` (eigene Route ab der eigenen Lage), Graph geteilt.
+    pub fn follow(&mut self, other: &Nav) {
+        if self.graph.is_none() {
+            self.graph = other.graph.clone();
+        }
+        if self.waypoint != other.waypoint {
+            match other.waypoint {
+                Some(at) => self.set(at),
+                None => self.clear(),
+            }
+        }
     }
     pub fn clear(&mut self) {
         self.waypoint = None;
@@ -279,6 +295,27 @@ fn advance(pts: &[(f64, f64)], from: usize, p: (f64, f64)) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn second_player_follows_the_shared_waypoint() {
+        let mut a = Nav::default();
+        let mut b = Nav::default();
+        a.toggle((100., 200.), 10.);
+        b.follow(&a);
+        assert_eq!(b.waypoint, Some((100., 200.)));
+        // eigene Route: Spieler 2 rechnet selbst (hier noch ohne Graph)
+        assert!(b.route.is_none());
+        a.toggle((300., 50.), 10.);
+        b.follow(&a);
+        assert_eq!(
+            b.waypoint,
+            Some((300., 50.)),
+            "neuer Wegpunkt gilt für beide"
+        );
+        a.clear();
+        b.follow(&a);
+        assert_eq!(b.waypoint, None, "erreicht oder entfernt: für beide weg");
+    }
 
     fn graph() -> Arc<RouteGraph> {
         let root = berlin_map_loader::default_data_root();

@@ -793,16 +793,38 @@ impl Voices {
         r: f64,
         exclude: Option<u32>,
     ) -> Vec<CarVoice> {
-        let (lx, ly, lvx, lvy) = listener;
         let mut out = Vec::new();
         for c in &world.cars {
             if Some(c.id) == exclude || c.wrecked || c.driver.is_none() || c.kind_info().bike {
                 continue;
             }
+            if let Some(v) = self.voice(world, c, listener, r) {
+                out.push(v);
+            }
+        }
+        // Fahrzeuge außer Hörweite vergessen
+        if self.state.len() > 256 {
+            let live: Vec<u32> = world.cars.iter().map(|c| c.id).collect();
+            self.state.retain(|id, _| live.contains(id));
+        }
+        out.sort_by(|a, b| b.gain.total_cmp(&a.gain));
+        out.truncate(n);
+        out
+    }
+    /// Stimme eines Fahrzeugs für den Hörer (x, y, vx, vy) im Umkreis `r`; `None` außer Hörweite.
+    pub fn voice(
+        &mut self,
+        world: &World,
+        c: &Car,
+        listener: (f64, f64, f64, f64),
+        r: f64,
+    ) -> Option<CarVoice> {
+        let (lx, ly, lvx, lvy) = listener;
+        {
             let (dx, dy) = (c.x - lx, c.y - ly);
             let d = dx.hypot(dy);
             if d >= r {
-                continue;
+                return None;
             }
             let e = engine_for(c);
             let v = c.speed();
@@ -824,7 +846,7 @@ impl Voices {
             let gain = (1. - d / r).powi(2)
                 * (0.35 + 0.65 * clamp01(v / 200. + c.controls.throttle * 0.4))
                 * big;
-            out.push(CarVoice {
+            Some(CarVoice {
                 id: c.id,
                 d,
                 gain,
@@ -832,16 +854,8 @@ impl Voices {
                 rate: SOUND_SPEED / (SOUND_SPEED - vr.clamp(-1500., 1500.)),
                 engine: *st,
                 tire: clamp01(v / 330.),
-            });
+            })
         }
-        // Fahrzeuge außer Hörweite vergessen
-        if self.state.len() > 256 {
-            let live: Vec<u32> = world.cars.iter().map(|c| c.id).collect();
-            self.state.retain(|id, _| live.contains(id));
-        }
-        out.sort_by(|a, b| b.gain.total_cmp(&a.gain));
-        out.truncate(n);
-        out
     }
 }
 

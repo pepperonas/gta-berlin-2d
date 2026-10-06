@@ -47,6 +47,21 @@ pub struct Visible {
     pub lit: bool,
 }
 
+impl World {
+    /// Von Spielern geführte Züge (Muster, Spitze, Tempo): Spieler 1, im Koop dazu Spieler 2.
+    pub fn player_trains(&self) -> Vec<(usize, f64, f64)> {
+        let mut v: Vec<_> = self
+            .player_train
+            .iter()
+            .map(|t| (t.pid, t.s, t.v))
+            .collect();
+        if let Some(t) = self.p2.as_ref().and_then(|s| s.player_train.as_ref()) {
+            v.push((t.pid, t.s, t.v));
+        }
+        v
+    }
+}
+
 fn out_of_view(w: &World, x: f64, y: f64, pad: f64) -> bool {
     !w.in_view_any(x, y, VIEW_HALF_X + pad, VIEW_HALF_Y + pad)
 }
@@ -184,11 +199,13 @@ impl World {
             let t: &Transit = &tr;
             // Straßenbahnen halten vor Hindernissen (Wartezeit zählt mit)
             // Fahrplan-Züge desselben Musters hinter dem Spielerzug warten vor seinem Heck
-            let pt = this.player_train.as_ref().map(|t| (t.pid, t.s));
+            // Koop: hinter beiden Spielerzügen
+            let pts = this.player_trains();
             let mut blocked = |p: &Pattern, v: &mut Veh, dt: f64| {
-                if let Some((pid, ps)) = pt
-                    && pid == p.id
-                {
+                for &(pid, ps, _) in &pts {
+                    if pid != p.id {
+                        continue;
+                    }
                     let vs = position_at(p, v.tau).s;
                     if vs < ps && ps - p.mode.train_len() - vs < 600. {
                         return true;
@@ -321,7 +338,7 @@ impl World {
             }
         }
         // Spielerzug: Straßenbahn immer, S-/U-Bahn nur oberirdisch als festes, fahrendes Hindernis
-        if let Some((pid, ps, pv)) = self.player_train.as_ref().map(|t| (t.pid, t.s, t.v)) {
+        for (pid, ps, pv) in self.player_trains() {
             let p = &tr.patterns[pid];
             let sh = tr.shape_of(p);
             if p.mode == Mode::Tram || !self.ug.underground_at_s(&mut self.city, p, sh, ps) {
@@ -517,7 +534,7 @@ impl World {
             }
         }
         // vom Spieler geführter Zug: Straßenbahn immer, S-/U-Bahn wo das Gleis oben liegt
-        if let Some((pid, ps, pv)) = self.player_train.as_ref().map(|t| (t.pid, t.s, t.v)) {
+        for (pid, ps, pv) in self.player_trains() {
             let p = &tr.patterns[pid];
             let mut cars = Vec::new();
             let mut lvl = Vec::new();

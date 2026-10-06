@@ -2283,11 +2283,18 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   Sitztausch, danach `Hud::shift_since`). Die Engine kennt zwei Minikarten (`Hud::map2`, eigene Kamera-Uniform).
   Weltmarken (Lebensbalken, Schilder, Bahnhofsbuchstaben) je Ansicht projiziert und nur auf der eigenen Hälfte
   behalten. Geteilt zeigt an der Linie je ein Pfeil in der Farbe des anderen Spielers zu ihm, mit Entfernung.
-- **Ton:** Ereignisse hört man nach dem Abstand zum näheren Spieler; der Motor bleibt der von Spieler 1, das Auto von
-  Spieler 2 klingt wie ein Auto im Verkehr.
+- **Ton:** Ereignisse hört man nach dem Abstand zum näheren Spieler. Das Auto von Spieler 2 hat eine eigene, volle
+  Motorstimme (Aufnahme-Bank bzw. Synthese über `Voices::voice` mit dem Auto selbst als Hörer), seitlich nach seiner
+  Lage zu Spieler 1, und fällt dafür aus der Verkehrsauswahl.
+- **Waffenrad von Spieler 2:** LB an seinem Controller wie bei Spieler 1 (tippen = vorige Waffe, halten = Rad in
+  seiner Bildhälfte, rechter Stick wählt); ohne Zeitlupe, die Welt gehört beiden.
+- **Navigation:** ein gemeinsamer Wegpunkt (Stadtplan), jeder Spieler mit eigener Route und Restweg auf seiner
+  Minikarte (`Nav::follow`, Graph geteilt); wer ankommt, löscht ihn für beide.
+- **Züge:** geführte Züge beider Spieler sind Hindernis für Verkehr und Straßenbahnen, Fahrplanzüge warten hinter
+  beiden, und jeder Spielerzug bremst vor dem des anderen (`World::player_trains`, `train_ahead`); Test
+  `second_players_train_is_an_obstacle_and_visible` (mit Gegenprobe).
 - **Messung** (M1 Pro, 2560 × 1440, HD Standard, `--messung`, je 540 Bilder): allein GPU 6,4 ms (P95 8,9),
   gemeinsames Bild 6,4 ms, geteilt 10,4 ms (P95 15,3; CPU 2,4 ms), Pixel geteilt 4,6 ms. Im Budget, die
   Kantenglättung bleibt auch geteilt an.
-- **Grenzen:** Die Fahrplanzüge warten nur hinter einem Zug, den Spieler 1 führt; Spieler 2 hat kein Waffenrad und
-  keine Wegpunkt-Navigation; Statistik zählt beide Spieler zusammen.
+- **Grenzen:** Statistik zählt beide Spieler zusammen; den Wegpunkt setzt, wer den Stadtplan bedient (Spieler 1).
 

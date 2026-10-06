@@ -129,6 +129,10 @@ pub struct Play {
     /// Waffenrad (Maus rechts, Controller LB), Echtzeit für das Halten, Zeitlupe
     wheel_m: crate::wheel::WheelButton,
     wheel_p: crate::wheel::WheelButton,
+    /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
+    wheel_p2: crate::wheel::WheelButton,
+    /// Navigation von Spieler 2: gemeinsamer Wegpunkt, eigene Route
+    nav2: crate::nav::Nav,
     real_t: f64,
     time_scale: f64,
     /// Kurzlebige Effekte (Mündungsfeuer, Leuchtspuren, Blut)
@@ -554,6 +558,8 @@ impl Play {
 
             wheel_m: Default::default(),
             wheel_p: Default::default(),
+            wheel_p2: Default::default(),
+            nav2: Default::default(),
             real_t: 0.,
             time_scale: 1.,
             fx: Default::default(),
@@ -930,15 +936,47 @@ impl Play {
             Mode::Foot
         };
         let pos = self.nav_pos();
-        let text = match self.nav.step(pos, mode, self.world.time) {
-            Some(crate::nav::NavEvent::Arrived) => "Wegpunkt erreicht",
-            Some(crate::nav::NavEvent::NoRoute) => "Keine Route zum Wegpunkt",
-            None => return,
+        let text = |e| match e {
+            crate::nav::NavEvent::Arrived => "Wegpunkt erreicht",
+            crate::nav::NavEvent::NoRoute => "Keine Route zum Wegpunkt",
         };
-        self.world.notice = Some(berlin_sim::world::Notice {
-            text: text.into(),
-            t: 2.,
-        });
+        if let Some(e) = self.nav.step(pos, mode, self.world.time) {
+            self.world.notice = Some(berlin_sim::world::Notice {
+                text: text(e).into(),
+                t: 2.,
+            });
+        }
+        // Koop: Spieler 2 folgt demselben Wegpunkt auf eigener Route; wer ankommt, löscht ihn für beide
+        if self.world.coop() {
+            self.nav2.follow(&self.nav);
+            let (pos2, mode2) = self.nav2_pos();
+            if let Some(e) = self.nav2.step(pos2, mode2, self.world.time) {
+                if matches!(e, crate::nav::NavEvent::Arrived) {
+                    self.nav.clear();
+                }
+                if let Some(s) = self.world.p2.as_mut() {
+                    s.notice = Some(berlin_sim::world::Notice {
+                        text: text(e).into(),
+                        t: 2.,
+                    });
+                }
+            }
+        } else if self.nav2.waypoint.is_some() {
+            self.nav2.clear();
+        }
+    }
+    /// Lage und Fortbewegung von Spieler 2 für die Route.
+    fn nav2_pos(&self) -> ((f64, f64), berlin_sim::routing::Mode) {
+        use berlin_sim::routing::Mode;
+        let w = &self.world;
+        let Some(s) = w.p2.as_ref() else {
+            return ((0., 0.), Mode::Foot);
+        };
+        let car = s.player.in_car.and_then(|id| w.car(id));
+        (
+            car.map_or((s.player.x, s.player.y), |c| (c.x, c.y)),
+            if car.is_some() { Mode::Car } else { Mode::Foot },
+        )
     }
     /// `settings.json` schreiben: Steuerschema und (abweichende) Tastenbelegung.
     fn write_settings(&self) {
@@ -1010,13 +1048,14 @@ impl Play {
         );
         let cam2 = views.cams[(views.count == 2) as usize].clone();
         let from = out.items.len();
+        let nav2 = self.nav2.view(self.nav2_pos().0);
         self.world.swap_seat();
         let warn2 = self.world.road_warning();
         crate::hud::draw(
             &self.world,
             None,
             warn2,
-            &Default::default(),
+            &nav2,
             &cam2,
             viewport,
             out,
@@ -1030,6 +1069,18 @@ impl Play {
         self.world.swap_seat();
         out.shift_since(from, half);
         out.width = full;
+        if self.wheel_p2.open
+            && self.screen == Screen::Playing
+            && let Some(s) = self.world.p2.as_ref()
+        {
+            crate::wheel::draw(
+                out,
+                &self.wheel_p2,
+                &s.player.combat,
+                self.real_t - self.wheel_p2.opened_at,
+                true,
+            );
+        }
         // geteilt: Pfeil an der Linie zum anderen Spieler, mit Entfernung
         if views.count == 2 && views.line > 0.05 {
             let (Some(a), Some(b)) = (
@@ -1086,7 +1137,7 @@ impl Play {
         });
     }
     /// Eingaben von Spieler 2: nur sein Controller, dieselbe Belegung wie Spieler 1 (ohne Tastatur und Maus).
-    fn p2_input(&self, keys: &Keys, bind: &crate::bindings::Bindings) -> Input {
+    fn p2_input(&mut self, keys: &Keys, bind: &crate::bindings::Bindings) -> Input {
         use crate::bindings::Action as B;
         let Some(s) = self.world.p2.as_ref() else {
             return Input::default();
@@ -1113,9 +1164,35 @@ impl Play {
             .as_ref()
             .is_some_and(|r| r.kind == berlin_sim::ride::RideKind::Driver);
         let mut i = input_from(&k2, s.player.in_car.is_some() || drives_train, bind);
-        // Waffenrad-Taste: Spieler 2 hat kein Rad, Tippen wählt die vorige Waffe
-        if bind.pad_pressed(&k2, B::WeaponWheel) && s.player.in_car.is_none() {
-            i.combat.weapon_prev = true;
+        // Waffenrad wie bei Spieler 1 am Controller: LB tippen = vorige Waffe, halten = Rad (in seiner Bildhälfte)
+        let alive_foot =
+            s.player.in_car.is_none() && !s.player.combat.dead && s.player.ride.is_none();
+        let cur = s.player.combat.weapon;
+        let n = berlin_sim::combat::WEAPONS.len();
+        let t = self.real_t;
+        let center = Vec2::new(self.hud_width * 0.75, 360.);
+        let wh = &mut self.wheel_p2;
+        if bind.pad_pressed(&k2, B::WeaponWheel) && alive_foot {
+            wh.press(t, center);
+        }
+        wh.tick(t, alive_foot, cur, n);
+        wh.aim(pad.rx, pad.ry);
+        if wh.down && !bind.pad_of(B::WeaponWheel).is_some_and(|p| p.held(&pad)) {
+            let o = wh.release(t);
+            if o.tap {
+                i.combat.weapon_prev = true;
+            }
+            if let Some(k) = o.pick {
+                i.combat.weapon_slot = k as u8 + 1;
+            }
+        }
+        if wh.open {
+            // bei offenem Rad kein Schuss, Zielen eingefroren
+            i.combat.fire = false;
+            i.combat.fire_pressed = false;
+            i.combat.kick = false;
+            i.combat.aim_x = 0.;
+            i.combat.aim_y = 0.;
         }
         i
     }

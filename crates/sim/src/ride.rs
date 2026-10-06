@@ -871,6 +871,26 @@ impl World {
                 }
             }
         }
+        // Koop: der Zug des anderen Spielers (im Sitztausch liegt er in `p2`) ist ein Hindernis wie jeder andere
+        if let Some(o) = self.p2.as_ref().and_then(|s| s.player_train.as_ref())
+            && tr.patterns[o.pid].mode == p.mode
+        {
+            let q = &tr.patterns[o.pid];
+            let qsh = tr.shape_of(q);
+            let (hx, hy, _) = point_on_shape(qsh, o.s);
+            if (hx - px).abs() <= look && (hy - py).abs() <= look {
+                let (tx, ty, _) = point_on_shape(qsh, o.s - q.mode.train_len());
+                let mut d = 0.;
+                while d <= look {
+                    let (mx, my, _) = point_on_shape(sh, t.s + d);
+                    if (mx - tx).hypot(my - ty) <= 30. {
+                        free = free.min((d - SAFE).max(0.));
+                        break;
+                    }
+                    d += 20.;
+                }
+            }
+        }
         free
     }
     /// Freier Weg der eigenen Straßenbahn bis zum ersten Hindernis auf dem Gleis.

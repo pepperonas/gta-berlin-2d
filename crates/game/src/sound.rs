@@ -43,6 +43,8 @@ pub struct Listener {
     /// Motoren aus Aufnahmen: eigener und fremde Zustände
     sample_own: Option<EngineSound>,
     sample_npc: HashMap<u32, (EngineSound, f64)>,
+    /// Koop: Motor aus Aufnahmen für das Auto von Spieler 2 (eigene Stimme, nicht aus dem Verkehr)
+    sample_p2: Option<(u32, EngineSound)>,
     pub engine_override: Option<EngineOverride>,
     pub reference: Option<std::sync::Arc<[f32]>>,
     pub engine_view: EngineView,
@@ -283,9 +285,53 @@ impl Listener {
         let (lvx, lvy) = pc.as_ref().map(|c| (c.vx, c.vy)).unwrap_or((0., 0.));
         // fremde Sportwagen mit Profil: Sample-Stimmen (die lautesten, das Spielerauto hat Vorrang)
         let own_id = pc.as_ref().map(|c| c.id);
+        // Koop: das Auto von Spieler 2 klingt wie ein eigenes (nah, volle Stimme), seitlich nach seiner Lage
+        let p2_car =
+            w.p2.as_ref()
+                .and_then(|s| s.player.in_car)
+                .and_then(|id| w.car(id))
+                .filter(|c| !c.wrecked && !c.kind_info().bike)
+                .cloned();
+        let p2_id = p2_car.as_ref().map(|c| c.id);
+        let p2_pan = p2_car
+            .as_ref()
+            .map_or(0., |c| ((c.x - w.player.x) / 300.).clamp(-1., 1.) * 0.6);
+        let mut p2_voice = None;
+        match p2_car.as_ref().and_then(|c| profile_for(c).map(|p| (c, p))) {
+            Some((c, p)) => {
+                if self.sample_p2.as_ref().is_none_or(|(id, _)| *id != c.id) {
+                    self.sample_p2 = Some((c.id, EngineSound::new(c.id)));
+                }
+                let st = &mut self.sample_p2.as_mut().expect("eben gesetzt").1;
+                let out = st.step(p, sound_config().bank(&p.bank), &sound_input(c), dt, false);
+                let open = c.kind_info().moto;
+                f.engines.push(EngineFrame {
+                    id: c.id,
+                    player: false,
+                    out,
+                    gain: if open { 0.85 } else { 0.7 },
+                    pan: p2_pan as f32,
+                    rate: 1.,
+                    lowpass: if open { 16000. } else { 9000. },
+                });
+            }
+            None => {
+                self.sample_p2 = None;
+                if let Some(c) = &p2_car {
+                    p2_voice = self
+                        .voices
+                        .voice(w, c, (c.x, c.y, c.vx, c.vy), 500.)
+                        .map(|v| berlin_sim::soundscape::CarVoice { pan: p2_pan, ..v });
+                }
+            }
+        }
         let mut cands = Vec::new();
         for c in &w.cars {
-            if Some(c.id) == own_id || c.wrecked || c.driver.is_none() {
+            if Some(c.id) == own_id
+                || (p2_id.is_some() && Some(c.id) == p2_id)
+                || c.wrecked
+                || c.driver.is_none()
+            {
                 continue;
             }
             let (dx, dy) = (c.x - cx, c.y - cy);
@@ -301,7 +347,12 @@ impl Listener {
             let sp = spatial(mix, d, dx, closing);
             cands.push((sp.gain, (c.id, p, sp, sound_input(c))));
         }
-        let picked = select_voices(None, cands, mix.stimmen - usize::from(own.is_some()));
+        let picked = select_voices(
+            None,
+            cands,
+            mix.stimmen
+                .saturating_sub(usize::from(own.is_some()) + f.engines.len()),
+        );
         let mut sampled: Vec<u32> = Vec::new();
         for (id, p, sp, inp) in picked {
             let (st, at) = self
@@ -330,11 +381,15 @@ impl Listener {
         if let Some(o) = own {
             f.engines.insert(0, o);
         }
-        f.voices = self
-            .voices
-            .near(w, (cx, cy, lvx, lvy), 12, 500., own_id)
+        f.voices = p2_voice
             .into_iter()
-            .filter(|v| w.car(v.id).is_none_or(|c| profile_for(c).is_none()))
+            .chain(
+                self.voices
+                    .near(w, (cx, cy, lvx, lvy), 12, 500., own_id)
+                    .into_iter()
+                    .filter(|v| p2_id.is_none() || Some(v.id) != p2_id)
+                    .filter(|v| w.car(v.id).is_none_or(|c| profile_for(c).is_none())),
+            )
             .take(4)
             .collect();
         // Donner: Einschläge seit dem letzten Bild (aus Seed und Zeit, wie der Blitz im Bild)
@@ -374,6 +429,42 @@ mod tests {
     use super::*;
     use berlin_sim::city::{City, DiskSource};
     use berlin_sim::world::{DT, Input};
+
+    /// Koop: das Auto von Spieler 2 hat eine eigene Motorstimme, auch wenn es weit von Spieler 1 entfernt ist.
+    #[test]
+    fn second_players_car_has_its_own_voice() {
+        let root = berlin_map_loader::default_data_root();
+        let city = City::open(&root, Box::new(DiskSource::new(root.clone()))).unwrap();
+        let mut w = World::new(city, 5, 22, 55);
+        let mut l = Listener::default();
+        assert!(w.join_p2());
+        let pc = w.player_car_id.unwrap();
+        let (x, y) = w.car(pc).map(|c| (c.x, c.y)).unwrap();
+        {
+            let s = w.p2.as_mut().unwrap();
+            (s.player.x, s.player.y) = (x + 15., y);
+        }
+        let go = Input {
+            enter_exit: true,
+            ..Default::default()
+        };
+        w.update_coop(&Input::default(), &go, DT);
+        assert_eq!(w.p2.as_ref().unwrap().player.in_car, Some(pc));
+        // Spieler 1 geht weit weg: die Stimme bleibt, weil sie Spieler 2 gehört
+        w.player.x -= 3000.;
+        let gas = Input {
+            throttle: 1.,
+            ..Default::default()
+        };
+        let mut heard = false;
+        for _ in 0..30 {
+            w.update_coop(&Input::default(), &gas, DT);
+            let f = l.frame(&mut w, DT);
+            heard |= f.voices.first().is_some_and(|v| v.id == pc && v.gain > 0.3)
+                || f.engines.iter().any(|e| e.id == pc);
+        }
+        assert!(heard, "Motor von Spieler 2 hörbar");
+    }
 
     #[test]
     fn frames_follow_the_player() {

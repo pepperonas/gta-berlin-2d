@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung, Koop: **Spieler 2 hat jetzt ein eigenes Waffenrad** (LB halten, in seiner Bildhälfte), **eigene
+  Navigation** zum gemeinsamen Wegpunkt (Route und Restweg auf seiner Minikarte), **eine eigene Motorstimme** für sein
+  Auto, und **die Züge beider Spieler** sind für Verkehr, Straßenbahnen und Fahrplanzüge Hindernis (auch füreinander).
 - Native Fassung: **lokaler Koop mit dynamischem Splitscreen.** Ein zweiter Controller tritt mit Start bei (oder
   Pausenmenü „Spieler 2 beitreten“; mit nur einem Controller spielt Spieler 1 mit Tastatur und Maus). Nah beieinander
   zeigt ein Bild beide (es zoomt dafür etwas heraus); entfernen sie sich, teilt es sich nahtlos – die Trennlinie steht

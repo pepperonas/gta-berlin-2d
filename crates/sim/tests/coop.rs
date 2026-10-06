@@ -257,3 +257,100 @@ fn coop_is_deterministic() {
     };
     assert_eq!(play(), play());
 }
+
+/// Der Zug, den Spieler 2 führt, ist für Verkehr, Straßenbahnen und Fahrplanzüge ein Hindernis und wird gezeichnet –
+/// genau wie der von Spieler 1.
+#[test]
+fn second_players_train_is_an_obstacle_and_visible() {
+    use berlin_sim::ride::Ref;
+    use berlin_sim::transit::{Mode, Transit};
+    use berlin_sim::world::TeleportSpot;
+    let root = berlin_map_loader::default_data_root();
+    let mut w = world(121);
+    w.set_transit(Transit::read(&root).expect("transit.json"));
+    let ov = berlin_map_loader::overview::Overview::read(&root).unwrap();
+    let st = ov
+        .stations
+        .iter()
+        .find(|s| s.name.contains("Alexanderplatz"))
+        .expect("Alexanderplatz");
+    let Some(TeleportSpot::Spot { x, y, angle, .. }) =
+        w.find_teleport_spot(st.at.x as f64, st.at.y as f64)
+    else {
+        panic!("Teleport")
+    };
+    w.teleport_to(x, y, angle);
+    for _ in 0..60 {
+        w.update(&idle(), DT);
+    }
+    // Spieler 1 übernimmt eine haltende Straßenbahn
+    let mut taken = false;
+    'outer: for _ in 0..60 * 120 {
+        w.update(&idle(), DT);
+        let refs: Vec<Ref> = {
+            let tr = w.transit.as_ref().unwrap();
+            w.transit_state
+                .tracked
+                .iter()
+                .filter(|(pid, _)| tr.patterns[**pid].mode == Mode::Tram)
+                .flat_map(|(&pid, s)| {
+                    s.veh.iter().map(move |v| Ref::Veh {
+                        pid,
+                        key: v.key.clone(),
+                    })
+                })
+                .collect()
+        };
+        for r in refs {
+            let Some(vs) = w.vehicle_state(&r) else {
+                continue;
+            };
+            let f = vs.cars[0];
+            if (f.x - w.camera.x).hypot(f.y - w.camera.y) > 1500. || !vs.dwelling {
+                continue;
+            }
+            (w.player.x, w.player.y) = (
+                f.x + f.angle.cos() * (f.l / 2. - 4.) - f.angle.sin() * (f.w / 2. + 4.),
+                f.y + f.angle.sin() * (f.l / 2. - 4.) + f.angle.cos() * (f.w / 2. + 4.),
+            );
+            w.update(
+                &Input {
+                    enter_exit: true,
+                    ..idle()
+                },
+                DT,
+            );
+            if w.player_train.is_some() {
+                taken = true;
+                break 'outer;
+            }
+        }
+    }
+    assert!(taken, "Straßenbahn übernommen");
+    // Zug an Spieler 2 übergeben (Spieler 1 steht daneben)
+    assert!(w.join_p2());
+    let t = w.player_train.take();
+    w.player.ride = None;
+    w.p2.as_mut().unwrap().player_train = t;
+    for _ in 0..3 {
+        w.update_coop(&idle(), &idle(), DT);
+    }
+    let trains = w.player_trains();
+    assert_eq!(trains.len(), 1, "nur der Zug von Spieler 2");
+    let (pid, s, _) = trains[0];
+    let (hx, hy, _) = {
+        let tr = w.transit.as_ref().unwrap();
+        berlin_sim::transit::point_on_shape(tr.shape_of(&tr.patterns[pid]), s)
+    };
+    assert!(
+        w.rail_obs.iter().any(|o| (o.x - hx).hypot(o.y - hy) < 60.),
+        "Hindernis für Verkehr und Bahnen"
+    );
+    let view = berlin_sim::collision::Rect::around(hx, hy, 400.);
+    assert!(
+        w.transit_visible(view)
+            .iter()
+            .any(|v| v.cars.iter().any(|c| (c.x - hx).hypot(c.y - hy) < 60.)),
+        "wird gezeichnet"
+    );
+}
