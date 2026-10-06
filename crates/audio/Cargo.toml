@@ -8,3 +8,7 @@ rust-version.workspace = true
 anyhow.workspace = true
 berlin-sim = { path = "../sim" }
 cpal = "0.18"
+serde_json.workspace = true
+ureq.workspace = true
+# Radio: MP3-Streams dekodieren (reines Rust, nur MP3)
+symphonia = { version = "0.5", default-features = false, features = ["mp3"] }

@@ -23,7 +23,9 @@ impl Audio {
             .context("Keine Audio-Ausgabekonfiguration")?;
         let config = supported.config();
         let (sr, channels) = (config.sample_rate, config.channels as usize);
-        let synth = Arc::new(Mutex::new(Synth::new(sr as f32)));
+        let mut live = Synth::new(sr as f32);
+        live.enable_radio();
+        let synth = Arc::new(Mutex::new(live));
         let s = synth.clone();
         let mut buf: Vec<f32> = Vec::new();
         let err = |e| eprintln!("Audio-Fehler: {e}");
@@ -81,6 +83,13 @@ impl Audio {
         if let Ok(mut synth) = self.synth.lock() {
             synth.play(s);
         }
+    }
+    /// Zustand des Autoradios (für die Anzeige).
+    pub fn radio_state(&self) -> crate::radio::State {
+        self.synth
+            .lock()
+            .map(|s| s.radio_state())
+            .unwrap_or(crate::radio::State::Off)
     }
     pub fn toggle_mute(&self) -> bool {
         self.synth

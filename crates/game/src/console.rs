@@ -302,6 +302,8 @@ pub enum Action {
     /// Grafikmodus setzen (`None` = umschalten)
     Graphics(Option<berlin_engine::graphics::GraphicsMode>),
     Quality(berlin_engine::graphics::Quality),
+    /// Autoradio: Sender wählen (`None` = aus)
+    Radio(Option<usize>),
 }
 
 /// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`, `motorsound`); gehören dem Spiel, nicht der Welt.
@@ -570,6 +572,13 @@ pub const COMMANDS: &[Command] = &[
         help: "nächstes Auto in Brand setzen – es explodiert gleich",
         cheat: true,
         args: &[],
+    },
+    Command {
+        name: "radio",
+        aliases: &["sender"],
+        help: "Autoradio: Sender 1–12, Name oder Genre (z. B. jazz), aus; ohne Angabe: Liste",
+        cheat: false,
+        args: &[arg("sender", true, Values::None)],
     },
     Command {
         name: "werfen",
@@ -1304,6 +1313,41 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
             match w.ignite_nearest(x, y, 600., 0.8) {
                 Some(_) => ok("Gleich knallt's – Abstand halten"),
                 None => err("Kein Auto in der Nähe"),
+            }
+        }
+        "radio" => {
+            let st = berlin_audio::radio::stations();
+            let Some(q) = a0 else {
+                let list: Vec<String> = st
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| format!("{} {} ({})", i + 1, s.name, s.genre))
+                    .collect();
+                return ok(format!("Sender: {} · aus", list.join(" · ")));
+            };
+            let q = q.to_lowercase();
+            if matches!(q.as_str(), "aus" | "off" | "0") {
+                ctx.actions.push(Action::Radio(None));
+                return ok("Radio aus");
+            }
+            let hit = q
+                .parse::<usize>()
+                .ok()
+                .filter(|&k| (1..=st.len()).contains(&k))
+                .map(|k| k - 1)
+                .or_else(|| {
+                    st.iter().position(|s| {
+                        s.name.to_lowercase().contains(&q) || s.genre.to_lowercase().contains(&q)
+                    })
+                });
+            match hit {
+                Some(k) => {
+                    ctx.actions.push(Action::Radio(Some(k)));
+                    ok(format!("Radio: {} ({})", st[k].name, st[k].genre))
+                }
+                None => err(format!(
+                    "Kein Sender „{q}“ – radio ohne Angabe zeigt die Liste"
+                )),
             }
         }
         "werfen" => {

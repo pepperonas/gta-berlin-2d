@@ -331,6 +331,22 @@ fn vfx_credit() -> String {
     )
 }
 
+/// Autoradio: Sender (live gestreamt, nichts davon im Spiel enthalten).
+fn radio_credits() -> Vec<String> {
+    berlin_audio::radio::stations()
+        .iter()
+        .map(|s| {
+            format!(
+                "{} ({}, {}) – {}",
+                s.name,
+                s.genre,
+                s.place,
+                s.page.trim_start_matches("https://")
+            )
+        })
+        .collect()
+}
+
 /// HD-Schrift aus ihrem Manifest (Name, Urheber, Lizenz, Seite).
 fn font_credit() -> String {
     font_line("schrift", "HD-Modus")
@@ -381,6 +397,11 @@ fn license_blocks() -> Vec<Block> {
     out.extend(engine_credits().into_iter().map(Block::Bullet));
     out.extend(material_credits().into_iter().map(Block::Bullet));
     out.push(Block::Bullet(vfx_credit()));
+    out.extend([
+        Block::Gap,
+        Block::Head("Autoradio (live gestreamt, nicht im Spiel enthalten)".into()),
+    ]);
+    out.extend(radio_credits().into_iter().map(Block::Bullet));
     out.extend([
         Block::Gap,
         Block::Head("Schrift".into()),
@@ -746,6 +767,12 @@ mod tests {
         assert!(
             t.contains("Anton") && t.contains("Open Font License"),
             "{t}"
+        );
+        assert_eq!(radio_credits().len(), 12);
+        assert!(
+            radio_credits()
+                .iter()
+                .any(|l| l.contains("FluxFM") && l.contains("fluxfm.de"))
         );
         let v = vfx_credit();
         assert!(

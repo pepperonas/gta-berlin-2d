@@ -23,6 +23,7 @@ mod neon;
 mod padkbd;
 mod physdebug;
 mod play;
+mod radio;
 mod railaudio;
 mod raster;
 mod rumble;

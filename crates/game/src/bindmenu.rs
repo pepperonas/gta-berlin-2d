@@ -665,7 +665,9 @@ mod tests {
     fn mouse_click_selects_the_cell_and_starts_capture() {
         let (mut m, mut b) = (BindMenu::default(), Bindings::default());
         let row = row_of(Action::Kick);
-        let y = TOP + row as f32 * ROW_H - 3.;
+        // die Tafel scrollt: Zeile ins Bild holen, dann dort klicken
+        m.scroll = row.saturating_sub(VISIBLE - 1);
+        let y = TOP + (row - m.scroll) as f32 * ROW_H - 3.;
         let p = Vec2::new(col_x(1280., 1), y);
         go(
             &mut m,

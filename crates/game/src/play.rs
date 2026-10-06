@@ -179,6 +179,8 @@ pub struct Play {
     arcs: Vec<crate::throwaim::Arc>,
     /// Straßenname und nächste Kreuzung je Spieler, seit wann so (sanftes Einblenden)
     streets: [Option<(berlin_sim::streetinfo::StreetLabel, f64)>; 2],
+    /// Autoradio: Sender je Auto (radio.rs)
+    radio: crate::radio::RadioCtl,
     street_tick: u32,
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
@@ -446,6 +448,13 @@ impl Play {
                 crate::hud::street(out, l, self.real_t - since, false);
             }
         }
+        if self.screen == Screen::Playing && self.radio.in_car() {
+            let age = self.real_t - self.radio.shown_at;
+            if age < crate::radio::SHOW_S {
+                let state = self.audio.as_ref().map(|a| a.radio_state());
+                crate::hud::radio(out, self.radio.current(), state, age, self.world.coop());
+            }
+        }
         self.physdebug.draw(out, &self.world);
         self.enginedebug.draw(out, &self.listener.engine_view);
         let p = &self.world.player;
@@ -637,6 +646,7 @@ impl Play {
             wheel_m: Default::default(),
             arcs: Vec::new(),
             streets: [None, None],
+            radio: Default::default(),
             street_tick: 0,
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
@@ -962,6 +972,13 @@ impl Play {
                     self.stats_total.bump("cheats");
                 }
                 Action::Money(m) => self.tracker.set_money(m),
+                Action::Radio(k) => {
+                    if !self.radio.set(k, self.real_t) {
+                        self.console
+                            .log
+                            .push(("Radio gibt es nur im Auto".into(), false, now));
+                    }
+                }
                 Action::Bars(arg) => {
                     self.set_bars_source(arg.as_deref());
                     let (msg, ok) = match self.reload_bars() {
@@ -1908,6 +1925,13 @@ pub fn combat_input(
         aim_world: None,
         cancel: false,
     }
+}
+
+/// Auto mit Radio, in dem `p` sitzt: geschlossene Fahrzeuge (kein Fahrrad, Roller, Motorrad).
+fn radio_car(p: &berlin_sim::world::Player, w: &berlin_sim::world::World) -> Option<u32> {
+    let id = p.in_car?;
+    let c = w.car(id)?;
+    (!berlin_sim::carmodels::is_open_kind(c.kind)).then_some(id)
 }
 
 /// Straße und nächste Kreuzung des Spielers auf dem aktiven Sitz; nicht im Bahnhof, nicht als Fahrgast in der Bahn.
@@ -3549,8 +3573,36 @@ impl Play {
         if self.world.time - self.stats_written > 60. {
             self.write_stats();
         }
+        // Autoradio: läuft im Auto von Spieler 1, sonst in dem von Spieler 2; geschaltet von dem, der drin sitzt
+        let p1_car = radio_car(&self.world.player, &self.world);
+        let p2_car = self
+            .world
+            .p2
+            .as_ref()
+            .and_then(|s| radio_car(&s.player, &self.world));
+        let (car, next, prev) = if p1_car.is_some() {
+            (
+                p1_car,
+                bind.pressed(keys, Bind::RadioNext),
+                bind.pressed(keys, Bind::RadioPrev),
+            )
+        } else {
+            let p2 = |a: Bind| match self.p2_dev {
+                P2Dev::Keyboard => bind
+                    .keys_of(a)
+                    .iter()
+                    .flatten()
+                    .any(|k| self.p2_keys.1.contains(k)),
+                P2Dev::Pad1 => bind.pad_of(a).is_some_and(|b| b.held(&keys.pad_pressed)),
+                P2Dev::Pad2 => bind.pad_of(a).is_some_and(|b| b.held(&keys.pad2_pressed)),
+            };
+            (p2_car, p2(Bind::RadioNext), p2(Bind::RadioPrev))
+        };
+        let n = berlin_audio::radio::stations().len();
+        let want = self.radio.step(car, next, prev, n, self.real_t);
         // Klang-Frame immer berechnen: der Motorzustand speist auch Drehzahlmesser und Gang im HUD
-        let frame = self.listener.frame(&mut self.world, dt);
+        let mut frame = self.listener.frame(&mut self.world, dt);
+        frame.radio = want;
         if let Some(audio) = &self.audio {
             audio.apply(&frame);
         }

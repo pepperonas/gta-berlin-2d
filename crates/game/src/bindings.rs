@@ -34,6 +34,9 @@ pub enum Action {
     Brake,
     Handbrake,
     Horn,
+    /// Autoradio: nächster bzw. vorheriger Sender (AUS gehört zur Runde)
+    RadioNext,
+    RadioPrev,
     Esp,
     Abs,
     /// Fahrhilfen-Rad (Controller: rechter Stick drücken): ESP, ABS, Sirene
@@ -296,6 +299,22 @@ pub const ACTIONS: &[Info] = &[
         Car,
         [Some(KeyCode::KeyH), None],
         Some(P::X),
+        None,
+    ),
+    info(
+        A::RadioNext,
+        "Radio: nächster Sender",
+        Car,
+        [Some(KeyCode::KeyR), None],
+        Some(P::RB),
+        None,
+    ),
+    info(
+        A::RadioPrev,
+        "Radio: vorheriger Sender",
+        Car,
+        [Some(KeyCode::KeyQ), None],
+        Some(P::LB),
         None,
     ),
     info(

@@ -212,6 +212,8 @@ pub struct Frame {
     pub engine_mix: f32,
     /// A/B-Vergleich: solange gesetzt, läuft die Referenzaufnahme (in Schleife) statt der Motor-Samples
     pub reference: Option<Arc<[f32]>>,
+    /// Autoradio: gewünschter Sender (`radio::stations()`), None = aus
+    pub radio: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -623,6 +625,8 @@ pub struct Synth {
     tick: usize,
     master: Smooth,
     muted: bool,
+    /// Autoradio (nur nach `enable_radio`)
+    radio: Option<crate::radio::Radio>,
     muffle: [Biquad; 2],
     muffle_f: Smooth,
     comp: Compressor,
@@ -765,6 +769,7 @@ impl Synth {
             tick: 0,
             master: Smooth::new(MASTER),
             muted: false,
+            radio: None,
             muffle: [
                 Biquad::new(Lowpass, 18000., 0.5),
                 Biquad::new(Lowpass, 18000., 0.5),
@@ -820,6 +825,9 @@ impl Synth {
 
     /// Parameter eines Bildes übernehmen.
     pub fn apply(&mut self, f: &Frame) {
+        if let Some(r) = &mut self.radio {
+            r.set(f.radio);
+        }
         self.set_vehicle(&f.vehicle);
         self.set_voices(&f.voices);
         self.set_ambience(&f.ambience);
@@ -2015,6 +2023,7 @@ impl Synth {
                     + l.wind.next(sr)
                     + l.whistle.next(sr)
                     + l.birds.next(sr)
+                    + l.fire.next(sr)
             } else {
                 amb
             };
@@ -2134,6 +2143,23 @@ impl Synth {
         let t = self.t;
         self.shots
             .retain(|s| (t - s.start) < s.env.dur as f64 + 0.05);
+        // Autoradio (nur live, `enable_radio`): im Wagen, also ungedämpft hinter der Mischung
+        if let Some(r) = &mut self.radio
+            && !self.muted
+        {
+            r.fill(out, sr);
+            out.iter_mut().for_each(|v| *v = v.clamp(-1., 1.));
+        }
+    }
+    /// Radio-Streaming einschalten (nur die Live-Ausgabe; Tests und WAV-Export streamen nie).
+    pub fn enable_radio(&mut self) {
+        self.radio.get_or_insert_with(Default::default);
+    }
+    /// Zustand des gewünschten Senders (aus, wenn kein Radio).
+    pub fn radio_state(&self) -> crate::radio::State {
+        self.radio
+            .as_ref()
+            .map_or(crate::radio::State::Off, |r| r.state())
     }
 }
 

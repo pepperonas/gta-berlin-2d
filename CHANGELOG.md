@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Autoradio mit zwölf Online-Sendern**, je ein Genre, Berlin zuerst: 104.6 RTL (Pop), 98.8 KISS FM
+  Hip-Hop, FluxFM (Indie), Star FM (Rock), FluxFM Sound of Berlin (Techno & House), rbb radio3 (Klassik), JazzRadio
+  106.8 (Jazz), Schlager Radio B2 (Schlager), Radio Berlin 88,8 (80er & 90er), dazu SomaFM Metal Detector (Metal),
+  Heavyweight Reggae (Reggae) und Groove Salad (Chillout). Läuft nur in geschlossenen Autos, live gestreamt (MP3,
+  dekodiert mit symphonia). Durchschalten mit RB/LB bzw. R/Q (umbelegbar), AUS gehört zur Runde. Jedes Auto merkt
+  sich seinen Sender, ein fremdes Auto startet auf seinem eigenen (manchmal aus). Oben mittig erscheinen kurz Sender
+  und Genre, ohne Netz „kein Empfang“ und leises Rauschen. Befehl `radio [nummer|name|genre|aus]`.
 - Native Fassung: **Straßenname und nächste Kreuzung im HUD.** Oben mittig, dezent und halbtransparent: die Straße,
   auf der man gerade ist, darunter die nächste Querstraße in Lauf- bzw. Fahrtrichtung mit Entfernung („Kreuzung
   Eisenbahnstraße · 90 m“, auf 10 m gerundet). Wechsel blenden weich ein; im Koop je Bildhälfte eine Zeile tiefer.
@@ -540,6 +547,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Native Fassung: Die Brand-Schleife (brennende Wracks, Molotow-Feuer) war seit ihrer Einführung stumm – sie wurde
+  gestellt, aber nicht in die Mischung addiert.
 - Native Fassung: Öffnet man das Waffenrad mit beiden Maustasten, bleibt die Figur jetzt sofort stehen – ein laufender
   Klick-Laufauftrag wird abgebrochen, und solange das Rad gedrückt oder offen ist, startet kein neuer. Nach dem
   Schließen läuft sie nicht von selbst weiter.

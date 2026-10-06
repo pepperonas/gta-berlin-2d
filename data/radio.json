@@ -1,0 +1,17 @@
+{
+  "_hinweis": "Radiosender im Auto (crates/audio/src/radio.rs). Gestreamt wird live vom Sender, nichts davon liegt im Repo. Reihenfolge = Reihenfolge beim Durchschalten (davor AUS). Stream-URLs am 06.10.2026 geprüft: alle MP3, 44,1/48 kHz, Stereo. Gefunden über radio-browser.info.",
+  "sender": [
+    {"name": "104.6 RTL", "genre": "Pop & Charts", "ort": "Berlin", "url": "http://stream.104.6rtl.com/rtl-live/mp3-128/radio-browser.info/", "seite": "https://www.104.6rtl.com"},
+    {"name": "98.8 KISS FM Hip-Hop", "genre": "Hip-Hop & Oldschool", "ort": "Berlin", "url": "http://stream.kissfm.de/kissfm-hiphop/mp3-128", "seite": "https://www.kissfm.de"},
+    {"name": "FluxFM", "genre": "Indie & Alternative", "ort": "Berlin", "url": "https://streams.fluxfm.de/live/mp3-128/audio/", "seite": "https://www.fluxfm.de"},
+    {"name": "Star FM", "genre": "Rock", "ort": "Berlin", "url": "https://stream.starfm.de/berlin/mp3-192/iradio", "seite": "https://www.starfm.de"},
+    {"name": "FluxFM Sound of Berlin", "genre": "Techno & House", "ort": "Berlin", "url": "http://streams.fluxfm.de/soundofberlin/mp3-128", "seite": "https://www.fluxfm.de"},
+    {"name": "rbb radio3", "genre": "Klassik", "ort": "Berlin", "url": "https://dispatcher.rndfnk.com/rbb/rbbkultur/live/mp3/mid", "seite": "https://www.radiodrei.de"},
+    {"name": "JazzRadio 106.8", "genre": "Jazz", "ort": "Berlin", "url": "https://streaming.radio.co/s774887f7b/listen", "seite": "https://www.jazzradio.net"},
+    {"name": "Schlager Radio B2", "genre": "Schlager", "ort": "Berlin", "url": "https://stream.schlagerradio.de/b2-schlagerradio-national/mp3-192/", "seite": "https://www.schlagerradio.de"},
+    {"name": "Radio Berlin 88,8", "genre": "80er & 90er", "ort": "Berlin", "url": "https://dispatcher.rndfnk.com/rbb/rbb888/live/mp3/mid", "seite": "https://www.radioberlin.de"},
+    {"name": "SomaFM Metal Detector", "genre": "Metal", "ort": "San Francisco", "url": "https://ice2.somafm.com/metal-128-mp3", "seite": "https://somafm.com/metal/"},
+    {"name": "SomaFM Heavyweight Reggae", "genre": "Reggae", "ort": "San Francisco", "url": "https://ice2.somafm.com/reggae-128-mp3", "seite": "https://somafm.com/reggae/"},
+    {"name": "SomaFM Groove Salad", "genre": "Chillout & Lounge", "ort": "San Francisco", "url": "https://ice2.somafm.com/groovesalad-128-mp3", "seite": "https://somafm.com/groovesalad/"}
+  ]
+}

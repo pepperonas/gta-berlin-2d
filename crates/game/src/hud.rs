@@ -733,6 +733,63 @@ pub fn breath(h: &mut Hud, left: f64, tired: bool, x: f32, y: f32, w: f32, t: f6
     }
 }
 
+/// Zeilen der Radioanzeige: Sender (bzw. „Radio aus“) und darunter Genre · Ort, „verbinde …“ oder „kein Empfang“.
+pub fn radio_lines(
+    station: Option<usize>,
+    state: Option<berlin_audio::radio::State>,
+) -> (String, Option<String>) {
+    use berlin_audio::radio::{State, stations};
+    let Some(s) = station.and_then(|k| stations().get(k)) else {
+        return ("Radio aus".into(), None);
+    };
+    let sub = match state {
+        Some(State::NoSignal) => "kein Empfang".to_string(),
+        Some(State::Connecting) => format!("{} · verbinde …", s.genre),
+        _ => format!("{} · {}", s.genre, s.place),
+    };
+    (s.name.clone(), Some(sub))
+}
+
+/// Autoradio nach dem Umschalten bzw. Einsteigen: oben mittig unter der Straße, blendet nach `radio::SHOW_S` aus.
+pub fn radio(
+    h: &mut Hud,
+    station: Option<usize>,
+    state: Option<berlin_audio::radio::State>,
+    age: f64,
+    coop: bool,
+) {
+    let fade_in = (age / 0.2).clamp(0., 1.);
+    let fade_out = ((crate::radio::SHOW_S - age) / 0.6).clamp(0., 1.);
+    let a = (fade_in * fade_out) as f32;
+    let (name, sub) = radio_lines(station, state);
+    let y = MARGIN.1 + if coop { 150. } else { 76. };
+    let no_signal = matches!(state, Some(berlin_audio::radio::State::NoSignal));
+    h.text(
+        &name,
+        h.width / 2.,
+        y,
+        19.,
+        [YELLOW[0], YELLOW[1], YELLOW[2], 0.9 * a],
+        Align::Center,
+        true,
+    );
+    if let Some(sub) = sub {
+        h.text(
+            &sub,
+            h.width / 2.,
+            y + 17.,
+            12.,
+            if no_signal {
+                [1., 0.55, 0.45, 0.85 * a]
+            } else {
+                [0.92, 0.92, 0.94, 0.7 * a]
+            },
+            Align::Center,
+            true,
+        );
+    }
+}
+
 /// Zeilen der Straßenanzeige: Straßenname und (falls voraus) „Kreuzung Name · 80 m“ (auf 10 m gerundet, ganz nah ohne
 /// Entfernung).
 pub fn street_lines(l: &berlin_sim::streetinfo::StreetLabel) -> (String, Option<String>) {
@@ -1371,6 +1428,35 @@ mod tests {
 #[cfg(test)]
 mod street_tests {
     use super::*;
+    #[test]
+    fn radio_label_names_station_genre_and_reception() {
+        use berlin_audio::radio::{State, stations};
+        let (n, sub) = radio_lines(Some(2), Some(State::Playing));
+        assert_eq!(n, stations()[2].name);
+        assert_eq!(
+            sub.unwrap(),
+            format!("{} · {}", stations()[2].genre, stations()[2].place)
+        );
+        assert_eq!(
+            radio_lines(Some(2), Some(State::NoSignal)).1.unwrap(),
+            "kein Empfang"
+        );
+        assert!(
+            radio_lines(Some(2), Some(State::Connecting))
+                .1
+                .unwrap()
+                .contains("verbinde")
+        );
+        assert_eq!(radio_lines(None, None), ("Radio aus".to_string(), None));
+        // blendet nach der Anzeigezeit aus
+        let max_a = |age: f64| {
+            let mut h = Hud::new([1280., 720.]);
+            radio(&mut h, Some(0), None, age, false);
+            h.items.iter().map(|i| i.color[3]).fold(0f32, f32::max)
+        };
+        assert!(max_a(1.) > 0.6);
+        assert!(max_a(crate::radio::SHOW_S - 0.01) < 0.05);
+    }
     #[test]
     fn street_label_shows_name_and_rounded_crossing_and_fades_in() {
         let l = berlin_sim::streetinfo::StreetLabel {

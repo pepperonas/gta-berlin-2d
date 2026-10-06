@@ -2444,3 +2444,19 @@ höchstens `AHEAD_M` = 150 m, 8 Knoten). `Play::streets` frischt das sechsmal je
 Zeitpunkt eines Wechsels; `hud::street` zeichnet oben mittig (Koop: `low`, unter der Kopfzeile), Texte aus der reinen
 `hud::street_lines`. Tests: `crates/sim/tests/streetinfo.rs`, `hud::street_tests`.
 
+## Autoradio (06.10.2026)
+
+- **Sender:** `data/radio.json` (Name, Genre, Ort, Stream-URL, Seite) – zwölf Genres, neun aus Berlin, drei von SomaFM
+  für Metal, Reggae und Chillout; gefunden über radio-browser.info, alle Streams am 06.10.2026 geprüft (MP3, 44,1/48
+  kHz, Stereo). Live-Test: `cargo test -p berlin-audio live_streams -- --ignored` (öffnet jeden Sender).
+- **Klang (`crates/audio/src/radio.rs`):** je Sender ein Thread (`ureq`, `symphonia` 0.5 nur MP3) füllt einen Puffer
+  (Gegendruck bei 4 s), der Audio-Thread zieht mit linearer Umrechnung auf die Ausgaberate, Vorpuffer 0,6 s,
+  Rauschen beim Verbinden und ohne Empfang, Wiederverbinden alle 3 s. Hinter der Mischung addiert (im Wagen,
+  ungedämpft), Pegel `RADIO_GAIN`. Nicht gebraucht → stumm, Stream läuft `LINGER_S` = 20 s weiter. Gestreamt wird nur
+  nach `Synth::enable_radio` (Live-Ausgabe), nie in Tests, Aufnahmen oder beim WAV-Export. `Frame::radio` = Sender.
+- **Spiel (`game/radio.rs` `RadioCtl`):** Sender je Auto, Startsender aus der Fahrzeugnummer (`default_for`, 12 %
+  aus), Runde AUS → 1 … 12 (`cycle`). Nur geschlossene Fahrzeuge (`radio_car`). Aktionen `RadioNext`/`RadioPrev`
+  (Car, R/Q, RB/LB). Koop: Radio im Auto von Spieler 1, sonst in dem von Spieler 2, geschaltet von dem, der drin
+  sitzt. HUD `hud::radio` (3 s nach Wechsel/Einsteigen, Zustand aus `Audio::radio_state`). Konsole `radio`.
+- **Behoben:** `amb_fire` wurde in `Synth::render` nicht addiert (Brand-Schleife war stumm).
+
