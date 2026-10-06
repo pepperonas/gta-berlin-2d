@@ -318,7 +318,7 @@ pub fn profile_for(car: &crate::car::Car) -> Option<&'static Profile> {
 /// Eingaben je Bild.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SoundInput {
-    /// Drehzahl und Gang aus der Fahrphysik, falls das Fahrzeug sie rechnet
+    /// Drehzahl und Gang aus der Fahrphysik, falls das Fahrzeug sie rechnet; Gang ab 1 (die Fahrphysik zählt ab 0)
     pub rpm: Option<f64>,
     pub gear: Option<usize>,
     /// Begrenzerdrehzahl aus den Fahrzeugdaten (sonst die des Profils)
@@ -518,8 +518,11 @@ impl EngineSound {
         // Drehzahl und Gangwechsel
         let (target, change) = match (inp.rpm, inp.gear) {
             (Some(r), Some(g)) => {
+                // erst normalisieren, dann vergleichen: sonst galt Gang 0 gegen 1 in jedem Bild als Herunterschalten
+                // und der Leerlauf bekam alle 0,5 s Zwischengas
+                let g = g.max(1);
                 let c = (g as i32 - self.gear as i32).signum();
-                self.gear = g.max(1);
+                self.gear = g;
                 (r.max(p.leerlauf * 0.9), c)
             }
             (Some(r), None) => (r.max(p.leerlauf * 0.9), 0),
@@ -705,6 +708,39 @@ mod tests {
         }
     }
 
+    #[test]
+    fn idle_stays_steady_without_blips() {
+        // stehendes Auto im ersten Gang: weder Zwischengas noch Drehzahlzucken (auch, wenn der Gang ab 0 kommt)
+        let cfg = config();
+        let p = cfg.all_profiles()[0];
+        let bank = cfg.bank(&p.bank);
+        for gear in [0, 1] {
+            let mut st = EngineSound::new(1);
+            let inp = SoundInput {
+                rpm: Some(p.leerlauf),
+                gear: Some(gear),
+                limiter: None,
+                throttle: 0.,
+                speed: 0.,
+                slip: 0.,
+            };
+            let mut shots = 0;
+            let (mut lo, mut hi) = (f64::INFINITY, 0f64);
+            for k in 0..360 {
+                let out = st.step(p, bank, &inp, 1. / 60., false);
+                shots += out.shots.len();
+                if k > 60 {
+                    lo = lo.min(out.rpm);
+                    hi = hi.max(out.rpm);
+                }
+            }
+            assert_eq!(shots, 0, "Gang {gear}: kein Zwischengas im Leerlauf");
+            assert!(
+                hi - lo < p.leerlauf * 0.01,
+                "Gang {gear}: Leerlauf ruhig ({lo:.0}–{hi:.0})"
+            );
+        }
+    }
     #[test]
     fn profiles_and_bank_load() {
         let c = config();

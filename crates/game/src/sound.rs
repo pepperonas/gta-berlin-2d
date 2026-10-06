@@ -60,7 +60,8 @@ fn sound_input(c: &Car) -> SoundInput {
     let phys = c.phys.as_deref();
     SoundInput {
         rpm: phys.map(|p| p.rpm),
-        gear: phys.map(|p| p.gear),
+        // Fahrphysik zählt ab 0, der Motorsound ab 1
+        gear: phys.map(|p| p.gear + 1),
         limiter: v.map(|v| v.engine.n_max).filter(|n| *n > 0.),
         throttle: if c.wrecked { 0. } else { c.controls.throttle },
         speed: c.speed() / 10.,

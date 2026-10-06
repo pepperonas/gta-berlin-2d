@@ -8,6 +8,15 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Leerlauf-Motorsound repariert.** Die Fahrphysik zählt Gänge ab 0, der Motorsound ab 1: im ersten
+  Gang galt deshalb jedes Bild als Herunterschalten, und der Motor bekam alle 0,5 s Zwischengas – im Stand zuckte die
+  Tonhöhe hörbar (bis 6,5 %), ebenso beim Rollen im ersten Gang. Jetzt bleibt der Leerlauf ruhig. Neue Testszene
+  `--audio-wav x.wav --audio-szene leerlauf [--audio-fahrzeug ID]` (stehen, zweimal kurz Gas), Protokoll feiner mit
+  `GTA_AUDIO_LOG_STEPS=6`.
+- Native Fassung: **Fahrzeuge fahren schneller an.** KI-Autos geben bis kurz vors Wunschtempo Vollgas (vorher schlichen
+  sie ab halbem Tempo heran; rund 25–30 % schneller auf 50 km/h, Stadtbus 7,8 → 4,6 s). Dazu ein Anfahr-Zuschlag aufs
+  Motormoment in `feel.json` (`anfahr_zuschlag` 0,6 bis `anfahr_bis_kmh` 50) – hilft vor allem schwach motorisierten
+  Fahrzeugen, die Haftgrenze bleibt, die Kalibrierung misst ohne.
 - Native Fassung: **Befehlszeile am Controller** – LB + RB gleichzeitig öffnen sie mit einer Bildschirmtastatur
   (Steuerkreuz/Stick wählen, A tippt, X löscht, Y Leerzeichen, LT/RT Vorschläge, RB übernimmt, Start führt aus, B
   schließt). Einzelne LB-/RB-Drücke (nächste Waffe, treten) warten dafür bis 0,09 s auf den zweiten Knopf.

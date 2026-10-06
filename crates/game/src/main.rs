@@ -217,8 +217,8 @@ fn main() -> Result<()> {
             "--audio-szene" => {
                 audio_scene = args.next().context("Szene für --audio-szene fehlt")?;
                 ensure!(
-                    ["auto", "ubahn"].contains(&audio_scene.as_str()),
-                    "--audio-szene erwartet auto oder ubahn"
+                    ["auto", "ubahn", "leerlauf"].contains(&audio_scene.as_str()),
+                    "--audio-szene erwartet auto, ubahn oder leerlauf"
                 );
             }
             "--audio-fahrzeug" => {
@@ -303,7 +303,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--koop [METER]] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|konsole-pad|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--koop [METER]] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|konsole-pad|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn|leerlauf]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen) · im Spiel springen --position/--geo dorthin, --zoom hält die Kamera fest · --messung: Bildzeiten (CPU, GPU) als JSON"
                 );
@@ -352,6 +352,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
             audio_secs,
             &path,
             audio_vehicle.as_deref(),
+            audio_scene == "leerlauf",
         );
     }
     if let Some(secs) = check_sim {
@@ -576,6 +577,7 @@ fn render_audio(
     secs: f64,
     path: &std::path::Path,
     vehicle: Option<&str>,
+    idle: bool,
 ) -> Result<()> {
     use berlin_audio::synth::Synth;
     use berlin_sim::city::{City, DiskSource};
@@ -626,6 +628,17 @@ fn render_audio(
                 enter_exit: k == 30,
                 ..Default::default()
             },
+            // Leerlauf: stehen (Handbremse; gehaltene Bremse wäre im Stand der Rückwärtsgang), zweimal kurz Gas,
+            // stehen
+            t if idle => Input {
+                throttle: if (5. ..5.4).contains(&t) || (9. ..9.25).contains(&t) {
+                    0.6
+                } else {
+                    0.
+                },
+                handbrake: true,
+                ..Default::default()
+            },
             t if t < 7. => Input {
                 throttle: 1.,
                 ..Default::default()
@@ -639,7 +652,13 @@ fn render_audio(
                 ..Default::default()
             },
         };
-        if k % 60 == 0 {
+        if k % std::env::var("GTA_AUDIO_LOG_STEPS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(60)
+            .max(1)
+            == 0
+        {
             let e = listener.engine();
             let v = &listener.engine_view;
             let sample = if v.profile.is_empty() {
