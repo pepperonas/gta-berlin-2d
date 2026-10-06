@@ -725,7 +725,8 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     cap_lat[1] *= dout.rear_grip;
     // Antrieb, Schalten
     shift(v, s, inp, speed, dt);
-    let mut f_drive = drive_force(v, s, inp, speed, dt);
+    // Spielgefühl: Anfahr-Zuschlag aufs Motormoment (nicht auf die Haftgrenze; Kalibrierung: Faktor 1)
+    let mut f_drive = drive_force(v, s, inp, speed, dt) * feel.launch(speed);
     // Motorbremse bzw. Rekuperation beim Gaswegnehmen (auf der Antriebsachse)
     let coast = inp.throttle < 0.05 && speed > 1.;
     let mut f_coast = 0.;

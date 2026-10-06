@@ -1,14 +1,14 @@
 {
   "version": "0.46.0",
-  "native": "0.1.12",
+  "native": "0.1.13",
   "loc": {
-    "rust": 75218,
+    "rust": 75288,
     "wgsl": 1106,
     "js": 26542,
     "csharp": 250
   },
   "tests": {
-    "rust": 416,
+    "rust": 417,
     "js": 479
   },
   "edition": "2024",

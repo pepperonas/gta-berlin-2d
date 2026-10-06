@@ -2867,7 +2867,9 @@ fn single_player_fingerprint_is_stable() {
     );
     assert_eq!(h, FINGERPRINT, "Einzelspieler-Ablauf hat sich geändert");
 }
-const FINGERPRINT: u64 = 0xe6fa_c4f9_2b60_2bd6;
+/// Neu aufgezeichnet am 06.10.2026 nach einer gewollten Änderung (schnelleres Anfahren: `anfahr_zuschlag` in
+/// feel.json, straffere Gasregelung der KI); mit beiden zurückgesetzt ergab sich der alte Wert 0xe6fa_c4f9_2b60_2bd6.
+const FINGERPRINT: u64 = 0xdad4_3a11_ba09_8830;
 
 /// Sirene: im Polizeiwagen schaltet `siren_toggle` sie an und wieder aus; im normalen Auto geschieht nichts.
 #[test]

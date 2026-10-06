@@ -10,5 +10,7 @@
  "gewichtsverlagerung_skala": 1.0,
  "kamera_zoom_nach_tempo": true,
  "lkw_begrenzer_tunebar": true,
- "wandkontakt_gleiten": true
+ "wandkontakt_gleiten": true,
+ "anfahr_zuschlag": 0.6,
+ "anfahr_bis_kmh": 50
 }

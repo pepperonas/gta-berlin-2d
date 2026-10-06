@@ -367,7 +367,7 @@ pub fn step_car(car: &mut Car, dt: f64, ground: Option<Ground>) {
     }) * surf.top;
     if ctl.throttle > 0. && vf < top {
         let a = match lim {
-            Some(l) => l.accel(vf.max(0.)),
+            Some(l) => l.accel_boosted(vf.max(0.), crate::vehdata::game_feel().launch(vf / 10.)),
             None => {
                 let t = if vf > 0. { 1. - (vf / top) * 0.55 } else { 1.4 };
                 ACCEL * pw * info.accel * t
@@ -497,6 +497,11 @@ impl Limits {
     pub fn accel(&self, vf: f64) -> f64 {
         let v = (vf / 10.).max(1.);
         self.traction.min(self.power / v * 10.)
+    }
+    /// Wie `accel`, mit Anfahr-Zuschlag `k` auf die Leistung (die Traktionsgrenze bleibt).
+    pub fn accel_boosted(&self, vf: f64, k: f64) -> f64 {
+        let v = (vf / 10.).max(1.);
+        self.traction.min(self.power * k / v * 10.)
     }
 }
 

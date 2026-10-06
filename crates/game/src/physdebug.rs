@@ -129,6 +129,22 @@ pub const FEEL: &[Slider<Feel>] = &[
         |f| b(f.wall_slide),
         |f, v| f.wall_slide = v > 0.5,
     ),
+    s(
+        "anfahr_zuschlag",
+        0.1,
+        0.,
+        2.,
+        |f| f.launch_boost,
+        |f, v| f.launch_boost = v,
+    ),
+    s(
+        "anfahr_bis_kmh",
+        5.,
+        5.,
+        150.,
+        |f| f.launch_until * 3.6,
+        |f, v| f.launch_until = v / 3.6,
+    ),
 ];
 
 /// Daten des gefahrenen Fahrzeugs (Schlüssel wie in `vehicles.json`).

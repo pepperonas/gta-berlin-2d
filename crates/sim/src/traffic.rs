@@ -1151,7 +1151,8 @@ fn drive_inner(car: &mut Car, ai: &mut Ai, cx: &mut Ctx, dt: f64) -> Option<bool
         return None;
     }
     if vf < target - 8. {
-        ctl.throttle = ((target - vf) / 60.).clamp(0.25, 1.);
+        // bis kurz vors Wunschtempo Vollgas (früher /60: ab halbem Tempo schlich die KI heran, an jeder Ampel träge)
+        ctl.throttle = ((target - vf) / 25.).clamp(0.25, 1.);
         ctl.brake = 0.;
     } else if vf > target + 8. {
         ctl.throttle = 0.;

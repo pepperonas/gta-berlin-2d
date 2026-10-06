@@ -78,6 +78,10 @@ pub struct Feel {
     pub camera_zoom_by_speed: bool,
     pub truck_limiter_tunable: bool,
     pub wall_slide: bool,
+    /// Anfahr-Zuschlag aufs Motormoment im Stand (0 = keiner), blendet bis `launch_until` (m/s) aus. Wirkt nur auf
+    /// den Antrieb, nie auf die Haftgrenze – durchdrehende Räder bleiben durchdrehende Räder.
+    pub launch_boost: f64,
+    pub launch_until: f64,
 }
 impl Feel {
     /// Simulation pur (Kalibrierung): Realismus 1, globaler Grip 1.
@@ -88,6 +92,7 @@ impl Feel {
             brake_global: 1.,
             steer_assist: 0.,
             drift_layer: false,
+            launch_boost: 0.,
             ..Self::game()
         }
     }
@@ -112,7 +117,17 @@ impl Feel {
             camera_zoom_by_speed: b("kamera_zoom_nach_tempo", true),
             truck_limiter_tunable: b("lkw_begrenzer_tunebar", true),
             wall_slide: b("wandkontakt_gleiten", true),
+            launch_boost: f("anfahr_zuschlag", 0.).clamp(0., 2.),
+            launch_until: f("anfahr_bis_kmh", 50.).max(1.) / 3.6,
         })
+    }
+    /// Faktor aufs Motormoment beim Tempo `speed` (m/s): 1 + Zuschlag im Stand, weich auslaufend bis `launch_until`.
+    pub fn launch(&self, speed: f64) -> f64 {
+        if self.launch_boost <= 0. {
+            return 1.;
+        }
+        let k = 1. - (speed.abs() / self.launch_until).clamp(0., 1.);
+        1. + self.launch_boost * k * k * (3. - 2. * k)
     }
     /// Arcade-Blende: bei Realismus 0 Grip ×1,25, Bremse ×1,2, Gewichtsverlagerung ×0,6, Aquaplaning ×0,3.
     pub fn grip(&self) -> f64 {
@@ -1301,6 +1316,25 @@ impl VehicleDb {
 mod tests {
     use super::*;
 
+    #[test]
+    fn launch_boost_fades_out_and_is_off_in_calibration() {
+        let mut f = Feel::game();
+        f.launch_boost = 0.6;
+        f.launch_until = 50. / 3.6;
+        assert!(
+            (f.launch(0.) - 1.6).abs() < 1e-12,
+            "voller Zuschlag im Stand"
+        );
+        let mut prev = f.launch(0.);
+        for i in 1..=60 {
+            let k = f.launch(i as f64 * 0.25);
+            assert!(k <= prev + 1e-12, "fällt monoton");
+            prev = k;
+        }
+        assert_eq!(f.launch(50. / 3.6), 1., "ab 50 km/h kein Zuschlag");
+        assert_eq!(Feel::simulation().launch(0.), 1., "Kalibrierung misst ohne");
+        assert!(Feel::game().launch_boost > 0., "im Spiel aktiv (feel.json)");
+    }
     #[test]
     fn all_vehicles_load_with_plausible_derived_values() {
         let db = VehicleDb::embedded().expect("Daten laden");

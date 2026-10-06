@@ -559,6 +559,26 @@ mod tests {
             );
             l.frame(&mut w, DT);
         }
+        // gemessen wird bei stehendem Gang (direkt nach dem Schalten zieht der Klang der Drehzahl kurz nach)
+        let gear = |w: &World| w.car(pc).and_then(|c| c.phys.as_ref().map(|p| p.gear));
+        let mut steady = 0;
+        let mut last = gear(&w);
+        for _ in 0..240 {
+            if steady >= 30 {
+                break;
+            }
+            w.update(
+                &Input {
+                    throttle: 1.,
+                    ..Default::default()
+                },
+                DT,
+            );
+            l.frame(&mut w, DT);
+            let g = gear(&w);
+            steady = if g == last { steady + 1 } else { 0 };
+            last = g;
+        }
         let phys = w
             .car(pc)
             .and_then(|c| c.phys.as_ref().map(|p| p.rpm))

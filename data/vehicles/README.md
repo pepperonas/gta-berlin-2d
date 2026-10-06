@@ -10,7 +10,7 @@ Die Fahrphysik der Rust-Fassung liest alles hier, nichts davon steht im Code. Ge
 | `tires.json` | Reifen: Haftung, Schlupfkurve, Faktor je Untergrund, Rollwiderstand |
 | `surfaces.json` | Untergründe der Karte und ihre Reifenkategorie |
 | `engine-curves.json` | Drehmomentkurven je Motortyp, Elektro- und Muskelmodell |
-| `feel.json` | Spielgefühl-Schicht (Grip, Bremse, Lastwechsel, Aquaplaning), Simulation = 1 |
+| `feel.json` | Spielgefühl-Schicht (Grip, Bremse, Lastwechsel, Aquaplaning, Anfahr-Zuschlag `anfahr_zuschlag` bis `anfahr_bis_kmh` – nur aufs Motormoment, nie auf die Haftung), Simulation = 1 bzw. 0 |
 | `vehicles.calibrated.json` | **erzeugt** vom Kalibrierwerkzeug, nicht von Hand bearbeiten |
 
 ## Neues Fahrzeug in 2 Minuten
