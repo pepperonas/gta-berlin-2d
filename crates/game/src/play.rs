@@ -3456,7 +3456,7 @@ impl Play {
         }
         // Straße und Kreuzung fürs HUD (sechsmal je Sekunde reicht)
         self.street_tick = self.street_tick.wrapping_add(1);
-        if self.street_tick % 10 == 0 {
+        if self.street_tick.is_multiple_of(10) {
             let l1 = street_of(&mut self.world);
             let l2 = self.world.with_p2(street_of).flatten();
             let t = self.real_t;
