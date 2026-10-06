@@ -284,22 +284,50 @@ fn bayer4(p: vec2<i32>) -> f32 {
     return m[(p.y & 3) * 4 + (p.x & 3)];
 }
 // je kleinem Bildpunkt (Ziel = Szenengröße): Farbabstimmung, Kontur, Streuung, Palette; Ausgabe sRGB-Werte
+// Farbe eines kleinen Bildpunkts vor der Palette: Farbabstimmung, sRGB, kräftiger (Sättigung, Kontrast) – sonst
+// landen viele Flächen auf den gedämpften Grautönen der Palette und das Bild wirkt verwaschen.
+const PIXEL_SAT: f32 = 1.3;
+const PIXEL_CONTRAST: f32 = 1.12;
+fn pixel_color(q: vec2<i32>, dims: vec2<i32>) -> vec3<f32> {
+    let p = clamp(q, vec2(0), dims - 1);
+    let c = textureLoad(atlas, p, 0).rgb * grade_factor((vec2<f32>(p) + 0.5) / vec2<f32>(dims));
+    var s = srgb_encode(clamp(c, vec3(0.0), vec3(1.0)));
+    let l = dot(s, vec3(0.299, 0.587, 0.114));
+    s = l + (s - l) * PIXEL_SAT;
+    // Kontrast nur für mittlere und helle Töne: dunkle (Nacht, Schatten) würde er nur weiter absenken
+    let lifted = (s - 0.5) * PIXEL_CONTRAST + 0.5;
+    return clamp(mix(s, lifted, smoothstep(0.18, 0.42, l)), vec3(0.0), vec3(1.0));
+}
+// je kleinem Bildpunkt (Ziel = Szenengröße): Kontur, Streuung nur in weichen Verläufen, Palette; Ausgabe sRGB-Werte
 @fragment fn pixel_quant_fs(in: FullOut) -> @location(0) vec4<f32> {
     let dims = vec2<i32>(textureDimensions(atlas));
     let q = vec2<i32>(floor(in.position.xy));
-    let c = textureLoad(atlas, q, 0).rgb * grade_factor((vec2<f32>(q) + 0.5) / vec2<f32>(dims));
-    var s = srgb_encode(clamp(c, vec3(0.0), vec3(1.0)));
-    // Kontur: ein Nachbar liegt deutlich näher (Tiefe = Lage; Boden 0,85–0,98, Dächer/Kronen ~0,45)
+    var s = pixel_color(q, dims);
+    let n = array<vec2<i32>, 4>(vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1));
+    // Kontur: ein Nachbar liegt deutlich näher (Tiefe = Lage; Boden 0,85–0,98, Dächer/Kronen ~0,45); Streuung nur, wo
+    // sich die Nachbarn kaum unterscheiden (Licht- und Nebelverläufe) – auf Kanten und Strukturen rauscht sie nur
     let d0 = textureLoad(pixel_depth, q, 0);
     var edge = false;
-    let n = array<vec2<i32>, 4>(vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1));
+    var vary = 0.0;
     for (var i = 0; i < 4; i++) {
-        let dn = textureLoad(pixel_depth, clamp(q + n[i], vec2(0), dims - 1), 0);
+        let qn = clamp(q + n[i], vec2(0), dims - 1);
+        let dn = textureLoad(pixel_depth, qn, 0);
         if dn < 0.8 && d0 - dn > 0.04 { edge = true; }
+        let c = pixel_color(qn, dims);
+        vary = max(vary, max(abs(c.r - s.r), max(abs(c.g - s.g), abs(c.b - s.b))));
     }
-    if edge { s = mix(s, vec3(0.05, 0.06, 0.09), 0.7); }
-    // Streuung um eine Palettenstufe (≈ 1/7 des Tonumfangs) · Stärke
-    s += bayer4(q) * PIXEL_DITHER / 7.0;
+    // Kontur in abgedunkelter Eigenfarbe (liest sich als Schattenkante, nicht als fremder Rand)
+    if edge { s = s * 0.22; }
+    // Streuung nur in echten Verläufen: über ±3 Bildpunkte ändert sich die Farbe merklich, von Nachbar zu Nachbar
+    // aber kaum. Eine gleichmäßige Fläche zwischen zwei Palettenfarben bleibt einfarbig (sonst Schachbrett).
+    var slope = 0.0;
+    for (var i = 0; i < 2; i++) {
+        let a = pixel_color(q + select(vec2(0, 3), vec2(3, 0), i == 0), dims);
+        let b = pixel_color(q - select(vec2(0, 3), vec2(3, 0), i == 0), dims);
+        slope = max(slope, max(abs(a.r - b.r), max(abs(a.g - b.g), abs(a.b - b.b))));
+    }
+    let gradient = smoothstep(0.03, 0.07, slope) * (1.0 - smoothstep(0.03, 0.06, vary));
+    s += bayer4(q) * PIXEL_DITHER / 7.0 * gradient;
     let idx = vec3<i32>(clamp(floor(s * PIXEL_LUT), vec3(0.0), vec3(PIXEL_LUT - 1.0)));
     return vec4(textureLoad(pixel_lut, idx, 0).rgb, 1.0);
 }

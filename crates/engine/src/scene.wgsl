@@ -150,15 +150,15 @@ fn linear_color(c: vec3<f32>) -> vec3<f32> {
     let rot = vec2(wp.x * 0.8 - wp.y * 0.6, wp.x * 0.6 + wp.y * 0.8);
     let grime = vnoise(wp * 0.0042) * 0.6 + vnoise(rot * 0.013 + vec2(17.0, 3.0)) * 0.4;
     if in.material == 1.0 || in.material == 2.0 || in.material == 3.0 || in.material == 10.0 {
-        let dirt = smoothstep(0.55, 0.85, grime) * 0.16;
-        let bleach = smoothstep(0.45, 0.2, grime) * 0.07;
+        let dirt = smoothstep(0.55, 0.85, grime) * 0.16 * surface_detail();
+        let bleach = smoothstep(0.45, 0.2, grime) * 0.07 * surface_detail();
         color = mix(color, vec3(0.16, 0.14, 0.11), dirt);
         color = mix(color, vec3(0.86, 0.84, 0.78), bleach);
     }
     // Dächer: Moos auf Ziegel und Schiefer, Ruß auf Blech und Flachdach
     if in.material >= 6.0 && in.material <= 9.0 {
         let n2 = vnoise(wp * 0.02 + in.center * 0.001);
-        let moss = smoothstep(0.62, 0.9, n2) * select(0.1, 0.22, in.material < 8.0);
+        let moss = smoothstep(0.62, 0.9, n2) * select(0.1, 0.22, in.material < 8.0) * surface_detail();
         color = mix(color, select(vec3(0.15, 0.15, 0.15), vec3(0.3, 0.36, 0.22), in.material < 8.0), moss);
     }
     // Wasser: Lichtreflexe, die mit der Zeit wandern und funkeln
@@ -300,13 +300,20 @@ fn surface_sample(p: vec2<f32>, gx: vec2<f32>, gy: vec2<f32>, pa: vec4<f32>, pb:
     let q = textureSampleGrad(mat_nr, mat_sampler, p * k, layer, gx * k, gy * k);
     return finish_sample(d, q, pa, pb);
 }
+// Pixel-Modus (camera.padding2.y = −1, renderer.rs): Flächen ruhig halten – Texturdetail, Relief und Flecken der HD-
+// Materialien zerfallen im groben Raster sonst zu Sprenkeln. Faktor 1 = HD, PIXEL_DETAIL im Pixel-Modus.
+const PIXEL_DETAIL: f32 = 0.05;
+fn surface_detail() -> f32 {
+    return select(1.0, PIXEL_DETAIL, camera.padding2.y < -0.5);
+}
 fn finish_sample(d: vec3<f32>, q: vec4<f32>, pa: vec4<f32>, pb: vec4<f32>) -> Ground {
     let lum = dot(d, vec3(0.299, 0.587, 0.114));
+    let k = surface_detail();
     var g: Ground;
-    g.tint = mix(vec3(1.0), mix(vec3(lum), d, pa.w), pa.z);
+    g.tint = mix(vec3(1.0), mix(vec3(lum), d, pa.w), pa.z * k);
     // OpenGL-Normale: Grün zeigt im Bild nach oben = Norden = −y der Karte
-    g.bump = vec2(q.r * 2.0 - 1.0, 1.0 - q.g * 2.0) * pb.x;
-    g.occlusion = mix(1.0, q.a, pb.y);
+    g.bump = vec2(q.r * 2.0 - 1.0, 1.0 - q.g * 2.0) * pb.x * k;
+    g.occlusion = mix(1.0, q.a, pb.y * k);
     g.rough = q.b;
     return g;
 }

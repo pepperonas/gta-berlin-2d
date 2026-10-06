@@ -1392,7 +1392,12 @@ impl Renderer {
         // freier Platz hinter dem Bildausschnitt: Nässe der Straßen (Glanz der Bodenmaterialien)
         uniform[6] = l.wet;
         // dahinter: Stufe der Nachbearbeitung (HDR-Bloom, weiche Schatten), GraphicsSettings::post_level
-        uniform[7] = self.graphics.post_level() as f32;
+        // Pixel-Modus: −1 (Szenen-Shader dämpfen Texturdetail, `surface_detail`); die HD-Abfragen (≥ 1) bleiben aus
+        uniform[7] = if self.graphics.mode == GraphicsMode::Pixel {
+            -1.
+        } else {
+            self.graphics.post_level() as f32
+        };
         uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
         uniform.extend([self.scale, 0., l.windows, l.warmth]);
         uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
@@ -1674,6 +1679,18 @@ fn upload_bodies(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pixel_mode_calms_surfaces_and_gates_dither() {
+        let src = super::shader_source();
+        // Texturdetail, Relief, Verdeckung, Schmutz und Moos hängen am Pixel-Faktor; HD bleibt bei 1
+        assert!(src.contains("select(1.0, PIXEL_DETAIL, camera.padding2.y < -0.5)"));
+        assert!(
+            src.matches("surface_detail()").count() >= 4,
+            "finish_sample, Schmutz, Ausbleichen, Moos"
+        );
+        // Streuung nur in echten Verläufen, Kontur in Eigenfarbe
+        assert!(src.contains("* gradient;") && src.contains("if edge { s = s * 0.22; }"));
+    }
     #[test]
     fn atlas_grid_comes_from_rust_not_from_literals() {
         let src = super::shader_source();

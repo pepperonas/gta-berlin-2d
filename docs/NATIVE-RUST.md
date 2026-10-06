@@ -2212,3 +2212,20 @@ Die Versionsnummer des Browser-Spiels (`package.json`) bleibt davon getrennt.
 - **Sprint:** Ausdauer, Erschöpfung und Erholungszeit des Spielers sind entfernt (`World::update` sprintet, solange
   Sprint gedrückt ist); Test `sprint_never_runs_out` (60 s Dauersprint im Sprinttempo). Das Fahrrad behält seine
   eigene Erschöpfung (`twowheel.rs`).
+
+## Pixel-Modus: klare Pixel-Art statt verwaschen (06.10.2026)
+
+Befund bei normaler Fenstergröße (2560 × 1440, ein Pixel = 5 Bildschirmpunkte): Kanten scharf, aber Flächen matschig –
+die HD-Texturen zerfielen im groben Raster zu Sprenkeln, die Bayer-Streuung legte ein Schachbrett auf jede Fläche
+zwischen zwei Palettenfarben, die Farben trafen die gedämpften Grautöne der Palette. Nutzerentscheid: klare Pixel-Art.
+
+- **Erkennung:** im Pixel-Modus `camera.padding2.y = −1` (sonst `post_level` 0–2; alle HD-Abfragen fragen ≥ 1).
+- **Ruhige Flächen:** `scene.wgsl surface_detail()` = `PIXEL_DETAIL` (0,05) im Pixel-Modus, 1 sonst; wirkt in
+  `finish_sample` (Texturfarbe, Relief, Verdeckung) und auf Schmutz, Ausbleichen und Moos/Ruß der Dächer. HD rechnet
+  unverändert (Faktor exakt 1).
+- **Farbe vor der Palette (`pixel_color`):** Sättigung ×1,3; Kontrast ×1,12 nur für mittlere und helle Töne
+  (Übergang Luminanz 0,18–0,42) – sonst sank die Nacht ab (Anteil fast schwarzer Bildpunkte 60 % → 16 %).
+- **Streuung nur in Verläufen:** gestreut wird, wo sich die Farbe über ±3 Bildpunkte merklich ändert, von Nachbar zu
+  Nachbar aber kaum (Licht, Nebel); gleichmäßige Flächen bleiben einfarbig, Kanten und Strukturen unberührt.
+- **Kontur:** abgedunkelte Eigenfarbe (×0,22) statt Mischung mit festem Blaugrau.
+- Vorher/nachher: `docs/images/native/grafik/08-pixel/klar-*.webp`; Test `pixel_mode_calms_surfaces_and_gates_dither`.

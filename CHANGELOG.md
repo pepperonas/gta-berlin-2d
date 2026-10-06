@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Pixel-Modus nicht mehr verwaschen – klare Pixel-Art.** Böden, Dächer und Fassaden sind im
+  Pixel-Modus fast flächig (Texturdetail, Relief, Schmutz und Moos auf 5 % gedämpft), die Farben vor der Palette
+  kräftiger (Sättigung ×1,3, mehr Kontrast in mittleren und hellen Tönen), die Streuung wirkt nur noch in echten
+  Verläufen statt als Schachbrett auf gleichmäßigen Flächen, Konturen sind dunkler (abgedunkelte Eigenfarbe). Nachts
+  bleibt das Bild lesbar.
 - Native Fassung: **echte Nachladegeräusche je Waffe** statt zweier Klicks für alle (Freesound, CC0, Rezepte in
   `tools/audio/sfx_recipes.json`): Pistole – Magazin raus, neues Magazin rein (Makarov bzw. Kleinpistole), am Ende
   schnappt der Schlitten vor (SIG P226); MP – Magazin raus und rein, dann Ladehebel zurück und vor (Uzi);
