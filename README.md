@@ -352,6 +352,16 @@ npm start          # Dev-Server auf http://localhost:8080 (anderer Port: PORT=90
 npm test           # Gesamtsuite; aktuellen Prüfstatus unten beachten: Kartenpipeline, Karte, Kollision, Fahrphysik, Verkehr, Passanten, Mission, Speichern, Menüs, Eingabe
 ```
 
+### Als Mac-App mit Icon
+
+`tools/macos-app.sh` baut die native Fassung als „GTA Berlin.app“ (unter `dist/`, mit `--install` zusätzlich nach
+`~/Applications`) – mit eigenem Icon im Dock und im Finder. Die App liest die Karte aus diesem Repo, läuft also auf
+dem Rechner, auf dem sie gebaut wurde. Das Icon (Fernsehturm über der Berliner Dachlinie in den Farben des
+Titel-Logos) entsteht mit `python3 tools/gfx/build_icon.py`, ebenso das Fenster-Icon unter Windows/Linux, die
+Xbox-Paketlogos und das Browser-Favicon.
+
+<img src="data/gfx/icon/icon-1024.png" alt="App-Icon" width="128">
+
 ### Karte neu erzeugen
 
 Die fertige Karte liegt in `web/data/berlin/` (`index.json` mit Grenzen, Ortsteilen und Missionsorten, `overview.json`

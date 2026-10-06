@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- **App-Icon:** Fernsehturm in Gold-Orange über der Berliner Dachlinie mit erleuchteten Fenstern, Abendhimmel. Gilt als
+  Fenster-Icon der nativen Fassung, als Dock-/Finder-Icon der neuen Mac-App (`tools/macos-app.sh` baut „GTA
+  Berlin.app“), für die Xbox-Paketlogos (Kacheln, Store, Splash) und als Favicon im Browser. Erzeugt von
+  `tools/gfx/build_icon.py`; `prepare-xbox` überschreibt die Logos nicht mehr.
 - Native Fassung: **Passanten gehen unterschiedlich schnell und bewegen sich lebendiger.** Jede Person hat ein festes
   Temperament: etwa jede achte bummelt, jede siebte hat es eilig, der Rest streut um das normale Tempo. Das Gangbild
   folgt dem eigenen Tempo (Bummler mit kurzem Schritt, Eilige ausgreifend mit kräftigem Armschwung), wer steht,

@@ -29,3 +29,4 @@ xbox/RustProbe/RustProbe/bin/
 xbox/RustProbe/RustProbe/obj/
 xbox/RustProbe/.vs/
 xbox/RustProbe/RustProbe/AppPackages/
+/dist/

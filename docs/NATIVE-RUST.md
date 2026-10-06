@@ -2552,3 +2552,9 @@ frisch (< 8 s) ein Glanzfleck.
 in `World::assign_kind` aufs Tempo – eine Simulationsänderung: der Einzelspieler-Fingerabdruck ist neu aufgenommen,
 mit `PACE_ON = false` ergibt sich nachweislich der alte. Darstellung: `game::figure::gait_of(Tempo/WALK)` →
 `Who::amp`/`run` statt An/Aus, Größe ±8 % je Person in `look_of`, Gewichtsverlagerung im Stand.
+
+**App-Icon (06.10.2026):** `tools/gfx/build_icon.py` (Pillow, 4× Überabtastung) → `data/gfx/icon/icon-1024.png`,
+`icon-128.rgba` (rohe Bytes; `engine::app_icon` über `include_bytes!`, kein PNG-Decoder nötig), `GtaBerlin.icns`
+(iconutil), `web/assets/icon.png`/`icon-180.png`, `xbox/GtaBerlin/Assets/*.png` (ungerundet, Dachlinie über die volle
+Breite). winit setzt das Fenster-Icon unter Windows/Linux; unter macOS kommt der Dock-Icon nur über das Bundle
+(`tools/macos-app.sh`, `dist/` ist ignoriert). Datenpfad steht beim Bauen fest (`default_data_root`).

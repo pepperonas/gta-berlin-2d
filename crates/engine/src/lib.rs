@@ -341,6 +341,7 @@ impl ApplicationHandler for App {
                 event_loop.create_window(
                     Window::default_attributes()
                         .with_title("GTA Berlin · Rust · Berlin wird geladen …")
+                        .with_window_icon(app_icon())
                         .with_inner_size::<winit::dpi::Size>(match self.window_size {
                             Some((w, h)) => winit::dpi::PhysicalSize::new(w, h).into(),
                             None => winit::dpi::LogicalSize::new(1280, 720).into(),
@@ -761,6 +762,13 @@ fn write_metrics(path: &std::path::Path, cpu: &[f32], gpu: Option<&[f32]>) -> Re
     Ok(())
 }
 
+/// Fenster-Icon (Titelleiste und Taskleiste unter Windows/Linux; den Dock-Icon unter macOS liefert das App-Bundle,
+/// `tools/macos-app.sh`). Rohe RGBA-Bytes aus `tools/gfx/build_icon.py`.
+pub fn app_icon() -> Option<winit::window::Icon> {
+    const RGBA: &[u8] = include_bytes!("../../../data/gfx/icon/icon-128.rgba");
+    winit::window::Icon::from_rgba(RGBA.to_vec(), 128, 128).ok()
+}
+
 #[cfg(test)]
 mod metric_tests {
     use super::median_p95;
@@ -770,5 +778,13 @@ mod metric_tests {
         assert_eq!(median_p95(&[3.]), Some((3., 3.)));
         let v: Vec<f32> = (1..=100).rev().map(|i| i as f32).collect();
         assert_eq!(median_p95(&v), Some((50., 95.)));
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    #[test]
+    fn the_window_icon_is_embedded() {
+        assert!(super::app_icon().is_some());
     }
 }
