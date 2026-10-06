@@ -2523,3 +2523,9 @@ bleibt).
 kalibriert mit `physics-calibrate`, Vmax 171 statt 165 km/h ist in `bekannte_abweichungen.json` begründet (nicht die
 Leistung verstellt). `motoart::Style::Dirt` (`style_of("dirtbike")`), Musterseite `--bildschirm motorraeder` mit fünf
 Spalten. Konsole `motorrad` → `moto_id` → `World::spawn_data_vehicle`.
+
+**Zweirad-Stürze entschärft (06.10.2026):** `twowheel.rs`: Wunsch-Schräglage begrenzt auf
+`min(max_lean, lean_limit(μ_ist, 0) · LEAN_SKILL)` (vorher nur `max_lean`, `kappa_max` misst weiter am Nenngrip);
+Bordstein großes Rad: Fahrrad stürzt ab `CURB_FALL_BIG` (Abnahmeszene 12), motorisierte nie, Stoß einmal je Kante
+(`State::curb_seen`, `CURB_LOSS`/`CURB_LOSS_MAX`); Vorderrad ohne ABS stürzt erst nach `FRONT_LOCK_S` = 0,4 s
+Blockieren (`State::lock_t`). Kalibrierung unverändert (186/210).

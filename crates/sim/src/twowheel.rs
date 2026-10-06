@@ -6,17 +6,20 @@
 //!   trockenen Haftgrenze, höchstens `max_schraeglage`). Daraus die Wunsch-Schräglage φ = atan(v²·κ/g); sie folgt mit
 //!   begrenzter Rate (Einlenken braucht bei Tempo Zeit, wie Gegenlenken in echt); gefahren wird die Krümmung der
 //!   tatsächlichen Schräglage g·tan(φ)/v². Langsam (unter 3–6 m/s, Füße am Boden) fährt das Rad der Lenkung nach.
-//!   Voller Einschlag allein wirft auf trockenem Asphalt nicht ab – wohl aber auf Nässe, Kopfstein oder Schiene
-//!   (dort trägt die Haftung die Schräglage nicht) und Bremsen/Gas in voller Schräglage (Reibungskreis).
+//!   Der Fahrer legt sich höchstens so weit, wie die tatsächliche Haftung trägt (`LEAN_SKILL` von atan μ): voller
+//!   Einschlag allein wirft auch auf Nässe oder Kopfstein nicht ab, dort werden die Bögen nur weiter. Stürze kommen
+//!   von Bremsen/Gas in voller Schräglage (Reibungskreis) und plötzlichem Haftverlust (Pfütze, Schiene).
 //! - Haftgrenze: braucht die Schräglage mehr als atan(μ) (neben der Längskraft, Reibungskreis) → Lowsider.
 //! - Wheelie, wenn die Beschleunigung g·l_h/h überschreitet (l_h = Schwerpunkt bis Hinterachse), Stoppie beim
 //!   Bremsen über g·l_v/h. Wheelie-Control hält beides an der Grenze, aber spielbar (kurze Wheelies beim
 //!   Ampelstart sind erwünscht). Ohne Kontrolle überschlägt sich das Rad über `FLIP`.
 //! - Bremsen: die Vorderbremse trägt den Großteil, begrenzt durch Überschlag und Haftung; ABS nur, wo vorhanden.
-//!   Ein blockiertes Vorderrad stürzt (außer langsam und geradeaus).
+//!   Ein Vorderrad, das länger als `FRONT_LOCK_S` blockiert, stürzt (außer langsam und geradeaus); kurzes
+//!   Überbremsen rutscht nur.
 //! - Fahrrad: Fahrerleistung (Dauer, Sprint per Taste mit Ausdauer), Kraftgrenze aus der Muskel-Kurve.
 //! - Motorrad: Gas in Schräglage auf losem Untergrund lässt das Heck leicht und kontrollierbar ausbrechen.
-//! - Berlin: flach gequerte Straßenbahnschiene (`Ground::groove`) und Bordsteine an kleinen Rädern werfen ab.
+//! - Berlin: flach gequerte Straßenbahnschiene (`Ground::groove`) und Bordsteine an kleinen Rädern werfen ab; große
+//!   Fahrräder ab `CURB_FALL_BIG`. Motorräder stößt der Bordstein nur und bremst sie.
 //!
 //! Zustand und Koordinaten wie `vphys` (Meter, Gierwinkel gegen den Uhrzeigersinn, Lenkung positiv = links).
 use crate::vehdata::{Feel, G, Power, RHO, Vehicle};
@@ -91,8 +94,13 @@ pub const SLIDE_YAW: f64 = 0.6;
 /// Kleines Rad (Radius in m): am Bordstein ab diesem Tempo (m/s) Sturz, darunter harter Halt
 pub const SMALL_WHEEL: f64 = 0.2;
 pub const CURB_FALL_V: f64 = 3.;
-/// großes Rad: frontal gegen den Bordstein ab diesem Tempo (m/s, ~23 km/h) Sturz, darunter rollt es hinauf
+/// Fahrrad: frontal gegen den Bordstein ab diesem Tempo (m/s, ~23 km/h) Sturz, darunter rollt es hinauf
 pub const CURB_FALL_BIG: f64 = 6.5;
+/// großes Rad am Bordstein: Tempoverlust je m/s und m Kantenhöhe (höchstens `CURB_LOSS_MAX` des Tempos)
+pub const CURB_LOSS: f64 = 0.3;
+pub const CURB_LOSS_MAX: f64 = 0.25;
+/// Zweirad ohne ABS: ein länger als so lange (s) blockiertes Vorderrad stürzt
+pub const FRONT_LOCK_S: f64 = 0.4;
 /// gestürztes Zweirad rutscht mit diesem Anteil der Haftung
 pub const SLIDE_MU: f64 = 0.45;
 
@@ -187,14 +195,22 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
                 return;
             }
             s.vx = 0.;
-        } else if speed > CURB_FALL_BIG && env.wheel[0].curb > 0.08 {
+        } else if matches!(v.engine.power, Power::Muscle { .. })
+            && speed > CURB_FALL_BIG
+            && env.wheel[0].curb > 0.08
+        {
             fall(s, Fall::Curb);
             return;
-        } else {
-            s.vx -= (0.3 * env.wheel[0].curb * speed).min(speed * 0.2);
-            s.pitch += 0.05;
+        } else if !s.curb_seen {
+            // großes Rad: der Stoß kostet Tempo und hebt kurz die Front, gestürzt wird nicht
+            let k = (env.wheel[0].curb / 0.12).clamp(0.3, 1.5);
+            s.vx -= (CURB_LOSS * k * speed).min(speed * CURB_LOSS_MAX);
+            s.pitch = (s.pitch + 0.05 * k).min(0.2);
         }
+        s.curb_seen = true;
         s.curb_hits += 1;
+    } else {
+        s.curb_seen = false;
     }
     // Antrieb: Fahrrad sprintet mit Ausdauer
     let muscle = matches!(v.engine.power, Power::Muscle { .. });
@@ -271,12 +287,16 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     if abs {
         f_front = f_front.min(front_grip * 0.97).min(stoppie_cap * 1.02);
     } else if f_front > front_grip && speed > 2. {
-        // ohne ABS: blockiertes Vorderrad – langsam und geradeaus geht es noch gut
-        if speed > 6. || s.lean.abs() > 0.1 {
+        // ohne ABS: blockiertes Vorderrad rutscht; hält es zu lange an, stürzt es – langsam und geradeaus geht es
+        // noch gut
+        s.lock_t += dt;
+        if s.lock_t > FRONT_LOCK_S && (speed > 6. || s.lean.abs() > 0.1) {
             fall(s, Fall::FrontLock);
             return;
         }
         f_front = front_grip * v.tire.slide_ratio;
+    } else {
+        s.lock_t = 0.;
     }
     let rear_brake_load = (m * G * a / l - m * h / l * decel_est).max(m * G * 0.05);
     let f_rear = (f_brake - want_front)
@@ -317,9 +337,11 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     let rate = BAR_RATE / (1. + speed / BAR_RATE_V);
     s.delta += (delta_cmd - s.delta).clamp(-rate * dt, rate * dt);
     let kappa_cmd = s.delta.tan() / l;
+    // der Fahrer legt sich nur so weit, wie die Haftung unter ihm trägt (Nässe, Kopfstein: weitere Bögen)
+    let lean_cap = v.max_lean.min(lean_limit(mu, 0.) * LEAN_SKILL);
     let lean_want = (speed * speed * kappa_cmd / G)
         .atan()
-        .clamp(-v.max_lean, v.max_lean);
+        .clamp(-lean_cap, lean_cap);
     let lean_rate = LEAN_RATE / (1. + speed / LEAN_RATE_V);
     s.lean += (lean_want - s.lean).clamp(-lean_rate * dt, lean_rate * dt);
     // Haftgrenze in Schräglage (Reibungskreis mit der Längskraft)
@@ -479,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn too_much_lean_on_wet_cobbles_lowsides() {
+    fn full_lock_on_wet_cobbles_widens_the_arc_hard_braking_in_lean_lowsides() {
         let db = db();
         let v = db.get("motorrad_naked").unwrap();
         let wet = Env::uniform(Ground {
@@ -501,6 +523,24 @@ mod tests {
             },
             &wet,
             3.,
+        );
+        assert!(
+            s.fallen.is_none(),
+            "voller Einschlag allein: {:?}",
+            s.fallen
+        );
+        assert!(s.lean.abs() <= lean_limit(0.5 * v.tire.mu, 0.) + 1e-6);
+        // in voller Schräglage voll bremsen: der Reibungskreis reicht nicht
+        run(
+            v,
+            &mut s,
+            Input {
+                brake: 1.,
+                steer: 1.,
+                ..Default::default()
+            },
+            &wet,
+            1.5,
         );
         assert_eq!(s.fallen, Some(Fall::Lowside));
         // trocken und sanft: kein Sturz
@@ -558,11 +598,23 @@ mod tests {
             vx: 12.,
             ..Default::default()
         };
-        // nasser Belag + Vollbremsung ohne ABS: Vorderrad blockiert
+        // nasser Belag + Vollbremsung ohne ABS: Vorderrad blockiert – kurz überbremsen rutscht nur
         let wet = Env::uniform(Ground {
             mu_rel: 0.5,
             ..Ground::DRY
         });
+        let mut tap = s.clone();
+        run(
+            v,
+            &mut tap,
+            Input {
+                brake: 1.,
+                ..Default::default()
+            },
+            &wet,
+            FRONT_LOCK_S * 0.75,
+        );
+        assert!(tap.fallen.is_none() && tap.lock_t > 0.);
         run(
             v,
             &mut s,
@@ -643,6 +695,20 @@ mod tests {
         };
         run(bike, &mut s, Input::default(), &curb, 0.05);
         assert!(s.fallen.is_none());
+        // Motorräder stürzen am Bordstein nie, auch schnell und an hoher Kante – der Stoß kostet nur Tempo
+        let mut high = Env::default();
+        high.wheel[0].curb = 0.18;
+        for id in ["motorrad_naked", "dirtbike", "superbike", "cruiser"] {
+            let m = db.get(id).unwrap();
+            let mut s = State {
+                vx: 20.,
+                gear: 3,
+                ..Default::default()
+            };
+            run(m, &mut s, Input::default(), &high, 0.05);
+            assert!(s.fallen.is_none(), "{id}");
+            assert!(s.vx < 20. && s.vx > 10., "{id}: {}", s.vx);
+        }
         // sichere Rille (Risiko 1): Sturz; Risiko 0: nichts
         let mut rail = Env::default();
         rail.wheel[0].groove = 1.;

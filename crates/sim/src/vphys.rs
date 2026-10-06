@@ -266,6 +266,10 @@ pub struct State {
     pub wc_t: f64,
     pub tired: bool,
     pub groove_seen: bool,
+    /// Zweirad ohne ABS: so lange (s) ist das Vorderrad schon blockiert
+    pub lock_t: f64,
+    /// Zweirad: Vorderrad steht gerade an einer Bordsteinkante (der Stoß wirkt einmal je Kante)
+    pub curb_seen: bool,
 }
 impl State {
     pub fn speed(&self) -> f64 {

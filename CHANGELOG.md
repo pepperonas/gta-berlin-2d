@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Motorräder stürzen seltener.** Am Bordstein nie mehr (der Stoß bremst und hebt kurz die Front;
+  Fahrrad und kleine Räder wie Roller und E-Scooter bleiben gefährdet). Der Fahrer legt sich nur so weit in die
+  Kurve, wie der Grip unter ihm trägt – auf Nässe und Kopfstein werden die Bögen weiter, statt dass es wegrutscht;
+  gestürzt wird bei Bremsen oder Gas in voller Schräglage und bei plötzlichem Gripverlust. Ohne ABS darf das
+  Vorderrad kurz blockieren (bis 0,4 s), erst längeres Überbremsen wirft ab.
 - Native Fassung: **Dirt-Bike und Befehl `motorrad`.** Neues Motorrad „Grunewald Enduro 450“ (Vorbild KTM 450
   EXC-F, 46 kW, 195 kg mit Fahrer) mit Stollenreifen, die auf losem Grund besser greifen als Straßenreifen, und eigener
   Zeichnung (hoher Kotflügel, Startnummerntafel, Handschützer, Stollen). `motorrad [naked|sport|cruiser|roller|dirt]`
