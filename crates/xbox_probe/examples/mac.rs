@@ -37,8 +37,16 @@ impl ApplicationHandler for App {
             std::env::consts::OS
         )];
         self.probe = Some(
-            berlin_probe::Probe::new(&instance, surface, size.width, size.height, steps)
-                .expect("Probe"),
+            // PROBE_FENCE=1: ohne Zeitstempel messen wie auf der Xbox (Fence), für vergleichbare Werte
+            berlin_probe::Probe::new(
+                &instance,
+                surface,
+                size.width,
+                size.height,
+                steps,
+                std::env::var_os("PROBE_FENCE").is_none(),
+            )
+            .expect("Probe"),
         );
         self.window = Some(window);
         el.set_control_flow(ControlFlow::Poll);

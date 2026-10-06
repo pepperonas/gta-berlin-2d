@@ -6,7 +6,7 @@
   IgnorableNamespaces="uap mp">
 
   <!-- Publisher muss zum Signaturzertifikat passen (Visual Studio: Package.appxmanifest → Packaging → Choose Certificate). -->
-  <Identity Name="GtaBerlin.RustProbe" Publisher="CN=GtaBerlinDev" Version="0.1.0.0" />
+  <Identity Name="GtaBerlin.RustProbe" Publisher="CN=GtaBerlinDev" Version="0.1.5.0" />
   <mp:PhoneIdentity PhoneProductId="3e8b5c2d-9a41-4b6f-8d7e-2c5a1f0b9e63" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>

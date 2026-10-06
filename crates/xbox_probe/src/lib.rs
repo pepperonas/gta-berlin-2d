@@ -21,6 +21,18 @@ pub const FRAMES_PER_MODE: u32 = 360;
 const WARMUP: u32 = 60;
 const SLOT: u64 = 256;
 
+/// Schritt, in dem `Probe::frame` gerade steckt (Index in `STAGES`). Die Konsolen-Hülle liest ihn aus einem anderen
+/// Thread: hängt das Zeichnen, zeigt der Bericht die Stelle.
+pub static STAGE: AtomicU8 = AtomicU8::new(0);
+pub const STAGES: [&str; 6] = [
+    "zwischen Bildern",
+    "Bild der Oberfläche holen (get_current_texture)",
+    "Last aufzeichnen",
+    "abschicken (submit)",
+    "anzeigen (present)",
+    "Zeitstempel abholen",
+];
+
 #[derive(Debug, Clone, Copy)]
 pub struct Mode {
     pub name: &'static str,
@@ -44,6 +56,46 @@ pub const MODES: [Mode; 3] = [
         samples: 1,
     },
 ];
+
+/// Grund, aus dem DX12 das Gerät entfernt hat (`ID3D12Device::GetDeviceRemovedReason`); `None`, solange es lebt
+/// oder das Gerät nicht von DX12 stammt.
+#[cfg(windows)]
+fn removed_reason(device: &wgpu::Device) -> Option<String> {
+    let hal = unsafe { device.as_hal::<wgpu::hal::api::Dx12>() }?;
+    match unsafe { hal.raw_device().GetDeviceRemovedReason() } {
+        Ok(()) => None,
+        Err(e) => Some(format!("0x{:08X} {}", e.code().0 as u32, e.message())),
+    }
+}
+#[cfg(not(windows))]
+fn removed_reason(_: &wgpu::Device) -> Option<String> {
+    None
+}
+
+/// Prüfpunkt im Aufbau: alles Bisherige abschicken, bis 5 s auf die GPU warten, dann melden, ob das Gerät noch lebt.
+fn alive(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    lost: &Mutex<Option<String>>,
+    steps: &mut Vec<String>,
+    what: &str,
+) {
+    queue.submit([]);
+    let _ = device.poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: Some(std::time::Duration::from_secs(5)),
+    });
+    let gone = lost.lock().ok().and_then(|l| l.clone());
+    let reason = removed_reason(device);
+    steps.push(match (gone, reason) {
+        (None, None) => format!("Aufbau {what}: Gerät ok"),
+        (g, r) => format!(
+            "Aufbau {what}: GERÄT VERLOREN ({}; DX12-Grund {})",
+            g.unwrap_or_else(|| "kein Rückruf".into()),
+            r.unwrap_or_else(|| "S_OK".into())
+        ),
+    });
+}
 
 /// Median und 95. Perzentil (nächster Rang).
 pub fn median_p95(samples: &[f32]) -> Option<(f32, f32)> {
@@ -177,19 +229,26 @@ pub struct Probe {
     samples: Vec<Vec<f32>>,
     cpu: Vec<f32>,
     last: std::time::Instant,
+    /// Aufrufe, in denen die Oberfläche kein Bild lieferte, und der letzte Grund
+    skipped: u32,
+    skip_reason: &'static str,
     /// Kopfzeilen: Adapter, Backend, Merkmale, Schritte bis hierher
     pub info: Vec<String>,
     errors: Arc<Mutex<Vec<String>>>,
+    /// Meldung des Device-Lost-Rückrufs
+    lost: Arc<Mutex<Option<String>>>,
 }
 
 impl Probe {
-    /// Gerät für eine schon angelegte Oberfläche; `steps` = bisherige Prüfschritte (für die Anzeige).
+    /// Gerät für eine schon angelegte Oberfläche; `steps` = bisherige Prüfschritte (für die Anzeige), `timestamps` =
+    /// GPU-Zeitstempel anfordern, falls das Gerät sie kann (die Konsole verlor das Gerät einmal genau dabei).
     pub fn new(
         instance: &wgpu::Instance,
         surface: wgpu::Surface<'static>,
         width: u32,
         height: u32,
         mut steps: Vec<String>,
+        timestamps: bool,
     ) -> Result<Self> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -209,7 +268,11 @@ impl Probe {
         ));
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("Probe"),
-            required_features: adapter.features() & wgpu::Features::TIMESTAMP_QUERY,
+            required_features: if timestamps {
+                adapter.features() & wgpu::Features::TIMESTAMP_QUERY
+            } else {
+                wgpu::Features::empty()
+            },
             required_limits: wgpu::Limits::default(),
             ..Default::default()
         }))
@@ -221,6 +284,15 @@ impl Probe {
                 v.push(e.to_string());
             }
         }));
+        // Ein verlorenes Gerät meldet wgpu nur hier, nicht über on_uncaptured_error
+        let lost: Arc<Mutex<Option<String>>> = Arc::default();
+        let l2 = lost.clone();
+        device.set_device_lost_callback(move |reason, msg| {
+            if let Ok(mut l) = l2.lock() {
+                *l = Some(format!("{reason:?}: {msg}"));
+            }
+        });
+        alive(&device, &queue, &lost, &mut steps, "Gerät angelegt");
         let caps = surface.get_capabilities(&adapter);
         let format = caps
             .formats
@@ -255,6 +327,13 @@ impl Probe {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
+        alive(
+            &device,
+            &queue,
+            &lost,
+            &mut steps,
+            "Oberfläche konfiguriert",
+        );
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Probe-Last"),
             source: wgpu::ShaderSource::Wgsl(include_str!("bench.wgsl").into()),
@@ -303,6 +382,13 @@ impl Probe {
             ..Default::default()
         });
         let array = noise_array(&device, &queue);
+        alive(
+            &device,
+            &queue,
+            &lost,
+            &mut steps,
+            "Rauschtextur hochgeladen",
+        );
         let params = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: SLOT * (LAYERS as u64 + 1),
@@ -426,8 +512,19 @@ impl Probe {
                 }
             })
             .collect();
+        alive(
+            &device,
+            &queue,
+            &lost,
+            &mut steps,
+            "Lastziele und Pipelines",
+        );
         let post_pipeline = pipeline("post_fs", format, 1, None);
+        alive(&device, &queue, &lost, &mut steps, "Ausgabe-Pipeline");
         let timer = Timer::new(&device, &queue);
+        if timer.is_some() {
+            alive(&device, &queue, &lost, &mut steps, "Zeitstempel-Abfragen");
+        }
         steps.push("Bereit: Last läuft".into());
         Ok(Self {
             device,
@@ -443,9 +540,21 @@ impl Probe {
             samples: vec![Vec::new(); MODES.len()],
             cpu: Vec::new(),
             last: std::time::Instant::now(),
+            skipped: 0,
+            skip_reason: "",
             info: steps,
             errors,
+            lost,
         })
+    }
+    /// Gerät verloren (Rückruf von wgpu oder von DX12 entfernt)?
+    pub fn lost(&self) -> bool {
+        self.lost.lock().map(|l| l.is_some()).unwrap_or(false)
+            || removed_reason(&self.device).is_some()
+    }
+    /// Größe der Swapchain (wie zuletzt konfiguriert).
+    pub fn surface_size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
     }
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
@@ -467,15 +576,32 @@ impl Probe {
             self.cpu.remove(0);
         }
         self.last = now;
+        STAGE.store(1, Ordering::Relaxed);
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f)
             | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface.configure(&self.device, &self.config);
+            other => {
+                self.skipped += 1;
+                self.skip_reason = match other {
+                    wgpu::CurrentSurfaceTexture::Outdated => "Outdated",
+                    wgpu::CurrentSurfaceTexture::Lost => "Lost",
+                    wgpu::CurrentSurfaceTexture::Timeout => "Timeout",
+                    wgpu::CurrentSurfaceTexture::Occluded => "Occluded",
+                    // ohne Eintrag unter wgpu-Fehler: Gerät verloren (wgpu meldet das nur per Rückruf)
+                    wgpu::CurrentSurfaceTexture::Validation => "Validation",
+                    _ => "anderer",
+                };
+                if matches!(
+                    other,
+                    wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost
+                ) {
+                    self.surface.configure(&self.device, &self.config);
+                }
+                STAGE.store(0, Ordering::Relaxed);
                 return Ok(());
             }
-            _ => return Ok(()),
         };
+        STAGE.store(2, Ordering::Relaxed);
         let mode = self.mode();
         let t = self.frame as f32 / 60.;
         let mut bytes = vec![0u8; (SLOT * (LAYERS as u64 + 1)) as usize];
@@ -492,6 +618,15 @@ impl Probe {
         } else {
             None
         };
+        // Ohne Zeitstempel (auf der Xbox verlor der Treiber beim Anlegen der Zeitstempel-Abfragen das Gerät): die Last
+        // einzeln abschicken und die Zeit bis zum Fence messen (GPU-Zeit plus Bruchteile einer Millisekunde)
+        let fence = self.timer.is_none() && in_window;
+        if fence {
+            let _ = self.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_secs(3)),
+            });
+        }
         let mut enc = self.device.create_command_encoder(&Default::default());
         let target = &self.targets[mode];
         {
@@ -532,6 +667,22 @@ impl Probe {
                 pass.draw(0..3, 0..1);
             }
         }
+        if fence {
+            let t0 = std::time::Instant::now();
+            let idx = self.queue.submit([enc.finish()]);
+            let done = self.device.poll(wgpu::PollType::Wait {
+                submission_index: Some(idx),
+                timeout: Some(std::time::Duration::from_secs(3)),
+            });
+            if done.is_ok() {
+                let v = &mut self.samples[mode];
+                v.push(t0.elapsed().as_secs_f32() * 1000.);
+                if v.len() > 600 {
+                    v.remove(0);
+                }
+            }
+            enc = self.device.create_command_encoder(&Default::default());
+        }
         {
             let view = frame.texture.create_view(&Default::default());
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -554,8 +705,11 @@ impl Probe {
         if let Some(tm) = &self.timer {
             tm.resolve(&mut enc);
         }
+        STAGE.store(3, Ordering::Relaxed);
         self.queue.submit([enc.finish()]);
+        STAGE.store(4, Ordering::Relaxed);
         frame.present();
+        STAGE.store(5, Ordering::Relaxed);
         if let Some(tm) = &mut self.timer {
             for (m, ms) in tm.collect(&self.device) {
                 let v = &mut self.samples[m];
@@ -566,6 +720,7 @@ impl Probe {
             }
         }
         self.frame += 1;
+        STAGE.store(0, Ordering::Relaxed);
         Ok(())
     }
     /// Mehrzeiliger Bericht: Prüfschritte, Messwerte je Betriebsart, Fehler.
@@ -578,10 +733,11 @@ impl Probe {
             HEIGHT,
             MODES[self.mode()].name
         ));
+        let kind = if self.timer.is_some() { "GPU" } else { "Fence" };
         for (i, m) in MODES.iter().enumerate() {
             match median_p95(&self.samples[i]) {
                 Some((med, p95)) => out.push_str(&format!(
-                    "  {:<34} GPU Median {:6.2} ms  P95 {:6.2} ms  ({} Bilder)\n",
+                    "  {:<34} {kind} Median {:6.2} ms  P95 {:6.2} ms  ({} Bilder)\n",
                     m.name,
                     med,
                     p95,
@@ -597,7 +753,24 @@ impl Probe {
             ));
         }
         if self.timer.is_none() {
-            out.push_str("  keine Zeitstempel auf diesem Gerät – nur Bildabstand\n");
+            out.push_str(
+                "  ohne Zeitstempel: Fence = Last einzeln abgeschickt, Zeit bis die GPU fertig ist\n",
+            );
+        }
+        if self.skipped > 0 {
+            out.push_str(&format!(
+                "  Oberfläche ohne Bild: {}× (zuletzt {}), gezeichnet: {}\n",
+                self.skipped, self.skip_reason, self.frame
+            ));
+        }
+        let gone = self.lost.lock().ok().and_then(|l| l.clone());
+        let reason = removed_reason(&self.device);
+        if gone.is_some() || reason.is_some() {
+            out.push_str(&format!(
+                "\nGERÄT VERLOREN: {}\n  DX12-Grund: {}\n",
+                gone.unwrap_or_else(|| "kein Rückruf".into()),
+                reason.unwrap_or_else(|| "S_OK".into())
+            ));
         }
         if let Ok(e) = self.errors.lock()
             && !e.is_empty()

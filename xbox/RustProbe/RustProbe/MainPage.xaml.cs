@@ -8,14 +8,14 @@ using Windows.UI.Xaml.Media;
 namespace RustProbe
 {
     /// <summary>
-    /// Holt den ISwapChainPanelNative-Zeiger des SwapChainPanel, startet die Rust-Probe damit und zeichnet je Bild
-    /// (CompositionTarget.Rendering, UI-Thread). Der Bericht der Probe steht oben links und in
+    /// Holt den ISwapChainPanelNative-Zeiger des SwapChainPanel und startet die Rust-Probe damit; sie zeichnet in ihrem
+    /// eigenen Render-Thread. Der Bericht der Probe steht oben links (Timer, 4× je Sekunde) und in
     /// LocalState\probe-status.txt (Xbox Device Portal → File Explorer).
     /// </summary>
     public sealed partial class MainPage : Page
     {
         [DllImport("berlin_probe.dll")] static extern int probe_start(IntPtr panel, uint width, uint height, [MarshalAs(UnmanagedType.LPWStr)] string logDir);
-        [DllImport("berlin_probe.dll")] static extern int probe_frame();
+        [DllImport("berlin_probe.dll")] static extern uint probe_tick();
         [DllImport("berlin_probe.dll")] static extern void probe_resize(uint width, uint height);
         [DllImport("berlin_probe.dll")] static extern uint probe_status([Out] char[] buffer, uint capacity);
 
@@ -24,7 +24,6 @@ namespace RustProbe
         // Zeiger ungeprüft und ruft nur SetSwapChain (gleiche vtable in beiden Fassungen).
         static readonly Guid SwapChainPanelNative = new Guid("F92F19D2-3ADE-45A6-A20C-F6F1EA90554B");
         bool started;
-        int frames;
 
         public MainPage()
         {
@@ -54,9 +53,14 @@ namespace RustProbe
                 }
                 Shell("ISwapChainPanelNative geholt, rufe probe_start");
                 PixelSize(out uint w, out uint h);
-                started = probe_start(native, w, h, ApplicationData.Current.LocalFolder.Path) == 0;
+                probe_start(native, w, h, ApplicationData.Current.LocalFolder.Path);
+                started = true;
                 ShowStatus();
-                CompositionTarget.Rendering += OnRendering;
+                // Gezeichnet wird im Render-Thread der Probe; hier nur der Bericht (blockiert nie auf das Zeichnen) und
+                // nach einem Geräteverlust der Neuaufbau mit der nächsten Variante (muss auf dem UI-Thread laufen)
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                timer.Tick += (s, a) => { probe_tick(); ShowStatus(); };
+                timer.Start();
             }
             catch (Exception ex)
             {
@@ -71,12 +75,6 @@ namespace RustProbe
             Report.Text = text;
             try { System.IO.File.WriteAllText(System.IO.Path.Combine(ApplicationData.Current.LocalFolder.Path, "shell-status.txt"), text); }
             catch { }
-        }
-
-        void OnRendering(object sender, object e)
-        {
-            if (started && probe_frame() == -2) ShowStatus();
-            if (++frames % 30 == 0) ShowStatus();
         }
 
         void ShowStatus()

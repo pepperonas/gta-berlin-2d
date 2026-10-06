@@ -4,8 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="Black">
         <SwapChainPanel x:Name="Panel" />
-        <Border Background="#C0000000" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="64,36,0,0" Padding="16" MaxWidth="1400">
-            <TextBlock x:Name="Report" FontFamily="Consolas" FontSize="16" Foreground="White" TextWrapping="Wrap" Text="Probe startet …" />
+        <!-- Standardschrift: Consolas fehlt auf der Xbox (·, ×, Umlaute wurden zu Ersatzzeichen); klein, weil das
+             Fenster dort 960 × 540 Einheiten hat -->
+        <Border Background="#C0000000" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24,16,24,16" Padding="10">
+            <TextBlock x:Name="Report" FontSize="11" Foreground="White" TextWrapping="Wrap" Text="Probe startet …" />
         </Border>
     </Grid>
 </Page>

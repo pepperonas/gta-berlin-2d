@@ -48,8 +48,8 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   DX12-Adapter da ist und ob die Oberfläche entsteht, und misst danach eine dem Spiel nachgebildete Last (8 Schichten in
   2560 × 1440, mit/ohne 4× MSAA). Dieselbe Last läuft auf dem Mac (`cargo run --release -p berlin-probe --example mac`;
   M1 Pro 4,5–5,3 ms) – das Verhältnis überträgt die Spielmessungen auf die Konsole. Bauen in der Windows-VM:
-  `xbox\RustProbe\build-probe.ps1`, Anleitung in `xbox/RustProbe/README.md`. In der Windows-VM gebaut und gestartet,
-  noch nicht auf der Xbox.
+  `xbox\RustProbe\build-probe.ps1`, Anleitung in `xbox/RustProbe/README.md`. In der Windows-VM gebaut, läuft auf der
+  Konsole (siehe „Behoben“).
 - Grafik-Überarbeitung, Phase 4 (native Fassung): **Dächer und Fassaden aus Texturen** (CC0, ambientCG) –
   Ziegel, Schiefer, Blech, Kiesdach; Putz, Klinker und Beton (Plattenbau mit Plattenfugen). Welche Fassade ein Haus
   bekommt, folgt dem Wandmaterial aus OSM bzw. dem Fassadenstil. **Fenster** haben Rahmen, steinerne Fensterbank,
@@ -457,6 +457,20 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
   Windows-VM (ARM64, Release-Build) läuft die Kette damit durch: DLLs geladen, Oberfläche angelegt, Last läuft (WARP).
   Die Probe schreibt vor jedem heiklen Schritt einen Zwischenstand nach `probe-status.txt`, die Hülle ihre eigenen
   Meldungen nach `shell-status.txt` und unbehandelte Ausnahmen nach `shell-error.txt`.
+- Xbox-Machbarkeitsprobe auf der Konsole (Series X, Developer Mode): **Rust + wgpu + DX12 zeichnen in einer UWP-App ins
+  `SwapChainPanel`** (Adapter `SraKmd_arden`, Hardware-GPU). Drei Hindernisse behoben, die auch das Spiel betreffen:
+  - Gezeichnet wurde auf dem UI-Thread; das Warten auf das nächste Bild (Fifo) blockierte dort das Panel nach dem
+    ersten Bild. Die Probe zeichnet jetzt in einem eigenen Render-Thread; der Bericht meldet einen Herzschlag und den
+    Schritt, in dem ein Hänger steckt.
+  - Neukonfigurieren der Oberfläche (`ResizeBuffers` nach der Größenänderung 960×540 → 1920×1080) scheiterte, wgpu hatte
+    die Swapchain da schon verworfen („Surface is not configured“). Die Swapchain behält jetzt ihre Startgröße.
+  - Beim Anlegen der GPU-Zeitstempel-Abfragen verlor der Treiber das Gerät (`DXGI_ERROR_DRIVER_INTERNAL_ERROR`; ein
+    Neuaufbau direkt danach scheiterte an der zurückgesetzten GPU). Gemessen wird ohne Zeitstempel über einen Fence
+    (Last einzeln abschicken, Zeit bis die GPU fertig ist); auf dem Mac vergleichbar mit `PROBE_FENCE=1`.
+  Dazu: Prüfpunkte im Aufbau mit Geräteverlust-Rückruf und DX12-Grund (`GetDeviceRemovedReason`), ein zweiter Versuch
+  nach 10 s Pause, Standardschrift statt Consolas (fehlt auf der Konsole). Erste Messung lief noch als *App* (laut
+  Microsoft höchstens 45 % der GPU, geteilt): Float 4× MSAA 53 ms Median, P95 193 ms. Die Messung im Spielmodus steht
+  aus; den Schalter „App type: Game“ aus den bekannten Anleitungen gibt es in Dev Home auf dieser Systemversion nicht.
 - Native Fassung: Über Zäune springen klappt jetzt auch im Gehtempo und mit der Maussteuerung. Der Absprung trägt die
   Figur mit Schwung weiter (vorher landete sie im Gehtempo mitten im Zaun und wurde zurückgeschoben – 1 von 85
   Zäunen); bei Klicksteuerung springt die Leertaste Richtung Klickziel, danach läuft die Figur weiter.
