@@ -387,7 +387,9 @@ impl BigMap {
         self.center += d * 600. * dt / f.max(1e-6);
         let zin = held(KeyCode::Equal) || held(KeyCode::NumpadAdd) || held(KeyCode::PageUp);
         let zout = held(KeyCode::Minus) || held(KeyCode::NumpadSubtract) || held(KeyCode::PageDown);
-        let rate = (zin as i32 as f32 - zout as i32 as f32) + p.rt - p.lt;
+        // rechter Stick: nach oben näher, nach unten weiter (Totzone wie beim Laufen)
+        let stick = if p.ry.abs() > 0.25 { -p.ry } else { 0. };
+        let rate = (zin as i32 as f32 - zout as i32 as f32) + p.rt - p.lt + stick;
         self.z = (self.z * (rate * 1.6 * dt).exp()).clamp(1., ZOOM_MAX);
         click
     }

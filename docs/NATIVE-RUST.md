@@ -2298,3 +2298,19 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   Kantenglättung bleibt auch geteilt an.
 - **Grenzen:** Statistik zählt beide Spieler zusammen; den Wegpunkt setzt, wer den Stadtplan bedient (Spieler 1).
 
+## Controller-Belegung nach Notizblatt (06.10.2026)
+
+- **Standard (`bindings.rs ACTIONS`):** zu Fuß A Sprint (+ Aktion), X Springen, Y Einsteigen, B Nachladen, RB Treten,
+  LB Nächste Waffe, RS Waffenrad; im Auto B Handbremse, Y Aussteigen, X Hupe, ↑ ESP, ↓ ABS, RS Fahrhilfen-Rad (neue
+  Aktion `AssistWheel`). Test `controller_layout_follows_the_note` (inkl. keine Doppelbelegung).
+- **Räder am Stickdruck (`wheel.rs WheelButton::pad_step`):** Drücken öffnet (aktuelle Wahl vorgewählt), der Stick
+  wählt, nochmal drücken oder A nimmt, B bricht ab; bei offenem Rad gehören A und B dem Rad (kein Sprint, Nachladen,
+  Handbremse). Gilt für das Waffenrad beider Spieler und das Fahrhilfen-Rad (`draw_assist`, ohne Zeitlupe).
+- **Sirene:** `Input.siren_toggle`, `Car::has_siren` (Polizei, Rettungswagen, Datensatz-Merkmal `sirene`); Hupe lang
+  halten (`bindings::HornPress`, `SIREN_HOLD` 0,45 s, einmal je Druck, danach still), auch über das Fahrhilfen-Rad.
+- **Einsteigen anzeigen:** `play::enter_target` wählt wie `World::try_enter_car`; ein durchscheinendes Rechteck in der
+  Spielerfarbe hinter dem Fahrzeug (Effekt-Durchgang, schreibt keine Tiefe), leicht pulsierend.
+- **Stadtplan:** rechter Stick zoomt; **Teleport-Rückfrage:** Auswahl Ja/Nein mit Pfeilen/Steuerkreuz/Stick.
+- **Offen:** Befehlszeile per RT+LT – am Controller kollidiert das mit Gas/Bremse und Zielen/Schießen, und Tippen
+  braucht eine Bildschirmtastatur; noch nicht umgesetzt.
+

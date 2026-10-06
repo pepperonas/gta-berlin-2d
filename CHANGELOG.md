@@ -8,6 +8,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **neue Controller-Belegung** (nach dem Notizblatt): zu Fuß X springen, B nachladen, RB treten,
+  LB nächste Waffe, rechten Stick drücken = Waffenrad (drücken öffnet, Stick wählt, nochmal drücken oder A nimmt, B
+  bricht ab); im Auto B Handbremse, Steuerkreuz ↓ ABS, rechten Stick drücken = neues **Fahrhilfen-Rad** (ESP, ABS,
+  Sirene). **Sirene:** in Polizei- und Rettungswagen X (Tastatur H) lang halten. **Einsteigen** wird angezeigt: das
+  Fahrzeug, in das Y/F führt, schimmert dezent in der Farbe des Spielers. Stadtplan zoomt auch mit dem rechten Stick,
+  die Teleport-Rückfrage hat eine Auswahl (Stick/Pfeile, A/Enter bestätigt). Eigene Belegungen in settings.json
+  bleiben erhalten.
 - Native Fassung, Koop: **Spieler 2 hat jetzt ein eigenes Waffenrad** (LB halten, in seiner Bildhälfte), **eigene
   Navigation** zum gemeinsamen Wegpunkt (Route und Restweg auf seiner Minikarte), **eine eigene Motorstimme** für sein
   Auto, und **die Züge beider Spieler** sind für Verkehr, Straßenbahnen und Fahrplanzüge Hindernis (auch füreinander).

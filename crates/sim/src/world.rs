@@ -73,6 +73,8 @@ pub struct Input {
     pub action_held: bool,
     pub esp_toggle: bool,
     pub abs_toggle: bool,
+    /// Sirene an/aus (Flanke; nur Fahrzeuge mit Sirene)
+    pub siren_toggle: bool,
     /// Kampf (nur zu Fuß wirksam)
     pub combat: crate::combat::CombatInput,
     /// Klicksteuerung zu Fuß (Diablo-Schema): Zeigerpunkt, gedrückt/gehalten, mit Strg. Eingestiegen wird nie per
@@ -3247,6 +3249,14 @@ impl World {
                 self.abs = !self.abs;
                 self.notice = Some(Notice {
                     text: format!("ABS {}", if self.abs { "AN" } else { "AUS" }),
+                    t: 1.6,
+                });
+            }
+            if input.siren_toggle && !self.cars[i].wrecked && self.cars[i].has_siren() {
+                let on = !self.cars[i].siren;
+                self.cars[i].siren = on;
+                self.notice = Some(Notice {
+                    text: format!("Sirene {}", if on { "AN" } else { "AUS" }),
                     t: 1.6,
                 });
             }

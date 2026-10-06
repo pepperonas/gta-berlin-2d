@@ -1,7 +1,7 @@
 //! Waffenrad (Port von `weaponwheel.js`): eine Taste, die kurz getippt etwas anderes tut als gehalten.
 //!  – Maus: beide Tasten zusammen halten (zu Fuß) = Rad genau am Zeiger; gewählt ist das Feld in Richtung des Zeigers
 //!    ab der Radmitte. Beide Tasten loslassen nimmt die Waffe, kurzes Doppeltippen tut nichts.
-//!  – Controller LB: tippen = vorige Waffe, halten = Rad, der rechte Stick wählt.
+//!  – Controller: rechten Stick drücken öffnet das Rad, der Stick wählt, nochmal drücken oder A nimmt, B bricht ab.
 //! Solange das Rad offen ist, läuft das Spiel in Zeitlupe.
 use berlin_engine::hud::{Align, Hud};
 use berlin_sim::combat::{Combat, WEAPONS};
@@ -133,6 +133,77 @@ impl WheelButton {
             closed: true,
             ..Default::default()
         }
+    }
+    /// Controller (Stickdruck): sofort öffnen, die aktuelle Wahl vorgewählt.
+    pub fn open_now(&mut self, t: f64, at: Vec2, current: usize, n: usize) {
+        *self = Self {
+            open: true,
+            hover: Some(current),
+            opened_at: t,
+            center: at,
+            last: at,
+            n,
+            ..Self::default()
+        };
+    }
+    /// Controller: schließen und das gezeigte Feld nehmen.
+    pub fn close_pick(&mut self) -> Outcome {
+        if !self.open {
+            return Outcome::default();
+        }
+        self.open = false;
+        self.down = false;
+        Outcome {
+            pick: self.hover,
+            closed: true,
+            ..Default::default()
+        }
+    }
+    /// Schließen ohne Wahl.
+    pub fn cancel(&mut self) -> Outcome {
+        let was = self.open;
+        self.open = false;
+        self.down = false;
+        Outcome {
+            closed: was,
+            ..Default::default()
+        }
+    }
+    /// Controller-Rad an einer Taste: drücken öffnet bzw. nimmt, A nimmt, B bricht ab, der Stick wählt.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pad_step(
+        &mut self,
+        t: f64,
+        at: Vec2,
+        toggle: bool,
+        confirm: bool,
+        back: bool,
+        stick: (f32, f32),
+        can_open: bool,
+        current: usize,
+        n: usize,
+    ) -> Outcome {
+        if self.open && !can_open {
+            return self.cancel();
+        }
+        if toggle && can_open && !self.open {
+            self.open_now(t, at, current, n);
+            return Outcome {
+                opened: true,
+                ..Default::default()
+            };
+        }
+        if !self.open {
+            return Outcome::default();
+        }
+        self.aim(stick.0, stick.1);
+        if back {
+            return self.cancel();
+        }
+        if toggle || confirm {
+            return self.close_pick();
+        }
+        Outcome::default()
     }
     pub fn release(&mut self, t: f64) -> Outcome {
         if !self.down {
@@ -294,9 +365,95 @@ pub fn draw(h: &mut Hud, w: &WheelButton, c: &Combat, age: f64, pad: bool) {
     );
 }
 
+/// Eintrag des Fahrhilfen-Rads: Name, Zustand, verfügbar.
+pub struct AssistItem {
+    pub name: &'static str,
+    pub state: String,
+    pub enabled: bool,
+}
+
+/// Fahrhilfen-Rad (Controller: rechten Stick drücken im Fahrzeug): ESP, ABS, Sirene. Gleiche Form wie das
+/// Waffenrad, ohne Zeitlupe.
+pub fn draw_assist(h: &mut Hud, w: &WheelButton, items: &[AssistItem], age: f64) {
+    let n = items.len().max(1);
+    let (cx, cy) = (w.center.x, w.center.y);
+    let u = (age / (EASE * 1.4)).clamp(0., 1.) as f32;
+    let e = 1. - (1. - u).powi(3);
+    let step = std::f32::consts::TAU / n as f32;
+    let gap = 0.05;
+    let scale = (0.86 + 0.14 * e) * 0.75;
+    let (r0, rr) = (INNER * scale, RADIUS * scale);
+    for (i, it) in items.iter().enumerate() {
+        let on = w.hover == Some(i) && it.enabled;
+        let mid = i as f32 * step - std::f32::consts::FRAC_PI_2;
+        let (a0, a1) = (mid - step / 2. + gap, mid + step / 2. - gap);
+        let ro = if on { rr + 8. } else { rr };
+        let fill = if on {
+            [1., 0.827, 0.24, 0.92]
+        } else {
+            [0.08, 0.09, 0.12, if it.enabled { 0.85 } else { 0.5 }]
+        };
+        h.arc(cx, cy, r0, ro - r0, a0, a1, fill);
+        let d = slot_dir(i, n);
+        let rm = (r0 + ro) / 2.;
+        let (tx, ty) = (cx + d.x * rm, cy + d.y * rm);
+        let col = if on {
+            [0.1, 0.11, 0.13, 1.]
+        } else if it.enabled {
+            [0.93, 0.93, 0.93, 1.]
+        } else {
+            [0.55, 0.55, 0.55, 1.]
+        };
+        h.text(it.name, tx, ty - 2., 14., col, Align::Center, !on);
+        h.text(&it.state, tx, ty + 15., 11., col, Align::Center, false);
+    }
+    h.ellipse(cx, cy, r0 - 6., r0 - 6., [0.047, 0.055, 0.075, 0.9]);
+    h.text(
+        "FAHRHILFEN",
+        cx,
+        cy + 4.,
+        11.,
+        [1., 0.83, 0.24, 1.],
+        Align::Center,
+        true,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stick_click_opens_selects_and_confirms() {
+        let mut w = WheelButton::default();
+        let at = Vec2::new(640., 360.);
+        // Drücken öffnet, die aktuelle Waffe ist vorgewählt
+        let o = w.pad_step(0., at, true, false, false, (0., 0.), true, 2, 6);
+        assert!(o.opened && w.open && w.hover == Some(2));
+        // Stick nach rechts wählt das Feld rechts, nochmal drücken nimmt es
+        w.pad_step(0.1, at, false, false, false, (1., 0.), true, 2, 6);
+        assert_eq!(w.hover, slot(1., 0., 6, 0.));
+        let o = w.pad_step(0.2, at, true, false, false, (0., 0.), true, 2, 6);
+        assert_eq!(o.pick, slot(1., 0., 6, 0.));
+        assert!(!w.open);
+        // A nimmt ebenfalls, B bricht ohne Wahl ab
+        w.pad_step(0.3, at, true, false, false, (0., 0.), true, 0, 6);
+        assert_eq!(
+            w.pad_step(0.4, at, false, true, false, (0., 0.), true, 0, 6)
+                .pick,
+            Some(0)
+        );
+        w.pad_step(0.5, at, true, false, false, (0., 0.), true, 0, 6);
+        let o = w.pad_step(0.6, at, false, false, true, (0., 0.), true, 0, 6);
+        assert!(o.pick.is_none() && o.closed && !w.open);
+        // nicht öffnen, wo es nicht darf (im Auto, tot); offenes Rad schließt dann ohne Wahl
+        assert!(
+            !w.pad_step(0.7, at, true, false, false, (0., 0.), false, 0, 6)
+                .opened
+        );
+        w.pad_step(0.8, at, true, false, false, (0., 0.), true, 0, 6);
+        let o = w.pad_step(0.9, at, false, false, false, (0., 0.), false, 0, 6);
+        assert!(o.closed && o.pick.is_none());
+    }
     #[test]
     fn slots_go_clockwise_from_the_top() {
         assert_eq!(slot(0., -50., 6, DEAD), Some(0));

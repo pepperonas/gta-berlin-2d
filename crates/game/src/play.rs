@@ -131,6 +131,11 @@ pub struct Play {
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
     wheel_p2: crate::wheel::WheelButton,
+    /// Teleport-Rückfrage: „Nein“ ausgewählt (Pfeile/Stick wechseln, A bzw. Enter nimmt die Auswahl)
+    teleport_no: bool,
+    /// Fahrhilfen-Rad (rechter Stick im Fahrzeug) je Spieler und die Hupe mit langem Druck (Sirene)
+    assist: [crate::wheel::WheelButton; 2],
+    horn: [crate::bindings::HornPress; 2],
     /// Navigation von Spieler 2: gemeinsamer Wegpunkt, eigene Route
     nav2: crate::nav::Nav,
     real_t: f64,
@@ -357,7 +362,11 @@ impl Play {
             let nav = self.nav.view(self.nav_pos());
             self.bigmap.draw(&self.world, &nav, !self.mouse_aim, out);
             if let Some((_, spot)) = &self.teleport {
-                crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+                crate::menu::draw_teleport(
+                    out,
+                    spot.as_ref().map(|s| s.3.as_str()),
+                    self.teleport_no,
+                );
             }
             return;
         }
@@ -393,10 +402,15 @@ impl Play {
         if let Some((_, spot)) = &self.teleport
             && !self.teleport_auto
         {
-            crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()));
+            crate::menu::draw_teleport(out, spot.as_ref().map(|s| s.3.as_str()), self.teleport_no);
         }
         if self.screen == Screen::Playing {
             crate::console::draw(out, &self.console, &self.world);
+        }
+        if self.assist[0].open && self.screen == Screen::Playing {
+            let items = assist_items(&self.world);
+            let age = self.real_t - self.assist[0].opened_at;
+            crate::wheel::draw_assist(out, &self.assist[0], &items, age);
         }
         for (wh, pad) in [(&self.wheel_m, false), (&self.wheel_p, true)] {
             if wh.open && self.screen == Screen::Playing {
@@ -559,6 +573,9 @@ impl Play {
             wheel_m: Default::default(),
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
+            teleport_no: false,
+            assist: Default::default(),
+            horn: Default::default(),
             nav2: Default::default(),
             real_t: 0.,
             time_scale: 1.,
@@ -1066,9 +1083,15 @@ impl Play {
                 dx: half,
             },
         );
+        let items2 = assist_items(&self.world);
         self.world.swap_seat();
         out.shift_since(from, half);
         out.width = full;
+        // Räder von Spieler 2 liegen schon in Bildschirmlage (Mitte seiner Hälfte)
+        if self.assist[1].open && self.screen == Screen::Playing {
+            let age = self.real_t - self.assist[1].opened_at;
+            crate::wheel::draw_assist(out, &self.assist[1], &items2, age);
+        }
         if self.wheel_p2.open
             && self.screen == Screen::Playing
             && let Some(s) = self.world.p2.as_ref()
@@ -1171,29 +1194,53 @@ impl Play {
         let n = berlin_sim::combat::WEAPONS.len();
         let t = self.real_t;
         let center = Vec2::new(self.hud_width * 0.75, 360.);
+        let in_car = s.player.in_car.is_some();
+        let siren_car = s
+            .player
+            .in_car
+            .and_then(|id| self.world.car(id))
+            .is_some_and(|c| c.has_siren());
         let wh = &mut self.wheel_p2;
-        if bind.pad_pressed(&k2, B::WeaponWheel) && alive_foot {
-            wh.press(t, center);
+        let was = wh.open;
+        let o = wh.pad_step(
+            t,
+            center,
+            bind.pad_pressed(&k2, B::WeaponWheel),
+            edges.a,
+            edges.b,
+            (pad.rx, pad.ry),
+            alive_foot,
+            cur,
+            n,
+        );
+        if let Some(k) = o.pick {
+            i.combat.weapon_slot = k as u8 + 1;
         }
-        wh.tick(t, alive_foot, cur, n);
-        wh.aim(pad.rx, pad.ry);
-        if wh.down && !bind.pad_of(B::WeaponWheel).is_some_and(|p| p.held(&pad)) {
-            let o = wh.release(t);
-            if o.tap {
-                i.combat.weapon_prev = true;
-            }
-            if let Some(k) = o.pick {
-                i.combat.weapon_slot = k as u8 + 1;
-            }
-        }
-        if wh.open {
-            // bei offenem Rad kein Schuss, Zielen eingefroren
+        if was || wh.open {
+            // bei offenem Rad kein Schuss, Zielen eingefroren; A und B gehören dem Rad
             i.combat.fire = false;
             i.combat.fire_pressed = false;
             i.combat.kick = false;
+            i.combat.reload = false;
             i.combat.aim_x = 0.;
             i.combat.aim_y = 0.;
+            i.sprint = false;
+            i.action = false;
+            i.action_held = false;
+            i.jump = false;
         }
+        assist_input(
+            &mut self.assist[1],
+            &mut self.horn[1],
+            &mut i,
+            t,
+            center,
+            &k2,
+            bind,
+            in_car,
+            siren_car,
+            1. / 60.,
+        );
         i
     }
     pub fn pause(&mut self) {
@@ -1306,11 +1353,17 @@ impl Play {
                             p.x >= r[0] && p.x <= r[0] + r[2] && p.y >= r[1] && p.y <= r[1] + r[3]
                         })
                 };
-                if mk.confirm || hit(yes) {
+                if bk.left || bk.right {
+                    self.teleport_no = bk.right;
                     self.ui_sound();
+                }
+                if hit(yes) || (mk.confirm && !self.teleport_no) {
+                    self.ui_sound();
+                    self.teleport_no = false;
                     self.confirm_teleport(true);
-                } else if mk.back || hit(no) {
+                } else if mk.back || hit(no) || (mk.confirm && self.teleport_no) {
                     self.ui_sound();
+                    self.teleport_no = false;
                     self.confirm_teleport(false);
                 }
                 true
@@ -3093,22 +3146,43 @@ impl Play {
         {
             outcomes.push(self.wheel_m.choose(i));
         }
-        if bind.pad_pressed(keys, Bind::WeaponWheel) && alive_foot {
-            self.wheel_p.press(t, hud_center);
+        // Controller: rechten Stick drücken öffnet bzw. nimmt, A nimmt, B bricht ab
+        let pad_was = self.wheel_p.open;
+        let o = self.wheel_p.pad_step(
+            t,
+            hud_center,
+            bind.pad_pressed(keys, Bind::WeaponWheel),
+            keys.pad_pressed.a,
+            keys.pad_pressed.b,
+            (keys.pad.rx, keys.pad.ry),
+            alive_foot,
+            cur,
+            n,
+        );
+        outcomes.push(o);
+        if pad_was || self.wheel_p.open {
+            // das Rad bedient A und B selbst
+            input.sprint = false;
+            input.action = false;
+            input.action_held = false;
+            input.jump = false;
+            input.combat.reload = false;
         }
-        self.wheel_p.tick(t, alive_foot, cur, n);
-        self.wheel_p.aim(keys.pad.rx, keys.pad.ry);
-        if self.wheel_p.down
-            && !bind
-                .pad_of(Bind::WeaponWheel)
-                .is_some_and(|p| p.held(&keys.pad))
-        {
-            let o = self.wheel_p.release(t);
-            if o.tap {
-                input.combat.weapon_prev = true;
-            }
-            outcomes.push(o);
-        }
+        // Fahrhilfen-Rad und Hupe/Sirene im Fahrzeug
+        let siren_car = w2.player_car().is_some_and(|c| c.has_siren());
+        let in_car = !self.bigmap.open && w2.player.in_car.is_some();
+        assist_input(
+            &mut self.assist[0],
+            &mut self.horn[0],
+            &mut input,
+            t,
+            hud_center,
+            keys,
+            &bind,
+            in_car,
+            siren_car,
+            dt,
+        );
         let open = self.wheel_m.open || self.wheel_p.open;
         if open {
             // Zifferntaste wählt und schließt
@@ -3250,6 +3324,126 @@ impl Play {
             self.save();
         }
     }
+}
+
+/// Fahrhilfen-Rad (rechten Stick drücken im Fahrzeug: ESP, ABS, Sirene) und Hupe mit langem Druck (Sirene) für
+/// einen Spieler; schreibt die Schalter in `input`. Bei offenem Rad gehören A und B dem Rad.
+#[allow(clippy::too_many_arguments)]
+fn assist_input(
+    wheel: &mut crate::wheel::WheelButton,
+    horn: &mut crate::bindings::HornPress,
+    input: &mut Input,
+    t: f64,
+    center: Vec2,
+    keys: &Keys,
+    bind: &crate::bindings::Bindings,
+    in_car: bool,
+    siren_car: bool,
+    dt: f64,
+) {
+    use crate::bindings::Action as B;
+    let was = wheel.open;
+    let o = wheel.pad_step(
+        t,
+        center,
+        in_car && bind.pad_pressed(keys, B::AssistWheel),
+        keys.pad_pressed.a,
+        keys.pad_pressed.b,
+        (keys.pad.rx, keys.pad.ry),
+        in_car,
+        0,
+        ASSIST_ITEMS,
+    );
+    match o.pick {
+        Some(0) => input.esp_toggle = true,
+        Some(1) => input.abs_toggle = true,
+        Some(2) => input.siren_toggle = siren_car,
+        _ => {}
+    }
+    if was || wheel.open {
+        input.handbrake = false;
+        input.action = false;
+        input.action_held = false;
+    }
+    let (h, toggle) = horn.step(input.horn, siren_car, dt);
+    input.horn = h;
+    input.siren_toggle |= toggle;
+}
+/// Einträge des Fahrhilfen-Rads
+pub const ASSIST_ITEMS: usize = 3;
+/// Einträge des Fahrhilfen-Rads mit Zustand für das gefahrene Auto des aktuellen Sitzes.
+fn assist_items(w: &World) -> Vec<crate::wheel::AssistItem> {
+    let car = w.player_car();
+    let siren = car.is_some_and(|c| c.has_siren());
+    vec![
+        crate::wheel::AssistItem {
+            name: "ESP",
+            state: berlin_sim::world::esp_label(w.esp, w.esp_full).into(),
+            enabled: true,
+        },
+        crate::wheel::AssistItem {
+            name: "ABS",
+            state: if w.abs { "AN" } else { "AUS" }.into(),
+            enabled: true,
+        },
+        crate::wheel::AssistItem {
+            name: "Sirene",
+            state: if !siren {
+                "–".into()
+            } else if car.is_some_and(|c| c.siren) {
+                "AN".into()
+            } else {
+                "AUS".into()
+            },
+            enabled: siren,
+        },
+    ]
+}
+
+/// Fahrzeug, in das die Figur einsteigen würde (wie `World::try_enter_car`: das nächste heile in Reichweite, das
+/// kein Spieler fährt).
+pub fn enter_target<'a>(
+    w: &'a World,
+    p: &berlin_sim::world::Player,
+) -> Option<&'a berlin_sim::car::Car> {
+    if p.in_car.is_some() || p.ride.is_some() || p.inside.is_some() || p.combat.dead {
+        return None;
+    }
+    w.cars
+        .iter()
+        .filter(|c| !c.wrecked && c.driver != Some(berlin_sim::car::Driver::Player))
+        .map(|c| (c, (c.x - p.x).hypot(c.y - p.y)))
+        .filter(|(_, d)| *d < berlin_sim::world::ENTER_DIST)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(c, _)| c)
+}
+/// Dezenter Schimmer unter dem Fahrzeug, in das man einsteigen kann (pulsiert leicht, Farbe des Spielers).
+fn enter_hint(
+    w: &World,
+    p: &berlin_sim::world::Player,
+    ring: [f32; 4],
+    ambient: [f32; 3],
+    out: &mut Vec<Body>,
+) {
+    let Some(c) = enter_target(w, p) else {
+        return;
+    };
+    let pulse = 0.5 + 0.5 * (w.time * 4.).sin() as f32;
+    let depth = if c.lvl() >= 1 { 0.55 } else { 0.62 };
+    out.push(Body {
+        center: [c.x as f32, c.y as f32],
+        half: [c.hw as f32 + 5., c.hh as f32 + 5.],
+        angle: c.angle as f32,
+        shape: 0.,
+        // hinter dem Auto, über seinem Schatten: nur der Rand ist zu sehen
+        depth: depth + 0.0003,
+        color: [
+            ring[0] * ambient[0],
+            ring[1] * ambient[1],
+            ring[2] * ambient[2],
+            0.22 + 0.16 * pulse,
+        ],
+    });
 }
 
 /// Bodenring der Spielfiguren: Spieler 1 Cyan, Spieler 2 Orange (dieselben Farben wie die Trennlinie).
@@ -3836,6 +4030,15 @@ impl Game for Play {
         let l = self.lighting().unwrap_or_default();
         let ambient = if l.dark > 0. { l.ambient } else { [1.; 3] };
         self.fx.effects(out, ambient);
+        // Einsteigen möglich: das Fahrzeug, in das F bzw. Y führt, schimmert dezent (je Spieler zu Fuß); durchscheinend,
+        // daher hier und nicht in `bodies` (sonst verdeckte es den Schatten und hellte die Silhouette auf)
+        if matches!(self.screen, Screen::Playing) {
+            let w = &self.world;
+            enter_hint(w, &w.player, PLAYER_RING[0], ambient, out);
+            if let Some(s) = w.p2.as_ref() {
+                enter_hint(w, &s.player, PLAYER_RING[1], ambient, out);
+            }
+        }
     }
     fn silhouettes(&self, out: &mut Vec<Body>) {
         if !self.debug.silhouettes {
@@ -4307,6 +4510,93 @@ mod tests {
             &b,
         );
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
+    }
+    /// Controller-Belegung nach dem Notizblatt: zu Fuß A sprinten, X springen, Y einsteigen, B nachladen; im Auto
+    /// B Handbremse, Y aussteigen, X hupen; der rechte Stick öffnet zu Fuß das Waffenrad, im Auto das Fahrhilfen-Rad.
+    #[test]
+    fn controller_layout_follows_the_note() {
+        use crate::bindings::{Action as A, Bindings, PadButton as P};
+        let b = Bindings::default();
+        assert_eq!(b.pad_of(A::Sprint), Some(P::A));
+        assert_eq!(b.pad_of(A::Jump), Some(P::X));
+        assert_eq!(b.pad_of(A::EnterExit), Some(P::Y));
+        assert_eq!(b.pad_of(A::Reload), Some(P::B));
+        assert_eq!(b.pad_of(A::WeaponWheel), Some(P::RS));
+        assert_eq!(b.pad_of(A::Handbrake), Some(P::B));
+        assert_eq!(b.pad_of(A::Horn), Some(P::X));
+        assert_eq!(b.pad_of(A::AssistWheel), Some(P::RS));
+        assert!(
+            b.conflicts().is_empty(),
+            "Standard ohne Doppelbelegung: {:?}",
+            b.conflicts()
+        );
+        let none = HashSet::new();
+        let keys = |edges: Pad| Keys {
+            held: &none,
+            pressed: &none,
+            pad: Pad {
+                connected: true,
+                b: edges.b,
+                x: edges.x,
+                ..Default::default()
+            },
+            pad_pressed: edges,
+            pad2: Default::default(),
+            pad2_pressed: Default::default(),
+            mouse: Default::default(),
+            typed: "",
+        };
+        let x = Pad {
+            x: true,
+            ..Default::default()
+        };
+        let bb = Pad {
+            b: true,
+            ..Default::default()
+        };
+        let foot_x = input_from(&keys(x), false, &b);
+        assert!(foot_x.jump && !foot_x.combat.reload);
+        let foot_b = input_from(&keys(bb), false, &b);
+        assert!(foot_b.combat.reload && !foot_b.combat.kick);
+        let car_b = input_from(&keys(bb), true, &b);
+        assert!(car_b.handbrake);
+        let car_x = input_from(&keys(x), true, &b);
+        assert!(car_x.horn && !car_x.jump);
+    }
+    /// Einsteigen möglich: das nächste freie Fahrzeug schimmert in der Farbe des Spielers, sonst nichts.
+    #[test]
+    fn enterable_car_is_highlighted() {
+        let dir = std::env::temp_dir().join(format!("gta-berlin-hint-{}", std::process::id()));
+        let root = berlin_map_loader::default_data_root();
+        let mut p = Play::new(
+            &root,
+            4,
+            Some(FileStorage::new(dir.join("s.json"))),
+            false,
+            Start::New,
+        )
+        .unwrap();
+        let pc = p.world.player_car_id.unwrap();
+        let (x, y) = p.world.car(pc).map(|c| (c.x, c.y)).unwrap();
+        let halo = |p: &Play| {
+            let mut out = Vec::new();
+            p.effects(&mut out);
+            out.iter()
+                .filter(|b| {
+                    b.shape == 0.
+                        && (b.center[0] - x as f32).abs() < 1.
+                        && (b.center[1] - y as f32).abs() < 1.
+                })
+                .count()
+        };
+        (p.world.player.x, p.world.player.y) = (x + 300., y);
+        assert_eq!(halo(&p), 0, "zu weit weg");
+        (p.world.player.x, p.world.player.y) = (x + 20., y);
+        assert_eq!(
+            enter_target(&p.world, &p.world.player).map(|c| c.id),
+            Some(pc)
+        );
+        assert_eq!(halo(&p), 1, "in Reichweite: Schimmer");
     }
     /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad;
     /// Koop: Start auf dem zweiten Controller holt Spieler 2 dazu, sein Stick bewegt nur ihn; mit nur einem

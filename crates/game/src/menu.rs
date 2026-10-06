@@ -627,7 +627,8 @@ pub fn teleport_buttons(vw: f32) -> ([f32; 4], [f32; 4]) {
 }
 
 /// Teleport-Rückfrage (hud.js drawTeleportDialog); `name` = Zielort, `None` solange der Stadtteil lädt.
-pub fn draw_teleport(h: &mut Hud, name: Option<&str>) {
+/// `no` = „Nein“ ausgewählt (Controller und Pfeiltasten wählen, A/Enter nimmt die Auswahl).
+pub fn draw_teleport(h: &mut Hud, name: Option<&str>, no: bool) {
     let vw = h.width;
     let (w, ht) = (560., 190.);
     let (x, y) = (vw / 2. - w / 2., 360. - ht / 2.);
@@ -655,24 +656,47 @@ pub fn draw_teleport(h: &mut Hud, name: Option<&str>) {
         Align::Center,
         true,
     );
-    let (yes, no) = teleport_buttons(vw);
-    h.rect(yes[0], yes[1], yes[2], yes[3], YELLOW, 10.);
+    let (yes, nob) = teleport_buttons(vw);
+    for (r, label, sel) in [(yes, "Ja", !no), (nob, "Nein", no)] {
+        if sel {
+            // Auswahlrahmen
+            h.rect(
+                r[0] - 3.,
+                r[1] - 3.,
+                r[2] + 6.,
+                r[3] + 6.,
+                [1., 1., 1., 0.9],
+                12.,
+            );
+        }
+        h.rect(
+            r[0],
+            r[1],
+            r[2],
+            r[3],
+            if sel { YELLOW } else { [1., 1., 1., 0.12] },
+            10.,
+        );
+        h.text(
+            label,
+            r[0] + r[2] / 2.,
+            r[1] + 30.,
+            18.,
+            if sel {
+                [0.07, 0.07, 0.07, 1.]
+            } else {
+                [0.93, 0.93, 0.93, 1.]
+            },
+            Align::Center,
+            !sel,
+        );
+    }
     h.text(
-        "Ja (Enter/A)",
-        yes[0] + yes[2] / 2.,
-        yes[1] + 30.,
-        18.,
-        [0.07, 0.07, 0.07, 1.],
-        Align::Center,
-        false,
-    );
-    h.rect(no[0], no[1], no[2], no[3], [1., 1., 1., 0.12], 10.);
-    h.text(
-        "Nein (Esc/B)",
-        no[0] + no[2] / 2.,
-        no[1] + 30.,
-        18.,
-        [0.93, 0.93, 0.93, 1.],
+        "←/→ wählen · Enter/A bestätigen · Esc/B abbrechen",
+        vw / 2.,
+        y + ht + 26.,
+        14.,
+        [0.8, 0.8, 0.8, 1.],
         Align::Center,
         true,
     );

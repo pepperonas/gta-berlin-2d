@@ -250,6 +250,15 @@ impl Car {
     pub fn model_name(&self) -> &'static str {
         car_model(self.id, self.kind, self.role == Role::Player, self.model)
     }
+    /// Hat das Fahrzeug eine Sirene (Polizei, Rettungswagen, Datensatz mit Merkmal `sirene`)?
+    pub fn has_siren(&self) -> bool {
+        matches!(self.kind, "police" | "ambulance")
+            || crate::vehdata::game_vehicle(self.model_name()).is_some_and(|v| {
+                v.flags
+                    .get("sirene")
+                    .is_some_and(|f| f.as_bool() == Some(true))
+            })
+    }
 }
 
 /// Untergrund → Fahrwerte (car.js `SURFACE`).

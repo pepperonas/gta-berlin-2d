@@ -36,6 +36,8 @@ pub enum Action {
     Horn,
     Esp,
     Abs,
+    /// Fahrhilfen-Rad (Controller: rechter Stick drücken): ESP, ABS, Sirene
+    AssistWheel,
     EnterExit,
     Use,
     Ride,
@@ -285,12 +287,12 @@ pub const ACTIONS: &[Info] = &[
         "Handbremse",
         Car,
         [Some(KeyCode::Space), None],
-        Some(P::RB),
+        Some(P::B),
         None,
     ),
     info(
         A::Horn,
-        "Hupe",
+        "Hupe (lang: Sirene)",
         Car,
         [Some(KeyCode::KeyH), None],
         Some(P::X),
@@ -309,6 +311,14 @@ pub const ACTIONS: &[Info] = &[
         "ABS an/aus",
         Car,
         [Some(KeyCode::KeyY), Some(KeyCode::KeyZ)],
+        Some(P::Down),
+        None,
+    ),
+    info(
+        A::AssistWheel,
+        "Fahrhilfen-Rad (ESP, ABS, Sirene)",
+        Car,
+        [None, None],
         Some(P::RS),
         None,
     ),
@@ -341,7 +351,7 @@ pub const ACTIONS: &[Info] = &[
         "Springen",
         Foot,
         [Some(KeyCode::Space), None],
-        Some(P::LS),
+        Some(P::X),
         None,
     ),
     info(
@@ -357,7 +367,7 @@ pub const ACTIONS: &[Info] = &[
         "Treten",
         Foot,
         [Some(KeyCode::KeyV), None],
-        Some(P::B),
+        Some(P::RB),
         None,
     ),
     info(
@@ -365,7 +375,7 @@ pub const ACTIONS: &[Info] = &[
         "Nachladen",
         Foot,
         [Some(KeyCode::KeyR), None],
-        Some(P::X),
+        Some(P::B),
         None,
     ),
     info(
@@ -373,15 +383,15 @@ pub const ACTIONS: &[Info] = &[
         "Nächste Waffe",
         Foot,
         [Some(KeyCode::KeyQ), None],
-        Some(P::RB),
+        Some(P::LB),
         None,
     ),
     info(
         A::WeaponWheel,
-        "Waffenrad halten / vorige tippen",
+        "Waffenrad (drücken: auf/zu)",
         Foot,
         [None, None],
-        Some(P::LB),
+        Some(P::RS),
         None,
     ),
     info(
@@ -657,6 +667,38 @@ pub const THROTTLE_GAMMA: f32 = 1.35;
 pub const PEDAL_UP: f64 = 0.15;
 pub const PEDAL_DOWN: f64 = 0.08;
 /// Pedalstellung `cur` einen Schritt `dt` zur Tastenstellung `target` (0/1) nachführen.
+/// s gehalten, bis die Hupe zur Sirene wird (nur Fahrzeuge mit Sirene)
+pub const SIREN_HOLD: f64 = 0.45;
+
+/// Hupe mit langem Druck: kurz = Hupe; in einem Fahrzeug mit Sirene schaltet ein Druck ab `SIREN_HOLD` die Sirene
+/// (einmal je Druck), die Hupe verstummt dann bis zum Loslassen.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HornPress {
+    t: f64,
+    fired: bool,
+}
+impl HornPress {
+    /// Liefert (Hupe, Sirene umschalten).
+    pub fn step(&mut self, held: bool, siren: bool, dt: f64) -> (bool, bool) {
+        if !held {
+            *self = Self::default();
+            return (false, false);
+        }
+        self.t += dt;
+        if !siren {
+            return (true, false);
+        }
+        if self.fired {
+            return (false, false);
+        }
+        if self.t >= SIREN_HOLD - 1e-9 {
+            self.fired = true;
+            return (false, true);
+        }
+        (true, false)
+    }
+}
+
 pub fn pedal_ramp(cur: f64, target: f64, dt: f64) -> f64 {
     if target > cur {
         (cur + dt / PEDAL_UP).min(target)
@@ -834,6 +876,31 @@ impl Bindings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn long_horn_switches_the_siren_once() {
+        use super::HornPress;
+        let dt = 1. / 60.;
+        // normales Auto: Hupe, solange gehalten
+        let mut h = HornPress::default();
+        for _ in 0..60 {
+            assert_eq!(h.step(true, false, dt), (true, false));
+        }
+        // mit Sirene: kurz = Hupe, lang = einmal Sirene, danach still bis zum Loslassen
+        let mut h = HornPress::default();
+        let (mut toggles, mut horn) = (0, 0);
+        for _ in 0..60 {
+            let (a, b) = h.step(true, true, dt);
+            horn += a as u32;
+            toggles += b as u32;
+        }
+        assert_eq!(toggles, 1);
+        assert!(horn > 0 && horn < 30, "erst Hupe, dann Ruhe: {horn}");
+        assert_eq!(h.step(false, true, dt), (false, false));
+        // kurzer Druck schaltet nichts
+        let mut h = HornPress::default();
+        let toggles: u32 = (0..10).map(|_| h.step(true, true, dt).1 as u32).sum();
+        assert_eq!(toggles, 0);
+    }
     #[test]
     fn keyboard_pedal_ramps_up_and_down() {
         use super::{PEDAL_DOWN, PEDAL_UP, pedal_ramp};

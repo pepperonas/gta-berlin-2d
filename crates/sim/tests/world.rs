@@ -2868,3 +2868,35 @@ fn single_player_fingerprint_is_stable() {
     assert_eq!(h, FINGERPRINT, "Einzelspieler-Ablauf hat sich geändert");
 }
 const FINGERPRINT: u64 = 0xe6fa_c4f9_2b60_2bd6;
+
+/// Sirene: im Polizeiwagen schaltet `siren_toggle` sie an und wieder aus; im normalen Auto geschieht nichts.
+#[test]
+fn player_switches_the_siren_in_a_police_car() {
+    let mut w = world(31);
+    run(&mut w, 5, idle());
+    let id = w.spawn_data_vehicle("polizei_kombi").expect("Polizeiwagen");
+    let (x, y) = w.car(id).map(|c| (c.x, c.y)).unwrap();
+    assert!(w.car(id).unwrap().has_siren());
+    (w.player.x, w.player.y) = (x + 15., y);
+    w.update(
+        &Input {
+            enter_exit: true,
+            ..idle()
+        },
+        DT,
+    );
+    assert_eq!(w.player.in_car, Some(id));
+    let toggle = Input {
+        siren_toggle: true,
+        ..idle()
+    };
+    w.update(&toggle, DT);
+    assert!(w.car(id).unwrap().siren, "Sirene an");
+    run(&mut w, 30, idle());
+    assert!(w.car(id).unwrap().siren, "bleibt an");
+    w.update(&toggle, DT);
+    assert!(!w.car(id).unwrap().siren, "Sirene aus");
+    // eigenes Auto ohne Sirene
+    let pc = w.player_car_id.unwrap();
+    assert!(!w.car(pc).unwrap().has_siren());
+}
