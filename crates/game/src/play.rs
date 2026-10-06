@@ -595,7 +595,7 @@ impl Play {
             listener: Default::default(),
             auto_enter: false,
             screen,
-            menu: crate::menu::title_menu(has_save).with_graphics(graphics.mode),
+            menu: crate::menu::title_menu(has_save).with_graphics(graphics),
             root: root.to_path_buf(),
             bars_live: None,
             bars_file: root
@@ -1417,18 +1417,22 @@ impl Play {
     }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
-        self.menu = crate::menu::pause_menu()
-            .with_graphics(self.graphics.mode)
+        self.menu = self.pause_menu_now();
+    }
+    /// Pausenmenü mit den aktuellen Einstellungen beschriftet.
+    fn pause_menu_now(&self) -> crate::menu::Menu {
+        crate::menu::pause_menu()
+            .with_graphics(self.graphics)
             .with_coop(self.world.coop())
             .with_devices(self.world.coop().then(|| self.p2_dev.label()))
-            .with_radio(self.radio_vol);
+            .with_radio(self.radio_vol)
     }
     /// Grafik wählen (Menü, Taste, Konsole): sofort wirksam, gespeichert, als Meldung bestätigt. `--grafik` setzt
     /// `self.graphics` direkt und schreibt nichts.
     pub fn set_graphics(&mut self, g: berlin_engine::graphics::GraphicsSettings) {
         self.graphics = g;
         self.graphics_saved = g;
-        self.menu.set_graphics(g.mode);
+        self.menu.set_graphics(g);
         self.write_settings();
         self.world.notice = Some(berlin_sim::world::Notice {
             text: format!("Grafik: {} · Qualität {}", g.mode.label(), g.quality.key()),
@@ -1439,6 +1443,58 @@ impl Play {
         let mut g = self.graphics;
         g.mode = g.mode.toggled();
         self.set_graphics(g);
+    }
+    /// Gemeinsame Einstellungen aus Titel- und Pausenmenü: links/rechts (`Pick::Adjust`) und Bestätigen.
+    /// `true` = erledigt.
+    fn menu_setting(&mut self, pick: crate::menu::Pick, keys: &Keys) -> bool {
+        use crate::menu::{Action, Pick};
+        match pick {
+            Pick::Adjust(Action::Graphics, _) | Pick::Choose(Action::Graphics) => {
+                self.toggle_graphics()
+            }
+            Pick::Adjust(Action::Quality, d) => {
+                let q = crate::menu::quality_adjust(self.graphics.quality, d);
+                if q != self.graphics.quality {
+                    self.set_graphics(berlin_engine::graphics::GraphicsSettings {
+                        quality: q,
+                        ..self.graphics
+                    });
+                }
+            }
+            Pick::Choose(Action::Quality) => {
+                self.set_graphics(berlin_engine::graphics::GraphicsSettings {
+                    quality: crate::menu::quality_step(self.graphics.quality),
+                    ..self.graphics
+                });
+            }
+            Pick::Adjust(Action::RadioVolume, d) => {
+                let v = crate::menu::radio_adjust(self.radio_vol, d);
+                if v != self.radio_vol {
+                    self.radio_vol = v;
+                    self.menu.set_radio(v);
+                    self.write_settings();
+                }
+            }
+            Pick::Choose(Action::RadioVolume) => {
+                self.radio_vol = crate::menu::radio_step(self.radio_vol);
+                self.menu.set_radio(self.radio_vol);
+                self.write_settings();
+            }
+            Pick::Adjust(Action::Devices, _) | Pick::Choose(Action::Devices) => {
+                let d = if let Pick::Adjust(_, d) = pick { d } else { 1 };
+                // reihum durch die möglichen Aufteilungen
+                let opts = P2Dev::options(keys.pad.connected, keys.pad2.connected);
+                let n = opts.len() as i32;
+                if let Some(i) = opts.iter().position(|x| *x == self.p2_dev) {
+                    self.p2_dev = opts[(i as i32 + d).rem_euclid(n) as usize];
+                } else if let Some(&x) = opts.first() {
+                    self.p2_dev = x;
+                }
+                self.menu.set_devices(Some(self.p2_dev.label()));
+            }
+            _ => return false,
+        }
+        true
     }
     fn ui_sound(&self) {
         if let Some(a) = &self.audio {
@@ -1459,10 +1515,7 @@ impl Play {
             .any(|i| i.action == crate::menu::Action::Resume);
         self.screen = Screen::Paused;
         if !keep {
-            self.menu = crate::menu::pause_menu()
-                .with_graphics(self.graphics.mode)
-                .with_coop(self.world.coop())
-                .with_devices(self.world.coop().then(|| self.p2_dev.label()));
+            self.menu = self.pause_menu_now();
         }
     }
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
@@ -1485,6 +1538,21 @@ impl Play {
                 && (self.teleport.is_some() || self.console.open)))
         {
             self.world.update(&Input::default(), dt);
+        }
+        // die Menü-Taste (Start) schließt das Pausenmenü und die Tafeln, die daraus geöffnet wurden, wieder
+        let start = |pressed: &berlin_engine::pad::Pad| {
+            self.bindings
+                .pad_of(crate::bindings::Action::Pause)
+                .is_some_and(|b| b.pressed(pressed))
+        };
+        if matches!(
+            self.screen,
+            Screen::Paused | Screen::Controls(false) | Screen::Stats(false) | Screen::About(false)
+        ) && (start(&keys.pad_pressed) || (self.world.coop() && start(&keys.pad2_pressed)))
+        {
+            self.screen = Screen::Playing;
+            self.ui_sound();
+            return true;
         }
         match self.screen {
             Screen::Playing if self.console.open => {
@@ -1658,7 +1726,13 @@ impl Play {
                             self.screen = Screen::Controls(true)
                         }
                         Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(true),
-                        Some(Pick::Choose(Action::Graphics)) => self.toggle_graphics(),
+                        Some(
+                            p @ (Pick::Adjust(..)
+                            | Pick::Choose(Action::Graphics | Action::Quality)),
+                        ) => {
+                            self.menu_setting(p, keys);
+                            self.ui_sound()
+                        }
                         Some(Pick::Choose(Action::About)) => {
                             self.ui_sound();
                             self.about = Default::default();
@@ -1701,7 +1775,9 @@ impl Play {
                     });
                 }
                 self.radio_preview = preview.is_some();
-                let mp = self.menu.mouse(self.hud_width / 2., 280., &keys.mouse);
+                let mp =
+                    self.menu
+                        .mouse(self.hud_width / 2., crate::menu::PAUSE_MENU_Y, &keys.mouse);
                 match mp.or(self.menu.input(mk)) {
                     Some(Pick::Back | Pick::Choose(Action::Resume)) => {
                         self.screen = Screen::Playing
@@ -1745,33 +1821,22 @@ impl Play {
                         }
                         self.screen = Screen::Playing;
                     }
-                    Some(Pick::Adjust(Action::RadioVolume, d)) => {
-                        let v = crate::menu::radio_adjust(self.radio_vol, d);
-                        if v != self.radio_vol {
-                            self.radio_vol = v;
-                            self.menu.set_radio(v);
-                            self.write_settings();
+                    Some(
+                        p @ (Pick::Adjust(..)
+                        | Pick::Choose(
+                            Action::RadioVolume
+                            | Action::Devices
+                            | Action::Graphics
+                            | Action::Quality,
+                        )),
+                    ) => {
+                        let adjust = matches!(p, Pick::Adjust(..));
+                        if self.menu_setting(p, keys) && adjust {
                             self.ui_sound();
                         }
                     }
-                    Some(Pick::Choose(Action::RadioVolume)) => {
-                        self.radio_vol = crate::menu::radio_step(self.radio_vol);
-                        self.menu.set_radio(self.radio_vol);
-                        self.write_settings();
-                    }
-                    Some(Pick::Choose(Action::Devices)) => {
-                        // reihum durch die möglichen Aufteilungen
-                        let opts = P2Dev::options(keys.pad.connected, keys.pad2.connected);
-                        if let Some(i) = opts.iter().position(|d| *d == self.p2_dev) {
-                            self.p2_dev = opts[(i + 1) % opts.len()];
-                        } else if let Some(&d) = opts.first() {
-                            self.p2_dev = d;
-                        }
-                        self.menu.set_devices(Some(self.p2_dev.label()));
-                    }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
                     Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(false),
-                    Some(Pick::Choose(Action::Graphics)) => self.toggle_graphics(),
                     Some(Pick::Choose(Action::About)) => {
                         self.about = Default::default();
                         self.screen = Screen::About(false)
@@ -1779,8 +1844,8 @@ impl Play {
                     Some(Pick::Choose(Action::Title)) => {
                         self.write_stats();
                         self.screen = Screen::Title;
-                        self.menu = crate::menu::title_menu(self.has_save())
-                            .with_graphics(self.graphics.mode);
+                        self.menu =
+                            crate::menu::title_menu(self.has_save()).with_graphics(self.graphics);
                     }
                     _ => {}
                 }
@@ -5848,9 +5913,9 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
-        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Spieler 2, Steuerung, Grafik, Radio,
-        // Statistik)
-        for _ in 0..8 {
+        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Spieler 2, Steuerung, Grafik, Qualität,
+        // Radio, Statistik)
+        for _ in 0..9 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
         press(&mut p, Some(KeyCode::Enter));
@@ -5870,7 +5935,8 @@ mod tests {
         assert_eq!(p.screen, Screen::Controls(true));
         press(&mut p, Some(KeyCode::Escape));
         assert_eq!(p.screen, Screen::Title);
-        // Statistik (unter dem Grafik-Eintrag): Spielzeit des Spiels ist gezählt und liegt in der Datei
+        // Statistik (unter Grafik und Qualität): Spielzeit des Spiels ist gezählt und liegt in der Datei
+        press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::ArrowDown));
         press(&mut p, Some(KeyCode::Enter));

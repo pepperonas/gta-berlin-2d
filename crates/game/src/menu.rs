@@ -7,6 +7,9 @@ use berlin_engine::{KeyCode, Keys};
 pub const YELLOW: [f32; 4] = [1., 0.827, 0.239, 1.];
 /// Mitte des ersten Eintrags im Titelmenü.
 pub const TITLE_MENU_Y: f32 = 316.;
+/// Erste Zeile des Pausenmenüs (HUD-Einheiten); tief genug unter Titel und Zeile mit den Aufträgen, hoch genug,
+/// dass auch das längste Menü (Koop mit „Geräte“) Luft zur Fußzeile behält
+pub const PAUSE_MENU_Y: f32 = 236.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -33,6 +36,17 @@ pub enum Action {
     Devices,
     /// Autoradio-Lautstärke: jede Wahl +10 %, nach 100 % wieder 0 %
     RadioVolume,
+    /// Grafikqualität Niedrig / Mittel / Hoch (Beschriftung zeigt die aktuelle)
+    Quality,
+}
+impl Action {
+    /// Einstellungen, die links/rechts verstellen (wie die Radiolautstärke)
+    pub fn adjustable(self) -> bool {
+        matches!(
+            self,
+            Self::RadioVolume | Self::Graphics | Self::Quality | Self::Devices
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,7 +68,7 @@ pub enum Pick {
     Move,
     Choose(Action),
     Back,
-    /// links (−1) bzw. rechts (+1) auf einem Eintrag: Wert verstellen (Radiolautstärke)
+    /// links (−1) bzw. rechts (+1) auf einem Eintrag: Wert verstellen (Einstellungen, `Action::adjustable`)
     Adjust(Action, i32),
 }
 
@@ -120,7 +134,7 @@ impl Menu {
         let dir = k.right as i32 - k.left as i32;
         if dir != 0
             && let Some(it) = self.items.get(self.index).filter(|i| i.enabled)
-            && it.action == Action::RadioVolume
+            && it.action.adjustable()
         {
             return Some(Pick::Adjust(it.action, dir));
         }
@@ -136,11 +150,13 @@ impl Menu {
     /// Zeilenabstand und Knopfhöhe: ab sieben Einträgen enger, damit das Menü über der Fußzeile endet.
     pub fn spacing(&self) -> (f32, f32) {
         // lange Menüs (Pause mit Radio, im Koop zusätzlich „Geräte“) enger, damit sie über der Fußzeile enden
-        if self.items.len() >= 11 {
+        if self.items.len() >= 12 {
+            (33., 28.)
+        } else if self.items.len() >= 11 {
             (36., 31.)
         } else if self.items.len() >= 10 {
             (40., 34.)
-        } else if self.items.len() >= 9 {
+        } else if self.items.len() >= 8 {
             (44., 38.)
         } else if self.items.len() >= 7 {
             (50., 42.)
@@ -189,11 +205,32 @@ const GRAPHICS_HD: &str = "Grafik: HD";
 const COOP_JOIN: &str = "Spieler 2 beitreten";
 const COOP_LEAVE: &str = "Spieler 2 verlassen";
 const GRAPHICS_PIXEL: &str = "Grafik: Pixel";
+const QUALITY_LABELS: [&str; 3] = ["Qualität: niedrig", "Qualität: mittel", "Qualität: hoch"];
+/// Beschriftung des Qualitäts-Eintrags.
+pub fn quality_label(q: berlin_engine::graphics::Quality) -> &'static str {
+    use berlin_engine::graphics::Quality;
+    QUALITY_LABELS[Quality::ALL.iter().position(|x| *x == q).unwrap_or(2)]
+}
+/// Links/rechts: eine Qualitätsstufe tiefer bzw. höher (ohne Umlauf).
+pub fn quality_adjust(
+    q: berlin_engine::graphics::Quality,
+    dir: i32,
+) -> berlin_engine::graphics::Quality {
+    use berlin_engine::graphics::Quality;
+    let i = Quality::ALL.iter().position(|x| *x == q).unwrap_or(2) as i32;
+    Quality::ALL[(i + dir.signum()).clamp(0, 2) as usize]
+}
+/// Bestätigen: reihum Niedrig → Mittel → Hoch → Niedrig.
+pub fn quality_step(q: berlin_engine::graphics::Quality) -> berlin_engine::graphics::Quality {
+    use berlin_engine::graphics::Quality;
+    let i = Quality::ALL.iter().position(|x| *x == q).unwrap_or(2);
+    Quality::ALL[(i + 1) % 3]
+}
 
 impl Menu {
-    /// Beschriftung des Grafik-Eintrags an den aktuellen Modus anpassen.
-    pub fn with_graphics(mut self, mode: berlin_engine::graphics::GraphicsMode) -> Self {
-        self.set_graphics(mode);
+    /// Beschriftung der Grafik- und Qualitäts-Einträge an die aktuellen Einstellungen anpassen.
+    pub fn with_graphics(mut self, g: berlin_engine::graphics::GraphicsSettings) -> Self {
+        self.set_graphics(g);
         self
     }
     /// Beschriftung des Koop-Eintrags: beitreten oder verlassen.
@@ -240,14 +277,17 @@ impl Menu {
             (None, None) => {}
         }
     }
-    pub fn set_graphics(&mut self, mode: berlin_engine::graphics::GraphicsMode) {
+    pub fn set_graphics(&mut self, g: berlin_engine::graphics::GraphicsSettings) {
         use berlin_engine::graphics::GraphicsMode;
         for it in &mut self.items {
             if it.action == Action::Graphics {
-                it.label = match mode {
+                it.label = match g.mode {
                     GraphicsMode::Hd => GRAPHICS_HD,
                     GraphicsMode::Pixel => GRAPHICS_PIXEL,
                 };
+            }
+            if it.action == Action::Quality {
+                it.label = quality_label(g.quality);
             }
         }
     }
@@ -262,6 +302,7 @@ pub fn title_menu(has_save: bool) -> Menu {
         item(Action::New, "Neues Spiel"),
         item(Action::Controls, "Steuerung"),
         item(Action::Graphics, GRAPHICS_HD),
+        item(Action::Quality, QUALITY_LABELS[2]),
         item(Action::Stats, "Statistik"),
         item(Action::About, "Über das Spiel"),
         item(Action::Quit, "Beenden"),
@@ -307,6 +348,7 @@ pub fn pause_menu() -> Menu {
         item(Action::Coop, COOP_JOIN),
         item(Action::Controls, "Steuerung"),
         item(Action::Graphics, GRAPHICS_HD),
+        item(Action::Quality, QUALITY_LABELS[2]),
         item(Action::RadioVolume, RADIO_LABELS[4]),
         item(Action::Stats, "Statistik"),
         item(Action::About, "Über das Spiel"),
@@ -608,7 +650,7 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f3
         );
     } else {
         draw_menu(h, m, vw / 2., TITLE_MENU_Y);
-        footer(h, "Enter / A: Auswählen");
+        footer(h, "Enter / A: Auswählen  ·  ← / →: Einstellen");
     }
     let grey = [0.6, 0.6, 0.6, 1.];
     h.text(
@@ -690,19 +732,22 @@ fn heart(h: &mut Hud, cx: f32, cy: f32, r: f32) {
 pub fn draw_pause(h: &mut Hud, m: &Menu, completed: u32, best: Option<f64>) {
     let vw = h.width;
     h.rect(0., 0., vw, 720., [0., 0., 0., 0.6], 0.);
-    h.text("PAUSE", vw / 2., 170., 56., YELLOW, Align::Center, true);
+    h.text("PAUSE", vw / 2., 128., 56., YELLOW, Align::Center, true);
     let best = best.map_or("–".to_owned(), crate::hud::fmt_time);
     h.text(
         &format!("Aufträge erledigt: {completed}   ·   Bestzeit: {best}"),
         vw / 2.,
-        210.,
+        168.,
         18.,
         [0.8, 0.8, 0.8, 1.],
         Align::Center,
         true,
     );
-    draw_menu(h, m, vw / 2., 280.);
-    footer(h, "Enter / A: Auswählen  ·  Esc / B: Weiter");
+    draw_menu(h, m, vw / 2., PAUSE_MENU_Y);
+    footer(
+        h,
+        "Enter / A: Auswählen  ·  ← / →: Einstellen  ·  Esc / B / Start: Weiter",
+    );
 }
 
 /// Knopfflächen der Teleport-Rückfrage (x, y, Breite, Höhe): Ja, Nein.
@@ -1010,26 +1055,30 @@ mod tests {
     fn mouse_points_and_clicks_entries() {
         use glam::Vec2;
         let mut m = pause_menu();
-        // zehn Einträge (mit Radio): eng gesetzt (y = 280 + i·40, je 34 hoch), 380 breit um cx
-        assert_eq!(m.spacing(), (40., 34.));
+        // elf Einträge (mit Qualität und Radio): eng gesetzt (y = 280 + i·36, je 31 hoch), 380 breit um cx
+        assert_eq!(m.spacing(), (36., 31.));
         assert_eq!(
             result_menu(false).spacing(),
             (58., 48.),
             "kurze Menüs behalten den weiten Abstand"
         );
         assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
-        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 40. * 2.)), Some(2));
+        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 36. * 2.)), Some(2));
         assert_eq!(
             m.at(640., 280., Vec2::new(640., 280. + 20.)),
             None,
             "Lücke zwischen zwei Einträgen"
         );
-        // das Pausenmenü endet über der Fußzeile – auch im Koop mit „Geräte“
+        // das Pausenmenü endet mit Luft über der Fußzeile – auch im Koop mit „Geräte“
         let (step, height) = m.spacing();
-        assert!(280. + (m.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10.);
+        assert!(
+            PAUSE_MENU_Y + (m.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10. - 30.
+        );
         let k = pause_menu().with_devices(Some("Geräte: S1 Controller 1 · S2 Tastatur"));
         let (step, height) = k.spacing();
-        assert!(280. + (k.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10.);
+        assert!(
+            PAUSE_MENU_Y + (k.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10. - 30.
+        );
         // das Titelmenü endet über der Fußzeile
         let t = title_menu(true);
         let (step, height) = t.spacing();
@@ -1154,6 +1203,46 @@ mod radio_menu_tests {
             m.items
                 .iter()
                 .any(|i| i.action == Action::RadioVolume && i.label == "Radio-Lautstärke: 70 %")
+        );
+    }
+
+    #[test]
+    fn every_setting_adjusts_left_and_right_quality_clamps() {
+        use berlin_engine::graphics::Quality;
+        let right = MenuKeys {
+            right: true,
+            ..Default::default()
+        };
+        let mut m = pause_menu().with_devices(Some("Geräte"));
+        for a in [
+            Action::Graphics,
+            Action::Quality,
+            Action::RadioVolume,
+            Action::Devices,
+        ] {
+            m.index = m.items.iter().position(|i| i.action == a).unwrap();
+            assert_eq!(m.input(right), Some(Pick::Adjust(a, 1)), "{a:?}");
+        }
+        assert_eq!(quality_adjust(Quality::Hoch, 1), Quality::Hoch);
+        assert_eq!(quality_adjust(Quality::Hoch, -1), Quality::Mittel);
+        assert_eq!(quality_adjust(Quality::Niedrig, -1), Quality::Niedrig);
+        assert_eq!(quality_step(Quality::Hoch), Quality::Niedrig);
+        assert_eq!(quality_label(Quality::Mittel), "Qualität: mittel");
+        let t = title_menu(false).with_graphics(berlin_engine::graphics::GraphicsSettings {
+            quality: Quality::Niedrig,
+            ..Default::default()
+        });
+        assert!(
+            t.items
+                .iter()
+                .any(|i| i.action == Action::Quality && i.label == "Qualität: niedrig")
+        );
+        // das längste Menü (Pause im Koop) endet über der Fußzeile
+        let (step, _) = m.spacing();
+        assert!(
+            PAUSE_MENU_Y + step * (m.items.len() as f32 - 1.) < 640.,
+            "{}",
+            m.items.len()
         );
     }
 }

@@ -500,11 +500,11 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
     // nur für diesen Start (settings.json bleibt, wie sie ist)
     if let Some(m) = grafik {
         play.graphics.mode = m;
-        play.menu.set_graphics(m);
     }
     if let Some(q) = qualitaet {
         play.graphics.quality = q;
     }
+    play.menu.set_graphics(play.graphics);
     berlin_engine::run_with(options, Some(Box::new(play)))
 }
 

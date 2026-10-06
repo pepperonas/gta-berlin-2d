@@ -2495,3 +2495,11 @@ stellt ±10 % ohne Überlauf. In der Pause spielt der Sender des Autos als Hörp
   (~1,7·10⁵ px) nur relativ zu einem Punkt rechnen. Karte 145 → 163 MB (den Umriss nicht ablegen – er ist die
   Aneinanderreihung der Eckzüge, ein früher Stand mit Umriss lag bei 189 MB). Bildzeit unverändert (GPU-Median 8,4
   statt 8,2 ms, Mehringdamm 2560×1440).
+
+**Menü-Einstellungen mit links/rechts (06.10.2026):** `menu::Action::adjustable()` (RadioVolume, Graphics, Quality,
+Devices) → `Pick::Adjust(action, ±1)`; die Auswertung für Titel und Pause steckt in `Play::menu_setting`. Neuer
+Eintrag `Action::Quality` (`quality_label`/`quality_adjust` ohne Umlauf/`quality_step` reihum), `Menu::with_graphics`
+nimmt jetzt `GraphicsSettings`. `Play::pause_menu_now` baut das Pausenmenü mit allen Beschriftungen (vorher verlor
+der Rückweg von einer Tafel die Radiolautstärke). Start (`Bind::Pause` am Pad, im Koop auch Pad 2) schließt Pause
+und die daraus geöffneten Tafeln (nicht die Belegungstafel, dort könnte Start gerade belegt werden).
+`PAUSE_MENU_Y` = 236, Abstände ab 12 Einträgen 33/28, ab 8 Einträgen 44/38.

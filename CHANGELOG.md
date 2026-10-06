@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Einstellungen im Menü mit links/rechts.** Grafik (HD/Pixel), die neue Zeile „Qualität“
+  (niedrig/mittel/hoch, vorher nur über die Konsole), Radiolautstärke und im Koop die Geräte-Aufteilung lassen sich
+  im Titel- und Pausenmenü mit ←/→, A/D, Steuerkreuz oder linkem Stick verstellen; Bestätigen schaltet weiter wie
+  bisher. Die Menü-Taste (Start) schließt das Pausenmenü und die daraus geöffneten Tafeln wieder. Das Pausenmenü
+  sitzt etwas höher, damit es auch im Koop Luft zur Fußzeile hat.
 - Native Fassung: **Kreuzungen mit echten Ecken.** Statt runder Scheiben, an die die Straßen eckig heranliefen (mit
   Lücken und überstehenden Zungen an stumpfen und spitzen Winkeln), bekommt jeder Knoten eine Fläche nach dem
   osm2streets-Verfahren: Fahrbahnkanten benachbarter Straßen werden geschnitten, die Ecke mit einem Bordsteinbogen
