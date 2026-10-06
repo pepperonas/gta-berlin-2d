@@ -49,6 +49,14 @@ pub const PARKED_DESPAWN: f64 = 1800.;
 pub const CLOCK_START: f64 = 16. * 60.;
 pub const START_DAY: u32 = 4;
 pub const FOOT_ZOOM: f64 = 2.;
+/// Ab diesem Tempo (px/s, 10 px = 1 m; ~8 km/h) wirft ein Auto einen Passanten um, darunter schiebt es ihn nur
+pub const RUN_OVER_MIN: f64 = 22.;
+/// Schaden eines Zusammenstoßes Auto–Passant (100 = tot): ab ~40 km/h tödlich, mit 20 km/h liegt er am Boden
+/// Passanten-Treffer durch KI-Autos: ab diesem Tempo (px/s), Schaden Tempo × 0,32 (alte Regel)
+const AI_HIT_MIN: f64 = 55.;
+pub fn run_over_damage(speed: f64) -> f64 {
+    ((speed - RUN_OVER_MIN) * 1.25).max(0.)
+}
 pub const GRID_CELL: f64 = 128.;
 pub const GRID_REACH: f64 = 90.;
 pub const PED_HP: f64 = 100.;
@@ -3557,13 +3565,26 @@ impl World {
                         continue;
                     }
                     let speed = c.speed();
-                    if speed > 55. {
+                    // Spielerautos werfen schon langsam um und töten ab ~40 km/h; die KI behält die alte Regel
+                    // (sie bremst ohnehin für Passanten, und der Einzelspieler-Ablauf bleibt bitgleich)
+                    let by_player = Some(c.id) == player_car
+                        || (player_car2.is_some() && Some(c.id) == player_car2);
+                    if speed > if by_player { RUN_OVER_MIN } else { AI_HIT_MIN } {
                         if ped.car_hit_cd <= 0. {
-                            ped.hp -= speed * 0.32;
                             ped.car_hit_cd = 1.1;
+                            if by_player {
+                                ped.hp -= run_over_damage(speed);
+                            } else {
+                                ped.hp -= speed * 0.32;
+                            }
                             if ped.hp <= 0. {
                                 ped.state = PedState::Dead;
                                 ped.dead_t = 0.;
+                            } else if by_player {
+                                // umgeworfen: liegt je nach Wucht eine Weile, flieht danach
+                                ped.state = PedState::Down;
+                                ped.t = 1.2 + run_over_damage(speed) / 45.;
+                                ped.threat = (c.x, c.y);
                             } else {
                                 ped.state = PedState::Flee;
                                 ped.t = 2.2;

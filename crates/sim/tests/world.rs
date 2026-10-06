@@ -2902,3 +2902,47 @@ fn player_switches_the_siren_in_a_police_car() {
     let pc = w.player_car_id.unwrap();
     assert!(!w.car(pc).unwrap().has_siren());
 }
+
+/// Überfahren: ab ~40 km/h tödlich, mit ~15 km/h umgeworfen (liegt am Boden), Schritttempo schiebt nur.
+#[test]
+fn cars_knock_down_and_kill_pedestrians_at_city_speeds() {
+    use berlin_sim::events::Event;
+    use berlin_sim::world::{RUN_OVER_MIN, run_over_damage};
+    assert_eq!(run_over_damage(RUN_OVER_MIN), 0.);
+    assert!(run_over_damage(111.) >= 100., "40 km/h tödlich");
+    assert!(
+        (40. ..100.).contains(&run_over_damage(55.)),
+        "20 km/h wirft um"
+    );
+    let mut w = world(21);
+    run(&mut w, 10, idle());
+    calm(&mut w);
+    for (kmh, want) in [(40., PedState::Dead), (15., PedState::Down)] {
+        let i = ped_in_front(&mut w, 0.);
+        let (px, py, lvl, id) = (w.peds[i].x, w.peds[i].y, w.peds[i].level.lvl, w.peds[i].id);
+        // ein geparktes Auto (ohne KI) unmittelbar vor den Passanten setzen und anschieben
+        let c = w
+            .cars
+            .iter()
+            .position(|c| c.ai.is_none() && c.driver.is_none() && !c.wrecked)
+            .expect("geparktes Auto");
+        // als Auto des Spielers (die neue Regel gilt für Spielerautos)
+        w.player.in_car = Some(w.cars[c].id);
+        let v = kmh / 3.6 * 10.;
+        let car = &mut w.cars[c];
+        (car.x, car.y, car.angle) = (px - car.hw - 2., py, 0.);
+        (car.vx, car.vy) = (v, 0.);
+        car.level.lvl = lvl;
+        let mut hit = false;
+        for _ in 0..12 {
+            w.update(&idle(), DT);
+            hit |= w.events.iter().any(|e| matches!(e, Event::Hit { .. }));
+            if hit {
+                break;
+            }
+        }
+        assert!(hit, "{kmh} km/h: kein Treffer");
+        let p = w.peds.iter().find(|p| p.id == id).expect("Passant");
+        assert_eq!(p.state, want, "{kmh} km/h");
+    }
+}

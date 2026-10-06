@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Überfahren mit dem eigenen Fahrzeug wirkt schon bei Stadttempo.** Ab etwa 8 km/h wirft das Auto
+  einen Passanten um (er liegt je nach Wucht ein paar Sekunden am Boden und flieht dann), ab etwa 40 km/h ist es
+  tödlich (vorher erst ab weit über 100 km/h, darunter liefen alle einfach weg). Unfälle der KI bleiben wie gehabt.
 - Native Fassung: **Motorräder stürzen seltener.** Am Bordstein nie mehr (der Stoß bremst und hebt kurz die Front;
   Fahrrad und kleine Räder wie Roller und E-Scooter bleiben gefährdet). Der Fahrer legt sich nur so weit in die
   Kurve, wie der Grip unter ihm trägt – auf Nässe und Kopfstein werden die Bögen weiter, statt dass es wegrutscht;

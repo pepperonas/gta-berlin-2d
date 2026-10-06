@@ -2529,3 +2529,7 @@ Spalten. Konsole `motorrad` → `moto_id` → `World::spawn_data_vehicle`.
 Bordstein großes Rad: Fahrrad stürzt ab `CURB_FALL_BIG` (Abnahmeszene 12), motorisierte nie, Stoß einmal je Kante
 (`State::curb_seen`, `CURB_LOSS`/`CURB_LOSS_MAX`); Vorderrad ohne ABS stürzt erst nach `FRONT_LOCK_S` = 0,4 s
 Blockieren (`State::lock_t`). Kalibrierung unverändert (186/210).
+
+**Überfahren (06.10.2026):** `world::RUN_OVER_MIN` (22 px/s) und `run_over_damage` ((v − 22) · 1,25; 100 = tot) gelten
+für Autos, in denen ein Spieler sitzt; der Passant geht in `PedState::Down` (1,2 s + Schaden/45). KI-Autos behalten
+die alte Regel (ab 55 px/s, Tempo × 0,32, Flucht) – sonst änderte sich der Einzelspieler-Fingerabdruck.
