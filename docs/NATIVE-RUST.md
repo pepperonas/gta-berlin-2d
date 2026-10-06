@@ -2465,4 +2465,8 @@ neu zu verbinden (`Radio::set(want, volume)`). `Play::radio_vol` in Prozent, Vor
 `radio::DEFAULT_VOLUME` = 40, gespeichert als `radio_lautstaerke` in settings.json. Pausenmenü `Action::RadioVolume`
 (`menu::radio_step`/`radio_label`, 10-%-Schritte, nach 100 % aus), Konsole `radio lautstärke N`. `Menu::spacing`: ab
 10 Einträgen 40/34, ab 11 (Koop mit „Geräte“) 36/31.
+Menüs kennen links/rechts (`MenuKeys::left/right`: Pfeile, A/D, Steuerkreuz, linker Stick mit Flanke über
+`stick_prev_x`); auf `Action::RadioVolume` liefert `Menu::input` `Pick::Adjust(action, ±1)`, `menu::radio_adjust`
+stellt ±10 % ohne Überlauf. In der Pause spielt der Sender des Autos als Hörprobe, solange dieser Eintrag gewählt ist
+(`Play::radio_preview`).
 

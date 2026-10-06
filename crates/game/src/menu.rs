@@ -54,6 +54,8 @@ pub enum Pick {
     Move,
     Choose(Action),
     Back,
+    /// links (−1) bzw. rechts (+1) auf einem Eintrag: Wert verstellen (Radiolautstärke)
+    Adjust(Action, i32),
 }
 
 /// Tasten der Menüs aus Tastatur und Controller (Flanken).
@@ -63,15 +65,22 @@ pub struct MenuKeys {
     pub down: bool,
     pub confirm: bool,
     pub back: bool,
+    pub left: bool,
+    pub right: bool,
 }
 impl MenuKeys {
-    pub fn from(keys: &Keys, stick_prev: f32) -> Self {
+    /// `stick_prev`/`stick_prev_x`: Stickstellung des letzten Schritts (Flanken).
+    pub fn from(keys: &Keys, stick_prev: f32, stick_prev_x: f32) -> Self {
         let p = |k: KeyCode| keys.pressed.contains(&k);
         let (pad, pe) = (&keys.pad, &keys.pad_pressed);
         // Stick als Taste: Flanke beim Überschreiten von 0,6
         let stick_up = pad.ly < -0.6 && stick_prev >= -0.6;
         let stick_down = pad.ly > 0.6 && stick_prev <= 0.6;
+        let stick_left = pad.lx < -0.6 && stick_prev_x >= -0.6;
+        let stick_right = pad.lx > 0.6 && stick_prev_x <= 0.6;
         Self {
+            left: p(KeyCode::ArrowLeft) || p(KeyCode::KeyA) || pe.left || stick_left,
+            right: p(KeyCode::ArrowRight) || p(KeyCode::KeyD) || pe.right || stick_right,
             up: p(KeyCode::ArrowUp) || p(KeyCode::KeyW) || pe.up || stick_up,
             down: p(KeyCode::ArrowDown) || p(KeyCode::KeyS) || pe.down || stick_down,
             confirm: p(KeyCode::Enter)
@@ -107,6 +116,13 @@ impl Menu {
         }
         if n > 0 && k.down && step(1) {
             return Some(Pick::Move);
+        }
+        let dir = k.right as i32 - k.left as i32;
+        if dir != 0
+            && let Some(it) = self.items.get(self.index).filter(|i| i.enabled)
+            && it.action == Action::RadioVolume
+        {
+            return Some(Pick::Adjust(it.action, dir));
         }
         if k.confirm {
             return self
@@ -271,6 +287,11 @@ const RADIO_LABELS: [&str; 11] = [
 /// Beschriftung für eine Lautstärke in Prozent (auf 10 % gerundet).
 pub fn radio_label(vol: u8) -> &'static str {
     RADIO_LABELS[((vol as usize + 5) / 10).min(10)]
+}
+/// Links/rechts: 10 % leiser bzw. lauter, zwischen 0 und 100 % (ohne Überlauf).
+pub fn radio_adjust(vol: u8, dir: i32) -> u8 {
+    let v = (vol as i32 + 5) / 10 * 10 + dir.signum() * 10;
+    v.clamp(0, 100) as u8
 }
 /// Nächster Wert beim Wählen: +10 %, nach 100 % wieder 0 %.
 pub fn radio_step(vol: u8) -> u8 {
@@ -951,6 +972,8 @@ mod tests {
         down: true,
         confirm: false,
         back: false,
+        left: false,
+        right: false,
     };
     #[test]
     fn menu_skips_disabled_and_wraps() {
@@ -1098,6 +1121,32 @@ mod radio_menu_tests {
         assert_eq!(radio_step(100), 0);
         assert_eq!(radio_step(0), 10);
         assert_eq!(radio_step(37), 50, "auf 10 % gerundet, dann weiter");
+        assert_eq!(radio_adjust(40, 1), 50);
+        assert_eq!(radio_adjust(40, -1), 30);
+        assert_eq!(radio_adjust(100, 1), 100, "kein Überlauf nach oben");
+        assert_eq!(radio_adjust(0, -1), 0, "kein Überlauf nach unten");
+        // links/rechts nur auf dem Radio-Eintrag
+        let mut m = pause_menu();
+        let right = MenuKeys {
+            right: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            m.input(right),
+            None,
+            "auf „Weiterspielen“ nichts zu verstellen"
+        );
+        m.index = m
+            .items
+            .iter()
+            .position(|i| i.action == Action::RadioVolume)
+            .unwrap();
+        assert_eq!(m.input(right), Some(Pick::Adjust(Action::RadioVolume, 1)));
+        let left = MenuKeys {
+            left: true,
+            ..Default::default()
+        };
+        assert_eq!(m.input(left), Some(Pick::Adjust(Action::RadioVolume, -1)));
         assert_eq!(radio_label(0), "Radio-Lautstärke: aus");
         assert_eq!(radio_label(40), "Radio-Lautstärke: 40 %");
         let m = pause_menu().with_radio(70);

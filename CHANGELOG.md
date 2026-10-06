@@ -8,7 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
-- Native Fassung: **Radiolautstärke einstellbar** – Pausenmenü „Radio-Lautstärke“ (jede Wahl +10 %, nach 100 % aus),
+- Native Fassung: **Radiolautstärke einstellbar** – Pausenmenü „Radio-Lautstärke“: Pfeiltasten links/rechts (auch A/D),
+  Steuerkreuz bzw. linker Stick regeln in 10-%-Schritten zwischen aus und 100 %; steht die Auswahl dort, spielt der
+  Sender des Autos in der Pause zur Hörprobe; Bestätigen schaltet weiter (+10 %, nach 100 % aus),
   Befehl `radio lautstärke 0–100`, gespeichert in settings.json (`radio_lautstaerke`). Voreinstellung 40 % der
   bisherigen Lautstärke (war zu laut). Lange Menüs setzen ab zehn Einträgen enger.
 - Native Fassung: **Autoradio mit zwölf Online-Sendern**, je ein Genre, Berlin zuerst: 104.6 RTL (Pop), 98.8 KISS FM

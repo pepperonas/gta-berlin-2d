@@ -183,6 +183,8 @@ pub struct Play {
     radio: crate::radio::RadioCtl,
     /// Autoradio-Lautstärke in Prozent (settings.json `radio_lautstaerke`)
     pub radio_vol: u8,
+    /// Pause: Radio spielt zur Hörprobe der Lautstärke
+    radio_preview: bool,
     street_tick: u32,
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
@@ -661,6 +663,7 @@ impl Play {
             streets: [None, None],
             radio: Default::default(),
             radio_vol,
+            radio_preview: false,
             street_tick: 0,
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
@@ -1465,7 +1468,7 @@ impl Play {
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
     fn step_screens(&mut self, keys: &Keys, dt: f64) -> bool {
         use crate::menu::{Action, Pick};
-        let mk = crate::menu::MenuKeys::from(keys, self.stick_prev);
+        let mk = crate::menu::MenuKeys::from(keys, self.stick_prev, self.stick_prev_x);
         let bk = crate::bindmenu::BindKeys::from(keys, (self.stick_prev_x, self.stick_prev));
         self.stick_prev = keys.pad.ly;
         self.stick_prev_x = keys.pad.lx;
@@ -1680,6 +1683,24 @@ impl Play {
                 true
             }
             Screen::Paused => {
+                // Hörprobe: steht die Auswahl auf der Radiolautstärke, spielt der Sender des Autos in der Pause mit
+                // der eingestellten Lautstärke (sonst ist der Ton in der Pause aus)
+                let on_radio = self
+                    .menu
+                    .items
+                    .get(self.menu.index)
+                    .is_some_and(|i| i.action == Action::RadioVolume);
+                let preview = on_radio.then(|| self.radio.current()).flatten();
+                if (preview.is_some() || self.radio_preview)
+                    && let Some(a) = &self.audio
+                {
+                    a.apply(&berlin_audio::synth::Frame {
+                        radio: preview,
+                        radio_volume: self.radio_vol as f32 / 100.,
+                        ..Default::default()
+                    });
+                }
+                self.radio_preview = preview.is_some();
                 let mp = self.menu.mouse(self.hud_width / 2., 280., &keys.mouse);
                 match mp.or(self.menu.input(mk)) {
                     Some(Pick::Back | Pick::Choose(Action::Resume)) => {
@@ -1723,6 +1744,15 @@ impl Play {
                             }
                         }
                         self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Adjust(Action::RadioVolume, d)) => {
+                        let v = crate::menu::radio_adjust(self.radio_vol, d);
+                        if v != self.radio_vol {
+                            self.radio_vol = v;
+                            self.menu.set_radio(v);
+                            self.write_settings();
+                            self.ui_sound();
+                        }
                     }
                     Some(Pick::Choose(Action::RadioVolume)) => {
                         self.radio_vol = crate::menu::radio_step(self.radio_vol);
@@ -5711,6 +5741,27 @@ mod tests {
         assert!(!p.run_command("radio lautstärke 130").ok);
         assert_eq!(p.radio_vol, 70);
         assert_eq!(read_radio_volume(&FileStorage::new(&path)), 70);
+        // im Pausenmenü: auf „Radio-Lautstärke“, Pfeil rechts lauter, Pfeil links leiser
+        p.screen = Screen::Playing;
+        p.pause();
+        let r = p
+            .menu
+            .items
+            .iter()
+            .position(|i| i.action == crate::menu::Action::RadioVolume)
+            .expect("Radio im Pausenmenü");
+        while p.menu.index != r {
+            press(&mut p, Some(KeyCode::ArrowDown));
+        }
+        press(&mut p, Some(KeyCode::ArrowRight));
+        assert_eq!(p.radio_vol, 80);
+        assert_eq!(p.menu.items[r].label, "Radio-Lautstärke: 80 %");
+        press(&mut p, Some(KeyCode::ArrowLeft));
+        press(&mut p, Some(KeyCode::ArrowLeft));
+        assert_eq!(p.radio_vol, 60);
+        assert_eq!(read_radio_volume(&FileStorage::new(&path)), 60);
+        assert_eq!(p.screen, Screen::Paused, "bleibt im Menü");
+        assert!(p.run_command("radio lautstärke 70").ok);
         // ein neuer Start liest die Einstellung
         let q = Play::new(&root, 4, Some(FileStorage::new(&path)), false, Start::Title).unwrap();
         assert_eq!(q.graphics.mode, GraphicsMode::Pixel);
