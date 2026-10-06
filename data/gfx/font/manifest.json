@@ -1,5 +1,14 @@
 {
  "_hinweis": "Erzeugt von tools/gfx/build_font.py – nicht von Hand ändern.",
+ "titel": {
+  "name": "Anton",
+  "version": "Google Fonts",
+  "urheber": "Vernon Adams (The Anton Project Authors)",
+  "lizenz": "SIL Open Font License 1.1",
+  "seite": "https://fonts.google.com/specimen/Anton",
+  "quelle": "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
+  "sha256": "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab"
+ },
  "schrift": {
   "name": "Inter SemiBold",
   "version": "4.1",

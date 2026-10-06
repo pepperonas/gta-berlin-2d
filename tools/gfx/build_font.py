@@ -33,6 +33,12 @@ EM = 48          # Atlas-Pixel je em
 SPREAD = 6       # Atlas-Pixel von der Kante bis zum vollen Wert
 SS = 4           # Überabtastung beim Rastern
 WIDTH = 1024
+# Titelschrift (Logo „GTA BERLIN“): Anton (Google Fonts, SIL OFL 1.1), groß und mit breitem Feld für Kontur,
+# Extrusion und Schatten
+TITLE_URL = "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf"
+TITLE_OFL = "https://github.com/google/fonts/raw/main/ofl/anton/OFL.txt"
+TITLE_SHA = "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab"
+TITLE_CHARS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ0123456789 -.!?·")
 
 # Zeichensatz wie der Bitmap-HUD: ASCII, Latin-1, typografische Zeichen und die Eigenzeichen aus hud.rs
 CHARS = [chr(c) for c in range(32, 127)] + [chr(c) for c in range(0xA0, 0x100)] + list(
@@ -57,19 +63,19 @@ def font_bytes(offline: bool) -> tuple[bytes, bytes, str]:
     return z.read(TTF), z.read("LICENSE.txt"), sha
 
 
-def raster(font: ImageFont.FreeTypeFont, ch: str):
+def raster(font: ImageFont.FreeTypeFont, ch: str, spread: int = SPREAD):
     """Maske der Glyphe (SS-fach), Ursprung links auf der Grundlinie; None bei Leerzeichen."""
     l, t, r, b = font.getbbox(ch, anchor="ls")
     if r <= l or b <= t:
         return None
-    pad = SPREAD * SS
+    pad = spread * SS
     w, h = r - l + 2 * pad, b - t + 2 * pad
     img = Image.new("L", (w, h), 0)
     ImageDraw.Draw(img).text((pad - l, pad - t), ch, font=font, fill=255, anchor="ls")
     return np.asarray(img) >= 128, (l - pad, t - pad)
 
 
-def sdf(mask: np.ndarray) -> np.ndarray:
+def sdf(mask: np.ndarray, spread: int = SPREAD) -> np.ndarray:
     """Abstandsfeld in Atlas-Auflösung (je SS × SS Block ein Wert), 0…255, 128 = Kante."""
     inside = mask
     edge = np.zeros_like(inside)
@@ -82,14 +88,97 @@ def sdf(mask: np.ndarray) -> np.ndarray:
     h, w = inside.shape[0] // SS, inside.shape[1] // SS
     gy, gx = np.mgrid[0:h, 0:w]
     centers = np.stack([gx.ravel() + 0.5, gy.ravel() + 0.5], 1)
-    d = np.full(len(centers), float(SPREAD))
-    for i in range(0, len(centers), 512):
-        c = centers[i : i + 512]
+    d = np.full(len(centers), float(spread))
+    for i in range(0, len(centers), 256):
+        c = centers[i : i + 256]
         dd = np.sqrt(((c[:, None, :] - pts[None, :, :]) ** 2).sum(-1)).min(1)
-        d[i : i + 512] = np.minimum(dd, SPREAD)
+        d[i : i + 256] = np.minimum(dd, spread)
     sample = inside[(gy.ravel() * SS + SS // 2), (gx.ravel() * SS + SS // 2)]
     signed = np.where(sample, d, -d)
-    return np.clip(np.round(128 + signed / SPREAD * 127), 0, 255).astype(np.uint8).reshape(h, w)
+    return np.clip(np.round(128 + signed / spread * 127), 0, 255).astype(np.uint8).reshape(h, w)
+
+
+def atlas_of(font, chars, em, spread, skip_missing):
+    """Glyphen rastern, Abstandsfeld, Regal-Packen. Liefert (Atlas, Zeichen-Metrik, fehlende Zeichen)."""
+
+    def shape(ch: str):
+        m = font.getmask(ch)
+        return m.size, bytes(m)
+
+    notdef = shape(chr(0x10FFFD))
+    glyphs, missing, cells = {}, [], []
+    for ch in chars:
+        if skip_missing and ch != " " and shape(ch) == notdef:
+            missing.append(ch)
+            continue
+        adv = font.getlength(ch) / SS / em
+        r = raster(font, ch, spread)
+        if r is None:
+            glyphs[str(ord(ch))] = [0, 0, 0, 0, 0.0, 0.0, round(adv, 4)]
+            continue
+        mask, (ox, oy) = r
+        h, w = mask.shape
+        mask = np.pad(mask, ((0, (-h) % SS), (0, (-w) % SS)))
+        cells.append((ch, sdf(mask, spread), ox / SS / em, oy / SS / em, adv))
+    cells.sort(key=lambda c: -c[1].shape[0])
+    x = y = row = 0
+    placed = []
+    for ch, img, bx, by, adv in cells:
+        h, w = img.shape
+        if x + w > WIDTH:
+            x, y, row = 0, y + row + 1, 0
+        placed.append((ch, img, x, y, bx, by, adv))
+        x += w + 1
+        row = max(row, h)
+    height = ((y + row + 1 + 63) // 64) * 64
+    atlas = np.zeros((height, WIDTH), np.uint8)
+    for ch, img, px, py, bx, by, adv in placed:
+        h, w = img.shape
+        atlas[py : py + h, px : px + w] = img
+        glyphs[str(ord(ch))] = [px, py, w, h, round(bx, 4), round(by, 4), round(adv, 4)]
+    return atlas, glyphs, missing
+
+
+def build_title(offline: bool) -> dict:
+    """Titelschrift Anton → titel_sdf.png/json; Rückgabe: Manifest-Eintrag."""
+    CACHE.mkdir(exist_ok=True)
+    ttf_path, ofl_path = CACHE / "Anton-Regular.ttf", CACHE / "Anton-OFL.txt"
+    for url, path in ((TITLE_URL, ttf_path), (TITLE_OFL, ofl_path)):
+        if not path.exists():
+            if offline:
+                sys.exit(f"{path} fehlt (ohne --offline laden)")
+            req = urllib.request.Request(url, headers={"User-Agent": "gta-berlin-build/1.0"})
+            with urllib.request.urlopen(req, timeout=120) as r:
+                path.write_bytes(r.read())
+    data = ttf_path.read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    if sha != TITLE_SHA and "--neu" not in sys.argv:
+        sys.exit(f"Anton hat sich geändert ({sha[:12]}); mit --neu bewusst übernehmen")
+    em, spread = 112, 16
+    font = ImageFont.truetype(io.BytesIO(data), em * SS)
+    atlas, glyphs, _ = atlas_of(font, TITLE_CHARS, em, spread, False)
+    Image.fromarray(atlas, "L").save(OUT / "titel_sdf.png", optimize=True)
+    asc, desc = font.getmetrics()
+    meta = {
+        "_hinweis": "Erzeugt von tools/gfx/build_font.py – nicht von Hand ändern.",
+        "em": em,
+        "spread": spread,
+        "atlas": [WIDTH, atlas.shape[0]],
+        "cap": round(-font.getbbox("H", anchor="ls")[1] / SS / em, 4),
+        "zeichen": glyphs,
+    }
+    (OUT / "titel_sdf.json").write_text(json.dumps(meta, ensure_ascii=False, separators=(",", ":")) + "\n")
+    (OUT / "OFL-Anton.txt").write_bytes(ofl_path.read_bytes())
+    print(f"Titel: {len(glyphs)} Zeichen, Atlas {WIDTH}×{atlas.shape[0]}")
+    return {
+        "name": "Anton",
+        "version": "Google Fonts",
+        "urheber": "Vernon Adams (The Anton Project Authors)",
+        "lizenz": "SIL Open Font License 1.1",
+        "seite": "https://fonts.google.com/specimen/Anton",
+        "quelle": TITLE_URL,
+        "sha256": sha,
+    }
 
 
 def main() -> None:
@@ -150,8 +239,10 @@ def main() -> None:
     }
     (OUT / "hud_sdf.json").write_text(json.dumps(meta, ensure_ascii=False, separators=(",", ":")) + "\n")
     (OUT / "OFL.txt").write_bytes(lic)
+    titel = build_title(offline)
     manifest = {
         "_hinweis": "Erzeugt von tools/gfx/build_font.py – nicht von Hand ändern.",
+        "titel": titel,
         "schrift": {
             "name": "Inter SemiBold",
             "version": "4.1",

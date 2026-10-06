@@ -418,6 +418,8 @@ fn skyline(h: &mut Hud) {
 /// Entwickler-Zeile unten links auf dem Titelbild; der GitHub-Teil ist ein Link.
 pub const CREDIT: &str = "Entwickelt von Martin Pfeffer · celox.io · ";
 pub const CREDIT_LINK: &str = "github.com/pepperonas";
+/// Widmung hinter dem Auftritt (das Herz zeichnet `heart`)
+pub const DEDICATION: &str = "  |  inspired by Anna";
 pub const CREDIT_URL: &str = "https://github.com/pepperonas";
 const CREDIT_SIZE: f32 = 12.;
 const CREDIT_Y: f32 = 720. - 16.;
@@ -462,8 +464,23 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f3
     h.rect(0., 0., vw, 720., [0.04, 0.03, 0.1, 0.4], 0.);
     h.rect(0., 430., vw, 290., [0.04, 0.03, 0.08, 0.35], 0.);
     skyline(h);
-    h.text("GTA", vw / 2., 150., 64., [1.; 4], Align::Center, true);
-    h.text("BERLIN", vw / 2., 232., 96., YELLOW, Align::Center, true);
+    // Logo: Anton mit Verlauf, Kontur, 3D-Extrusion und Schatten (HD), Bitmap mit Extrusion (Pixel)
+    h.logo(
+        "GTA",
+        vw / 2. - 4.,
+        124.,
+        50.,
+        [1.; 4],
+        [0.13, 0.16, 0.27, 1.],
+    );
+    h.logo(
+        "BERLIN",
+        vw / 2.,
+        226.,
+        86.,
+        [1., 0.82, 0.18, 1.],
+        [0.48, 0.12, 0.06, 1.],
+    );
     h.text(
         "Kisten für den Kiez",
         vw / 2.,
@@ -517,7 +534,51 @@ pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f3
         true,
     );
     h.rect(36. + w, CREDIT_Y + 2., lw, 1., link, 0.);
+    // Widmung hinter dem Auftritt, mit Trennstrich und Herz
+    let x = 36. + w + lw;
+    let dw = h.text(
+        DEDICATION,
+        x,
+        CREDIT_Y,
+        CREDIT_SIZE,
+        grey,
+        Align::Left,
+        true,
+    );
+    heart(h, x + dw + 9., CREDIT_Y - 4.5, 6.);
     credit_link_rect(h)
+}
+
+/// Rosa Herz (💗): auf die Spitze gestelltes Quadrat mit zwei Kreisen auf den oberen Kanten – dunkler Rand, rosa
+/// Fläche, hellerer Kern, Glanzpunkt. `r` = halbe Breite (Basiseinheiten).
+fn heart(h: &mut Hud, cx: f32, cy: f32, r: f32) {
+    let s = h.scale;
+    for (k, c) in [
+        (1.0, [0.06, 0.02, 0.05, 0.9]),
+        (0.8, [1., 0.33, 0.6, 1.]),
+        (0.42, [1., 0.66, 0.82, 1.]),
+    ] {
+        let a = r * k / 0.854;
+        let y = cy + 0.07 * r / 0.854 + (1. - k) * r * 0.12;
+        let m = a / (2. * std::f32::consts::SQRT_2);
+        h.items.push(berlin_engine::hud::HudItem {
+            center: [cx * s, y * s],
+            half: [a / 2. * s, a / 2. * s],
+            angle: std::f32::consts::FRAC_PI_4,
+            shape: 0.,
+            color: c,
+            extra: [0.; 4],
+        });
+        h.ellipse(cx - m, y - m, a / 2., a / 2., c);
+        h.ellipse(cx + m, y - m, a / 2., a / 2., c);
+    }
+    h.ellipse(
+        cx - r * 0.42,
+        cy - r * 0.38,
+        r * 0.15,
+        r * 0.15,
+        [1., 1., 1., 0.9],
+    );
 }
 
 pub fn draw_pause(h: &mut Hud, m: &Menu, completed: u32, best: Option<f64>) {

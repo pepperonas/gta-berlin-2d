@@ -15,7 +15,9 @@ struct HudOut {
     if shape == 3.0 { pad = vec2(0.0); } // Zeichen pixelgenau
     let local = corners[index] * (extent + pad);
     let c = cos(angle); let s = sin(angle);
-    let p = center + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
+    var p = center + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
+    // Logo (Formen 10–12): `angle` ist die Kursive (Scherung), keine Drehung
+    if shape >= 10.0 && shape <= 12.0 { p = center + vec2(local.x - local.y * angle, local.y); }
     var out: HudOut;
     out.position = vec4(p.x / camera.viewport.x * 2.0 - 1.0, 1.0 - p.y / camera.viewport.y * 2.0, 0.0, 1.0);
     out.local = local; out.color = color; out.shape = shape; out.extent = extent; out.extra = extra;
@@ -43,6 +45,36 @@ fn coverage(d: f32) -> f32 {
         let cell = in.extra.x;
         let t = vec2(cell % 16.0, floor(cell / 16.0)) * 8.0 + clamp(uv01, vec2(0.0), vec2(0.999)) * 8.0;
         a = textureLoad(atlas, vec2<i32>(floor(t + vec2(0.0, HUD_BITMAP_Y))), 0).r;
+    } else if in.shape >= 10.0 && in.shape <= 12.0 {
+        // Logo (Anton): 10 Füllung, 11 Kontur/Extrusion (dick), 12 weicher Schatten
+        let uv01 = in.local / in.extent * 0.5 + 0.5;
+        let d = sdf_texel(in.extra.xy + uv01 * in.extra.zw);
+        let screen_per_atlas = in.extent.y * 2.0 / max(in.extra.w, 1.0);
+        let per_px = 0.5 / HUD_TITLE_SPREAD / screen_per_atlas;
+        let w = max(fwidth(d) * 0.75, 1e-4);
+        if in.shape == 12.0 {
+            a = smoothstep(0.12, 0.5, d) * 0.9;
+        } else if in.shape == 11.0 {
+            let edge = max(0.5 - 3.2 * per_px, 0.12);
+            a = smoothstep(edge - w, edge + w, d);
+        } else {
+            a = smoothstep(0.5 - w, 0.5 + w, d);
+            // Verlauf: oben hell, Mitte Farbe, unten satt; harte Glanzkante knapp über der Mitte (Chrom der 80er)
+            let v = uv01.y;
+            let c = in.color.rgb;
+            let top = mix(c, vec3(1.0), 0.55);
+            let low = c * vec3(0.92, 0.66, 0.42);
+            var col = select(mix(top, c, v / 0.47), mix(c * 0.86, low, (v - 0.47) / 0.53), v > 0.47);
+            // Kantenlicht von oben links, dunkle Kante unten rechts (Abstandsfeld als Höhenfeld)
+            let g = vec2(dpdx(d), dpdy(d));
+            let n = g / max(length(g), 1e-5);
+            let rim = 1.0 - smoothstep(0.5, 0.5 + 2.5 * per_px, d);
+            let lit = dot(n, normalize(vec2(0.55, 0.85)));
+            col = col + vec3(1.0) * rim * max(lit, 0.0) * 0.55 - col * rim * max(-lit, 0.0) * 0.35;
+            let alpha = a * in.color.a;
+            if alpha < 0.004 { discard; }
+            return vec4(linear_color(clamp(col, vec3(0.0), vec3(1.0))), alpha);
+        }
     } else if in.shape == 6.0 || in.shape == 7.0 {
         // SDF-Zeichen (Inter): 0,5 = Kante; Kontur (7) als dickere, dunkle Fassung darunter
         let uv01 = in.local / in.extent * 0.5 + 0.5;

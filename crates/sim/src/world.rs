@@ -38,10 +38,6 @@ pub const JUMP_CLEAR: f64 = 1.5;
 /// ~25 px weit.
 pub const JUMP_CARRY: f64 = 45.;
 pub const ENTER_DIST: f64 = 40.;
-pub const STAMINA_DRAIN: f64 = 12.;
-pub const STAMINA_RECOVER: f64 = 20.;
-pub const STAMINA_PAUSE: f64 = 1.;
-pub const STAMINA_AGAIN: f64 = 0.25;
 pub const TRAFFIC_CARS: usize = 22;
 pub const TRAFFIC_PEDS: usize = 55;
 pub const SPAWN_MIN: f64 = 750.;
@@ -128,9 +124,6 @@ pub struct Player {
     pub in_car: Option<u32>,
     pub step: f64,
     pub stun: f64,
-    pub stamina: f64,
-    pub tired: bool,
-    pub rest: f64,
     pub swimming: bool,
     pub move_speed: f64,
     pub level: crate::levels::LevelState,
@@ -346,9 +339,6 @@ impl World {
                 in_car: None,
                 step: 0.,
                 stun: 0.,
-                stamina: 1.,
-                tired: false,
-                rest: 0.,
                 swimming: false,
                 move_speed: 0.,
                 level: Default::default(),
@@ -2351,22 +2341,8 @@ impl World {
         };
         let mag = mx.hypot(my).min(1.);
         let want_sprint = !p.swimming && input.sprint && mag > 0.05 && !input.walk_slow;
-        if p.tired && p.stamina >= STAMINA_AGAIN {
-            p.tired = false;
-        }
-        let sprinting = want_sprint && !p.tired && p.stamina > 0.;
-        if sprinting {
-            p.stamina = (p.stamina - dt / STAMINA_DRAIN).max(0.);
-            p.rest = 0.;
-            if p.stamina == 0. {
-                p.tired = true;
-            }
-        } else {
-            p.rest += dt;
-            if p.rest > STAMINA_PAUSE {
-                p.stamina = (p.stamina + dt / STAMINA_RECOVER).min(1.);
-            }
-        }
+        // Sprinten ohne Ausdauergrenze (Wunsch 06.10.2026: „unendlich lang rennen“)
+        let sprinting = want_sprint;
         // Sprung: nur vom Boden, nicht schwimmend, nicht benommen, nicht im Bahnhof
         let airborne = p.z > 0. || p.vz > 0.;
         if input.jump && !airborne && !p.swimming && !stunned && p.inside.is_none() {

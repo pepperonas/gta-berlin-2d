@@ -310,12 +310,19 @@ fn material_credits() -> Vec<String> {
 
 /// HD-Schrift aus ihrem Manifest (Name, Urheber, Lizenz, Seite).
 fn font_credit() -> String {
+    font_line("schrift", "HD-Modus")
+}
+/// Titelschrift des Logos aus dem Manifest.
+fn title_font_credit() -> String {
+    font_line("titel", "Logo")
+}
+fn font_line(key: &str, use_: &str) -> String {
     let man: serde_json::Value =
         serde_json::from_str(berlin_engine::FONT_MANIFEST).unwrap_or_default();
-    let f = &man["schrift"];
+    let f = &man[key];
     let s = |k: &str| f[k].as_str().unwrap_or("").to_string();
     format!(
-        "{} {} (HD-Modus): {}, {} – {}",
+        "{} {} ({use_}): {}, {} – {}",
         s("name"),
         s("version"),
         s("urheber"),
@@ -354,6 +361,7 @@ fn license_blocks() -> Vec<Block> {
         Block::Gap,
         Block::Head("Schrift".into()),
         Block::Bullet(font_credit()),
+        Block::Bullet(title_font_credit()),
         Block::Bullet(
             "Bitmapschrift (Pixel-Modus) aus dem Paket font8x8 (MIT), ergänzt um eigene Zeichen"
                 .into(),
@@ -709,6 +717,11 @@ mod tests {
         assert!(
             f.contains("Inter") && f.contains("Open Font License") && f.contains("rsms.me"),
             "{f}"
+        );
+        let t = title_font_credit();
+        assert!(
+            t.contains("Anton") && t.contains("Open Font License"),
+            "{t}"
         );
         let c = material_credits();
         let man: serde_json::Value =

@@ -8,6 +8,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **neues Logo im Titelbild.** „GTA BERLIN“ in Anton (SIL Open Font License) als eigener
+  Abstandsfeld-Atlas: leicht kursiv, Verlauf mit Glanzkante (Berlin in Gold, GTA in Weiß), Kantenlicht, dunkle Kontur,
+  3D-Extrusion nach rechts unten und weicher Schlagschatten; im Pixel-Modus ein Pixelschriftzug mit versetztem
+  Schatten. Fußzeile: „| inspired by Anna“ mit rosa Herz.
+- Native Fassung: **Rennen ohne Ausdauergrenze** – Sprinten hält jetzt beliebig lange (vorher nach etwa 12 s
+  erschöpft).
 - Native Fassung: **eigene Versionsnummer, die automatisch hochzählt.** Die Version der Rust-Fassung ist die des
   Cargo-Arbeitsbereichs (Start 0.1.x); der Pre-commit-Hook (`tools/rust-version.mjs`) erhöht die letzte Stelle bei
   jedem Commit, der die Rust-Fassung ändert (Crates, Daten, Cargo-Dateien), samt den eigenen Paketen in `Cargo.lock`.

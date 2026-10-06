@@ -137,6 +137,52 @@ fn sdf() -> &'static Sdf {
         }
     })
 }
+/// Titelschrift (Logo): Anton als Abstandsfeld mit breitem Feld, liegt im gemeinsamen Atlas unter der HUD-Schrift.
+struct Title {
+    em: f32,
+    spread: f32,
+    height: u32,
+    cap: f32,
+    glyphs: HashMap<char, Glyph>,
+    px: Vec<u8>,
+}
+fn title() -> &'static Title {
+    static T: OnceLock<Title> = OnceLock::new();
+    T.get_or_init(|| {
+        let meta: serde_json::Value =
+            serde_json::from_str(include_str!("../../../data/gfx/font/titel_sdf.json"))
+                .expect("titel_sdf.json");
+        let (rgba, _, height) =
+            crate::materials::decode(include_bytes!("../../../data/gfx/font/titel_sdf.png"))
+                .expect("titel_sdf.png");
+        let f = |v: &serde_json::Value| v.as_f64().unwrap_or(0.) as f32;
+        let y0 = sdf().height as f32;
+        let mut glyphs = HashMap::new();
+        for (k, v) in meta["zeichen"].as_object().expect("zeichen") {
+            let c = char::from_u32(k.parse().expect("Zeichencode")).expect("Zeichen");
+            let a: Vec<f32> = v.as_array().expect("Metrik").iter().map(f).collect();
+            glyphs.insert(
+                c,
+                Glyph {
+                    // im gemeinsamen Atlas unter der HUD-Schrift
+                    rect: [a[0], a[1] + y0, a[2], a[3]],
+                    left: a[4],
+                    top: a[5],
+                    adv: a[6],
+                },
+            );
+        }
+        Title {
+            em: f(&meta["em"]),
+            spread: f(&meta["spread"]),
+            height,
+            cap: f(&meta["cap"]),
+            glyphs,
+            px: rgba.iter().step_by(4).copied().collect(),
+        }
+    })
+}
+
 /// Ein Zeichen der SDF-Schrift für Text in der Welt (Schilder): Atlas-Rechteck in Bildpunkten, Lage zum Ursprung
 /// auf der Grundlinie, Größe und Vorschub in em. `None` = fehlt der Schrift.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -163,6 +209,9 @@ pub fn world_glyph(c: char) -> Option<WorldGlyph> {
 pub fn cap_height() -> f32 {
     sdf().cap
 }
+/// Kursive des Logos (x-Versatz je Pixel Höhe) und Laufweite (Anton sitzt eng; die Kontur braucht Luft)
+const LOGO_SKEW: f32 = 0.16;
+const LOGO_TRACK: f32 = 1.06;
 /// Schriftgröße der SDF-Schrift in em je Basiseinheit `size`: Großbuchstaben so hoch wie die der Bitmapschrift
 /// (7 von 8 Zeilen).
 fn sdf_em(size: f32) -> f32 {
@@ -171,27 +220,34 @@ fn sdf_em(size: f32) -> f32 {
 /// WGSL-Konstanten der Schrift (Lage der Bitmapzellen im gemeinsamen Atlas).
 pub fn shader_constants() -> String {
     format!(
-        "const HUD_BITMAP_Y: f32 = {}.0;\nconst HUD_SDF_SPREAD: f32 = {:?};\n",
-        sdf().height,
-        sdf().spread
+        "const HUD_BITMAP_Y: f32 = {}.0;\nconst HUD_SDF_SPREAD: f32 = {:?};\nconst HUD_TITLE_SPREAD: f32 = {:?};\n",
+        sdf().height + title().height,
+        sdf().spread,
+        title().spread
     )
 }
 
-/// Gemeinsamer Atlas (ein Kanal): SDF-Schrift oben, darunter die 16 × 16 Bitmapzellen à 8 × 8. Liefert Pixel,
-/// Breite, Höhe.
+/// Gemeinsamer Atlas (ein Kanal): SDF-Schrift oben, darunter die Titelschrift, darunter die 16 × 16 Bitmapzellen à
+/// 8 × 8. Liefert Pixel, Breite, Höhe.
 pub fn atlas() -> (Vec<u8>, u32, u32) {
     let s = sdf();
-    let (w, h) = (s.width.max(ATLAS), s.height + ATLAS);
+    let t = title();
+    let (w, h) = (s.width.max(ATLAS), s.height + t.height + ATLAS);
     let mut out = vec![0u8; (w * h) as usize];
     for y in 0..s.height {
         let row = (y * s.width) as usize;
         out[(y * w) as usize..(y * w + s.width) as usize]
             .copy_from_slice(&s.px[row..row + s.width as usize]);
     }
+    for y in 0..t.height {
+        let row = (y * s.width) as usize;
+        let dst = ((s.height + y) * w) as usize;
+        out[dst..dst + s.width as usize].copy_from_slice(&t.px[row..row + s.width as usize]);
+    }
     let bits = bitmap_atlas();
     for y in 0..ATLAS {
         let src = (y * ATLAS) as usize;
-        let dst = ((s.height + y) * w) as usize;
+        let dst = ((s.height + t.height + y) * w) as usize;
         out[dst..dst + ATLAS as usize].copy_from_slice(&bits[src..src + ATLAS as usize]);
     }
     (out, w, h)
@@ -639,6 +695,91 @@ impl Hud {
             }
         }
     }
+    /// Breite eines Logo-Schriftzugs (Basiseinheiten) bei Großbuchstabenhöhe `cap`.
+    pub fn logo_width(&self, text: &str, cap: f32) -> f32 {
+        if !self.sdf {
+            return self.text_width(text, cap / 0.875);
+        }
+        let t = title();
+        let em = cap / t.cap;
+        text.chars()
+            .map(|c| t.glyphs.get(&c).map_or(0.3, |g| g.adv) * em * LOGO_TRACK)
+            .sum()
+    }
+    /// Logo-Schriftzug (Titelbild): Großbuchstabenhöhe `cap` (Basiseinheiten), mittig auf `cx`, Grundlinie `base`.
+    /// HD: Anton mit Verlauf und Glanzkante (Form 10), dunkler Kontur und 3D-Extrusion nach rechts unten (11) und
+    /// weichem Schlagschatten (12), leicht kursiv. Pixel-Modus: Bitmapschrift mit Extrusion aus versetzten Kopien.
+    pub fn logo(
+        &mut self,
+        text: &str,
+        cx: f32,
+        base: f32,
+        cap: f32,
+        color: [f32; 4],
+        depth_color: [f32; 4],
+    ) {
+        let w = self.logo_width(text, cap);
+        let x0 = cx - w / 2.;
+        if !self.sdf {
+            let size = cap / 0.875;
+            let p = self.px(size) / self.scale;
+            // ein Bildpunkt der Schrift nach rechts unten, mit Kontur: klassischer Pixel-Schriftzug
+            self.text(text, x0 + p, base + p, size, depth_color, Align::Left, true);
+            self.text(text, x0, base, size, color, Align::Left, false);
+            return;
+        }
+        let t = title();
+        let em = cap / t.cap * self.scale;
+        let k = em / t.em;
+        let skew = LOGO_SKEW;
+        // Lagen von hinten nach vorn: Schatten, Extrusion, Kontur, Füllung
+        let depth = cap * self.scale * 0.11;
+        let steps = 10;
+        let mut layers: Vec<(f32, [f32; 2], [f32; 4])> = vec![(
+            12.,
+            [depth * 1.15, depth * 1.6],
+            [0., 0., 0., 0.55 * color[3]],
+        )];
+        for i in (1..=steps).rev() {
+            let f = i as f32 / steps as f32;
+            let shade = 0.55 + 0.45 * (1. - f);
+            let c = [
+                depth_color[0] * shade,
+                depth_color[1] * shade,
+                depth_color[2] * shade,
+                depth_color[3],
+            ];
+            layers.push((11., [depth * f * 0.7, depth * f], c));
+        }
+        layers.push((11., [0., 0.], [0.03, 0.02, 0.04, color[3]]));
+        layers.push((10., [0., 0.], color));
+        for (shape, off, col) in layers {
+            let mut pen = x0 * self.scale;
+            for c in text.chars() {
+                let Some(g) = t.glyphs.get(&c) else {
+                    pen += 0.3 * em;
+                    continue;
+                };
+                if g.rect[2] > 0. {
+                    let (gw, gh) = (g.rect[2] * k, g.rect[3] * k);
+                    let cy = base * self.scale + g.top * em + gh / 2.;
+                    self.items.push(HudItem {
+                        // Kursive schert um die Grundlinie: die Mitte der Glyphe wandert mit
+                        center: [
+                            pen + g.left * em + gw / 2. + off[0] - (cy - base * self.scale) * skew,
+                            cy + off[1],
+                        ],
+                        half: [gw / 2., gh / 2.],
+                        angle: skew,
+                        shape,
+                        color: col,
+                        extra: g.rect,
+                    });
+                }
+                pen += g.adv * em * LOGO_TRACK;
+            }
+        }
+    }
     #[allow(clippy::too_many_arguments)]
     fn glyph_run(
         &mut self,
@@ -721,13 +862,48 @@ mod tests {
         assert!(s.cap > 0.6 && s.cap < 0.8 && s.em > 16.);
         let (px, w, h) = atlas();
         assert_eq!(px.len(), (w * h) as usize);
-        assert_eq!(h, s.height + ATLAS);
-        assert!(shader_constants().contains(&format!("HUD_BITMAP_Y: f32 = {}.0", s.height)));
-        // Bitmap liegt unter dem SDF-Teil: 'A' (Zelle 65) hat dort Pixel
+        let by = s.height + title().height;
+        assert_eq!(h, by + ATLAS);
+        assert!(shader_constants().contains(&format!("HUD_BITMAP_Y: f32 = {by}.0")));
+        // Bitmap liegt unter SDF- und Titelteil: 'A' (Zelle 65) hat dort Pixel
         let filled = (0..64)
-            .filter(|i| px[((s.height + 32 + i / 8) * w + 8 + i % 8) as usize] > 0)
+            .filter(|i| px[((by + 32 + i / 8) * w + 8 + i % 8) as usize] > 0)
             .count();
         assert!(filled > 10);
+    }
+    #[test]
+    fn logo_layers_and_fallback() {
+        let mut h = Hud::new([1280., 720.]);
+        h.sdf = true;
+        h.logo(
+            "BERLIN",
+            640.,
+            230.,
+            80.,
+            [1., 0.8, 0.2, 1.],
+            [0.5, 0.1, 0.05, 1.],
+        );
+        let n = |s: f32| h.items.iter().filter(|i| i.shape == s).count();
+        assert_eq!(n(10.), 6, "Füllung je Buchstabe");
+        assert_eq!(n(12.), 6, "Schatten je Buchstabe");
+        assert_eq!(n(11.), 6 * 11, "Extrusion (10) + Kontur je Buchstabe");
+        // mittig und Großbuchstaben so hoch wie verlangt
+        let fill: Vec<_> = h.items.iter().filter(|i| i.shape == 10.).collect();
+        let l = fill
+            .iter()
+            .map(|i| i.center[0] - i.half[0])
+            .fold(f32::MAX, f32::min);
+        let r = fill
+            .iter()
+            .map(|i| i.center[0] + i.half[0])
+            .fold(f32::MIN, f32::max);
+        assert!(((l + r) / 2. - 640.).abs() < 25., "{l} {r}");
+        let mut b = Hud::new([1280., 720.]);
+        b.logo("GTA", 640., 150., 56., [1.; 4], [0.2; 4]);
+        assert!(
+            b.items.iter().all(|i| i.shape == 3.),
+            "Pixel-Modus: Bitmapschrift"
+        );
     }
     #[test]
     fn sdf_text_uses_font_advances_and_falls_back() {

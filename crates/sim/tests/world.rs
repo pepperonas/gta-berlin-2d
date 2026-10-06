@@ -315,17 +315,26 @@ fn on_foot_walks_and_is_blocked_by_walls() {
         }
     }
     assert!((w.player.x - x0).hypot(w.player.y - y0) > 1. || w.player.step > 100.);
-    // Sprint leert die Ausdauer
-    run(
-        &mut w,
-        300,
-        Input {
-            move_x: 1.,
-            sprint: true,
-            ..idle()
-        },
-    );
-    assert!(w.player.stamina < 1.);
+}
+
+/// Sprinten hat keine Ausdauergrenze: auch nach 60 s Dauersprint läuft die Figur im Sprinttempo.
+#[test]
+fn sprint_never_runs_out() {
+    let mut w = world(4);
+    let sprint = Input {
+        move_x: 1.,
+        sprint: true,
+        ..idle()
+    };
+    for i in 0..(60. / DT) as usize {
+        // Hindernisse sollen das Tempo nicht verfälschen: jedes Bild zurück an den Start
+        let (x, y) = (w.player.x, w.player.y);
+        w.update(&sprint, DT);
+        if w.player.in_car.is_none() && !w.player.swimming {
+            assert_eq!(w.player.move_speed, berlin_sim::world::SPRINT, "Bild {i}");
+        }
+        (w.player.x, w.player.y) = (x, y);
+    }
 }
 
 #[test]
@@ -2665,7 +2674,6 @@ fn jumping_clears_fences_at_every_pace() {
                 w.player.y = my + ny * 12.;
                 (w.player.z, w.player.vz) = (0., 0.);
                 w.player.level.lvl = 0;
-                w.player.stamina = 1.;
                 let mut jumped = false;
                 for _ in 0..90 {
                     let d = (w.player.x - mx) * nx + (w.player.y - my) * ny;

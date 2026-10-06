@@ -2195,3 +2195,20 @@ geändert (Minor/Major), zählt er nichts dazu. Ungestagte Änderungen an den be
 `git add` nichts Fremdes mitnimmt. Anzeige: `about::native_version()` (Titelbild „Rust x.y.z“, Über das Spiel),
 Badge `version-rust`. Tests: `tests/rust-version.test.js` (Auswahl der Pfade, Anheben, Cargo.lock in Einklang).
 Die Versionsnummer des Browser-Spiels (`package.json`) bleibt davon getrennt.
+
+## Logo im Titelbild, Widmung, Rennen ohne Ausdauer (06.10.2026)
+
+- **Titelschrift:** Anton (Google Fonts, SIL OFL 1.1, Vernon Adams), von `tools/gfx/build_font.py` als zweiter
+  Abstandsfeld-Atlas gebaut (`data/gfx/font/titel_sdf.*`, 112 px je em, Feld 16 px, nur Großbuchstaben, Ziffern,
+  Umlaute, wenige Zeichen; SHA-256-geprüft, OFL-Text `OFL-Anton.txt`). Er liegt im gemeinsamen HUD-Atlas zwischen
+  HUD-Schrift und Bitmapzellen (`HUD_BITMAP_Y` verschiebt sich mit, `HUD_TITLE_SPREAD`).
+- **`Hud::logo`:** Lagen von hinten nach vorn – weicher Schatten (Form 12), zehn Extrusionsschichten nach rechts unten
+  in der Tiefenfarbe (11), dunkle Kontur (11), Füllung (10). Die Füllung hat einen senkrechten Verlauf mit harter
+  Glanzkante knapp über der Mitte und Kantenlicht von oben links aus dem Gradienten des Abstandsfelds. Kursive: bei
+  den Formen 10–12 ist `angle` eine Scherung im Vertex-Shader, keine Drehung. Pixel-Modus: Bitmapschrift mit einem
+  um einen Schriftpixel versetzten Schatten (mit Kontur) unter der Füllung.
+- **Widmung:** `menu::DEDICATION` („  |  inspired by Anna“) hinter dem GitHub-Link, dahinter ein gezeichnetes Herz
+  (auf die Spitze gestelltes Quadrat + zwei Kreise, drei Lagen, Glanzpunkt) – 💗 hat keine Schrift im Spiel.
+- **Sprint:** Ausdauer, Erschöpfung und Erholungszeit des Spielers sind entfernt (`World::update` sprintet, solange
+  Sprint gedrückt ist); Test `sprint_never_runs_out` (60 s Dauersprint im Sprinttempo). Das Fahrrad behält seine
+  eigene Erschöpfung (`twowheel.rs`).
