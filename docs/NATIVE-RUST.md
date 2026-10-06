@@ -2542,3 +2542,8 @@ Zeichnung auf ihr liegt. Konsole `waffe`.
 **Treffer-Reaktion (06.10.2026):** rein Darstellung: `figure::Who::hit` (Richtung vom `Ped::threat` weg, `hurt_t`) →
 `person_bodies` verschiebt den Körper um 2,4 px · `hit_react(t)` (50-ms-Ruck, federnd über `HIT_REACT_S` = 0,45 s),
 dreht den Oberkörper bis 0,55 rad zur Stoßseite, zieht die Hände zur Brust und tönt Haut/Oberteil 0,12 s rötlich.
+
+**Blut (06.10.2026):** `effects.rs`: Spritzer `r = 0,6 + 3,4·h^2,2`, Streckung `1 + d/9`, Satellit ab r > 1,6;
+Nebel `Kick::Mist` in eigener Liste `Effects::mist` (altert in `step`, Effekt-Durchgang); Lache aus vier Lappen mit
+`Splat::grow` (√-Wachstum über 4–7 s); `blood_color(age)` (trocknet über `BLOOD_DRY` = 45 s), je Fleck Rand + Kern,
+frisch (< 8 s) ein Glanzfleck.

@@ -14,6 +14,23 @@ struct Splat {
     r: [f32; 2],
     angle: f32,
     age: f32,
+    /// Lache: wächst über so viele Sekunden auf volle Größe (0 = Spritzer, sofort da)
+    grow: f32,
+}
+/// Wie Blut am Boden aussieht: frisch dunkelrot mit nassem Glanz, zum Rand dunkler, trocknet über
+/// `BLOOD_DRY` Sekunden zu Braunschwarz und verblasst im letzten Fünftel von `BLOOD_KEEP`.
+const BLOOD_DRY: f32 = 45.;
+/// Farbe des Blutkerns nach `age` Sekunden (RGBA).
+fn blood_color(age: f32) -> [f32; 4] {
+    let d = (age / BLOOD_DRY).clamp(0., 1.);
+    let k = (age / BLOOD_KEEP).min(1.);
+    let fade = if k > 0.8 { 1. - (k - 0.8) / 0.2 } else { 1. };
+    [
+        0.40 - 0.22 * d,
+        0.02 + 0.03 * d,
+        0.03 + 0.02 * d,
+        0.9 * fade,
+    ]
 }
 
 /// Art eines Reifenpartikels (worldfx.js tireEffect)
@@ -23,6 +40,8 @@ pub enum Kick {
     Dust,
     Spray,
     Snow,
+    /// Blutnebel beim Treffer
+    Mist,
 }
 impl Kick {
     /// Farbe ohne Blaustich: Reifenqualm ist warmweißes Grau, Gischt fast farbloser Sprühnebel (vorher hellblau
@@ -33,6 +52,7 @@ impl Kick {
             Kick::Smoke => [0.86, 0.85, 0.83],
             Kick::Spray => [0.82, 0.83, 0.84],
             Kick::Snow => [0.937, 0.951, 0.96],
+            Kick::Mist => [0.46, 0.03, 0.04],
         }
     }
     /// Höchste Deckkraft: Gischt ist dünn, Qualm dichter, Staub dazwischen.
@@ -42,6 +62,7 @@ impl Kick {
             Kick::Spray => 0.3,
             Kick::Dust => 0.45,
             Kick::Snow => 0.5,
+            Kick::Mist => 0.42,
         }
     }
 }
@@ -94,6 +115,8 @@ pub struct Effects {
     /// brennende Wracks und Explosionen
     fire: crate::firefx::FireFx,
     splats: std::collections::VecDeque<Splat>,
+    /// Blutnebel in der Luft (altert in `step`, nicht mit den Reifenwolken)
+    mist: Vec<Particle>,
     seq: u32,
     /// Ring am Boden, wohin ein Klick die Figur schickt (main.js clickFx)
     ring: Option<([f32; 2], f32)>,
@@ -109,28 +132,57 @@ impl Effects {
         for e in events {
             match e {
                 Event::Blood { x, y, a, n } => {
-                    // Tropfen fächern in Schlagrichtung auf, Größe und Abstand aus Hashes
+                    let (x, y, a) = (*x as f32, *y as f32, *a as f32);
+                    // Spritzer: viele kleine, wenige große Tropfen; je weiter geflogen, desto länglicher in
+                    // Flugrichtung, große mit einem Satellitentropfen davor
                     for k in 0..*n {
                         self.seq = self.seq.wrapping_add(1);
-                        let h = |m: f64| hash01(self.seq as f64 * 12.9898 + m) as f32;
-                        let ang = *a as f32 + (h(1.) - 0.5) * 1.2;
-                        let d = 4. + h(2.) * 16. * (k as f32 + 1.) / *n as f32;
-                        let r = 1.5 + h(3.) * 3.5;
-                        self.add_splat(
-                            [*x as f32 + ang.cos() * d, *y as f32 + ang.sin() * d],
-                            [r * (1. + h(4.)), r],
-                            ang,
-                        );
+                        let seq = self.seq;
+                        let h = |m: f64| hash01(seq as f64 * 12.9898 + m) as f32;
+                        let ang = a + (h(1.) - 0.5) * 1.1;
+                        let d = 3. + h(2.) * 18. * (k as f32 + 1.) / *n as f32;
+                        let r = 0.6 + 3.4 * h(3.).powf(2.2);
+                        let long = 1. + d / 9.;
+                        let (c, sn) = (ang.cos(), ang.sin());
+                        self.add_splat([x + c * d, y + sn * d], [r * long, r], ang, 0.);
+                        if r > 1.6 {
+                            let e = d + r * long + 1.5 + h(4.) * 3.;
+                            let rs = 0.35 + h(5.) * 0.5;
+                            self.add_splat([x + c * e, y + sn * e], [rs * 1.6, rs], ang, 0.);
+                        }
+                    }
+                    // feiner Nebel in der Luft, der in Schussrichtung verweht
+                    for k in 0..3 {
+                        self.seq = self.seq.wrapping_add(1);
+                        let seq = self.seq;
+                        let h = |m: f64| hash01(seq as f64 * 4.17 + m) as f32;
+                        let ang = a + (h(1.) - 0.5) * 0.9;
+                        let v = 40. + h(2.) * 50. + k as f32 * 10.;
+                        self.mist.push(Particle {
+                            kind: Kick::Mist,
+                            at: [x, y],
+                            v: [ang.cos() * v, ang.sin() * v],
+                            size: 1.8 + h(3.) * 1.2,
+                            life: 0.35,
+                            max: 0.35,
+                        });
                     }
                 }
                 Event::Kill { x, y, .. } => {
-                    self.seq = self.seq.wrapping_add(1);
-                    let h = hash01(self.seq as f64 * 3.7) as f32;
-                    self.add_splat(
-                        [*x as f32, *y as f32],
-                        [13. + h * 5., 10. + h * 3.],
-                        h * std::f32::consts::TAU,
-                    );
+                    // Lache: unregelmäßig aus mehreren Lappen, breitet sich über einige Sekunden aus
+                    for k in 0..4 {
+                        self.seq = self.seq.wrapping_add(1);
+                        let seq = self.seq;
+                        let h = |m: f64| hash01(seq as f64 * 3.7 + m) as f32;
+                        let ang = h(1.) * std::f32::consts::TAU;
+                        let off = if k == 0 { 0. } else { 2. + h(2.) * 4. };
+                        self.add_splat(
+                            [*x as f32 + ang.cos() * off, *y as f32 + ang.sin() * off],
+                            [7. + h(3.) * 5., 5. + h(4.) * 3.],
+                            h(5.) * std::f32::consts::TAU,
+                            4. + h(6.) * 3.,
+                        );
+                    }
                 }
                 _ => {}
             }
@@ -267,12 +319,13 @@ impl Effects {
     pub fn click_ring(&mut self, at: (f64, f64)) {
         self.ring = Some(([at.0 as f32, at.1 as f32], RING_S));
     }
-    fn add_splat(&mut self, at: [f32; 2], r: [f32; 2], angle: f32) {
+    fn add_splat(&mut self, at: [f32; 2], r: [f32; 2], angle: f32, grow: f32) {
         self.splats.push_back(Splat {
             at,
             r,
             angle,
             age: 0.,
+            grow,
         });
         while self.splats.len() > BLOOD_MAX {
             self.splats.pop_front();
@@ -290,6 +343,15 @@ impl Effects {
         for s in &mut self.splats {
             s.age += dt;
         }
+        for q in &mut self.mist {
+            q.life -= dt;
+            q.at[0] += q.v[0] * dt;
+            q.at[1] += q.v[1] * dt;
+            let drag = (1. - dt * 6.).max(0.);
+            q.v = [q.v[0] * drag, q.v[1] * drag];
+            q.size += dt * 12.;
+        }
+        self.mist.retain(|q| q.life > 0.);
         while self.splats.front().is_some_and(|s| s.age > BLOOD_KEEP) {
             self.splats.pop_front();
         }
@@ -305,8 +367,8 @@ impl Effects {
         let lum = ambient[0] * 0.2126 + ambient[1] * 0.7152 + ambient[2] * 0.0722;
         let amb = ambient.map(|a| (a + lum) * 0.5);
         let lit = |c: [f32; 3]| [c[0] * amb[0], c[1] * amb[1], c[2] * amb[2]];
-        // Reifenwolken: weicher Fleck, der aufquillt und vergeht
-        for q in &self.particles {
+        // Reifenwolken und Blutnebel: weicher Fleck, der aufquillt und vergeht
+        for q in self.particles.iter().chain(&self.mist) {
             let age = 1. - q.life / q.max;
             let a = (std::f32::consts::PI * age).sin() * q.kind.alpha();
             let c = lit(q.kind.color());
@@ -349,18 +411,45 @@ impl Effects {
                 color: [0.06, 0.06, 0.065, 0.32 * (k.life / SKID_S).min(1.)],
             });
         }
-        for s in &self.splats {
-            // trocknet nach: wird dunkler und verblasst gegen Ende
-            let k = (s.age / BLOOD_KEEP).min(1.);
-            let fade = if k > 0.8 { 1. - (k - 0.8) / 0.2 } else { 1. };
+        for (i, s) in self.splats.iter().enumerate() {
+            // Lachen breiten sich aus (schnell, dann langsamer), Spritzer liegen sofort
+            let g = if s.grow > 0. {
+                (s.age / s.grow).clamp(0., 1.).sqrt().max(0.15)
+            } else {
+                1.
+            };
+            let half = [s.r[0] * g, s.r[1] * g];
+            let c = blood_color(s.age);
+            let d = 0.83 - i as f32 * 1e-7;
+            // dunkler Rand (das Blut gerinnt am Rand zuerst), heller Kern
             out.push(Body {
                 center: s.at,
-                half: s.r,
+                half: [half[0] + 0.5, half[1] + 0.5],
                 angle: s.angle,
                 shape: 1.,
-                depth: 0.83,
-                color: [0.42 - 0.18 * k, 0.03, 0.03, 0.85 * fade],
+                depth: d + 0.00002,
+                color: [c[0] * 0.55, c[1] * 0.5, c[2] * 0.5, c[3]],
             });
+            out.push(Body {
+                center: s.at,
+                half,
+                angle: s.angle,
+                shape: 1.,
+                depth: d,
+                color: c,
+            });
+            // nass: ein Glanzfleck, solange es frisch ist
+            let wet = (1. - s.age / 8.).clamp(0., 1.);
+            if wet > 0. && half[1] > 1.4 {
+                out.push(Body {
+                    center: [s.at[0] - half[0] * 0.25, s.at[1] - half[1] * 0.3],
+                    half: [half[0] * 0.35, half[1] * 0.22],
+                    angle: s.angle,
+                    shape: 1.,
+                    depth: d - 0.00002,
+                    color: [0.85, 0.45, 0.45, 0.22 * wet * c[3]],
+                });
+            }
         }
         self.fire.bodies(out);
         self.gun.bodies(out);
@@ -416,7 +505,14 @@ mod tests {
         ]);
         let mut out = Vec::new();
         fx.bodies(&mut out);
-        assert_eq!(out.len(), 7 + 1, "Blut und Einschussloch am Boden");
+        // je Tropfen Rand und Kern (frisch große mit Glanz), dazu Satellitentropfen und das Einschussloch
+        let drops = fx.blood_count();
+        assert!(drops >= 7, "{drops}");
+        assert!(
+            out.len() > 2 * drops,
+            "Blut und Einschussloch am Boden: {}",
+            out.len()
+        );
         let mut glow = Vec::new();
         fx.effects(&mut glow, [1.; 3]);
         assert!(
@@ -425,13 +521,48 @@ mod tests {
         );
         // Blutstropfen liegen in Schlagrichtung
         assert!(fx.splats.iter().all(|s| s.at[0] > 50.));
+        assert!(!fx.mist.is_empty(), "Blutnebel beim Treffer");
         fx.step(2.);
-        assert_eq!(fx.blood_count(), 7, "das Blut bleibt");
+        assert_eq!(fx.blood_count(), drops, "das Blut bleibt");
         let mut glow = Vec::new();
         fx.effects(&mut glow, [1.; 3]);
-        assert!(glow.is_empty(), "Bahnen, Feuer, Dampf und Staub sind weg");
+        assert!(
+            glow.is_empty(),
+            "Bahnen, Feuer, Dampf, Staub und Nebel sind weg"
+        );
         fx.step(BLOOD_KEEP);
         assert_eq!(fx.blood_count(), 0);
+    }
+}
+
+#[cfg(test)]
+mod blood_tests {
+    use super::*;
+    #[test]
+    fn a_pool_spreads_and_blood_dries_dark() {
+        let mut fx = Effects::default();
+        fx.ingest(&[Event::Kill {
+            x: 0.,
+            y: 0.,
+            weapon: "pistol",
+            player: true,
+        }]);
+        let size = |fx: &Effects| {
+            let mut out = Vec::new();
+            fx.bodies(&mut out);
+            out.iter().map(|b| b.half[0] * b.half[1]).sum::<f32>()
+        };
+        let early = size(&fx);
+        fx.step(1.);
+        let mid = size(&fx);
+        fx.step(8.);
+        let full = size(&fx);
+        assert!(early < mid && mid < full, "{early} {mid} {full}");
+        // frisch dunkelrot, getrocknet bräunlich-schwarz, am Ende verblasst
+        let (fresh, dry) = (blood_color(0.), blood_color(BLOOD_DRY));
+        assert!(fresh[0] > 0.35 && fresh[0] > fresh[1] * 8.);
+        assert!(dry[0] < fresh[0] * 0.6);
+        assert!(blood_color(BLOOD_KEEP)[3] < 0.01);
     }
 }
 

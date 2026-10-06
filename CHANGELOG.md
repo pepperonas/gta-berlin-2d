@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Realistischeres Blut.** Spritzer mit vielen kleinen und wenigen großen Tropfen, die mit der
+  Flugweite länglicher werden, Satellitentropfen vor den großen, ein kurzer Blutnebel in Schussrichtung; nach dem
+  Tod eine unregelmäßige Lache, die sich über einige Sekunden ausbreitet. Frisches Blut glänzt nass, gerinnt am Rand
+  dunkler und trocknet über rund 45 Sekunden ins Braunschwarze.
 - Native Fassung: **Treffer sieht man am Getroffenen.** Ein angeschossener oder geschlagener Passant ruckt vom
   Angreifer weg, dreht den Oberkörper mit dem Stoß ab, reißt die Arme zur Brust und blitzt im ersten Moment rötlich
   auf; nach knapp einer halben Sekunde federt er zurück und flieht bzw. kämpft wie bisher.
