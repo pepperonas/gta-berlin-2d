@@ -84,6 +84,10 @@ impl Audio {
             synth.play(s);
         }
     }
+    /// Laufender Titel des Autoradios („Interpret - Titel“), sofern der Sender ihn schickt.
+    pub fn radio_title(&self) -> Option<String> {
+        self.synth.lock().ok().and_then(|s| s.radio_title())
+    }
     /// Zustand des Autoradios (für die Anzeige).
     pub fn radio_state(&self) -> crate::radio::State {
         self.synth

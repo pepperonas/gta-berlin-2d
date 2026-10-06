@@ -750,6 +750,58 @@ pub fn draw_pause(h: &mut Hud, m: &Menu, completed: u32, best: Option<f64>) {
     );
 }
 
+/// größte Breite der Titelzeile im Pausenmenü (HUD-Einheiten)
+const PAUSE_RADIO_MAX_W: f32 = 720.;
+/// Laufender Radiosender im Pausenmenü, dezent zwischen Kopfzeile und Menü: „Radio · Sender · Genre“, darunter
+/// „Interpret – Titel“, wenn der Sender ein Lied meldet (`berlin_audio::radio::song_info`).
+pub fn draw_pause_radio(
+    h: &mut Hud,
+    station: &str,
+    genre: &str,
+    song: Option<(Option<String>, String)>,
+) {
+    let vw = h.width;
+    let dim = [0.72, 0.74, 0.78, 0.85];
+    let (y1, y2) = if song.is_some() {
+        (192., 210.)
+    } else {
+        (200., 0.)
+    };
+    h.text(
+        &format!("Radio  ·  {station}  ·  {genre}"),
+        vw / 2.,
+        y1,
+        14.,
+        dim,
+        Align::Center,
+        true,
+    );
+    if let Some((artist, title)) = song {
+        let line = match artist {
+            Some(a) => format!("{a}  –  {title}"),
+            None => title,
+        };
+        // lange Titel kürzen (gemessen), damit die Zeile nicht breiter als 720 Einheiten wird
+        let mut line = line;
+        if h.text_width(&line, 15.) > PAUSE_RADIO_MAX_W {
+            while line.pop().is_some()
+                && h.text_width(&format!("{}…", line.trim_end()), 15.) > PAUSE_RADIO_MAX_W
+            {
+            }
+            line = format!("{}…", line.trim_end());
+        }
+        h.text(
+            &line,
+            vw / 2.,
+            y2,
+            15.,
+            [0.95, 0.85, 0.45, 0.95],
+            Align::Center,
+            true,
+        );
+    }
+}
+
 /// Knopfflächen der Teleport-Rückfrage (x, y, Breite, Höhe): Ja, Nein.
 pub fn teleport_buttons(vw: f32) -> ([f32; 4], [f32; 4]) {
     let (h, bw, bh) = (190., 200., 46.);
@@ -1246,5 +1298,31 @@ mod radio_menu_tests {
             "{}",
             m.items.len()
         );
+    }
+
+    #[test]
+    fn pause_radio_line_sits_between_header_and_menu_and_fits() {
+        let mut h = Hud::new([1280., 720.]);
+        let n0 = h.items.len();
+        draw_pause_radio(
+            &mut h,
+            "SomaFM Heavyweight Reggae",
+            "Reggae",
+            Some((
+                Some("Ein sehr langer Interpretenname mit Gästen und noch mehr Gästen".into()),
+                "Ein ebenso langer Titel (Extended Dub Version)".into(),
+            )),
+        );
+        assert!(h.items.len() > n0);
+        // die Titelzeile ist gekürzt: kein Zeichen weiter außen als 360 Einheiten von der Mitte
+        let s = h.scale;
+        let far = h.items[n0..]
+            .iter()
+            .map(|i| (i.center[0] / s - 640.).abs())
+            .fold(0., f32::max);
+        assert!(far < 380., "{far}");
+        // zwischen Aufträge-Zeile (168) und erster Menüzeile (oberer Rand)
+        let (_, height) = pause_menu().spacing();
+        assert!(210. + 9. < PAUSE_MENU_Y - height / 2.);
     }
 }

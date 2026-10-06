@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Pausenmenü zeigt, was im Radio läuft:** dezent unter der Kopfzeile Sender und Genre, darunter
+  Interpret und Titel, wenn der Sender sie mitschickt (ICY-Metadaten im Stream; elf der zwölf Sender tun das).
+  Meldet ein Sender nur sich selbst („FluxFM - Livestream“), bleibt die Titelzeile weg. In der Pause bleibt der
+  Sender stumm verbunden, nach der Pause spielt er ohne neues Verbinden weiter.
 - Native Fassung: **Controller im Fahrzeug neu belegt:** A = Handbremse (vorher B), B = ESP an/aus (vorher
   Steuerkreuz oben), die Aktion im Fahrzeug (Einladen, Türen als Zugführer) liegt auf Steuerkreuz rechts, kräftig
   treten auf dem Fahrrad auf Steuerkreuz oben. Zu Fuß bleibt alles, wie es war; Zoom am Steuerkreuz gilt nur noch zu

@@ -522,6 +522,16 @@ impl Play {
                 self.world.completed as u32,
                 self.world.best_time,
             );
+            // laufender Sender dezent unter der Kopfzeile: Sender · Genre, darunter Interpret – Titel
+            if let Some(i) = self.radio.current()
+                && let Some(st) = berlin_audio::radio::stations().get(i)
+            {
+                let title = self.audio.as_ref().and_then(|a| a.radio_title());
+                let song = title
+                    .as_deref()
+                    .and_then(|t| berlin_audio::radio::song_info(t, &st.name));
+                crate::menu::draw_pause_radio(out, &st.name, &st.genre, song);
+            }
         }
     }
     pub fn new(
@@ -1765,12 +1775,19 @@ impl Play {
                     .get(self.menu.index)
                     .is_some_and(|i| i.action == Action::RadioVolume);
                 let preview = on_radio.then(|| self.radio.current()).flatten();
-                if (preview.is_some() || self.radio_preview)
+                // sonst bleibt der Sender des Autos stumm verbunden: so kennt die Pause Titel und Interpret, und
+                // nach der Pause spielt er ohne neues Verbinden weiter
+                let quiet = self.radio.current();
+                if (preview.is_some() || quiet.is_some() || self.radio_preview)
                     && let Some(a) = &self.audio
                 {
                     a.apply(&berlin_audio::synth::Frame {
-                        radio: preview,
-                        radio_volume: self.radio_vol as f32 / 100.,
+                        radio: preview.or(quiet),
+                        radio_volume: if preview.is_some() {
+                            self.radio_vol as f32 / 100.
+                        } else {
+                            0.
+                        },
                         ..Default::default()
                     });
                 }

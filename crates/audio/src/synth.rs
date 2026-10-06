@@ -2157,6 +2157,10 @@ impl Synth {
     pub fn enable_radio(&mut self) {
         self.radio.get_or_insert_with(Default::default);
     }
+    /// Laufender Titel des gewünschten Senders (ICY-Metadaten), sofern bekannt.
+    pub fn radio_title(&self) -> Option<String> {
+        self.radio.as_ref().and_then(|r| r.title())
+    }
     /// Zustand des gewünschten Senders (aus, wenn kein Radio).
     pub fn radio_state(&self) -> crate::radio::State {
         self.radio

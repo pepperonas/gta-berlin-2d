@@ -2509,3 +2509,12 @@ zwei neue Aktionen im Bereich `Car`: `UseCar` (E, Steuerkreuz rechts) und `Pedal
 `Use` und die Zoom-Aktionen sind jetzt `Foot`. `input_from` wählt `Use`/`UseCar` und `Sprint`/`PedalSprint` nach
 `driving` (auch Zugführer), der Zoom liest im Fahrzeug nur die Tasten. `settings.json` speichert nur Abweichungen –
 neue Standards wirken für alle, die die betroffenen Tasten nicht selbst belegt haben.
+
+**Radio-Titel (06.10.2026):** Anfrage mit `Icy-MetaData: 1`; `IcyReader` (radio.rs) schneidet alle `icy-metaint`
+Bytes den Block (Längenbyte × 16) heraus, `parse_icy_title` (UTF-8, sonst Latin-1) legt `StreamTitle` in
+`Shared::title`; `Radio::title` → `Synth::radio_title` → `Audio::radio_title`. `song_info(raw, station)` macht daraus
+(Interpret, Titel) für „A - B“ und „"B" von A“ und verwirft Selbstmeldungen (enthält „livestream“ oder beginnt mit
+dem ersten Wort des Sendernamens). Gemessen am 06.10.: alle zwölf Sender liefern `icy-metaint`, neun davon Lieder.
+`menu::draw_pause_radio` (Breite gemessen gekürzt, `PAUSE_RADIO_MAX_W`). In der Pause hält `Frame { radio: aktueller
+Sender, radio_volume: 0 }` den Stream offen (`Radio::fill` puffert dann nicht weiter, der Titel vom Pausenbeginn
+bleibt).

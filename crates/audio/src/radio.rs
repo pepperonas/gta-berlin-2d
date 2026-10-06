@@ -5,7 +5,8 @@
 //! (`Radio::fill`). Beim Verbinden und ohne Empfang rauscht es leise. Wird das Radio nicht mehr gebraucht (Aussteigen,
 //! Pause), läuft der Stream noch `LINGER_S` stumm weiter, damit kurzes Unterbrechen nicht neu verbindet.
 //! Gestreamt wird nur, wenn `Synth::enable_radio` aufgerufen wurde (Live-Ausgabe) – nie in Tests oder beim
-//! WAV-Export.
+//! WAV-Export. Titel und Interpret kommen aus den ICY-Metadaten (`Icy-MetaData: 1`): der Sender schiebt alle
+//! `icy-metaint` Bytes einen Block `StreamTitle='…';` in den MP3-Strom, `IcyReader` schneidet ihn heraus.
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -81,6 +82,8 @@ impl State {
 /// Gemeinsam zwischen Stream-Thread und Audio-Thread.
 struct Shared {
     buf: Mutex<VecDeque<[f32; 2]>>,
+    /// laufender Titel aus den ICY-Metadaten („Interpret - Titel“, wie gesendet)
+    title: Mutex<Option<String>>,
     sr: AtomicU32,
     state: AtomicU8,
     stop: AtomicBool,
@@ -174,6 +177,13 @@ impl Radio {
             _ => State::Off,
         }
     }
+    /// Laufender Titel des gewünschten Senders („Interpret - Titel“, wie gesendet), sofern bekannt.
+    pub fn title(&self) -> Option<String> {
+        match (&self.stream, self.want) {
+            (Some(s), Some(_)) => s.shared.title.lock().ok().and_then(|t| t.clone()),
+            _ => None,
+        }
+    }
     /// `n` Stereo-Abtastwerte bei Ausgaberate `sr` dazumischen (`out` verschachtelt links/rechts).
     pub fn fill(&mut self, out: &mut [f32], sr: f32) {
         let Some(st) = &self.stream else { return };
@@ -239,6 +249,7 @@ impl Radio {
 fn spawn(station: usize) -> Stream {
     let shared = Arc::new(Shared {
         buf: Mutex::new(VecDeque::new()),
+        title: Mutex::new(None),
         sr: AtomicU32::new(44100),
         state: AtomicU8::new(State::Connecting.code()),
         stop: AtomicBool::new(false),
@@ -269,8 +280,99 @@ fn spawn(station: usize) -> Stream {
     Stream { station, shared }
 }
 
+/// Entfernt die ICY-Metadatenblöcke aus dem Strom (alle `metaint` Bytes: Längenbyte × 16, dann Text) und legt den
+/// Titel in `Shared::title` ab. `metaint` 0 = der Sender schickt keine Metadaten.
+struct IcyReader<R> {
+    inner: R,
+    metaint: usize,
+    left: usize,
+    shared: Arc<Shared>,
+}
+impl<R: std::io::Read> std::io::Read for IcyReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.metaint == 0 {
+            return self.inner.read(buf);
+        }
+        if self.left == 0 {
+            let mut len = [0u8; 1];
+            self.inner.read_exact(&mut len)?;
+            let n = len[0] as usize * 16;
+            if n > 0 {
+                let mut meta = vec![0u8; n];
+                self.inner.read_exact(&mut meta)?;
+                if let Some(t) = parse_icy_title(&meta)
+                    && let Ok(mut slot) = self.shared.title.lock()
+                {
+                    *slot = (!t.is_empty()).then_some(t);
+                }
+            }
+            self.left = self.metaint;
+        }
+        let n = buf.len().min(self.left);
+        let got = self.inner.read(&mut buf[..n])?;
+        self.left -= got;
+        Ok(got)
+    }
+}
+
+/// `StreamTitle='…';` aus einem ICY-Metadatenblock (UTF-8, sonst Latin-1; Nullbytes am Ende). `None` ohne Feld,
+/// leerer Text = Feld leer (Sender ohne Titel, z. B. Werbung).
+pub fn parse_icy_title(meta: &[u8]) -> Option<String> {
+    let end = meta.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
+    let raw = &meta[..end];
+    let text = match std::str::from_utf8(raw) {
+        Ok(t) => t.to_string(),
+        Err(_) => raw.iter().map(|&b| b as char).collect(),
+    };
+    let start = text.find("StreamTitle='")? + "StreamTitle='".len();
+    let rest = &text[start..];
+    let stop = rest.find("';").unwrap_or(rest.len());
+    Some(rest[..stop].trim().to_string())
+}
+
+/// Was angezeigt wird: (Interpret, Titel) aus einem ICY-Titel. `None`, wenn der Sender statt eines Liedes nur sich
+/// selbst meldet („FluxFM - Livestream“, „STAR FM MAXIMUM ROCK Berlin“). Formate: „Interpret - Titel“ und
+/// „"Titel" von Interpret“ (Radio Berlin 88,8); alles andere als Titel ohne Interpret (Sendungsname).
+pub fn song_info(raw: &str, station: &str) -> Option<(Option<String>, String)> {
+    let norm = |t: &str| {
+        t.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    let t = raw.trim();
+    let first = station
+        .split_whitespace()
+        .next()
+        .map(norm)
+        .unwrap_or_default();
+    if t.is_empty()
+        || norm(t).contains("livestream")
+        || (!first.is_empty() && norm(t).starts_with(&first))
+    {
+        return None;
+    }
+    let unquote = |x: &str| {
+        x.trim()
+            .trim_matches(|c| matches!(c, '"' | '\'' | '„' | '“' | '”'))
+            .trim()
+            .to_string()
+    };
+    if let Some((title, artist)) = t.rsplit_once(" von ")
+        && title.trim_start().starts_with(['"', '„', '“'])
+    {
+        return Some((Some(artist.trim().to_string()), unquote(title)));
+    }
+    match t.split_once(" - ") {
+        Some((a, b)) if !a.trim().is_empty() && !b.trim().is_empty() => {
+            Some((Some(a.trim().to_string()), b.trim().to_string()))
+        }
+        _ => Some((None, t.to_string())),
+    }
+}
+
 /// Einen Stream öffnen und dekodieren, bis er endet, abbricht oder gestoppt wird.
-fn run(url: &str, s: &Shared) -> anyhow::Result<()> {
+fn run(url: &str, s: &Arc<Shared>) -> anyhow::Result<()> {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
     use symphonia::core::formats::FormatOptions;
@@ -283,8 +385,18 @@ fn run(url: &str, s: &Shared) -> anyhow::Result<()> {
         .build()
         .get(url)
         .set("User-Agent", "gta-berlin/0.1 (Autoradio)")
+        .set("Icy-MetaData", "1")
         .call()?;
-    let reader = resp.into_reader();
+    let metaint = resp
+        .header("icy-metaint")
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+    let reader = IcyReader {
+        inner: resp.into_reader(),
+        metaint,
+        left: metaint,
+        shared: s.clone(),
+    };
     let mss = MediaSourceStream::new(Box::new(ReadOnlySource::new(reader)), Default::default());
     let mut hint = Hint::new();
     hint.with_extension("mp3");
@@ -370,6 +482,7 @@ mod tests {
         // ohne Netz: einen Stream von Hand füttern
         let shared = Arc::new(Shared {
             buf: Mutex::new(VecDeque::new()),
+            title: Mutex::new(None),
             sr: AtomicU32::new(24000),
             state: AtomicU8::new(State::Connecting.code()),
             stop: AtomicBool::new(true),
@@ -448,6 +561,74 @@ mod tests {
 mod volume_tests {
     use super::*;
     #[test]
+    fn icy_metadata_is_cut_out_and_the_title_parsed() {
+        use std::io::Read;
+        assert_eq!(
+            parse_icy_title(b"StreamTitle='Daft Punk - Around the World';StreamUrl='';\0\0"),
+            Some("Daft Punk - Around the World".into())
+        );
+        assert_eq!(parse_icy_title(b"StreamTitle='';\0"), Some(String::new()));
+        assert_eq!(parse_icy_title(b"StreamUrl='x';"), None);
+        // Latin-1 (kein gültiges UTF-8)
+        assert_eq!(
+            parse_icy_title(b"StreamTitle='Die \xc4rzte - Schrei nach Liebe';"),
+            Some("Die Ärzte - Schrei nach Liebe".into())
+        );
+        let song = |t: &str, st: &str| song_info(t, st);
+        assert_eq!(
+            song("Die Ärzte - Schrei nach Liebe", "Star FM"),
+            Some((Some("Die Ärzte".into()), "Schrei nach Liebe".into()))
+        );
+        assert_eq!(
+            song(
+                "\"Gettin' Jiggy Wit It\" von Will Smith",
+                "Radio Berlin 88,8"
+            ),
+            Some((Some("Will Smith".into()), "Gettin' Jiggy Wit It".into()))
+        );
+        assert_eq!(
+            song("Wie es euch gefällt.", "rbb radio3"),
+            Some((None, "Wie es euch gefällt.".into())),
+            "Sendung ohne Interpret"
+        );
+        // der Sender meldet nur sich selbst
+        assert_eq!(song("FluxFM - Livestream", "FluxFM"), None);
+        assert_eq!(
+            song("FluxFM - Sound Of Berlin", "FluxFM Sound of Berlin"),
+            None
+        );
+        assert_eq!(song("STAR FM MAXIMUM ROCK Berlin", "Star FM"), None);
+        assert_eq!(song("104.6 RTL Berlin Livestream", "104.6 RTL"), None);
+        assert_eq!(song("", "Star FM"), None);
+        // Strom: 4 Bytes Ton, Metadaten (1 × 16 Bytes), 4 Bytes Ton, leerer Block, 2 Bytes Ton
+        let mut meta = b"StreamTitle='A - B';".to_vec();
+        meta.resize(32, 0);
+        let mut data = b"abcd".to_vec();
+        data.push(2);
+        data.extend(&meta);
+        data.extend(b"efgh");
+        data.push(0);
+        data.extend(b"ij");
+        let shared = Arc::new(Shared {
+            buf: Mutex::new(VecDeque::new()),
+            title: Mutex::new(None),
+            sr: AtomicU32::new(44100),
+            state: AtomicU8::new(0),
+            stop: AtomicBool::new(false),
+        });
+        let mut r = IcyReader {
+            inner: std::io::Cursor::new(data),
+            metaint: 4,
+            left: 4,
+            shared: shared.clone(),
+        };
+        let mut out = Vec::new();
+        r.read_to_end(&mut out).unwrap();
+        assert_eq!(out, b"abcdefghij", "nur der Ton bleibt");
+        assert_eq!(shared.title.lock().unwrap().as_deref(), Some("A - B"));
+    }
+
+    #[test]
     fn volume_scales_the_target_and_zero_mutes() {
         // ohne Netz: Stream von Hand, damit `set` nicht verbindet
         let mut r = Radio {
@@ -455,6 +636,7 @@ mod volume_tests {
                 station: 0,
                 shared: Arc::new(Shared {
                     buf: Mutex::new(VecDeque::new()),
+                    title: Mutex::new(None),
                     sr: AtomicU32::new(48000),
                     state: AtomicU8::new(State::Playing.code()),
                     stop: AtomicBool::new(true),
