@@ -555,7 +555,9 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
       if (v !== undefined) turning.add(v);
     }
   }
+  if (process.env.PLATE_DIAG) globalThis.__plateDiag = {};
   const plateData = platesOf(edges, edgePts, S, { turning });
+  if (globalThis.__plateDiag) { const { samples, ...counts } = globalThis.__plateDiag; console.log('Hüllen-Gründe', JSON.stringify(counts)); console.log('Beispiele', JSON.stringify(samples)); }
   step(`Kreuzungsflächen ${plateData.plates.length} (davon ${plateData.plates.filter((p) => p.end).length} Straßenenden, ${plateData.plates.filter((p) => p.fill).length} als Hülle, Wendehämmer ${turning.size})`);
   const postStats = keepPostsOffCarriageway(access.out, { edges, vertices, junctions, S });
   access.stats.pollerVerschoben = postStats.moved; access.stats.pollerEntfernt = postStats.dropped;

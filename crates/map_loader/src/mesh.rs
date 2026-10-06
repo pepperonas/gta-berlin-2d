@@ -783,6 +783,8 @@ fn lane_lines(mesh: &mut Mesh, r: &Road, cum: &[f32], length: f32, depth: f32, s
     }
 }
 
+/// Überlappung der Straße unter ihrer Kreuzungsfläche (px)
+const SEAM_PX: f32 = 2.;
 /// Farbe und Material der Fahrbahn je Belag (0 Asphalt, 1 Pflaster, 2 Platten, 3 unbefestigt).
 fn road_surface(surface: u8) -> (u32, f32) {
     match surface {
@@ -852,7 +854,13 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
     let trimmed;
     let r = if r.trim[0] > 0. || r.trim[1] > 0. {
         trimmed = Road {
-            points: crate::geom::trim_polyline(&r.points, r.trim[0], r.trim[1]),
+            // 2 px unter die Fläche (sie liegt davor): die Flächenecken sind auf ganze px gerundet, ohne Überlappung
+            // schien durch den Haarriss an der Mündung der Rasen
+            points: crate::geom::trim_polyline(
+                &r.points,
+                (r.trim[0] - SEAM_PX).max(0.),
+                (r.trim[1] - SEAM_PX).max(0.),
+            ),
             ..r.clone()
         };
         if trimmed.points.len() < 2 {

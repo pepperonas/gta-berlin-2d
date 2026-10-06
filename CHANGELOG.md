@@ -13,6 +13,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Kreuzungen mit runden Ecken fast überall.** Nur noch 1 634 statt 6 551 Kreuzungen fallen auf
+  eine Notfläche mit geraden Ecken zurück: an spitzen Abzweigen sitzt die Bordsteinnase jetzt dort, wo sich die
+  Fahrbahnen trennen; kurze Straßenstücke mit freiem Ende dürfen fast ganz in die Fläche; fast gleiche Punkte gelten
+  als einer (sie wurden als Selbstschnitt gewertet). Die Haarrisse, durch die an den Straßenmündungen der Rasen
+  schien (dünne grünliche Querlinien), sind weg – die Straße reicht 2 px unter die Fläche.
 - Native Fassung: **Straßen sehen aus wie in Berlin.** Große Kreuzungen an Straßen mit Mittelstreifen sind eine
   Fläche: der Mittelstreifen endet mit einer Bordsteinnase, keine hellen Balken und kein Linien-Gitter mehr quer über
   die Kreuzung. Keine runden Scheiben mehr (vorher an 13 % der Kreuzungen, jetzt an 34 von 28 500 – dort treffen

@@ -198,3 +198,24 @@ test('Rückfall: die konvexe Hülle ist einfach und umfasst alle Punkte', () => 
   assert.equal(hull.length, 8);
   assert.ok(!selfIntersects(hull));
 });
+
+test('spitzer Abzweig: die Nase sitzt, wo sich die Fahrbahnen trennen – keine Notfläche', () => {
+  // Hauptstraße West–Ost, eine Zufahrt zweigt unter 18° nach Nordosten ab (häufigster Grund für die Hüllen)
+  const deg = (d, len, w, c) => { const a = d * Math.PI / 180; return { pts: [0, 0, Math.cos(a) * len * S, Math.sin(a) * len * S], h: w * S / 2, c }; };
+  const arms = [{ key: 0, ...deg(180, 40, 6.5, 3) }, { key: 1, ...deg(0, 40, 6.5, 3) }, { key: 2, ...deg(-18, 45, 4.5, 9) }];
+  const pl = plateOf(arms, S);
+  assert.ok(pl && !pl.fill, 'echte Fläche, keine Hülle');
+  assert.ok(!selfIntersects(pl.ring));
+  // beide Mündungen am Abzweig liegen dort, wo die Fahrbahnen nicht mehr überlappen
+  const t1 = pl.trims.get(1), t2 = pl.trims.get(2);
+  const p1 = pointAt(arms[1].pts, t1), p2 = pointAt(arms[2].pts, t2);
+  assert.ok(Math.hypot(p1.x - p2.x, p1.y - p2.y) >= (arms[1].h + arms[2].h) * 0.9, `überlappen noch: ${t1} ${t2}`);
+});
+
+test('kurzer Arm mit freiem Ende darf fast ganz in die Fläche', () => {
+  const arms = [arm(0, 0, 8), arm(1, 90, 8, 7, 3), arm(2, 180, 8), arm(3, 270, 8)];
+  const tight = plateOf(arms, S);
+  const free = plateOf(arms.map((r) => (r.key === 1 ? { ...r, share: 0.9 } : r)), S);
+  assert.ok(free.trims.get(1) > tight.trims.get(1), `${free.trims.get(1)} > ${tight.trims.get(1)}`);
+  assert.ok(free.trims.get(1) <= 3 * S * 0.9 + 1e-6);
+});

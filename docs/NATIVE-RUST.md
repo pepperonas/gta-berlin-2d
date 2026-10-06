@@ -2577,3 +2577,9 @@ Breite). winit setzt das Fenster-Icon unter Windows/Linux; unter macOS kommt der
 - **Tests:** `tests/plates.test.js` (Mittelstreifen-Nase, Straßenende/Wendehammer, Hülle), `mesh.rs
   lane_lines_berlin_style…`, `tests/plates.rs stop_lines_stand_before_the_junction` (echte Kacheln; mit der alten
   Platzierung lagen 34 von 68 Haltlinien in einer Fläche, jetzt 0 von 39).
+
+**Weniger Notflächen (06.10.2026):** Diagnose mit `PLATE_DIAG=1 npm run map:build` (Gründe je Armzahl/Gruppe/kurzer
+Arm, Beispiele). Ursachen und Abhilfe: spitze Abzweige (< `NOSE_PHI`) – die Nase rückt bis zur Trennung der Fahrbahnen
+vor (Suche bis `NOSE_MAX_M` 30 m, ≤ 90 % der Armlänge); kurze Arme – `TRIM_SHARE_FREE` 0,9 statt 0,45, wenn das andere
+Ende keine eigene Fläche hat (Grad < 3); Mini-Rückwärtsschritte – `DEDUPE_PX` 2 (Endpunkt = Mündung bleibt exakt).
+6 551 → 1 634 Hüllen. Haarriss an der Mündung: `mesh.rs SEAM_PX` – die Straße endet 2 px unter der Fläche.

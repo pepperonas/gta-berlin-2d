@@ -18,8 +18,10 @@ export const BEND_MIN = 0.45;
 export const SIDEWALK_MAX_CLASS = 9;
 /// längste Ecke (Gehrung) als Vielfaches der breitesten halben Fahrbahn – spitzere Winkel werden abgeschrägt
 const MITER_MAX = 4;
-/// höchstens dieser Anteil einer Straße wird am Knoten weggekürzt
+/// höchstens dieser Anteil einer Straße wird am Knoten weggekürzt (am anderen Ende liegt eine eigene Fläche) …
 const TRIM_SHARE = 0.45;
+/// … und so viel, wenn das andere Ende frei endet oder die Straße dort nur weiterläuft (keine Fläche dort)
+export const TRIM_SHARE_FREE = 0.9;
 /// Knoten, die über eine kürzere Straße verbunden sind, bilden eine gemeinsame Fläche (m) – sonst überlappen sich
 /// ihre Flächen und dazwischen bleibt ein Stummel mit eigenem Belag und Bordstein stehen
 export const MERGE_M = 8;
@@ -28,6 +30,8 @@ export const MERGE_M = 8;
 export const MERGE_SPAN_M = 14;
 /// Nachbararme mit kleinerem Winkel (rad) bekommen eine gerade Bordsteinnase statt einer Ecke
 export const NOSE_PHI = 0.6;
+/// so weit (m) darf die Nase bei sehr spitzen Abzweigen vom Knoten wegrücken
+export const NOSE_MAX_M = 30;
 /// Richtungsfahrbahnen derselben Straße: Knoten, deren Querverbindung kürzer ist (m), bilden eine Fläche …
 export const DUAL_M = 35;
 /// … und die ganze Gruppe darf so groß werden (m)
@@ -82,7 +86,19 @@ export function plateOf(arms, S) {
   a.sort((p, q) => p.ord - q.ord || p.key - q.key);
   const vx = Math.round(mx), vy = Math.round(my);
   // erst mit Bordsteinbögen, sonst mit geraden Ecken; geht beides nicht auf, die Hülle der Mündungen
-  return corners(a, S, true) ?? corners(a, S, false) ?? hullPlate(a, S, vx, vy);
+  const ok = corners(a, S, true) ?? corners(a, S, false);
+  if (ok) return ok;
+  if (globalThis.__plateDiag) {
+    const d = globalThis.__plateDiag;
+    corners(a, S, false);
+    const capped = a.some((r) => r.need > r.L * TRIM_SHARE);
+    const multi = new Set(a.map((r) => `${r.vx},${r.vy}`)).size > 1;
+    const key = `arme${Math.min(a.length, 6)}${multi ? '+gruppe' : ''}${capped ? '+kurz' : ''}`;
+    d[key] = (d[key] ?? 0) + 1;
+    if (!d.samples) d.samples = [];
+    if (d.samples.length < 40) d.samples.push([key, Math.round(a[0].vx), Math.round(a[0].vy)]);
+  }
+  return hullPlate(a, S, vx, vy);
 }
 
 /// Eckzüge und Kürzungen für sortierte Arme `a`; `arcs`: Bordsteinbögen (sonst gerade Ecken). null bei Selbstschnitt.
@@ -96,7 +112,21 @@ function corners(a, S, arcs) {
     const r = a[i], q = a[(i + 1) % n];
     // fast parallele Nachbarn (Richtungsfahrbahnen einer Straße, spitzes Y): gerade Bordsteinnase zwischen den
     // Mündungen – als Ecke gerechnet liefen Bordstein und Gehweg als Balken quer durch die Kreuzung
-    if (Math.abs(norm(q.th - r.th)) < NOSE_PHI) { cs.push({ i, j: (i + 1) % n, nose: true }); continue; }
+    if (Math.abs(norm(q.th - r.th)) < NOSE_PHI) {
+      // die Nase sitzt dort, wo sich die beiden Fahrbahnen trennen (Spitze der Sperrfläche); davor überlappen sie,
+      // die Mündungen lägen ineinander und der Umriss schnitte sich
+      const cap = Math.min(NOSE_MAX_M * S, Math.min(r.L, q.L) * 0.9);
+      let sep = 0;
+      for (let t = 0; t <= cap; t += 0.5 * S) {
+        const pi = pointAt(r.pts, t), pj = pointAt(q.pts, t);
+        sep = t;
+        if (Math.hypot(pi.x - pj.x, pi.y - pj.y) >= r.h + q.h) break;
+      }
+      r.need = Math.max(r.need, sep);
+      q.need = Math.max(q.need, sep);
+      cs.push({ i, j: (i + 1) % n, nose: true });
+      continue;
+    }
     let phi = q.th - r.th; if (phi <= 0) phi += 2 * Math.PI; // Winkel von i nach j (mathematisch positiv)
     const ni = [-r.dy, r.dx], nj = [-q.dy, q.dx];
     if (phi >= Math.PI - 0.02) { cs.push({ i, j: (i + 1) % n, convex: true }); continue; }
@@ -151,7 +181,10 @@ function corners(a, S, arcs) {
     cornerLines.push(dedupe(line));
   }
   const r2 = dedupe(ring);
-  if (r2.length < 6 || selfIntersects(r2)) return null;
+  if (r2.length < 6 || selfIntersects(r2)) {
+    if (globalThis.__plateFail) globalThis.__plateFail.push({ arcs, ring: r2, corners: cornerLines });
+    return null;
+  }
   const trims = new Map(a.map((r) => [r.key, r.T]));
   return { ring: r2, corners: cornerLines, trims, x: vx, y: vy };
 }
@@ -159,7 +192,7 @@ function corners(a, S, arcs) {
 /// Kürzung je Straße aus dem Bedarf der Ecken (gedeckelt: kurze Straßen behalten ihre Mitte) und die Mündungen
 /// (senkrecht über die gekürzte Straße; linke Normale (−uy, ux) → links = p + h·(−uy, ux)).
 function mouths(a, S) {
-  for (const r of a) r.T = Math.min(Math.max(r.need, 0.5 * S), r.L * TRIM_SHARE);
+  for (const r of a) r.T = Math.min(Math.max(r.need, 0.5 * S), r.L * (r.share ?? TRIM_SHARE));
   return a.map((r) => {
     const p = pointAt(r.pts, r.T);
     return { R: [p.x + r.h * p.uy, p.y - r.h * p.ux], L: [p.x - r.h * p.uy, p.y + r.h * p.ux] };
@@ -227,12 +260,20 @@ export function endPlate(arm, S, turnR = 0) {
   return { ring, corners: [dedupe(line)], trims: new Map([[arm.key, T]]), x: Math.round(vx), y: Math.round(vy) };
 }
 
-/// Aufeinanderfolgende Doppelpunkte (< 0,5 px) entfernen.
+/// Punkte, die näher beieinander liegen, gelten als einer (2 px = 20 cm): fast gleiche Punkte bildeten winzige
+/// Rückwärtsschritte, die die Schnittprüfung als Selbstschnitt meldete (häufigster Grund für die Hüllen-Rückfälle)
+const DEDUPE_PX = 2;
+/// Aufeinanderfolgende Doppelpunkte (< `DEDUPE_PX`) entfernen.
 function dedupe(pts) {
   const out = [];
   for (let i = 0; i < pts.length; i += 2) {
     const k = out.length;
-    if (k >= 2 && Math.hypot(pts[i] - out[k - 2], pts[i + 1] - out[k - 1]) < 0.5) continue;
+    if (k >= 2 && Math.hypot(pts[i] - out[k - 2], pts[i + 1] - out[k - 1]) < DEDUPE_PX) {
+      // der letzte Punkt (die Mündung) bleibt exakt: er ersetzt seinen zu nahen Vorgänger, oder – ist der Vorgänger
+      // selbst eine Mündung (Zug aus zwei Punkten) – er bleibt zusätzlich stehen
+      if (i !== pts.length - 2) continue;
+      if (k >= 4) { out[k - 2] = pts[i]; out[k - 1] = pts[i + 1]; continue; }
+    }
     out.push(pts[i], pts[i + 1]);
   }
   return out;
@@ -330,7 +371,9 @@ export function platesOf(edges, edgePts, S, { turning = new Set() } = {}) {
       if (set.has(ed.a) && set.has(ed.b)) { inner.add(ed); continue; }
       const pts = edgePts(ed);
       const fwd = ed.a === v;
-      arms.push({ key: arms.length, ed, fwd, pts: fwd ? pts : reversePts(pts), h: ed.w / 10 * S / 2, c: ed.c });
+      const other = fwd ? ed.b : ed.a;
+      const share = (at.get(other)?.length ?? 0) >= 3 ? undefined : TRIM_SHARE_FREE;
+      arms.push({ key: arms.length, ed, fwd, pts: fwd ? pts : reversePts(pts), h: ed.w / 10 * S / 2, c: ed.c, share });
     }
     if (arms.length + inner.size < 2) return false;
     const pl = plateOf(arms, S);
