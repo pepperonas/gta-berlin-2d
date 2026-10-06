@@ -17,6 +17,11 @@ pub type Teleport = ((f64, f64), Option<(f64, f64, f64, String)>);
 
 pub struct Play {
     pub world: World,
+    /// Koop: welcher Controller Spieler 2 gehört (1 = zweiter Controller, 0 = erster – Spieler 1 spielt dann nur
+    /// mit Tastatur und Maus)
+    pub p2_pad: u8,
+    rumbler2: crate::rumble::Rumbler,
+    rumble_out2: Option<berlin_engine::Rumble>,
     storage: Option<FileStorage>,
     saved_for: u32,
     lamps: LampCache,
@@ -484,6 +489,9 @@ impl Play {
             zoom_fix: None,
             rumbler: Default::default(),
             rumble_out: None,
+            p2_pad: 1,
+            rumbler2: Default::default(),
+            rumble_out2: None,
             pedals: [0.; 2],
             interp: Default::default(),
             demo_combat: false,
@@ -915,9 +923,65 @@ impl Play {
             }
         }
     }
+    /// Spieler 2 tritt bei (Controller-Platz `slot`).
+    pub fn join_coop(&mut self, slot: u8) {
+        if self.world.join_p2() {
+            self.p2_pad = slot;
+            self.ui_sound();
+        } else if !self.world.coop() {
+            self.world.notice = Some(berlin_sim::world::Notice {
+                text: "Kein Platz für Spieler 2".into(),
+                t: 2.,
+            });
+        }
+    }
+    pub fn leave_coop(&mut self) {
+        self.world.leave_p2();
+        self.p2_pad = 1;
+        self.world.notice = Some(berlin_sim::world::Notice {
+            text: "Spieler 2 hat das Spiel verlassen".into(),
+            t: 2.,
+        });
+    }
+    /// Eingaben von Spieler 2: nur sein Controller, dieselbe Belegung wie Spieler 1 (ohne Tastatur und Maus).
+    fn p2_input(&self, keys: &Keys, bind: &crate::bindings::Bindings) -> Input {
+        use crate::bindings::Action as B;
+        let Some(s) = self.world.p2.as_ref() else {
+            return Input::default();
+        };
+        let (pad, edges) = if self.p2_pad == 0 {
+            (keys.pad, keys.pad_pressed)
+        } else {
+            (keys.pad2, keys.pad2_pressed)
+        };
+        let none = std::collections::HashSet::new();
+        let k2 = Keys {
+            held: &none,
+            pressed: &none,
+            pad,
+            pad_pressed: edges,
+            pad2: Default::default(),
+            pad2_pressed: Default::default(),
+            mouse: Default::default(),
+            typed: "",
+        };
+        let drives_train = s
+            .player
+            .ride
+            .as_ref()
+            .is_some_and(|r| r.kind == berlin_sim::ride::RideKind::Driver);
+        let mut i = input_from(&k2, s.player.in_car.is_some() || drives_train, bind);
+        // Waffenrad-Taste: Spieler 2 hat kein Rad, Tippen wählt die vorige Waffe
+        if bind.pad_pressed(&k2, B::WeaponWheel) && s.player.in_car.is_none() {
+            i.combat.weapon_prev = true;
+        }
+        i
+    }
     pub fn pause(&mut self) {
         self.screen = Screen::Paused;
-        self.menu = crate::menu::pause_menu().with_graphics(self.graphics.mode);
+        self.menu = crate::menu::pause_menu()
+            .with_graphics(self.graphics.mode)
+            .with_coop(self.world.coop());
     }
     /// Grafik wählen (Menü, Taste, Konsole): sofort wirksam, gespeichert, als Meldung bestätigt. `--grafik` setzt
     /// `self.graphics` direkt und schreibt nichts.
@@ -955,7 +1019,9 @@ impl Play {
             .any(|i| i.action == crate::menu::Action::Resume);
         self.screen = Screen::Paused;
         if !keep {
-            self.menu = crate::menu::pause_menu().with_graphics(self.graphics.mode);
+            self.menu = crate::menu::pause_menu()
+                .with_graphics(self.graphics.mode)
+                .with_coop(self.world.coop());
         }
     }
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
@@ -1032,7 +1098,17 @@ impl Play {
             }
             Screen::Playing => {
                 use crate::bindings::Action as B;
-                let pause = self.bindings.pressed(keys, B::Pause);
+                // Start auf dem zweiten Controller: beitreten bzw. (als Spieler 2) Pause
+                let start2 = self
+                    .bindings
+                    .pad_of(B::Pause)
+                    .is_some_and(|b| b.pressed(&keys.pad2_pressed));
+                if start2 && !self.world.coop() && !self.world.loading {
+                    self.join_coop(1);
+                    return false;
+                }
+                let pause = self.bindings.pressed(keys, B::Pause)
+                    || (start2 && self.world.coop() && self.p2_pad == 1);
                 if pause && self.bigmap.open && !self.bindings.pad_pressed(keys, B::Pause) {
                     self.bigmap.open = false;
                     return false;
@@ -1163,6 +1239,23 @@ impl Play {
                             text: "Mission neu gestartet".into(),
                             t: 2.,
                         });
+                        self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Choose(Action::Coop)) => {
+                        if self.world.coop() {
+                            self.leave_coop();
+                        } else {
+                            // zweiter Controller, sonst der erste (Spieler 1 bleibt bei Tastatur und Maus)
+                            let slot = if keys.pad2.connected { 1 } else { 0 };
+                            if slot == 0 && !keys.pad.connected {
+                                self.world.notice = Some(berlin_sim::world::Notice {
+                                    text: "Spieler 2 braucht einen Controller".into(),
+                                    t: 2.5,
+                                });
+                            } else {
+                                self.join_coop(slot);
+                            }
+                        }
                         self.screen = Screen::Playing;
                     }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
@@ -2401,12 +2494,10 @@ impl Play {
     }
 }
 
-impl Game for Play {
-    fn step_seconds(&self) -> f64 {
-        DT
-    }
-    fn step(&mut self, keys: &Keys, dt: f64) {
+impl Play {
+    fn step_keys(&mut self, keys: &Keys, dt: f64) {
         self.interp.record(&self.world);
+
         if self.step_screens(keys, dt) {
             return;
         }
@@ -2799,7 +2890,17 @@ impl Game for Play {
             self.wheel_m.open || self.wheel_p.open,
             dt,
         );
-        w2.update(&input, dt * self.time_scale);
+        if w2.coop() {
+            let input2 = if self.bigmap.open {
+                Input::default()
+            } else {
+                self.p2_input(keys, &bind)
+            };
+            self.world
+                .update_coop(&input, &input2, dt * self.time_scale);
+        } else {
+            w2.update(&input, dt * self.time_scale);
+        }
         if input.click_pressed
             && let (Some(at), Some(berlin_sim::world::Click::Walk { .. })) =
                 (input.click_world, &self.world.player.click)
@@ -2824,6 +2925,22 @@ impl Game for Play {
                     .step(&w.events, (w.player.x, w.player.y), own, drive, w.time)
             {
                 self.rumble_out = Some(r);
+            }
+            if let Some(s) = w.p2.as_ref() {
+                let own2 = s.player.in_car;
+                let drive2 = own2.and_then(|id| w.car(id)).and_then(|c| {
+                    c.dyn_state.as_ref().map(|d| crate::rumble::Drive {
+                        spin: d.spin_f.max(d.spin_r),
+                        lock: d.lock_r,
+                        assist: d.esp > 0.05,
+                    })
+                });
+                if let Some(r) =
+                    self.rumbler2
+                        .step(&w.events, (s.player.x, s.player.y), own2, drive2, w.time)
+                {
+                    self.rumble_out2 = Some(r);
+                }
             }
         }
         self.fx.step(dt as f32);
@@ -2866,6 +2983,37 @@ impl Game for Play {
             self.saved_for = self.world.completed as u32;
             self.save();
         }
+    }
+}
+
+impl Game for Play {
+    fn step_seconds(&self) -> f64 {
+        DT
+    }
+    fn step(&mut self, keys: &Keys, dt: f64) {
+        if self.world.coop() && self.p2_pad == 0 {
+            // Spieler 2 hat den ersten Controller: Spieler 1 sieht ihn nicht
+            let k1 = Keys {
+                held: keys.held,
+                pressed: keys.pressed,
+                pad: Default::default(),
+                pad_pressed: Default::default(),
+                pad2: keys.pad,
+                pad2_pressed: keys.pad_pressed,
+                mouse: keys.mouse,
+                typed: keys.typed,
+            };
+            self.p2_pad = 1;
+            self.step_keys(&k1, dt);
+            if self.world.coop() {
+                self.p2_pad = 0;
+            }
+        } else {
+            self.step_keys(keys, dt);
+        }
+    }
+    fn rumble2(&mut self) -> Option<berlin_engine::Rumble> {
+        self.rumble_out2.take()
     }
     fn interpolate(&mut self, alpha: f64) {
         self.interp.apply(&mut self.world, alpha);
@@ -3816,6 +3964,8 @@ mod tests {
             pressed: &none,
             pad,
             pad_pressed: edges,
+            pad2: Default::default(),
+            pad2_pressed: Default::default(),
             mouse: Default::default(),
             typed: "",
         };
@@ -3836,6 +3986,8 @@ mod tests {
                     ..Default::default()
                 },
                 pad_pressed: Pad::default(),
+                pad2: Default::default(),
+                pad2_pressed: Default::default(),
                 mouse: Default::default(),
                 typed: "",
             },
@@ -3845,6 +3997,114 @@ mod tests {
         assert!(walk.move_y < -0.9 && walk.sprint && walk.throttle == 0.);
     }
     /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad;
+    /// Koop: Start auf dem zweiten Controller holt Spieler 2 dazu, sein Stick bewegt nur ihn; mit nur einem
+    /// Controller übernimmt Spieler 2 den ersten, Spieler 1 spielt mit Tastatur.
+    #[test]
+    fn second_controller_joins_and_moves_player_two() {
+        let dir = std::env::temp_dir().join(format!("gta-berlin-coop-{}", std::process::id()));
+        let root = berlin_map_loader::default_data_root();
+        let mut p = Play::new(
+            &root,
+            4,
+            Some(FileStorage::new(dir.join("s.json"))),
+            false,
+            Start::New,
+        )
+        .unwrap();
+        let none = HashSet::new();
+        let step = |p: &mut Play, pad: Pad, pad2: Pad, pad2_pressed: Pad| {
+            p.step(
+                &Keys {
+                    held: &none,
+                    pressed: &none,
+                    pad,
+                    pad_pressed: Pad::default(),
+                    pad2,
+                    pad2_pressed,
+                    mouse: Default::default(),
+                    typed: "",
+                },
+                DT,
+            );
+        };
+        let idle = Pad {
+            connected: true,
+            ..Default::default()
+        };
+        for _ in 0..5 {
+            step(&mut p, idle, idle, Pad::default());
+        }
+        assert!(!p.world.coop());
+        let start = Pad {
+            menu: true,
+            ..Default::default()
+        };
+        step(&mut p, idle, idle, start);
+        assert!(p.world.coop(), "Start auf Controller 2 tritt bei");
+        assert_eq!(p.screen, Screen::Playing, "kein Pausenmenü beim Beitreten");
+        let x1 = p.world.player.x;
+        let x2 = p.world.p2.as_ref().unwrap().player.x;
+        let right = Pad {
+            connected: true,
+            lx: 1.,
+            ..Default::default()
+        };
+        for _ in 0..40 {
+            step(&mut p, idle, right, Pad::default());
+        }
+        assert!(
+            p.world.p2.as_ref().unwrap().player.x > x2 + 5.,
+            "Spieler 2 läuft"
+        );
+        assert!((p.world.player.x - x1).abs() < 1e-9, "Spieler 1 steht");
+        // Start auf Controller 2 im Spiel: Pause, Spieler 2 verlässt über das Menü
+        step(&mut p, idle, idle, start);
+        assert_eq!(p.screen, Screen::Paused);
+        let k = p
+            .menu
+            .items
+            .iter()
+            .position(|i| i.action == crate::menu::Action::Coop)
+            .unwrap();
+        assert_eq!(p.menu.items[k].label, "Spieler 2 verlassen");
+        p.menu.index = k;
+        let confirm = Pad {
+            connected: true,
+            a: true,
+            ..Default::default()
+        };
+        p.step(
+            &Keys {
+                held: &none,
+                pressed: &none,
+                pad: idle,
+                pad_pressed: confirm,
+                pad2: idle,
+                pad2_pressed: Pad::default(),
+                mouse: Default::default(),
+                typed: "",
+            },
+            DT,
+        );
+        assert!(!p.world.coop(), "Spieler 2 hat verlassen");
+        // nur ein Controller: Spieler 2 übernimmt ihn, Spieler 1 bleibt an der Tastatur
+        p.join_coop(0);
+        assert!(p.world.coop());
+        let x1 = p.world.player.x;
+        let x2 = p.world.p2.as_ref().unwrap().player.x;
+        for _ in 0..40 {
+            step(&mut p, right, Pad::default(), Pad::default());
+        }
+        assert!(
+            p.world.p2.as_ref().unwrap().player.x > x2 + 5.,
+            "Controller 1 lenkt Spieler 2"
+        );
+        assert!(
+            (p.world.player.x - x1).abs() < 1e-9,
+            "Spieler 1 sieht den Controller nicht"
+        );
+    }
+
     /// im Auto steigt keine Maustaste aus.
     #[test]
     fn mouse_left_walks_right_shoots_both_open_the_wheel() {
@@ -3868,6 +4128,8 @@ mod tests {
                     pressed: &none,
                     pad: Pad::default(),
                     pad_pressed: Pad::default(),
+                    pad2: Default::default(),
+                    pad2_pressed: Default::default(),
                     mouse,
                     typed: "",
                 },
@@ -4081,6 +4343,8 @@ mod tests {
                     pressed: &pressed,
                     pad: Pad::default(),
                     pad_pressed: Pad::default(),
+                    pad2: Default::default(),
+                    pad2_pressed: Default::default(),
                     mouse: Default::default(),
                     typed: "",
                 },
@@ -4141,6 +4405,8 @@ mod tests {
                     pressed: &pressed,
                     pad: Pad::default(),
                     pad_pressed: Pad::default(),
+                    pad2: Default::default(),
+                    pad2_pressed: Default::default(),
                     mouse: Default::default(),
                     typed: "",
                 },
@@ -4200,8 +4466,8 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
-        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Steuerung, Grafik)
-        for _ in 0..6 {
+        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Spieler 2, Steuerung, Grafik, Statistik)
+        for _ in 0..7 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
         press(&mut p, Some(KeyCode::Enter));

@@ -48,8 +48,13 @@ impl Pad {
 
 pub(crate) struct Gamepads {
     gilrs: Option<gilrs::Gilrs>,
+    /// Controller 1 (Spieler 1) und 2 (Spieler 2): gehalten und Flanken
     pub state: Pad,
     pub edges: Pad,
+    pub state2: Pad,
+    pub edges2: Pad,
+    /// welcher Controller auf welchem Platz sitzt (bleibt, solange er verbunden ist)
+    slots: [Option<gilrs::GamepadId>; 2],
     /// laufende Vibration (muss leben, solange sie spielt)
     effect: Option<gilrs::ff::Effect>,
     /// Vibration ist mit diesem Controller nicht möglich (einmal gemeldet, dann still)
@@ -68,23 +73,26 @@ impl Gamepads {
             gilrs,
             state: Pad::default(),
             edges: Pad::default(),
+            state2: Pad::default(),
+            edges2: Pad::default(),
+            slots: [None; 2],
             effect: None,
             ff_failed: false,
         }
     }
     /// Vibration: starker (tiefer) und schwacher (heller) Motor 0…1 für `ms` Millisekunden. Ersetzt eine laufende.
     /// Ohne Force-Feedback (z. B. unter macOS, die gilrs dort nicht anbietet) geschieht nichts.
-    pub fn rumble(&mut self, strong: f32, weak: f32, ms: u32) {
+    pub fn rumble(&mut self, slot: usize, strong: f32, weak: f32, ms: u32) {
         use gilrs::ff::{BaseEffect, BaseEffectType, EffectBuilder, Replay, Ticks};
         if self.ff_failed {
             return;
         }
         let Some(g) = self.gilrs.as_mut() else { return };
+        let want = self.slots[slot.min(1)];
         let ids: Vec<_> = g
             .gamepads()
-            .filter(|(_, gp)| gp.is_connected() && gp.is_ff_supported())
+            .filter(|(id, gp)| Some(*id) == want && gp.is_connected() && gp.is_ff_supported())
             .map(|(id, _)| id)
-            .take(1)
             .collect();
         if ids.is_empty() {
             return;
@@ -120,7 +128,7 @@ impl Gamepads {
         }
     }
 
-    /// Ereignisse abholen und den Zustand des ersten verbundenen Controllers lesen.
+    /// Ereignisse abholen, Controller ihren Plätzen zuordnen und beide Zustände lesen.
     pub fn poll(&mut self) {
         let Some(g) = self.gilrs.as_mut() else { return };
         while let Some(ev) = g.next_event() {
@@ -128,49 +136,92 @@ impl Gamepads {
                 eprintln!("Gamepad verbunden: {}", g.gamepad(ev.id).name());
             }
         }
-        let before = self.state;
-        let mut now = Pad::default();
-        if let Some((_, gp)) = g.gamepads().find(|(_, gp)| gp.is_connected()) {
-            use gilrs::{Axis, Button};
-            let axis = |a| gp.axis_data(a).map(|d| d.value()).unwrap_or(0.);
-            let btn = |b| gp.is_pressed(b);
-            let trig = |b| {
-                gp.button_data(b)
-                    .map(|d| d.value())
-                    .unwrap_or(if gp.is_pressed(b) { 1. } else { 0. })
-            };
-            now = Pad {
-                connected: true,
-                lx: axis(Axis::LeftStickX),
-                ly: -axis(Axis::LeftStickY),
-                rx: axis(Axis::RightStickX),
-                ry: -axis(Axis::RightStickY),
-                lt: trig(Button::LeftTrigger2),
-                rt: trig(Button::RightTrigger2),
-                a: btn(Button::South),
-                b: btn(Button::East),
-                x: btn(Button::West),
-                y: btn(Button::North),
-                lb: btn(Button::LeftTrigger),
-                rb: btn(Button::RightTrigger),
-                view: btn(Button::Select),
-                menu: btn(Button::Start),
-                up: btn(Button::DPadUp),
-                down: btn(Button::DPadDown),
-                left: btn(Button::DPadLeft),
-                right: btn(Button::DPadRight),
-                ls: btn(Button::LeftThumb),
-                rs: btn(Button::RightThumb),
-            };
-        }
-        self.edges.latch_edges(&before, &now);
+        let connected: Vec<gilrs::GamepadId> = g
+            .gamepads()
+            .filter(|(_, gp)| gp.is_connected())
+            .map(|(id, _)| id)
+            .collect();
+        self.slots = assign_slots(self.slots, &connected);
+        let read = |id: Option<gilrs::GamepadId>| match id {
+            Some(id) => read_pad(&g.gamepad(id)),
+            None => Pad::default(),
+        };
+        let (now, now2) = (read(self.slots[0]), read(self.slots[1]));
+        self.edges.latch_edges(&self.state.clone(), &now);
+        self.edges2.latch_edges(&self.state2.clone(), &now2);
         self.state = now;
+        self.state2 = now2;
+    }
+}
+
+/// Plätze der Controller: wer verbunden bleibt, behält seinen Platz; Getrennte machen ihn frei; Neue füllen den
+/// ersten freien Platz (in der Reihenfolge, in der gilrs sie meldet).
+fn assign_slots<T: Copy + PartialEq>(slots: [Option<T>; 2], connected: &[T]) -> [Option<T>; 2] {
+    let mut out = slots.map(|s| s.filter(|id| connected.contains(id)));
+    for &id in connected {
+        if out.contains(&Some(id)) {
+            continue;
+        }
+        if let Some(free) = out.iter_mut().find(|s| s.is_none()) {
+            *free = Some(id);
+        }
+    }
+    out
+}
+
+fn read_pad(gp: &gilrs::Gamepad) -> Pad {
+    use gilrs::{Axis, Button};
+    let axis = |a| gp.axis_data(a).map(|d| d.value()).unwrap_or(0.);
+    let btn = |b| gp.is_pressed(b);
+    let trig = |b| {
+        gp.button_data(b)
+            .map(|d| d.value())
+            .unwrap_or(if gp.is_pressed(b) { 1. } else { 0. })
+    };
+    Pad {
+        connected: true,
+        lx: axis(Axis::LeftStickX),
+        ly: -axis(Axis::LeftStickY),
+        rx: axis(Axis::RightStickX),
+        ry: -axis(Axis::RightStickY),
+        lt: trig(Button::LeftTrigger2),
+        rt: trig(Button::RightTrigger2),
+        a: btn(Button::South),
+        b: btn(Button::East),
+        x: btn(Button::West),
+        y: btn(Button::North),
+        lb: btn(Button::LeftTrigger),
+        rb: btn(Button::RightTrigger),
+        view: btn(Button::Select),
+        menu: btn(Button::Start),
+        up: btn(Button::DPadUp),
+        down: btn(Button::DPadDown),
+        left: btn(Button::DPadLeft),
+        right: btn(Button::DPadRight),
+        ls: btn(Button::LeftThumb),
+        rs: btn(Button::RightThumb),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn slots_stay_with_their_controller() {
+        // erster verbunden → Platz 1, zweiter → Platz 2
+        let s = assign_slots([None, None], &[7]);
+        assert_eq!(s, [Some(7), None]);
+        let s = assign_slots(s, &[7, 9]);
+        assert_eq!(s, [Some(7), Some(9)]);
+        // Controller 1 getrennt: Controller 2 bleibt Spieler 2, Platz 1 wird frei
+        let s = assign_slots(s, &[9]);
+        assert_eq!(s, [None, Some(9)]);
+        // ein neuer füllt den freien Platz
+        let s = assign_slots(s, &[9, 4]);
+        assert_eq!(s, [Some(4), Some(9)]);
+        // drei Controller: der dritte bekommt keinen Platz
+        assert_eq!(assign_slots(s, &[1, 9, 4]), [Some(4), Some(9)]);
+    }
     #[test]
     fn edges_are_latched_until_cleared() {
         let mut edges = Pad::default();

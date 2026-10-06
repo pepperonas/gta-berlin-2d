@@ -27,6 +27,8 @@ pub enum Action {
     Free,
     /// Grafik HD / Pixel umschalten (Beschriftung zeigt den aktuellen Modus)
     Graphics,
+    /// Spieler 2 beitreten lassen bzw. verabschieden (Beschriftung zeigt, was geschieht)
+    Coop,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,7 +115,9 @@ impl Menu {
     }
     /// Zeilenabstand und Knopfhöhe: ab sieben Einträgen enger, damit das Menü über der Fußzeile endet.
     pub fn spacing(&self) -> (f32, f32) {
-        if self.items.len() >= 7 {
+        if self.items.len() >= 9 {
+            (44., 38.)
+        } else if self.items.len() >= 7 {
             (50., 42.)
         } else {
             (58., 48.)
@@ -157,12 +161,23 @@ const fn item(action: Action, label: &'static str) -> Item {
 }
 
 const GRAPHICS_HD: &str = "Grafik: HD";
+const COOP_JOIN: &str = "Spieler 2 beitreten";
+const COOP_LEAVE: &str = "Spieler 2 verlassen";
 const GRAPHICS_PIXEL: &str = "Grafik: Pixel";
 
 impl Menu {
     /// Beschriftung des Grafik-Eintrags an den aktuellen Modus anpassen.
     pub fn with_graphics(mut self, mode: berlin_engine::graphics::GraphicsMode) -> Self {
         self.set_graphics(mode);
+        self
+    }
+    /// Beschriftung des Koop-Eintrags: beitreten oder verlassen.
+    pub fn with_coop(mut self, coop: bool) -> Self {
+        for it in &mut self.items {
+            if it.action == Action::Coop {
+                it.label = if coop { COOP_LEAVE } else { COOP_JOIN };
+            }
+        }
         self
     }
     pub fn set_graphics(&mut self, mode: berlin_engine::graphics::GraphicsMode) {
@@ -200,6 +215,7 @@ pub fn pause_menu() -> Menu {
         item(Action::Resume, "Weiterspielen"),
         item(Action::Save, "Spiel speichern"),
         item(Action::Restart, "Mission neu starten"),
+        item(Action::Coop, COOP_JOIN),
         item(Action::Controls, "Steuerung"),
         item(Action::Graphics, GRAPHICS_HD),
         item(Action::Stats, "Statistik"),
@@ -878,20 +894,23 @@ mod tests {
     fn mouse_points_and_clicks_entries() {
         use glam::Vec2;
         let mut m = pause_menu();
-        // sieben Einträge: enger gesetzt (y = 280 + i·50, je 42 hoch), 380 breit um cx
-        assert_eq!(m.spacing(), (50., 42.));
+        // neun Einträge: eng gesetzt (y = 280 + i·44, je 38 hoch), 380 breit um cx
+        assert_eq!(m.spacing(), (44., 38.));
         assert_eq!(
             result_menu(false).spacing(),
             (58., 48.),
             "kurze Menüs behalten den weiten Abstand"
         );
         assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
-        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 50. * 2.)), Some(2));
+        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 44. * 2.)), Some(2));
         assert_eq!(
-            m.at(640., 280., Vec2::new(640., 280. + 25.)),
+            m.at(640., 280., Vec2::new(640., 280. + 22.)),
             None,
             "Lücke zwischen zwei Einträgen"
         );
+        // das Pausenmenü endet über der Fußzeile
+        let (step, height) = m.spacing();
+        assert!(280. + (m.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10.);
         // das Titelmenü endet über der Fußzeile
         let t = title_menu(true);
         let (step, height) = t.spacing();

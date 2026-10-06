@@ -866,6 +866,8 @@ mod tests {
             pressed,
             pad,
             pad_pressed: edges,
+            pad2: Default::default(),
+            pad2_pressed: Default::default(),
             mouse: Default::default(),
             typed: "",
         }

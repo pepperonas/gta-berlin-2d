@@ -126,6 +126,9 @@ pub struct Keys<'a> {
     /// Gamepad: gehaltener Zustand und Tastenflanken seit dem letzten Schritt
     pub pad: pad::Pad,
     pub pad_pressed: pad::Pad,
+    /// zweiter Controller (Spieler 2 im Koop)
+    pub pad2: pad::Pad,
+    pub pad2_pressed: pad::Pad,
     pub mouse: Mouse,
     /// Getippter Text seit dem letzten Schritt (Tastaturbelegung beachtet, Wiederholungen inklusive)
     pub typed: &'a str,
@@ -151,6 +154,10 @@ pub struct Rumble {
 pub trait Game {
     /// Neue Vibration für den Controller (einmal je Bild abgeholt; `None` = nichts Neues).
     fn rumble(&mut self) -> Option<Rumble> {
+        None
+    }
+    /// Vibration für den Controller von Spieler 2.
+    fn rumble2(&mut self) -> Option<Rumble> {
         None
     }
     /// Zeiten des vorigen Bildes (jedes Bild einmal, vor `hud`).
@@ -469,6 +476,8 @@ impl ApplicationHandler for App {
                         self.mouse = Mouse::default();
                         self.pads.state = pad::Pad::default();
                         self.pads.edges = pad::Pad::default();
+                        self.pads.state2 = pad::Pad::default();
+                        self.pads.edges2 = pad::Pad::default();
                     }
                     let mut mouse = self.mouse;
                     mouse.world = mouse
@@ -484,6 +493,8 @@ impl ApplicationHandler for App {
                                 pressed: &self.pressed,
                                 pad: self.pads.state,
                                 pad_pressed: self.pads.edges,
+                                pad2: self.pads.state2,
+                                pad2_pressed: self.pads.edges2,
                                 mouse,
                                 typed: &self.typed,
                             },
@@ -492,6 +503,7 @@ impl ApplicationHandler for App {
                         self.pressed.clear();
                         self.typed.clear();
                         self.pads.edges = pad::Pad::default();
+                        self.pads.edges2 = pad::Pad::default();
                         // Flanken und Rad gelten genau einen Schritt
                         mouse.left_pressed = false;
                         mouse.right_pressed = false;
@@ -537,7 +549,10 @@ impl ApplicationHandler for App {
                         renderer.set_overview(&mesh);
                     }
                     if let Some(r) = game.rumble() {
-                        self.pads.rumble(r.strong, r.weak, r.ms);
+                        self.pads.rumble(0, r.strong, r.weak, r.ms);
+                    }
+                    if let Some(r) = game.rumble2() {
+                        self.pads.rumble(1, r.strong, r.weak, r.ms);
                     }
                     game.frame_stats(FrameStats {
                         dt,
