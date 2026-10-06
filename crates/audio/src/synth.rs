@@ -58,15 +58,16 @@ pub const IMPACT: SfxSpec = spec("impact", 0.131, 0.1, true);
 pub const HIT: SfxSpec = spec("hit", 0.217, 0.06, true);
 /// Nachladen je Waffe (0 Pistole, 1 MP, 2 Schrotflinte): Beginn (Magazin raus/rein, Patronen) und Ende (Schlitten,
 /// Ladehebel, Pumpe) – echte Aufnahmen (Freesound, CC0), Rezepte in tools/audio/sfx_recipes.json.
+/// Nachladen: +6 dB gegenüber der ersten Fassung (Notizblatt „Nachladen lauter“) – im Kampfgeräusch ging es unter.
 pub const RELOAD: [SfxSpec; 3] = [
-    spec("reload_pistol", 0.127, 0.03, false),
-    spec("reload_smg", 0.116, 0.03, false),
-    spec("reload_shotgun", 0.23, 0.03, false),
+    spec("reload_pistol", 0.254, 0.03, false),
+    spec("reload_smg", 0.232, 0.03, false),
+    spec("reload_shotgun", 0.46, 0.03, false),
 ];
 pub const RELOADED: [SfxSpec; 3] = [
-    spec("reloaded_pistol", 0.2, 0.03, false),
-    spec("reloaded_smg", 0.111, 0.03, false),
-    spec("reloaded_shotgun", 0.153, 0.03, false),
+    spec("reloaded_pistol", 0.4, 0.03, false),
+    spec("reloaded_smg", 0.222, 0.03, false),
+    spec("reloaded_shotgun", 0.306, 0.03, false),
 ];
 pub const WEAPON_SWITCH: SfxSpec = spec("weapon_switch", 0.154, 0.05, false);
 pub const UI: SfxSpec = spec("ui", 0.41, 0.02, false);
@@ -2130,12 +2131,12 @@ mod tests {
             (Sfx::Thud(1.), "thud", 0.037),
             (Sfx::Impact(1.), "impact", 0.0125),
             (Sfx::Hit, "hit", 0.043),
-            (Sfx::Reload(0), "reload_pistol", 0.016),
-            (Sfx::Reload(1), "reload_smg", 0.016),
-            (Sfx::Reload(2), "reload_shotgun", 0.016),
-            (Sfx::Reloaded(0), "reloaded_pistol", 0.02),
-            (Sfx::Reloaded(1), "reloaded_smg", 0.02),
-            (Sfx::Reloaded(2), "reloaded_shotgun", 0.02),
+            (Sfx::Reload(0), "reload_pistol", 0.032),
+            (Sfx::Reload(1), "reload_smg", 0.032),
+            (Sfx::Reload(2), "reload_shotgun", 0.032),
+            (Sfx::Reloaded(0), "reloaded_pistol", 0.04),
+            (Sfx::Reloaded(1), "reloaded_smg", 0.04),
+            (Sfx::Reloaded(2), "reloaded_shotgun", 0.04),
             (Sfx::WeaponSwitch, "weapon_switch", 0.009),
             (Sfx::Crash(1.), "crash_heavy", 0.1018),
             (Sfx::Crash(0.3), "crash_light", 0.0342),
