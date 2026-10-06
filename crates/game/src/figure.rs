@@ -330,6 +330,25 @@ pub fn player_look() -> Look {
     }
 }
 
+/// Spieler 2 (Koop): andere Jacke, Pferdeschwanz, Mütze – auf einen Blick vom ersten zu unterscheiden.
+pub fn player2_look() -> Look {
+    Look {
+        top: 0x1e9e6a,
+        hair: Some(0x8a4b22),
+        hat: Some(0xf2b134),
+        bag: None,
+        acc: Acc::None,
+        acc_color: 0,
+        scale: 1.05,
+        pants: 0x2f2a28,
+        shoes: 0x1d1d1d,
+        build: Part::TorsoMid,
+        hair_part: Part::HairPony,
+        hat_part: Part::HatBeanie,
+        bag_part: Part::Bag,
+    }
+}
+
 /// Pose (gait.js gaitPose) ohne eigenen Zustand: Phase aus der Strecke (ein Doppelschritt ≈ 28 px gehend, 52 px
 /// rennend – das entspricht der Kadenz in gait.js), Ausschlag aus dem Bewegungszustand. Lokale Koordinaten:
 /// +x vorn, +y rechts. Liefert Füße (x vor/zurück), Hände (x, y) und den Hüftschwung.

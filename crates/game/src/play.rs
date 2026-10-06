@@ -20,6 +20,11 @@ pub struct Play {
     /// Koop: welcher Controller Spieler 2 gehört (1 = zweiter Controller, 0 = erster – Spieler 1 spielt dann nur
     /// mit Tastatur und Maus)
     pub p2_pad: u8,
+    /// `--koop [METER]`: Spieler 2 beim Start dazuholen, optional so weit östlich (geteiltes Bild)
+    pub koop_start: Option<f64>,
+    /// Ansichten des laufenden Bildes (von der Engine, `set_views`) und Bildgröße
+    views: berlin_engine::split::Views,
+    viewport: Vec2,
     rumbler2: crate::rumble::Rumbler,
     rumble_out2: Option<berlin_engine::Rumble>,
     storage: Option<FileStorage>,
@@ -289,9 +294,27 @@ impl Play {
             crate::weatherfx::storm_overlay(&self.world, camera, viewport, out);
             crate::weatherfx::overlay(&self.world, out);
             crate::underground::draw_tunnels(&mut self.world, camera, viewport, out);
-            crate::underground::entrance_letters(&self.world, camera, viewport, out);
-            crate::neon::draw(&self.neon, camera, viewport, out);
-            crate::hud::ped_health_bars(&self.world, camera, viewport, out);
+            // Weltmarken je Ansicht; im geteilten Bild bleibt nur, was auf der eigenen Hälfte liegt
+            let views = self.views.clone();
+            let split = self.world.coop() && views.count == 2;
+            for k in 0..if split { 2 } else { 1 } {
+                let cam = if split { &views.cams[k] } else { camera };
+                let from = out.items.len();
+                crate::underground::entrance_letters(&self.world, cam, viewport, out);
+                crate::neon::draw(&self.neon, cam, viewport, out);
+                crate::hud::ped_health_bars(&self.world, cam, viewport, out);
+                if split {
+                    let mut i = from;
+                    while i < out.items.len() {
+                        let c = out.items[i].center;
+                        if views.view_at(Vec2::new(c[0], c[1]), viewport) == k {
+                            i += 1;
+                        } else {
+                            out.items.remove(i);
+                        }
+                    }
+                }
+            }
         }
         self.hud_width = out.width;
         if self.sign_lab {
@@ -336,15 +359,20 @@ impl Play {
         }
         let warn = self.world.road_warning();
         let nav = self.nav.view(self.nav_pos());
-        crate::hud::draw(
-            &self.world,
-            engine.as_ref(),
-            warn,
-            &nav,
-            camera,
-            viewport,
-            out,
-        );
+        if self.world.coop() {
+            self.coop_hud(engine.as_ref(), warn, &nav, camera, viewport, out);
+        } else {
+            crate::hud::draw(
+                &self.world,
+                engine.as_ref(),
+                warn,
+                &nav,
+                camera,
+                viewport,
+                out,
+                crate::hud::Parts::ALL,
+            );
+        }
         self.physdebug.draw(out, &self.world);
         self.enginedebug.draw(out, &self.listener.engine_view);
         let p = &self.world.player;
@@ -490,6 +518,9 @@ impl Play {
             rumbler: Default::default(),
             rumble_out: None,
             p2_pad: 1,
+            koop_start: None,
+            views: berlin_engine::split::Views::single(Default::default()),
+            viewport: Vec2::new(1280., 720.),
             rumbler2: Default::default(),
             rumble_out2: None,
             pedals: [0.; 2],
@@ -920,6 +951,117 @@ impl Play {
             });
             if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
                 eprintln!("Einstellungen nicht gespeichert: {e}");
+            }
+        }
+    }
+    /// Ausschnitte dieses Bildes zum Aussortieren (ohne Koop: die Kamera der Welt).
+    fn spots(&self) -> crate::coopview::Spots {
+        let c = self.world.camera;
+        if self.world.coop() {
+            crate::coopview::Spots::from_views(&self.views)
+        } else {
+            crate::coopview::Spots::one(c.x, c.y, c.zoom)
+        }
+    }
+    /// Koop-HUD: Gemeinsames (Geld, Uhr, Auftrag) übers ganze Bild, je Spieler sein Block in seiner Bildhälfte
+    /// (Spieler 2 rechts, gezeichnet auf seinem Platz per Sitztausch), im geteilten Bild an der Trennlinie ein Pfeil
+    /// zum anderen Spieler.
+    fn coop_hud(
+        &mut self,
+        engine: Option<&berlin_sim::soundscape::EngineState>,
+        warn: Option<&'static str>,
+        nav: &crate::nav::NavView,
+        camera: &berlin_engine::camera::Camera,
+        viewport: Vec2,
+        out: &mut berlin_engine::hud::Hud,
+    ) {
+        use crate::hud::Parts;
+        let views = self.views.clone();
+        let full = out.width;
+        let half = full / 2.;
+        let merged = views.count < 2;
+        let only = |player: bool| Parts {
+            shared: !player,
+            player,
+            // gemeinsames Bild: ein Zielpfeil übers ganze Bild; geteilt: je Hälfte
+            arrow: if player { !merged } else { merged },
+            dx: 0.,
+        };
+        crate::hud::draw(
+            &self.world,
+            engine,
+            warn,
+            nav,
+            camera,
+            viewport,
+            out,
+            only(false),
+        );
+        out.width = half;
+        crate::hud::draw(
+            &self.world,
+            engine,
+            warn,
+            nav,
+            camera,
+            viewport,
+            out,
+            only(true),
+        );
+        let cam2 = views.cams[(views.count == 2) as usize].clone();
+        let from = out.items.len();
+        self.world.swap_seat();
+        let warn2 = self.world.road_warning();
+        crate::hud::draw(
+            &self.world,
+            None,
+            warn2,
+            &Default::default(),
+            &cam2,
+            viewport,
+            out,
+            Parts {
+                shared: false,
+                player: true,
+                arrow: !merged,
+                dx: half,
+            },
+        );
+        self.world.swap_seat();
+        out.shift_since(from, half);
+        out.width = full;
+        // geteilt: Pfeil an der Linie zum anderen Spieler, mit Entfernung
+        if views.count == 2 && views.line > 0.05 {
+            let (Some(a), Some(b)) = (
+                Some((self.world.player.x, self.world.player.y)),
+                self.world.p2.as_ref().map(|s| (s.player.x, s.player.y)),
+            ) else {
+                return;
+            };
+            let meters = ((b.0 - a.0).hypot(b.1 - a.1) / self.world.city.scale).round();
+            let n = views.normal;
+            let center = Vec2::new(full / 2., 360.);
+            for (k, dir) in [(0usize, n), (1, -n)] {
+                // knapp vor der Linie auf der eigenen Seite, Spitze zur Linie; entlang der Linie nach unten
+                // versetzt (die Bildmitte gehört dem Zielpfeil)
+                let along = Vec2::new(-n.y, n.x);
+                let along = if along.y < 0. { -along } else { along };
+                let p = center - dir * 46. + along * 100.;
+                let col = crate::play::PLAYER_RING[1 - k];
+                let ang = dir.y.atan2(dir.x);
+                let alpha = views.line;
+                out.triangle(p.x, p.y, 15., ang, [0., 0., 0., 0.7 * alpha]);
+                out.triangle(p.x, p.y, 12., ang, [col[0], col[1], col[2], alpha]);
+                let t = p - dir * 26.;
+                out.text(
+                    &format!("{meters} m"),
+                    t.x,
+                    t.y + 5.,
+                    14.,
+                    [1., 1., 1., alpha],
+                    berlin_engine::hud::Align::Center,
+                    true,
+                );
             }
         }
     }
@@ -2454,14 +2596,17 @@ impl Play {
         if self.world.in_tunnel_station() {
             return;
         }
-        let (cx, cy) = (self.world.camera.x, self.world.camera.y);
-        let view = 2200. / self.world.camera.zoom.max(0.5);
+        let sp = self.spots();
         let t = self.world.time;
         let s = self.world.city.scale;
-        let mut pois = self.world.city.pois_near(cx, cy, view + 250.);
+        let city = &mut self.world.city;
+        let mut pois = sp.gather(
+            |cx, cy, z| city.pois_near(cx, cy, 2200. / z.max(0.5) + 250.),
+            |q| (q.x, q.y),
+        );
         pois.sort_by(|a, b| {
-            let da = (a.x - cx).hypot(a.y - cy);
-            let db = (b.x - cx).hypot(b.y - cy);
+            let da = sp.dist(a.x, a.y);
+            let db = sp.dist(b.x, b.y);
             da.total_cmp(&db)
         });
         for q in pois {
@@ -2789,6 +2934,38 @@ impl Play {
             self.zoom_user =
                 (self.zoom_user * (zoom as f32 * 1.4 * dt as f32).exp()).clamp(0.6, 1.8);
         }
+        if let Some(m) = self.koop_start
+            && !w2.loading
+        {
+            if !w2.coop() {
+                w2.join_p2();
+                self.p2_pad = 1;
+            }
+            if m <= 0. {
+                self.koop_start = None;
+            } else {
+                // Spieler 2 weiter östlich auf einen freien Platz (Kacheln dort laden wie beim Teleport)
+                let (x, y) = (w2.player.x + m * w2.city.scale, w2.player.y);
+                match w2.find_teleport_spot(x, y) {
+                    Some(berlin_sim::world::TeleportSpot::Spot { x: sx, y: sy, .. }) => {
+                        if let Some(s) = w2.p2.as_mut() {
+                            (s.player.x, s.player.y) = (sx, sy);
+                            (s.camera.x, s.camera.y) = (sx, sy);
+                            s.player.level_init = false;
+                        }
+                        w2.city.release("teleport");
+                        self.koop_start = None;
+                    }
+                    Some(berlin_sim::world::TeleportSpot::Pending) => {
+                        w2.city.pump();
+                    }
+                    None => {
+                        w2.city.release("teleport");
+                        self.koop_start = None;
+                    }
+                }
+            }
+        }
         if self.auto_enter && !w2.loading && w2.player.in_car.is_none() {
             self.auto_enter = false;
             if let Some((x, y)) = w2
@@ -2947,8 +3124,20 @@ impl Play {
         self.fx.tires(&mut self.world, dt as f32);
         self.trails
             .record(&self.world.cars, self.world.time, self.world.weather.snow);
-        let view =
+        // alle Ausschnitte umfassen (Koop: die Bahnen gibt es ohnehin nur um die Spieler)
+        let mut view =
             berlin_sim::collision::Rect::around(self.world.camera.x, self.world.camera.y, 2600.);
+        if self.world.coop() {
+            for &(x, y, _) in self.spots().all() {
+                let r = berlin_sim::collision::Rect::around(x, y, 2600.);
+                let (x0, y0) = (view.x.min(r.x), view.y.min(r.y));
+                let (x1, y1) = (
+                    (view.x + view.w).max(r.x + r.w),
+                    (view.y + view.h).max(r.y + r.h),
+                );
+                view = berlin_sim::collision::Rect::new(x0, y0, x1 - x0, y1 - y0);
+            }
+        }
         self.trains = self.world.transit_visible(view);
         // auf einem Bahnsteig unter freiem Himmel zeichnet der Bahnsteig seine Züge selbst (an seinen Gleisen)
         if let Some(st) = self.world.current_station().filter(|s| s.open_air) {
@@ -2982,6 +3171,70 @@ impl Play {
         {
             self.saved_for = self.world.completed as u32;
             self.save();
+        }
+    }
+}
+
+/// Bodenring der Spielfiguren: Spieler 1 Cyan, Spieler 2 Orange (dieselben Farben wie die Trennlinie).
+pub const PLAYER_RING: [[f32; 4]; 2] = [[0.25, 0.85, 1., 0.9], [1., 0.6, 0.15, 0.9]];
+
+/// Spielfigur zu Fuß (oder bewusstlos liegend) mit Bodenring in der Farbe des Spielers.
+fn player_figure(
+    p: &berlin_sim::world::Player,
+    look: &crate::figure::Look,
+    ring: [f32; 4],
+    time: f64,
+    out: &mut Vec<Body>,
+) {
+    if p.in_car.is_none() && p.combat.dead {
+        // K. o.: liegt
+        let (x, y, f) = (p.x as f32, p.y as f32, p.combat.fall as f32);
+        out.push(Body {
+            center: [x, y],
+            half: [9., 5.],
+            angle: f,
+            shape: 1.,
+            depth: 0.617,
+            color: rgba(0x2b2f3a, 1.),
+        });
+        out.push(Body {
+            center: [x + f.cos() * 10., y + f.sin() * 10.],
+            half: [3.2, 3.2],
+            angle: 0.,
+            shape: 1.,
+            depth: 0.6168,
+            color: rgba(0xe0ac69, 1.),
+        });
+    } else if p.in_car.is_none() && p.ride.is_none() {
+        let (x, y, a) = (p.x as f32, p.y as f32, p.angle as f32);
+        let depth0 = if p.level.lvl >= 1 { 0.548 } else { 0.617 };
+        let lift = p.z as f32;
+        let weapon0 = out.len();
+        weapon_bodies(&p.combat, (x, y), a, depth0, out);
+        let weapon1 = out.len();
+        let depth = if p.level.lvl >= 1 { 0.548 } else { 0.617 };
+        out.push(Body {
+            center: [x, y],
+            half: [11., 11.],
+            angle: 0.,
+            shape: 2.,
+            depth: depth + 0.0005,
+            color: ring,
+        });
+        let pl = p;
+        let who = crate::figure::Who {
+            x: pl.x,
+            y: pl.y,
+            facing: pl.angle,
+            step: pl.step,
+            amp: (pl.move_speed / 40.).clamp(0., 1.) as f32,
+            run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
+            skin: 0xf2d0b1,
+        };
+        let fig0 = out.len();
+        crate::figure::person_bodies(&who, look, depth, time, out);
+        if lift > 0. {
+            lift_bodies(out, weapon0..weapon1, fig0, (x, y), lift);
         }
     }
 }
@@ -3044,10 +3297,24 @@ impl Game for Play {
     fn quit(&self) -> bool {
         self.quit
     }
+    fn camera2(&self) -> Option<(Vec2, f32)> {
+        if !matches!(self.screen, Screen::Playing | Screen::Paused) {
+            return None;
+        }
+        let c = self.world.p2.as_ref()?.camera;
+        Some((
+            Vec2::new(c.x as f32, c.y as f32),
+            self.zoom_fix.unwrap_or(c.zoom as f32 * self.zoom_user),
+        ))
+    }
+    fn set_views(&mut self, views: &berlin_engine::split::Views, viewport: Vec2) {
+        self.views = views.clone();
+        self.viewport = viewport;
+    }
     fn bodies(&self, out: &mut Vec<Body>) {
         let w = &self.world;
-        let (cx, cy) = (w.camera.x, w.camera.y);
-        let near = |x: f64, y: f64| (x - cx).abs() < 2600. && (y - cy).abs() < 1800.;
+        let sp = self.spots();
+        let near = |x: f64, y: f64| sp.near(x, y, |_| (2600., 1800.));
         // Missionsziel als Ring am Boden
         let pv = berlin_sim::mission::PlayerView {
             x: w.player.x,
@@ -3458,68 +3725,21 @@ impl Game for Play {
                 });
             }
         }
-        if w.player.in_car.is_none() && w.player.combat.dead {
-            // K. o.: liegt
-            let (x, y, f) = (
-                w.player.x as f32,
-                w.player.y as f32,
-                w.player.combat.fall as f32,
+        player_figure(
+            &w.player,
+            &crate::figure::player_look(),
+            PLAYER_RING[0],
+            w.time,
+            out,
+        );
+        if let Some(s) = w.p2.as_ref() {
+            player_figure(
+                &s.player,
+                &crate::figure::player2_look(),
+                PLAYER_RING[1],
+                w.time,
+                out,
             );
-            out.push(Body {
-                center: [x, y],
-                half: [9., 5.],
-                angle: f,
-                shape: 1.,
-                depth: 0.617,
-                color: rgba(0x2b2f3a, 1.),
-            });
-            out.push(Body {
-                center: [x + f.cos() * 10., y + f.sin() * 10.],
-                half: [3.2, 3.2],
-                angle: 0.,
-                shape: 1.,
-                depth: 0.6168,
-                color: rgba(0xe0ac69, 1.),
-            });
-        } else if w.player.in_car.is_none() && w.player.ride.is_none() {
-            let (x, y, a) = (w.player.x as f32, w.player.y as f32, w.player.angle as f32);
-            let depth0 = if w.player.level.lvl >= 1 {
-                0.548
-            } else {
-                0.617
-            };
-            let lift = w.player.z as f32;
-            let weapon0 = out.len();
-            weapon_bodies(&w.player.combat, (x, y), a, depth0, out);
-            let weapon1 = out.len();
-            let depth = if w.player.level.lvl >= 1 {
-                0.548
-            } else {
-                0.617
-            };
-            out.push(Body {
-                center: [x, y],
-                half: [11., 11.],
-                angle: 0.,
-                shape: 2.,
-                depth: depth + 0.0005,
-                color: [0.25, 0.85, 1., 0.9],
-            });
-            let pl = &w.player;
-            let who = crate::figure::Who {
-                x: pl.x,
-                y: pl.y,
-                facing: pl.angle,
-                step: pl.step,
-                amp: (pl.move_speed / 40.).clamp(0., 1.) as f32,
-                run: ((pl.move_speed - 95.) / 30.).clamp(0., 1.) as f32,
-                skin: 0xf2d0b1,
-            };
-            let fig0 = out.len();
-            crate::figure::person_bodies(&who, &crate::figure::player_look(), depth, w.time, out);
-            if lift > 0. {
-                lift_bodies(out, weapon0..weapon1, fig0, (x, y), lift);
-            }
         }
         if self.moto_lab {
             moto_lab_bodies(self.world.camera.x as f32, self.world.camera.y as f32, out);
@@ -3549,9 +3769,13 @@ impl Game for Play {
             return;
         }
         // render.js drawCovered: alle Bewegten, knapp vor ihren eigenen Teilen (sie verdecken sich nicht selbst)
-        let (cx, cy) = (w.camera.x, w.camera.y);
-        let view = 2200. / w.camera.zoom.max(0.5);
-        let near = |x: f64, y: f64| (x - cx).abs() < view && (y - cy).abs() < view * 0.7;
+        let sp = self.spots();
+        let near = |x: f64, y: f64| {
+            sp.near(x, y, |z| {
+                let view = 2200. / z.max(0.5);
+                (view, view * 0.7)
+            })
+        };
         let own = w.player_car().map(|c| c.id);
         for c in w
             .cars
@@ -3758,15 +3982,21 @@ impl Game for Play {
         let l = world_light(&self.world);
         {
             // Laternen und Wegweiser im Bild für bodies()/hud() vormerken
+            let sp = self.spots();
             let w = &mut self.world;
-            let (cx, cy) = (w.camera.x, w.camera.y);
-            let view = 1500. / w.camera.zoom.max(0.5);
+            let lamps = &mut self.lamps;
             self.street_lamps = if w.in_tunnel_station() {
                 Vec::new()
             } else {
-                self.lamps.near(&mut w.city, cx, cy, view)
+                sp.gather(
+                    |cx, cy, z| lamps.near(&mut w.city, cx, cy, 1500. / z.max(0.5)),
+                    |lp| (lp.x, lp.y),
+                )
             };
-            self.street_signs = w.city.signs_near(cx, cy, view);
+            self.street_signs = sp.gather(
+                |cx, cy, z| w.city.signs_near(cx, cy, 1500. / z.max(0.5)),
+                |sg| (sg.x, sg.y),
+            );
             self.lamps_lit = l.lamps_on;
         }
         // Schilder am Eingang: tags matt, ab der Dämmerung leuchtend
@@ -3789,19 +4019,18 @@ impl Game for Play {
                     pad: 0.,
                 });
             };
-        let (cx, cy, zoom) = (
-            self.world.camera.x,
-            self.world.camera.y,
-            self.world.camera.zoom,
-        );
-        let view = 2200. / zoom.max(0.5);
+        let sp = self.spots();
         if l.lamps_on {
             // Laternenköpfe selbst leuchten (render.js lightOccluders malt sie in die Lichtkarte)
             for lp in &self.street_lamps {
                 let (hx, hy) = crate::streetfurn::lamp_head(lp);
                 push(out, hx as f64, hy as f64, 9., rgb(lp.rgb), 1.);
             }
-            for lp in self.lamps.near(&mut self.world.city, cx, cy, view + 250.) {
+            let (lamps, city) = (&mut self.lamps, &mut self.world.city);
+            for lp in sp.gather(
+                |cx, cy, z| lamps.near(city, cx, cy, 2200. / z.max(0.5) + 250.),
+                |lp| (lp.x, lp.y),
+            ) {
                 push(
                     out,
                     lp.x + lp.nx * 18.,
@@ -3814,7 +4043,11 @@ impl Game for Play {
         }
         // Läden, Lokale und Bahnhöfe: warmer Schein aus dem Schaufenster auf den Gehweg; Schilder leuchten
         if !self.world.in_tunnel_station() {
-            let mut pois = self.world.city.pois_near(cx, cy, view + 250.);
+            let city = &mut self.world.city;
+            let mut pois = sp.gather(
+                |cx, cy, z| city.pois_near(cx, cy, 2200. / z.max(0.5) + 250.),
+                |q| (q.x, q.y),
+            );
             pois.retain(|q| crate::neon::SHOP_GLOW.contains(&q.cat));
             for q in pois {
                 if let Some((gx, gy)) = self.neon.glow_point(&mut self.world.city, &q) {
@@ -3834,10 +4067,12 @@ impl Game for Play {
             }
         }
         let w = &self.world;
-        let (cx, cy) = (w.camera.x, w.camera.y);
-        let view = 2200. / w.camera.zoom.max(0.5);
-        let near =
-            |x: f64, y: f64| (x - cx).abs() < view + 250. && (y - cy).abs() < view * 0.7 + 250.;
+        let near = |x: f64, y: f64| {
+            sp.near(x, y, |z| {
+                let view = 2200. / z.max(0.5);
+                (view + 250., view * 0.7 + 250.)
+            })
+        };
         // Ampeln: farbiger Schein an der Haltelinie jeder Zufahrt
         for &v in &w.city.signals {
             let Some(nd) = w.city.nodes.get(&v) else {

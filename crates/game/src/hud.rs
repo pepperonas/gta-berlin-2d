@@ -53,6 +53,28 @@ fn prompt(h: &mut Hud, text: &str, y: f32) {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Welche Teile `draw` zeichnet: gemeinsame (Geld, Uhr, Auftrag, Ladebalken, Briefing, Ergebnis) und die des
+/// Spielers (Minikarte, Gesundheit, Waffe, Tacho, Zielpfeil, Hinweise). Allein beides; im Koop die gemeinsamen
+/// einmal übers ganze Bild und je Spieler seine Teile in seiner Bildhälfte (`dx` = Versatz der Hälfte in
+/// Basiseinheiten, für den Zielpfeil).
+#[derive(Debug, Clone, Copy)]
+pub struct Parts {
+    pub shared: bool,
+    pub player: bool,
+    /// Zielpfeil zum Auftrag (gemeinsames Bild: einmal übers ganze Bild, geteilt: je Hälfte)
+    pub arrow: bool,
+    pub dx: f32,
+}
+impl Parts {
+    pub const ALL: Parts = Parts {
+        shared: true,
+        player: true,
+        arrow: true,
+        dx: 0.,
+    };
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     w: &World,
     engine: Option<&EngineState>,
@@ -61,9 +83,10 @@ pub fn draw(
     camera: &Camera,
     viewport: Vec2,
     h: &mut Hud,
+    parts: Parts,
 ) {
     let (mx, my) = MARGIN;
-    if w.loading {
+    if w.loading && parts.shared {
         let (bw, bh) = (360., 56.);
         panel(h, h.width / 2. - bw / 2., 360. - bh / 2., bw, bh, 0.85);
         h.text(
@@ -77,16 +100,23 @@ pub fn draw(
         );
         return;
     }
+    if w.loading {
+        return;
+    }
     // oben links: Geld, Wochentag und Uhrzeit
-    let mw = h.text(
-        &format!("{} €", group(w.money as i64)),
-        mx,
-        my + 26.,
-        22.,
-        GREEN,
-        Align::Left,
-        true,
-    );
+    let mw = if !parts.shared {
+        0.
+    } else {
+        h.text(
+            &format!("{} €", group(w.money as i64)),
+            mx,
+            my + 26.,
+            22.,
+            GREEN,
+            Align::Left,
+            true,
+        )
+    };
     let night = w.clock >= 1230. || w.clock < 330.;
     let clock = format!(
         "{} {} {}  {} · {:.0} °C",
@@ -96,19 +126,21 @@ pub fn draw(
         berlin_sim::weather::label(w.sky.kind),
         w.temp
     );
-    h.text(
-        &clock,
-        mx + mw + 16.,
-        my + 25.,
-        15.,
-        if night {
-            [0.76, 0.8, 1., 1.]
-        } else {
-            [1., 0.89, 0.6, 1.]
-        },
-        Align::Left,
-        true,
-    );
+    if parts.shared {
+        h.text(
+            &clock,
+            mx + mw + 16.,
+            my + 25.,
+            15.,
+            if night {
+                [0.76, 0.8, 1., 1.]
+            } else {
+                [1., 0.89, 0.6, 1.]
+            },
+            Align::Left,
+            true,
+        );
+    }
 
     let pv = PlayerView {
         x: w.player.x,
@@ -118,7 +150,7 @@ pub fn draw(
     let (objective, target) = w.mission.objective(&w.city.places, pv, &w.cars);
     let ms = w.mission.state;
     // unten links: Minikarte (beim Briefing ausgeblendet)
-    if ms != State::Briefing {
+    if ms != State::Briefing && parts.player {
         minimap(w, target, nav, mx, 720. - my - MINI - 10., MINI, h);
         if let Some(m) = nav.remaining_m {
             let t = if m >= 1000. {
@@ -142,13 +174,16 @@ pub fn draw(
             breath(h, left, tired, mx, 720. - my + 2., MINI, w.time);
         }
     }
-    ride_bar(w, h);
+    if parts.player {
+        ride_bar(w, h);
+    }
     // unten rechts zu Fuß: Waffe und Munition (im Zug keine Waffe)
-    if w.player.in_car.is_none() && w.player.ride.is_none() && !w.player.combat.dead {
+    if parts.player && w.player.in_car.is_none() && w.player.ride.is_none() && !w.player.combat.dead
+    {
         weapon_panel(h, &w.player.combat, h.width - mx, 720. - my);
     }
     // oben rechts: Auftrag und Zeit
-    if !objective.is_empty() {
+    if !objective.is_empty() && parts.shared {
         let r = h.width - mx;
         let lw = h.text("AUFTRAG", r, my + 11., 11., YELLOW, Align::Right, true);
         h.rect(r - lw - 36., my + 5., 26., 3., YELLOW, 0.);
@@ -180,10 +215,12 @@ pub fn draw(
             h.text(label, r - tw - 12., my + 66., 13., GREY, Align::Right, true);
         }
     }
-    hurt(h, &w.player.combat);
+    if parts.player {
+        hurt(h, &w.player.combat);
+    }
     // unten rechts: Tacho, darüber Fahrzeugname nach dem Einsteigen
     let car = w.player_car();
-    if let Some(c) = car {
+    if let Some(c) = car.filter(|_| parts.player) {
         let (cx, cy, rad) = (h.width - mx - 56., 720. - my - 68., 54.);
         // Warnschild (Wetter an der Stelle) links vom Tacho
         if let Some(text) = warn {
@@ -431,9 +468,11 @@ pub fn draw(
     }
     // Zielpfeil: über dem Ziel, wenn es im Bild ist, sonst am Bildrand mit Entfernung
     if let Some((tx, ty)) = target
+        && parts.arrow
         && !matches!(ms, State::Briefing | State::Success | State::Failed)
     {
-        let s = camera.world_to_screen(Vec2::new(tx as f32, ty as f32), 0., viewport) / h.scale;
+        let s = camera.world_to_screen(Vec2::new(tx as f32, ty as f32), 0., viewport) / h.scale
+            - Vec2::new(parts.dx, 0.);
         let src = car.map(|c| (c.x, c.y)).unwrap_or((w.player.x, w.player.y));
         let meters = ((tx - src.0).hypot(ty - src.1) / 10.).round();
         let (l, rr, top, bottom) = (mx + 40., h.width - mx - 40., my + 120., 720. - my - 160.);
@@ -475,12 +514,16 @@ pub fn draw(
         }
     }
     // Hinweise unten mittig
+    // Auftragshinweis gehört allen (gemeinsamer Teil), die übrigen Hinweise dem Spieler
     let mut hint: Option<String> = w
         .mission
         .prompt
+        .filter(|_| parts.shared)
         .map(|p| p.replacen("A ", "E ", 1).replacen("A:", "E:", 1));
-    let mut hint_y = 720. - my - 24.;
+    // Koop (gemeinsamer Teil allein): über den Spielerblöcken unten
+    let mut hint_y = 720. - my - 24. - if parts.player { 0. } else { MINI + 30. };
     if hint.is_none()
+        && parts.player
         && let Some(n) = &w.notice
     {
         hint = Some(n.text.clone());
@@ -488,6 +531,7 @@ pub fn draw(
     }
     // U-Bahnhof: Einsteigen am Bahnsteig bzw. Eingang an der Straße
     if hint.is_none()
+        && parts.player
         && let Some(st) = w
             .player
             .inside
@@ -498,6 +542,7 @@ pub fn draw(
         hint = Some(format!("G: Einsteigen {} → {}", t.line, t.dest));
     }
     if hint.is_none()
+        && parts.player
         && car.is_none()
         && w.player.inside.is_none()
         && w.player.ride.is_none()
@@ -519,6 +564,7 @@ pub fn draw(
         ));
     }
     if hint.is_none()
+        && parts.player
         && car.is_none()
         && w.player.ride.is_none()
         && w.player.inside.is_none()
@@ -529,6 +575,7 @@ pub fn draw(
         hint = Some("F: Einsteigen".into());
     }
     if hint.is_none()
+        && parts.player
         && let Some(c) = car
     {
         if c.wrecked {
@@ -541,6 +588,9 @@ pub fn draw(
         && !matches!(ms, State::Briefing | State::Success | State::Failed)
     {
         prompt(h, &t, hint_y);
+    }
+    if !parts.shared {
+        return;
     }
     if w.mission.load > 0. && ms == State::ToPickup {
         let (bw, x, y) = (260., h.width / 2. - 130., 720. - my - 66.);

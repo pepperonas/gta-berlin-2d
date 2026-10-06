@@ -4,6 +4,9 @@ struct Camera {
     sun: vec4<f32>, params: vec4<f32>,
     // shadow: Richtung (x, y), Länge je Höhe, Stärke · ambient: Umgebungslicht (sRGB) und Dunkelheit
     shadow: vec4<f32>, ambient: vec4<f32>,
+    // Splitscreen (split.rs): Normale der Trennlinie (Spieler 1 → 2), Deckkraft der Linie, Seite dieser Ansicht
+    // (0 = ganzes Bild, 1 = Spieler 1, 2 = Spieler 2)
+    split: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var atlas: texture_2d<f32>;

@@ -19,6 +19,8 @@ pub struct Interp {
     peds: HashMap<u32, Pose>,
     player: Option<Pose>,
     camera: Option<(f64, f64)>,
+    /// Spieler 2 (Koop): Figur und Kamera
+    p2: Option<(Pose, (f64, f64))>,
     saved: Option<Saved>,
 }
 
@@ -27,6 +29,7 @@ struct Saved {
     peds: Vec<(usize, Pose)>,
     player: Pose,
     camera: (f64, f64),
+    p2: Option<(Pose, (f64, f64))>,
 }
 
 /// Winkel auf dem kürzesten Weg mischen.
@@ -57,6 +60,12 @@ impl Interp {
             .extend(w.peds.iter().map(|p| (p.id, (p.x, p.y, p.facing))));
         self.player = Some((w.player.x, w.player.y, w.player.angle));
         self.camera = Some((w.camera.x, w.camera.y));
+        self.p2 = w.p2.as_ref().map(|s| {
+            (
+                (s.player.x, s.player.y, s.player.angle),
+                (s.camera.x, s.camera.y),
+            )
+        });
     }
 
     /// Interpolierte Lagen für das Bild einsetzen (`alpha` 0…1); `restore` macht es rückgängig.
@@ -70,6 +79,12 @@ impl Interp {
             peds: Vec::new(),
             player: (w.player.x, w.player.y, w.player.angle),
             camera: (w.camera.x, w.camera.y),
+            p2: w.p2.as_ref().map(|s| {
+                (
+                    (s.player.x, s.player.y, s.player.angle),
+                    (s.camera.x, s.camera.y),
+                )
+            }),
         };
         for (i, c) in w.cars.iter_mut().enumerate() {
             let cur = (c.x, c.y, c.angle);
@@ -95,6 +110,15 @@ impl Interp {
                 w.camera.y = py + (cy - py) * t;
             }
         }
+        if let (Some(s), Some((pp, pc)), Some((cp, cc))) = (w.p2.as_mut(), self.p2, saved.p2) {
+            if let Some(m) = mix(pp, cp, t) {
+                (s.player.x, s.player.y, s.player.angle) = m;
+            }
+            if (cc.0 - pc.0).hypot(cc.1 - pc.1) <= JUMP {
+                s.camera.x = pc.0 + (cc.0 - pc.0) * t;
+                s.camera.y = pc.1 + (cc.1 - pc.1) * t;
+            }
+        }
         self.saved = Some(saved);
     }
 
@@ -115,6 +139,10 @@ impl Interp {
         }
         (w.player.x, w.player.y, w.player.angle) = s.player;
         (w.camera.x, w.camera.y) = s.camera;
+        if let (Some(p2), Some((pose, cam))) = (w.p2.as_mut(), s.p2) {
+            (p2.player.x, p2.player.y, p2.player.angle) = pose;
+            (p2.camera.x, p2.camera.y) = cam;
+        }
     }
 }
 

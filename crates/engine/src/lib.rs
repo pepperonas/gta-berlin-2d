@@ -172,6 +172,12 @@ pub trait Game {
     fn step(&mut self, keys: &Keys, dt: f64);
     /// Kameraziel (Kartenpixel) und Zoom.
     fn camera(&self) -> (Vec2, f32);
+    /// Kameraziel und Zoom von Spieler 2 (Koop); `None` = ein Spieler, ein Bild.
+    fn camera2(&self) -> Option<(Vec2, f32)> {
+        None
+    }
+    /// Ansichten dieses Bildes (gemeinsam oder geteilt, `split.rs`), vor `bodies`, `lights` und `hud`.
+    fn set_views(&mut self, _views: &split::Views, _viewport: Vec2) {}
     fn bodies(&self, out: &mut Vec<Body>);
     /// Fahrzeugbilder (RGBA8, Breite, Höhe), einmal abgeholt.
     fn take_vehicle_atlas(&mut self) -> Option<(Vec<u8>, u32, u32)> {
@@ -253,6 +259,7 @@ pub fn run_with(options: Options, game: Option<Box<dyn Game>>) -> Result<()> {
         renderer: None,
         done: false,
         capture,
+        views: split::Views::single(camera.clone()),
         camera,
         index,
         streamer,
@@ -291,6 +298,8 @@ struct App {
     renderer: Option<renderer::Renderer>,
     done: bool,
     camera: Camera,
+    /// Ansichten des letzten Bildes (Splitscreen: zwei; sonst eine = `camera`)
+    views: split::Views,
     keys: HashSet<KeyCode>,
     pressed: HashSet<KeyCode>,
     typed: String,
@@ -527,6 +536,20 @@ impl ApplicationHandler for App {
                     let (position, zoom) = game.camera();
                     self.camera.position = position;
                     self.camera.zoom = (zoom * self.zoom_factor).clamp(0.5, 3.2);
+                    // Koop: aus beiden Wunschkameras ein gemeinsames oder geteiltes Bild
+                    self.views = match game.camera2() {
+                        Some((p2, z2)) => {
+                            let cam2 = Camera {
+                                position: p2,
+                                zoom: (z2 * self.zoom_factor).clamp(0.5, 3.2),
+                                scale: self.camera.scale,
+                            };
+                            split::split_views(&self.camera, &cam2, renderer.viewport())
+                        }
+                        None => split::Views::single(self.camera.clone()),
+                    };
+                    self.camera = self.views.cams[0].clone();
+                    game.set_views(&self.views, renderer.viewport());
                     self.bodies.clear();
                     game.bodies(&mut self.bodies);
                     renderer.set_bodies(&self.bodies);
@@ -563,7 +586,7 @@ impl ApplicationHandler for App {
                     overlay.sdf = game.graphics().mode == graphics::GraphicsMode::Hd;
                     game.hud(&self.camera, viewport, &mut overlay);
                     game.end_frame();
-                    renderer.set_hud(&overlay.items, overlay.map);
+                    renderer.set_hud(&overlay.items, overlay.map, overlay.map2);
                 } else if self.focused {
                     self.camera.position += movement.normalize_or_zero()
                         * (if self.keys.contains(&KeyCode::ShiftLeft) {
@@ -578,9 +601,17 @@ impl ApplicationHandler for App {
                         Vec2::new(self.index.meta.width, self.index.meta.height),
                     );
                 }
+                if self.game.is_none() {
+                    self.views = split::Views::single(self.camera.clone());
+                }
+                let second = (self.views.count == 2).then(|| {
+                    let c = &self.views.cams[1];
+                    (c.position, renderer.view_bounds(c))
+                });
                 self.streamer.focus(Focus {
                     position: self.camera.position,
                     view: renderer.view_bounds(&self.camera),
+                    second,
                 });
                 if let Some(snapshot) = self.streamer.latest() {
                     renderer.sync(&snapshot);
@@ -619,7 +650,7 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                     return;
                 }
-                let rendered = renderer.render(&self.camera);
+                let rendered = renderer.render_views(&self.views);
                 self.work_ms = now.elapsed().as_secs_f32() * 1000.;
                 if self.metrics.is_some() && matches!(rendered, Ok(true)) {
                     // erst nach der Aufwärmphase (Kacheln hochladen, Kamera eingeschwungen) zählen

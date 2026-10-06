@@ -54,6 +54,13 @@ pub(crate) struct Renderer {
     /// Nachbearbeitung und HUD behalten `uniform`/`bind` (volle Größe)
     scene_uniform: wgpu::Buffer,
     scene_bind: wgpu::BindGroup,
+    /// Splitscreen: Kamera der zweiten Ansicht (Szene und volle Größe)
+    scene_uniform2: wgpu::Buffer,
+    scene_bind2: wgpu::BindGroup,
+    uniform2: wgpu::Buffer,
+    bind2: wgpu::BindGroup,
+    /// Ansichten des letzten Bildes (Aufnahme zeichnet sie nach)
+    last_cams: Vec<Camera>,
     /// Tiefe des HUD-Durchgangs (Minikarte), eine Abtastung
     hud_depth: wgpu::TextureView,
     silhouettes: Option<wgpu::Buffer>,
@@ -91,9 +98,12 @@ pub(crate) struct Renderer {
     hud: Option<wgpu::Buffer>,
     hud_capacity: usize,
     hud_count: u32,
-    map: Option<MapInset>,
+    /// Minikarten (Koop: zwei), je mit eigener Kamera
+    maps: [Option<MapInset>; 2],
     map_uniform: wgpu::Buffer,
     map_bind: wgpu::BindGroup,
+    map_uniform2: wgpu::Buffer,
+    map_bind2: wgpu::BindGroup,
     overlay_pipeline: wgpu::RenderPipeline,
     overview: Option<(wgpu::Buffer, wgpu::Buffer, u32)>,
     /// GPU-Zeit je Bild (nur mit `--messung` und wenn der Adapter Zeitstempel kann)
@@ -228,6 +238,26 @@ impl Renderer {
                 resource: scene_uniform.as_entire_binding(),
             }],
         });
+        let camera_buffer = |label| {
+            let buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: UNIFORM_BYTES,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(label),
+                layout: &camera_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf.as_entire_binding(),
+                }],
+            });
+            (buf, bind)
+        };
+        let (scene_uniform2, scene_bind2) = camera_buffer("Kamera der Szene (Ansicht 2)");
+        let (uniform2, bind2) = camera_buffer("Kamera (Ansicht 2)");
+        let (map_uniform2, map_bind2) = camera_buffer("Minikarte 2");
         let map_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Minikarte"),
             size: UNIFORM_BYTES,
@@ -523,7 +553,8 @@ impl Renderer {
             &[],
             config.format,
             1,
-            None,
+            // Splitscreen: die zweite Ansicht mischt sich mit Deckkraft ein (sonst Deckkraft 1 = unverändert)
+            Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Always,
         );
@@ -573,6 +604,11 @@ impl Renderer {
             pixel_bind: None,
             pixel,
             scene_uniform,
+            scene_uniform2,
+            scene_bind2,
+            uniform2,
+            bind2,
+            last_cams: Vec::new(),
             scene_bind,
             hud_depth,
             silhouettes: None,
@@ -605,9 +641,11 @@ impl Renderer {
             hud: None,
             hud_capacity: 0,
             hud_count: 0,
-            map: None,
+            maps: [None; 2],
             map_uniform,
             map_bind,
+            map_uniform2,
+            map_bind2,
             gpu,
             acquire_ms: 0.,
             overlay_pipeline,
@@ -838,10 +876,13 @@ impl Renderer {
             });
         self.overview = Some((vertices, indices, mesh.indices.len() as u32));
     }
-    pub fn set_hud(&mut self, items: &[HudItem], map: Option<MapInset>) {
+    pub fn set_hud(&mut self, items: &[HudItem], map: Option<MapInset>, map2: Option<MapInset>) {
         self.hud_count = items.len() as u32;
-        self.map = map.filter(|m| m.rect[2] >= 4. && m.rect[3] >= 4. && m.span > 0.);
-        if let Some(m) = self.map {
+        let ok =
+            |m: Option<MapInset>| m.filter(|m| m.rect[2] >= 4. && m.rect[3] >= 4. && m.span > 0.);
+        self.maps = [ok(map), ok(map2)];
+        for (k, m) in self.maps.into_iter().enumerate() {
+            let Some(m) = m else { continue };
             // eigene Kamera: Mitte, Maßstab Pixel je Welt-px, Ausschnittgröße; params.y = schematisch
             let mut u = vec![
                 m.center[0],
@@ -855,9 +896,13 @@ impl Renderer {
             ];
             u.extend([0.3, -0.5, 0.8, 0.]);
             u.extend([self.scale, 1., m.px, if m.detail { 1. } else { 0. }]);
-            u.extend([0.; 8]);
-            self.queue
-                .write_buffer(&self.map_uniform, 0, bytemuck::cast_slice(&u));
+            u.extend([0.; 12]);
+            let buf = if k == 0 {
+                &self.map_uniform
+            } else {
+                &self.map_uniform2
+            };
+            self.queue.write_buffer(buf, 0, bytemuck::cast_slice(&u));
         }
         if items.is_empty() {
             return;
@@ -904,7 +949,7 @@ impl Renderer {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        camera: &Camera,
+        cams: &[Camera],
         timestamps: Option<u32>,
     ) {
         // Messung: Anfang im ersten Durchgang des Bildes, Ende im HUD-Durchgang (dem letzten)
@@ -916,174 +961,134 @@ impl Renderer {
                 end_of_pass_write_index: (!begin).then_some(q + 1),
             })
         };
-        let visible = self.view_bounds(camera).expand(512.);
-        let l = self.lighting;
-        let shadows = l.shadow_strength > 0.02;
-        let night = l.dark > 0.;
-        // 1) Schattenmaske: auch Häuser außerhalb des Bildes können hineinwerfen (bis 900 px)
-        if shadows {
-            let casters = visible.expand(900.);
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Schattenmaske"),
-                timestamp_writes: stamp(true),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.light.mask.view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-            pass.set_bind_group(0, &self.scene_bind, &[]);
-            pass.set_bind_group(1, &self.atlas_bind, &[]);
-            pass.set_pipeline(&self.light.shadow);
-            for tile in self.tiles.values().filter(|t| t.bounds.intersects(casters)) {
-                if let (Some(v), Some(i)) = (&tile.shadows, &tile.shadow_indices) {
-                    pass.set_vertex_buffer(0, v.slice(..));
-                    pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.draw_indexed(0..tile.source.shadow_indices.len() as u32, 0, 0..1);
+        // je Ansicht (Splitscreen: zwei) dieselben Durchgänge in dieselben Ziele; die zweite legt sich in der
+        // Nachbearbeitung nur auf ihre Bildhälfte
+        for (k, camera) in cams.iter().enumerate() {
+            let (first, last) = (k == 0, k + 1 == cams.len());
+            let (sb, b) = if first {
+                (&self.scene_bind, &self.bind)
+            } else {
+                (&self.scene_bind2, &self.bind2)
+            };
+            let begin = || if first { stamp(true) } else { None };
+            let visible = self.view_bounds(camera).expand(512.);
+            let l = self.lighting;
+            let shadows = l.shadow_strength > 0.02;
+            let night = l.dark > 0.;
+            // 1) Schattenmaske: auch Häuser außerhalb des Bildes können hineinwerfen (bis 900 px)
+            if shadows {
+                let casters = visible.expand(900.);
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Schattenmaske"),
+                    timestamp_writes: begin(),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.light.mask.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+                pass.set_bind_group(0, sb, &[]);
+                pass.set_bind_group(1, &self.atlas_bind, &[]);
+                pass.set_pipeline(&self.light.shadow);
+                for tile in self.tiles.values().filter(|t| t.bounds.intersects(casters)) {
+                    if let (Some(v), Some(i)) = (&tile.shadows, &tile.shadow_indices) {
+                        pass.set_vertex_buffer(0, v.slice(..));
+                        pass.set_index_buffer(i.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..tile.source.shadow_indices.len() as u32, 0, 0..1);
+                    }
+                }
+                pass.set_pipeline(&self.light.tree_shadow);
+                for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+                    if let Some(sprites) = &tile.sprites {
+                        pass.set_vertex_buffer(0, sprites.slice(..));
+                        pass.draw(0..6, 0..tile.source.sprites.len() as u32);
+                    }
                 }
             }
-            pass.set_pipeline(&self.light.tree_shadow);
-            for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
-                if let Some(sprites) = &tile.sprites {
-                    pass.set_vertex_buffer(0, sprites.slice(..));
-                    pass.draw(0..6, 0..tile.source.sprites.len() as u32);
+            // 2) Lichtkarte: Umgebungslicht plus Lichtquellen
+            if night {
+                let lin = |c: f32| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) } as f64;
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Lichtkarte"),
+                    timestamp_writes: if shadows { None } else { begin() },
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.light.lightmap.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: lin(l.ambient[0]),
+                                g: lin(l.ambient[1]),
+                                b: lin(l.ambient[2]),
+                                a: 1.,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+                if let Some(lights) = self
+                    .light
+                    .lights
+                    .as_ref()
+                    .filter(|_| self.light.light_count > 0)
+                {
+                    pass.set_bind_group(0, sb, &[]);
+                    pass.set_bind_group(1, &self.atlas_bind, &[]);
+                    pass.set_pipeline(&self.light.light);
+                    pass.set_vertex_buffer(0, lights.slice(..));
+                    pass.draw(0..6, 0..self.light.light_count);
                 }
             }
-        }
-        // 2) Lichtkarte: Umgebungslicht plus Lichtquellen
-        if night {
-            let lin = |c: f32| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) } as f64;
+            let pixel_post = self.graphics.mode == GraphicsMode::Pixel && self.pixel_bind.is_some();
+            // 3) Bild: Karte, Schatten auf den Boden, Bäume/Decals, bewegte Objekte, dann das Licht
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Lichtkarte"),
-                timestamp_writes: if shadows { None } else { stamp(true) },
+                label: Some("Berlin frame"),
+                timestamp_writes: if shadows || night { None } else { begin() },
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.light.lightmap.view,
+                    view: &self.targets.color,
                     depth_slice: None,
-                    resolve_target: None,
+                    resolve_target: self.targets.resolve.as_ref(),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: lin(l.ambient[0]),
-                            g: lin(l.ambient[1]),
-                            b: lin(l.ambient[2]),
+                            r: 0.14,
+                            g: 0.20,
+                            b: 0.12,
                             a: 1.,
                         }),
-                        store: wgpu::StoreOp::Store,
+                        // mit Kantenglättung zählt nur das aufgelöste Bild (auf Kachel-GPUs bleibt die Abtastung so im
+                        // Kachelspeicher)
+                        store: if self.targets.resolve.is_some() {
+                            wgpu::StoreOp::Discard
+                        } else {
+                            wgpu::StoreOp::Store
+                        },
                     },
                 })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.targets.depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.),
+                        // der Pixel-Modus liest die Tiefe für die Konturen
+                        store: if pixel_post {
+                            wgpu::StoreOp::Store
+                        } else {
+                            wgpu::StoreOp::Discard
+                        },
+                    }),
+                    stencil_ops: None,
+                }),
                 ..Default::default()
             });
-            if let Some(lights) = self
-                .light
-                .lights
-                .as_ref()
-                .filter(|_| self.light.light_count > 0)
-            {
-                pass.set_bind_group(0, &self.scene_bind, &[]);
-                pass.set_bind_group(1, &self.atlas_bind, &[]);
-                pass.set_pipeline(&self.light.light);
-                pass.set_vertex_buffer(0, lights.slice(..));
-                pass.draw(0..6, 0..self.light.light_count);
-            }
-        }
-        let pixel_post = self.graphics.mode == GraphicsMode::Pixel && self.pixel_bind.is_some();
-        // 3) Bild: Karte, Schatten auf den Boden, Bäume/Decals, bewegte Objekte, dann das Licht
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Berlin frame"),
-            timestamp_writes: if shadows || night { None } else { stamp(true) },
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.targets.color,
-                depth_slice: None,
-                resolve_target: self.targets.resolve.as_ref(),
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.14,
-                        g: 0.20,
-                        b: 0.12,
-                        a: 1.,
-                    }),
-                    // mit Kantenglättung zählt nur das aufgelöste Bild (auf Kachel-GPUs bleibt die Abtastung so im
-                    // Kachelspeicher)
-                    store: if self.targets.resolve.is_some() {
-                        wgpu::StoreOp::Discard
-                    } else {
-                        wgpu::StoreOp::Store
-                    },
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.targets.depth,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.),
-                    // der Pixel-Modus liest die Tiefe für die Konturen
-                    store: if pixel_post {
-                        wgpu::StoreOp::Store
-                    } else {
-                        wgpu::StoreOp::Discard
-                    },
-                }),
-                stencil_ops: None,
-            }),
-            ..Default::default()
-        });
-        pass.set_bind_group(0, &self.scene_bind, &[]);
-        pass.set_bind_group(1, &self.atlas_bind, &[]);
-        pass.set_bind_group(2, &self.materials, &[]);
-        pass.set_pipeline(&self.pipes.tiles);
-        for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
-            if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
-                pass.set_vertex_buffer(0, vertices.slice(..));
-                pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
-            }
-        }
-        // Hintergrundboden: nur wo keine Fläche liegt (Tiefe noch leer)
-        pass.set_pipeline(&self.pipes.ground);
-        pass.draw(0..3, 0..1);
-        if shadows {
-            pass.set_pipeline(&self.pipes.comp.shadow);
-            pass.set_bind_group(1, &self.light.mask.bind, &[]);
-            pass.draw(0..3, 0..1);
+            pass.set_bind_group(0, sb, &[]);
             pass.set_bind_group(1, &self.atlas_bind, &[]);
-        }
-        pass.set_pipeline(&self.pipes.sprites);
-        for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
-            if let Some(sprites) = &tile.sprites {
-                pass.set_vertex_buffer(0, sprites.slice(..));
-                pass.draw(0..6, 0..tile.source.sprites.len() as u32);
-            }
-        }
-        // Körper: Schriftatlas (Gruppe 2), Lichtkarte (Gruppe 3; ohne Nacht ungenutzt, der Shader fragt die Dunkelheit)
-        let body_groups = |pass: &mut wgpu::RenderPass| {
-            pass.set_bind_group(1, &self.vehicle_bind, &[]);
-            pass.set_bind_group(2, &self.world_font, &[]);
-            pass.set_bind_group(3, &self.light.lightmap.bind, &[]);
-        };
-        if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
-            body_groups(&mut pass);
-            pass.set_pipeline(&self.pipes.bodies);
-            pass.set_vertex_buffer(0, bodies.slice(..));
-            pass.draw(0..6, 0..self.body_count);
-        }
-        if night {
-            pass.set_pipeline(&self.pipes.comp.light);
-            pass.set_bind_group(1, &self.light.lightmap.bind, &[]);
-            pass.draw(0..3, 0..1);
-            pass.set_pipeline(&self.pipes.comp.ambient);
-            pass.draw(0..3, 0..1);
-            if self.lighting.dark > 0.3 && self.graphics.post_level() == 0 {
-                pass.set_pipeline(&self.pipes.comp.bloom);
-                pass.draw(0..3, 0..1);
-            }
-        }
-        let m = self.lighting.minutes.rem_euclid(1440.);
-        if self.lighting.windows > 0.001 || !(330. ..=1380.).contains(&m) {
-            pass.set_pipeline(&self.pipes.windows);
-            pass.set_bind_group(1, &self.atlas_bind, &[]);
+            pass.set_bind_group(2, &self.materials, &[]);
+            pass.set_pipeline(&self.pipes.tiles);
             for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
                 if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
                     pass.set_vertex_buffer(0, vertices.slice(..));
@@ -1091,145 +1096,208 @@ impl Renderer {
                     pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
                 }
             }
-        }
-        if let Some(buffer) = self
-            .silhouettes
-            .as_ref()
-            .filter(|_| self.silhouette_count > 0)
-        {
-            body_groups(&mut pass);
-            pass.set_pipeline(&self.pipes.silhouettes);
-            pass.set_vertex_buffer(0, buffer.slice(..));
-            pass.draw(0..6, 0..self.silhouette_count);
-        }
-        if let Some(buffer) = self.effects.as_ref().filter(|_| self.effect_count > 0) {
-            body_groups(&mut pass);
-            pass.set_pipeline(&self.pipes.effects);
-            pass.set_vertex_buffer(0, buffer.slice(..));
-            pass.draw(0..6, 0..self.effect_count);
-        }
-        drop(pass);
-        // 3b) Bloom aus dem HDR-Bild (ab Mittel): Schwelle → ½, bei Hoch zusätzlich ½ → ¼ → zurück auf ½
-        let level = self.graphics.post_level();
-        if level >= 1 {
-            let mut step = |label, view: &wgpu::TextureView, src: &wgpu::BindGroup, pipe, load| {
+            // Hintergrundboden: nur wo keine Fläche liegt (Tiefe noch leer)
+            pass.set_pipeline(&self.pipes.ground);
+            pass.draw(0..3, 0..1);
+            if shadows {
+                pass.set_pipeline(&self.pipes.comp.shadow);
+                pass.set_bind_group(1, &self.light.mask.bind, &[]);
+                pass.draw(0..3, 0..1);
+                pass.set_bind_group(1, &self.atlas_bind, &[]);
+            }
+            pass.set_pipeline(&self.pipes.sprites);
+            for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+                if let Some(sprites) = &tile.sprites {
+                    pass.set_vertex_buffer(0, sprites.slice(..));
+                    pass.draw(0..6, 0..tile.source.sprites.len() as u32);
+                }
+            }
+            // Körper: Schriftatlas (Gruppe 2), Lichtkarte (Gruppe 3; ohne Nacht ungenutzt, der Shader fragt die Dunkelheit)
+            let body_groups = |pass: &mut wgpu::RenderPass| {
+                pass.set_bind_group(1, &self.vehicle_bind, &[]);
+                pass.set_bind_group(2, &self.world_font, &[]);
+                pass.set_bind_group(3, &self.light.lightmap.bind, &[]);
+            };
+            if let Some(bodies) = self.bodies.as_ref().filter(|_| self.body_count > 0) {
+                body_groups(&mut pass);
+                pass.set_pipeline(&self.pipes.bodies);
+                pass.set_vertex_buffer(0, bodies.slice(..));
+                pass.draw(0..6, 0..self.body_count);
+            }
+            if night {
+                pass.set_pipeline(&self.pipes.comp.light);
+                pass.set_bind_group(1, &self.light.lightmap.bind, &[]);
+                pass.draw(0..3, 0..1);
+                pass.set_pipeline(&self.pipes.comp.ambient);
+                pass.draw(0..3, 0..1);
+                if self.lighting.dark > 0.3 && self.graphics.post_level() == 0 {
+                    pass.set_pipeline(&self.pipes.comp.bloom);
+                    pass.draw(0..3, 0..1);
+                }
+            }
+            let m = self.lighting.minutes.rem_euclid(1440.);
+            if self.lighting.windows > 0.001 || !(330. ..=1380.).contains(&m) {
+                pass.set_pipeline(&self.pipes.windows);
+                pass.set_bind_group(1, &self.atlas_bind, &[]);
+                for tile in self.tiles.values().filter(|t| t.bounds.intersects(visible)) {
+                    if let (Some(vertices), Some(indices)) = (&tile.vertices, &tile.indices) {
+                        pass.set_vertex_buffer(0, vertices.slice(..));
+                        pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..tile.source.indices.len() as u32, 0, 0..1);
+                    }
+                }
+            }
+            if let Some(buffer) = self
+                .silhouettes
+                .as_ref()
+                .filter(|_| self.silhouette_count > 0)
+            {
+                body_groups(&mut pass);
+                pass.set_pipeline(&self.pipes.silhouettes);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..6, 0..self.silhouette_count);
+            }
+            if let Some(buffer) = self.effects.as_ref().filter(|_| self.effect_count > 0) {
+                body_groups(&mut pass);
+                pass.set_pipeline(&self.pipes.effects);
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                pass.draw(0..6, 0..self.effect_count);
+            }
+            drop(pass);
+            // 3b) Bloom aus dem HDR-Bild (ab Mittel): Schwelle → ½, bei Hoch zusätzlich ½ → ¼ → zurück auf ½
+            let level = self.graphics.post_level();
+            if level >= 1 {
+                let mut step =
+                    |label, view: &wgpu::TextureView, src: &wgpu::BindGroup, pipe, load| {
+                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some(label),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view,
+                                depth_slice: None,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load,
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            ..Default::default()
+                        });
+                        pass.set_bind_group(0, sb, &[]);
+                        pass.set_bind_group(1, src, &[]);
+                        pass.set_pipeline(pipe);
+                        pass.draw(0..3, 0..1);
+                    };
+                let clear = wgpu::LoadOp::Clear(wgpu::Color::BLACK);
+                let t = &self.targets;
+                step(
+                    "Bloom Schwelle",
+                    &t.half,
+                    &t.post,
+                    &self.bloom.prefilter,
+                    clear,
+                );
+                if level >= 2 {
+                    step("Bloom ¼", &t.quarter, &t.half_bind, &self.bloom.down, clear);
+                    step(
+                        "Bloom ¼ → ½",
+                        &t.half,
+                        &t.quarter_bind,
+                        &self.bloom.up,
+                        wgpu::LoadOp::Load,
+                    );
+                }
+            }
+            // 3c) Pixel-Modus: Palette je kleinem Bildpunkt
+            if let Some(bind) = self.pixel_bind.as_ref().filter(|_| pixel_post) {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some(label),
+                    label: Some("Pixel: Palette"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
+                        view: &self.targets.pix,
                         depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load,
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
                     ..Default::default()
                 });
-                pass.set_bind_group(0, &self.scene_bind, &[]);
-                pass.set_bind_group(1, src, &[]);
-                pass.set_pipeline(pipe);
+                pass.set_bind_group(0, b, &[]);
+                pass.set_bind_group(1, &self.targets.post, &[]);
+                pass.set_bind_group(3, bind, &[]);
+                pass.set_pipeline(&self.pixel.quant);
                 pass.draw(0..3, 0..1);
-            };
-            let clear = wgpu::LoadOp::Clear(wgpu::Color::BLACK);
-            let t = &self.targets;
-            step(
-                "Bloom Schwelle",
-                &t.half,
-                &t.post,
-                &self.bloom.prefilter,
-                clear,
-            );
-            if level >= 2 {
-                step("Bloom ¼", &t.quarter, &t.half_bind, &self.bloom.down, clear);
-                step(
-                    "Bloom ¼ → ½",
-                    &t.half,
-                    &t.quarter_bind,
-                    &self.bloom.up,
-                    wgpu::LoadOp::Load,
-                );
             }
-        }
-        // 3c) Pixel-Modus: Palette je kleinem Bildpunkt
-        if let Some(bind) = self.pixel_bind.as_ref().filter(|_| pixel_post) {
+            // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Pixel: Palette"),
+                label: Some("Nachbearbeitung und HUD"),
+                timestamp_writes: if last { stamp(false) } else { None },
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.targets.pix,
+                    view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        // zweite Ansicht: über die erste, nur auf ihrer Seite der Trennlinie
+                        load: if first {
+                            wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                        } else {
+                            wgpu::LoadOp::Load
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.hud_depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 ..Default::default()
             });
-            pass.set_bind_group(0, &self.bind, &[]);
-            pass.set_bind_group(1, &self.targets.post, &[]);
-            pass.set_bind_group(3, bind, &[]);
-            pass.set_pipeline(&self.pixel.quant);
+            // 4a) Szenenbild ins Ausgabebild (Farbabstimmung, Vignette)
+            pass.set_bind_group(0, b, &[]);
+            match self.pixel_bind.as_ref().filter(|_| pixel_post) {
+                Some(bind) => {
+                    pass.set_bind_group(1, &self.targets.pix_bind, &[]);
+                    pass.set_bind_group(3, bind, &[]);
+                    pass.set_pipeline(&self.pixel.pipeline);
+                }
+                None => {
+                    pass.set_bind_group(1, &self.targets.post, &[]);
+                    pass.set_bind_group(3, &self.targets.half_bind, &[]);
+                    pass.set_pipeline(&self.post_pipeline);
+                }
+            }
             pass.draw(0..3, 0..1);
-        }
-        // 4) HUD über allem (ohne Tiefentest), dazwischen die Minikarte in ihrem Rechteck
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Nachbearbeitung und HUD"),
-            timestamp_writes: stamp(false),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.hud_depth,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            ..Default::default()
-        });
-        // 4a) Szenenbild ins Ausgabebild (Farbabstimmung, Vignette)
-        pass.set_bind_group(0, &self.bind, &[]);
-        match self.pixel_bind.as_ref().filter(|_| pixel_post) {
-            Some(bind) => {
-                pass.set_bind_group(1, &self.targets.pix_bind, &[]);
-                pass.set_bind_group(3, bind, &[]);
-                pass.set_pipeline(&self.pixel.pipeline);
+            if !last {
+                continue;
             }
-            None => {
-                pass.set_bind_group(1, &self.targets.post, &[]);
-                pass.set_bind_group(3, &self.targets.half_bind, &[]);
-                pass.set_pipeline(&self.post_pipeline);
-            }
-        }
-        pass.draw(0..3, 0..1);
-        let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
-            return;
-        };
-        let split = self
-            .map
-            .map_or(self.hud_count, |m| m.split.min(self.hud_count));
-        pass.set_bind_group(0, &self.bind, &[]);
-        pass.set_pipeline(&self.hud_pipeline);
-        pass.set_bind_group(1, &self.hud_font, &[]);
-        pass.set_vertex_buffer(0, hud.slice(..));
-        pass.draw(0..6, 0..split);
-        if let Some(m) = self.map {
-            let (w, h) = (self.size.width as f32, self.size.height as f32);
-            let x0 = m.rect[0].clamp(0., w);
-            let y0 = m.rect[1].clamp(0., h);
-            let x1 = (m.rect[0] + m.rect[2]).clamp(0., w);
-            let y1 = (m.rect[1] + m.rect[3]).clamp(0., h);
-            if x1 - x0 >= 1. && y1 - y0 >= 1. {
-                let k = m.span / m.rect[2] / 2.;
-                let (c, r) = (Vec2::from(m.center), Vec2::new(m.rect[2], m.rect[3]) * k);
+            let Some(hud) = self.hud.as_ref().filter(|_| self.hud_count > 0) else {
+                return;
+            };
+            // HUD in Abschnitten, dazwischen die Minikarten (in der Reihenfolge, in der sie entstanden)
+            pass.set_bind_group(0, &self.bind, &[]);
+            pass.set_pipeline(&self.hud_pipeline);
+            pass.set_bind_group(1, &self.hud_font, &[]);
+            pass.set_vertex_buffer(0, hud.slice(..));
+            let mut from = 0;
+            for (k, m) in self.maps.iter().enumerate() {
+                let Some(m) = *m else { continue };
+                let split = m.split.clamp(from, self.hud_count);
+                pass.draw(0..6, from..split);
+                from = split;
+                let (w, h) = (self.size.width as f32, self.size.height as f32);
+                let x0 = m.rect[0].clamp(0., w);
+                let y0 = m.rect[1].clamp(0., h);
+                let x1 = (m.rect[0] + m.rect[2]).clamp(0., w);
+                let y1 = (m.rect[1] + m.rect[3]).clamp(0., h);
+                if x1 - x0 < 1. || y1 - y0 < 1. {
+                    continue;
+                }
+                let kk = m.span / m.rect[2] / 2.;
+                let (c, r) = (Vec2::from(m.center), Vec2::new(m.rect[2], m.rect[3]) * kk);
                 let area = Bounds {
                     min: c - r,
                     max: c + r,
@@ -1237,7 +1305,12 @@ impl Renderer {
                 .expand(256.);
                 pass.set_viewport(m.rect[0], m.rect[1], m.rect[2], m.rect[3], 0., 1.);
                 pass.set_scissor_rect(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32);
-                pass.set_bind_group(0, &self.map_bind, &[]);
+                let mb = if k == 0 {
+                    &self.map_bind
+                } else {
+                    &self.map_bind2
+                };
+                pass.set_bind_group(0, mb, &[]);
                 pass.set_bind_group(1, &self.atlas_bind, &[]);
                 if m.overview {
                     if let Some((v, i, n)) = &self.overview {
@@ -1263,8 +1336,8 @@ impl Renderer {
                 pass.set_pipeline(&self.hud_pipeline);
                 pass.set_bind_group(1, &self.hud_font, &[]);
                 pass.set_vertex_buffer(0, hud.slice(..));
-                pass.draw(0..6, split..self.hud_count);
             }
+            pass.draw(0..6, from..self.hud_count);
         }
     }
     /// Read back our own render target for repeatable visual QA, independent of desktop capture.
@@ -1292,10 +1365,16 @@ impl Renderer {
             mapped_at_creation: false,
         });
         let mut encoder = self.device.create_command_encoder(&Default::default());
+        // Splitscreen: beide Ansichten des letzten Bildes (deren Uniforms stehen noch)
+        let cams = if self.last_cams.len() == 2 {
+            self.last_cams.clone()
+        } else {
+            vec![camera.clone()]
+        };
         self.draw_scene(
             &mut encoder,
             &texture.create_view(&Default::default()),
-            camera,
+            &cams,
             None,
         );
         encoder.copy_texture_to_buffer(
@@ -1356,7 +1435,55 @@ impl Renderer {
         eprintln!("GPU-Aufnahme: {}", path.display());
         Ok(())
     }
-    pub fn render(&mut self, camera: &Camera) -> Result<bool> {
+    /// Kamera-Uniforms einer Ansicht schreiben: volle Größe (Nachbearbeitung, HUD) und Szene (im Pixel-Modus klein).
+    fn write_camera(
+        &self,
+        camera: &Camera,
+        split: [f32; 4],
+        full: &wgpu::Buffer,
+        scene: &wgpu::Buffer,
+    ) {
+        let l = self.lighting;
+        let mut uniform = camera.uniform(self.viewport()).to_vec();
+        // freier Platz hinter `scale`: Nebel für das Fensterlicht
+        uniform[3] = l.fog;
+        // freier Platz hinter dem Bildausschnitt: Nässe der Straßen (Glanz der Bodenmaterialien)
+        uniform[6] = l.wet;
+        // dahinter: Stufe der Nachbearbeitung (HDR-Bloom, weiche Schatten), GraphicsSettings::post_level
+        // Pixel-Modus: −1 (Szenen-Shader dämpfen Texturdetail, `surface_detail`); die HD-Abfragen (≥ 1) bleiben aus
+        uniform[7] = if self.graphics.mode == GraphicsMode::Pixel {
+            -1.
+        } else {
+            self.graphics.post_level() as f32
+        };
+        uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
+        uniform.extend([self.scale, 0., l.windows, l.warmth]);
+        uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
+        uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
+        uniform.extend(split);
+        self.queue
+            .write_buffer(full, 0, bytemuck::cast_slice(&uniform));
+        // Szene: im Pixel-Modus kleines Ziel, Maßstab / k, Mitte auf das Bildpunktraster gerastet (sonst flimmern
+        // Kanten beim Fahren um einen Bildpunkt hin und her)
+        if self.graphics.mode == GraphicsMode::Pixel {
+            let small = self.scene_size();
+            let k = self.size.width as f32 / small.width as f32;
+            let k = k
+                .min(self.size.height as f32 / small.height as f32)
+                .floor()
+                .max(1.);
+            uniform[2] /= k;
+            let s = uniform[2];
+            uniform[0] = (uniform[0] * s).round() / s;
+            uniform[1] = (uniform[1] * s).round() / s;
+            uniform[4] = small.width as f32;
+            uniform[5] = small.height as f32;
+        }
+        self.queue
+            .write_buffer(scene, 0, bytemuck::cast_slice(&uniform));
+    }
+    /// Ein Bild mit einer oder zwei Ansichten (Splitscreen).
+    pub fn render_views(&mut self, views: &crate::split::Views) -> Result<bool> {
         if !self.drawable() {
             return Ok(false);
         }
@@ -1385,43 +1512,19 @@ impl Renderer {
             return Ok(false);
         }
         self.acquire_ms = t0.elapsed().as_secs_f32() * 1000.;
-        let l = self.lighting;
-        let mut uniform = camera.uniform(self.viewport()).to_vec();
-        // freier Platz hinter `scale`: Nebel für das Fensterlicht
-        uniform[3] = l.fog;
-        // freier Platz hinter dem Bildausschnitt: Nässe der Straßen (Glanz der Bodenmaterialien)
-        uniform[6] = l.wet;
-        // dahinter: Stufe der Nachbearbeitung (HDR-Bloom, weiche Schatten), GraphicsSettings::post_level
-        // Pixel-Modus: −1 (Szenen-Shader dämpfen Texturdetail, `surface_detail`); die HD-Abfragen (≥ 1) bleiben aus
-        uniform[7] = if self.graphics.mode == GraphicsMode::Pixel {
-            -1.
-        } else {
-            self.graphics.post_level() as f32
-        };
-        uniform.extend([l.sun[0], l.sun[1], l.sun[2].max(0.05), l.minutes]);
-        uniform.extend([self.scale, 0., l.windows, l.warmth]);
-        uniform.extend([l.shadow[0], l.shadow[1], l.shadow_len, l.shadow_strength]);
-        uniform.extend([l.ambient[0], l.ambient[1], l.ambient[2], l.dark]);
-        self.queue
-            .write_buffer(&self.uniform, 0, bytemuck::cast_slice(&uniform));
-        // Szene: im Pixel-Modus kleines Ziel, Maßstab / k, Mitte auf das Bildpunktraster gerastet (sonst flimmern
-        // Kanten beim Fahren um einen Bildpunkt hin und her)
-        if self.graphics.mode == GraphicsMode::Pixel {
-            let small = self.scene_size();
-            let k = self.size.width as f32 / small.width as f32;
-            let k = k
-                .min(self.size.height as f32 / small.height as f32)
-                .floor()
-                .max(1.);
-            uniform[2] /= k;
-            let s = uniform[2];
-            uniform[0] = (uniform[0] * s).round() / s;
-            uniform[1] = (uniform[1] * s).round() / s;
-            uniform[4] = small.width as f32;
-            uniform[5] = small.height as f32;
+        let cams: Vec<Camera> = views.cams[..views.count.clamp(1, 2)].to_vec();
+        for (k, cam) in cams.iter().enumerate() {
+            // Splitscreen für die Nachbearbeitung: Normale, Deckkraft der Linie, Seite (0 = ganzes Bild)
+            let side = if views.count == 2 { k as f32 + 1. } else { 0. };
+            let split = [views.normal.x, views.normal.y, views.line, side];
+            let (u, su) = if k == 0 {
+                (&self.uniform, &self.scene_uniform)
+            } else {
+                (&self.uniform2, &self.scene_uniform2)
+            };
+            self.write_camera(cam, split, u, su);
         }
-        self.queue
-            .write_buffer(&self.scene_uniform, 0, bytemuck::cast_slice(&uniform));
+        self.last_cams.clone_from(&cams);
         let view = frame
             .as_ref()
             .map(|f| f.texture.create_view(&Default::default()));
@@ -1430,7 +1533,7 @@ impl Renderer {
         match (&self.offscreen, &view) {
             (Some(target), view) => {
                 // feste Zeichengröße: Bild abseits, im Fenster eine verkleinerte Vorschau (Seitenverhältnis bleibt)
-                self.draw_scene(&mut encoder, target, camera, timestamps);
+                self.draw_scene(&mut encoder, target, &cams, timestamps);
                 if let Some(view) = view {
                     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Fenster (feste Zeichengröße)"),
@@ -1458,7 +1561,7 @@ impl Renderer {
                     }
                 }
             }
-            (None, Some(view)) => self.draw_scene(&mut encoder, view, camera, timestamps),
+            (None, Some(view)) => self.draw_scene(&mut encoder, view, &cams, timestamps),
             (None, None) => unreachable!("ohne Swapchain-Bild oben schon beendet"),
         }
         if let Some(g) = &self.gpu {
@@ -1493,8 +1596,8 @@ pub(crate) fn shader_source() -> String {
     ]
     .concat()
 }
-/// Kamera (32 B) + Sonne + Parameter + Schatten + Umgebungslicht (je 16 B).
-const UNIFORM_BYTES: u64 = 96;
+/// Kamera (32 B) + Sonne + Parameter + Schatten + Umgebungslicht + Splitscreen (je 16 B).
+const UNIFORM_BYTES: u64 = 112;
 fn offscreen_view(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,

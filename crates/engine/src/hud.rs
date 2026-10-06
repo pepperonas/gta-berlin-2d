@@ -334,6 +334,8 @@ pub struct MapInset {
 pub struct Hud {
     pub items: Vec<HudItem>,
     pub map: Option<MapInset>,
+    /// zweite Minikarte (Koop: Spieler 2)
+    pub map2: Option<MapInset>,
     pub scale: f32,
     /// Breite in Basiseinheiten
     pub width: f32,
@@ -347,6 +349,7 @@ impl Hud {
         Self {
             items: Vec::new(),
             map: None,
+            map2: None,
             scale,
             width: viewport[0] / scale,
             height: 720.,
@@ -356,7 +359,7 @@ impl Hud {
     /// Minikarte in das Rechteck (Basiseinheiten) legen; was danach gezeichnet wird, liegt über der Karte.
     pub fn map_inset(&mut self, x: f32, y: f32, w: f32, h: f32, center: [f32; 2], span: f32) {
         let s = self.scale;
-        self.map = Some(MapInset {
+        let m = Some(MapInset {
             rect: [x * s, y * s, w * s, h * s],
             center,
             span,
@@ -365,12 +368,31 @@ impl Hud {
             detail: false,
             px: s,
         });
+        // die zweite Karte im selben Bild (Koop) kommt danach
+        if self.map.is_some() && self.map2.is_none() {
+            self.map2 = m;
+        } else {
+            self.map = m;
+        }
+    }
+    /// Alles ab Element `from` (und Karten, die danach entstanden) um `dx` Basiseinheiten verschieben: ein Block,
+    /// der für eine Bildhälfte gezeichnet wurde, wandert in die rechte Hälfte.
+    pub fn shift_since(&mut self, from: usize, dx: f32) {
+        let d = dx * self.scale;
+        for it in &mut self.items[from..] {
+            it.center[0] += d;
+        }
+        for m in [&mut self.map, &mut self.map2].into_iter().flatten() {
+            if m.split as usize >= from {
+                m.rect[0] += d;
+            }
+        }
     }
     /// Stadtplan in das Rechteck (Basiseinheiten); `span` = Weltbreite des Rechtecks.
     pub fn overview_inset(&mut self, rect: [f32; 4], center: [f32; 2], span: f32, detail: bool) {
         let [x, y, w, h] = rect;
         self.map_inset(x, y, w, h, center, span);
-        if let Some(m) = self.map.as_mut() {
+        if let Some(m) = self.map2.as_mut().or(self.map.as_mut()) {
             m.overview = true;
             m.detail = detail;
         }

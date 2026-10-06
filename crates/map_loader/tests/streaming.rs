@@ -65,6 +65,7 @@ fn focus(stream: &Streamer, x: f32) {
             min: p - Vec2::splat(150.),
             max: p + Vec2::splat(150.),
         },
+        second: None,
     });
 }
 fn wait(stream: &Streamer, condition: impl Fn(&Snapshot) -> bool) -> Snapshot {

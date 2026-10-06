@@ -76,7 +76,10 @@ impl Listener {
     pub fn frame(&mut self, w: &mut World, dt: f64) -> Frame {
         let mut f = Frame::default();
         let (cx, cy) = (w.camera.x, w.camera.y);
-        let near = |x: f64, y: f64| (1. - (x - cx).hypot(y - cy) / EVENT_HEAR).clamp(0., 1.) as f32;
+        // Koop: was einer der beiden Spieler hört (allein genau der Abstand zur Kamera)
+        let (foci, nf) = w.foci();
+        let dist = |x: f64, y: f64| berlin_sim::coop::min_dist(&foci[..nf], x, y);
+        let near = |x: f64, y: f64| (1. - dist(x, y) / EVENT_HEAR).clamp(0., 1.) as f32;
         for e in &w.events {
             let s = match *e {
                 Event::Crash { x, y, strength, .. } => {
@@ -119,7 +122,7 @@ impl Listener {
                 Event::Shot { x, y, weapon, .. } => {
                     let kind = gun_kind(weapon);
                     // Schüsse hört man weiter als einen Unfall
-                    let k = (1. - (x - cx).hypot(y - cy) / (EVENT_HEAR * 2.)).clamp(0., 1.) as f32;
+                    let k = (1. - dist(x, y) / (EVENT_HEAR * 2.)).clamp(0., 1.) as f32;
                     Some((Sfx::Gun(kind, 1.), k))
                 }
                 Event::Swing { x, y, hit, .. } => Some((

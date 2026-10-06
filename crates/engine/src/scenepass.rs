@@ -419,7 +419,8 @@ impl PixelPass {
             &[],
             format,
             1,
-            None,
+            // Splitscreen wie post_fs: zweite Ansicht mischt sich ein
+            Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Always,
         );

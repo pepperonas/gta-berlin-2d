@@ -240,6 +240,31 @@ fn agx(c: vec3<f32>) -> vec3<f32> {
 }
 // Szenenbild (linear, HDR) ins Ausgabebild: Bloom dazu, Farbabstimmung und Vignette, Belichtung, AgX. Ein
 // Bildpunkt je Bildpunkt (gleiche Größe), daher textureLoad.
+// --- Splitscreen (split.rs) ---------------------------------------------------------------------------------------
+// Beide Ansichten zeichnen ins selbe Ausgabebild: Ansicht 1 ganz, Ansicht 2 darüber nur auf ihrer Seite der Linie
+// (Mischung „Alpha“, sonst Deckkraft 1 = unverändert). Die Linie: heller Kern, Schein in der Farbe der Seite (Spieler 1
+// Cyan, Spieler 2 Orange), zur Linie hin leicht abgedunkelt (Tiefe). Dicke in 720er-Basiseinheiten.
+const SPLIT_P1 = vec3(0.20, 0.85, 1.0);
+const SPLIT_P2 = vec3(1.0, 0.55, 0.12);
+fn split_out(p: vec2<f32>, c: vec3<f32>) -> vec4<f32> {
+    if camera.split.w < 0.5 { return vec4(c, 1.0); }
+    let d = dot(p - camera.viewport * 0.5, camera.split.xy) / max(camera.viewport.y / 720.0, 0.25);
+    let ad = abs(d);
+    let a = camera.split.z;
+    let shade = exp(-ad / 18.0) * 0.35 * a;
+    if camera.split.w < 1.5 { return vec4(c * (1.0 - shade), 1.0); }
+    let core = 1.0 - smoothstep(1.2, 2.4, ad);
+    let glow = exp(-ad / 7.0) * 0.6;
+    let halo = mix(select(SPLIT_P1, SPLIT_P2, d > 0.0), vec3(1.0), core);
+    let k = max(core, glow) * a;
+    if d <= 0.0 {
+        // Seite von Spieler 1: nur die Linie, durchscheinend über Ansicht 1
+        if k < 0.003 { discard; }
+        return vec4(halo, k);
+    }
+    return vec4(mix(c * (1.0 - shade), halo, k), 1.0);
+}
+
 @fragment fn post_fs(in: FullOut) -> @location(0) vec4<f32> {
     var c = textureLoad(atlas, vec2<i32>(floor(in.position.xy)), 0).rgb;
     if camera.padding2.y >= 1.0 {
@@ -247,7 +272,7 @@ fn agx(c: vec3<f32>) -> vec3<f32> {
         c += textureSample(aux_tex, aux_samp, in.uv).rgb * strength;
     }
     c *= grade_factor(in.uv);
-    return vec4(agx(c * AGX_EXPOSURE), 1.0);
+    return split_out(in.position.xy, agx(c * AGX_EXPOSURE));
 }
 
 // Bloom (lighting.js drawBloom): helle Stellen der Lichtkarte überstrahlen. Quelle wie brightness(0,55) contrast(5),
@@ -337,6 +362,6 @@ fn pixel_color(q: vec2<i32>, dims: vec2<i32>) -> vec3<f32> {
     let k = max(floor(min(camera.viewport.x / fd.x, camera.viewport.y / fd.y)), 1.0);
     let off = floor((camera.viewport - fd * k) * 0.5);
     let p = floor((in.position.xy - off) / k);
-    if p.x < 0.0 || p.y < 0.0 || p.x >= fd.x || p.y >= fd.y { return vec4(0.0, 0.0, 0.0, 1.0); }
-    return vec4(linear_color(textureLoad(atlas, vec2<i32>(p), 0).rgb), 1.0);
+    if p.x < 0.0 || p.y < 0.0 || p.x >= fd.x || p.y >= fd.y { return split_out(in.position.xy, vec3(0.0)); }
+    return split_out(in.position.xy, linear_color(textureLoad(atlas, vec2<i32>(p), 0).rgb));
 }

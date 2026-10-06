@@ -21,6 +21,33 @@ const MAX_RESIDENT: usize = 64;
 pub struct Focus {
     pub position: Vec2,
     pub view: Bounds,
+    /// zweiter Bildausschnitt (Splitscreen): Kacheln um beide laden und halten
+    pub second: Option<(Vec2, Bounds)>,
+}
+impl Focus {
+    fn spots(&self) -> Vec<(Vec2, Bounds)> {
+        let mut v = vec![(self.position, self.view)];
+        v.extend(self.second);
+        v
+    }
+}
+/// Listen reihum zusammenführen (je eine Kachel aus jeder), ohne Doppelte; eine Liste bleibt, wie sie ist.
+fn interleave(lists: Vec<Vec<TileKey>>) -> Vec<TileKey> {
+    if lists.len() == 1 {
+        return lists.into_iter().next().unwrap_or_default();
+    }
+    let mut out = Vec::new();
+    let n = lists.iter().map(Vec::len).max().unwrap_or(0);
+    for i in 0..n {
+        for l in &lists {
+            if let Some(&k) = l.get(i)
+                && !out.contains(&k)
+            {
+                out.push(k);
+            }
+        }
+    }
+    out
 }
 #[derive(Debug, Default, Clone)]
 pub struct Status {
@@ -288,19 +315,35 @@ fn worker(
         }
         drop(mailbox);
         if let Some(f) = focus {
-            let view_radius = (f.view.max - f.view.min).length() * 0.5 + 512.;
-            let load_radius = 7000_f32.max(view_radius);
-            let keep_radius = 11000_f32.max(load_radius + index.meta.tile);
-            let mut wanted = keys_around(&available, f.position, load_radius, index.meta.tile);
+            let spots = f.spots();
+            let mut lists = Vec::new();
+            let mut keep = HashSet::new();
+            for &(position, view) in &spots {
+                let view_radius = (view.max - view.min).length() * 0.5 + 512.;
+                let load_radius = 7000_f32.max(view_radius);
+                let keep_radius = 11000_f32.max(load_radius + index.meta.tile);
+                lists.push(keys_around(
+                    &available,
+                    position,
+                    load_radius,
+                    index.meta.tile,
+                ));
+                keep.extend(keys_around(
+                    &available,
+                    position,
+                    keep_radius,
+                    index.meta.tile,
+                ));
+            }
+            let mut wanted = interleave(lists);
             wanted.truncate(MAX_RESIDENT);
-            let keep: HashSet<_> =
-                keys_around(&available, f.position, keep_radius, index.meta.tile)
-                    .into_iter()
-                    .collect();
             let mut visible: Vec<_> = wanted
                 .iter()
                 .copied()
-                .filter(|k| k.bounds(index.meta.tile).intersects(f.view.expand(256.)))
+                .filter(|k| {
+                    let b = k.bounds(index.meta.tile);
+                    spots.iter().any(|(_, v)| b.intersects(v.expand(256.)))
+                })
                 .collect();
             visible.sort();
             if visible != last_visible {
@@ -333,11 +376,13 @@ fn worker(
                         .copied()
                         .filter(|k| !wanted.contains(k))
                         .max_by(|&a, &b| {
-                            distance(a, f.position, index.meta.tile).total_cmp(&distance(
-                                b,
-                                f.position,
-                                index.meta.tile,
-                            ))
+                            let near = |k| {
+                                spots
+                                    .iter()
+                                    .map(|(p, _)| distance(k, *p, index.meta.tile))
+                                    .fold(f32::INFINITY, f32::min)
+                            };
+                            near(a).total_cmp(&near(b))
                         });
                     if let Some(far) = far {
                         reg.remove(far, &mut dirty);

@@ -5,6 +5,7 @@ mod bindings;
 mod bindmenu;
 mod carart;
 mod console;
+mod coopview;
 mod effects;
 mod enginedebug;
 mod figart;
@@ -47,7 +48,7 @@ fn main() -> Result<()> {
         metrics: None,
         window: None,
     };
-    let mut args = std::env::args().skip(1);
+    let mut args = std::env::args().skip(1).peekable();
     let mut geo = None;
     let mut check_map = false;
     let mut free = false;
@@ -68,6 +69,8 @@ fn main() -> Result<()> {
     let mut clock: Option<f64> = None;
     let mut sound = true;
     let mut in_car = false;
+    // Koop von Anfang an; Zahl = Spieler 2 so viele Meter östlich (geteiltes Bild)
+    let mut koop: Option<f64> = None;
     let mut force_weather: Option<&'static str> = None;
     let mut stadtplan: Option<f32> = None;
     let mut bars: Option<String> = None;
@@ -167,6 +170,14 @@ fn main() -> Result<()> {
             "--check-map" => check_map = true,
             "--stumm" | "--mute" => sound = false,
             "--im-auto" => in_car = true,
+            "--koop" => {
+                // optional: Abstand von Spieler 2 in Metern (nach Osten)
+                let next = args.peek().and_then(|a| a.parse::<f64>().ok());
+                if next.is_some() {
+                    args.next();
+                }
+                koop = Some(next.unwrap_or(0.));
+            }
             "--befehl" => commands.push(args.next().context("Befehl für --befehl fehlt")?),
             "--bars" => {
                 bars = Some(
@@ -290,7 +301,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--koop [METER]] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen) · im Spiel springen --position/--geo dorthin, --zoom hält die Kamera fest · --messung: Bildzeiten (CPU, GPU) als JSON"
                 );
@@ -378,6 +389,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         play::Start::New
     } else if resume
         || in_car
+        || koop.is_some()
         || stadtplan.is_some()
         || screen.is_some()
         || demo_combat
@@ -444,6 +456,7 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         anyhow::ensure!(r.ok, "Befehl „{c}“ gescheitert");
     }
     play.auto_enter = in_car;
+    play.koop_start = koop;
     play.world.force_weather = force_weather;
     // Aufnahmen: der Boden ist schon so nass bzw. verschneit, wie das erzwungene Wetter es nach einer Weile wäre
     if let Some(k) = force_weather {
