@@ -2317,3 +2317,20 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   `padkbd.rs` (Bildschirmtastatur oben im Bild, Ziffern, Buchstaben, `:.,-`, Leerzeichen, Löschen, OK). Mit der
   Tastatur geöffnet bleibt sie aus. Aufnahme: `--bildschirm konsole-pad`.
 
+## Notizblatt, Seite 2/3: kleine Punkte (06.10.2026)
+
+- **Schneller anfahren:** KI-Gasregelung `((Ziel − Tempo) / 25)` statt `/60` (vorher ab halbem Tempo herangeschlichen;
+  25–30 % schneller auf 50 km/h, Stadtbus 7,8 → 4,6 s). `feel.json anfahr_zuschlag` (0,6) / `anfahr_bis_kmh` (50):
+  `Feel::launch(speed)` aufs Motormoment in `vphys` und auf die Leistungsgrenze der kinematischen KI
+  (`Limits::accel_boosted`), nie auf die Haftgrenze; `Feel::simulation` = 0, Kalibrierung unverändert. Gemessen
+  0–50 km/h: Limousine 2,5 → 2,3 s (haftungsbegrenzt), Kleinwagen 5,3 → 4,3 s. Physik-Anzeige hat Regler dafür.
+- **Leerlauf-Motorsound:** `SoundInput.gear` ist ab 1, die Fahrphysik zählt ab 0 – `sound.rs` gibt `gear + 1`
+  weiter, und `EngineSound::step` normalisiert vor dem Vergleich. Vorher galt Gang 0 gegen 1 in jedem Bild als
+  Herunterschalten: Zwischengas alle 0,5 s (`BLIP_COOLDOWN`), Tonhöhe zuckte bis 6,5 % (auch beim Rollen im ersten
+  Gang). Test `idle_stays_steady_without_blips` (Gegenprobe rot). Testszene `--audio-szene leerlauf`,
+  `GTA_AUDIO_LOG_STEPS` für feinere Protokolle.
+- **Nachladen +6 dB** (`RELOAD`/`RELOADED`, Zielpegel 0,032 bzw. 0,04; Spitzen höchstens 0,26).
+- **Route auf der Straße:** `play::route_dashes` aus `Nav::ahead` – Striche 2,2 m / Lücke 1,4 m, 0,6 m breit,
+  Routenfarbe mit Deckkraft 0,32, Tiefe 0,63 (hinter Fahrzeugen und Häusern), wandern mit 1,4 m/s zum Ziel, nach
+  600 m (`ROUTE_AHEAD`) Schluss. Bild: `images/native/route/route-auf-der-strasse.webp`.
+

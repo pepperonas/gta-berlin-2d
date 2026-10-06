@@ -3439,6 +3439,77 @@ fn assist_items(w: &World) -> Vec<crate::wheel::AssistItem> {
     ]
 }
 
+/// Route auf der Straße: Strichlinie (2,2 m Strich, 1,4 m Lücke, 0,6 m breit) in der Routenfarbe, wandert langsam
+/// zum Ziel, blendet nach `ROUTE_AHEAD` aus. Durchscheinend im Effekt-Durchgang: hinter Autos, Figuren und Häusern.
+const ROUTE_AHEAD: f64 = 6000.;
+fn route_dashes(
+    route: &[(f64, f64)],
+    time: f64,
+    ambient: [f32; 3],
+    spots: &crate::coopview::Spots,
+    out: &mut Vec<Body>,
+) {
+    const DASH: f64 = 22.;
+    const PERIOD: f64 = 36.;
+    if route.len() < 2 {
+        return;
+    }
+    let c = crate::nav::ROUTE_COLOR;
+    // nachts nicht ganz im Dunkel versinken: höchstens halb abgedunkelt
+    let lit = |k: f32| c[0].min(1.) * k.max(0.5);
+    let col = [
+        lit(ambient[0]),
+        c[1] * ambient[1].max(0.5),
+        c[2] * ambient[2].max(0.5),
+    ];
+    let shift = (time * 14.).rem_euclid(PERIOD);
+    // erster Strich hinter der Figur beginnt im Raster, damit die Linie gleichmäßig wandert
+    let mut along = 0.;
+    let mut next = shift - PERIOD;
+    for w in route.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = (b.0 - a.0).hypot(b.1 - a.1);
+        if len < 1e-6 {
+            continue;
+        }
+        let (ux, uy) = ((b.0 - a.0) / len, (b.1 - a.1) / len);
+        let angle = uy.atan2(ux) as f32;
+        while next < along + len {
+            let s0 = (next - along).max(0.);
+            let s1 = (next + DASH - along).min(len);
+            if next > ROUTE_AHEAD {
+                return;
+            }
+            if s1 > s0 + 2. && next + DASH > 18. {
+                let m = (s0 + s1) / 2.;
+                let (x, y) = (a.0 + ux * m, a.1 + uy * m);
+                let d = along + m;
+                if spots.near(x, y, |z| {
+                    let v = 2400. / z.max(0.5);
+                    (v, v * 0.7)
+                }) {
+                    // weich ein- (an der Figur) und ausblenden (am Ende des sichtbaren Stücks)
+                    let fade =
+                        ((d / 60.).min(1.) * ((ROUTE_AHEAD - d) / 1500.).clamp(0., 1.)) as f32;
+                    out.push(Body {
+                        center: [x as f32, y as f32],
+                        half: [((s1 - s0) / 2.) as f32, 3.],
+                        angle,
+                        shape: 0.,
+                        depth: 0.63,
+                        color: [col[0], col[1], col[2], 0.32 * fade],
+                    });
+                }
+            }
+            next += PERIOD;
+        }
+        along += len;
+        if along > ROUTE_AHEAD {
+            break;
+        }
+    }
+}
+
 /// Fahrzeug, in das die Figur einsteigen würde (wie `World::try_enter_car`: das nächste heile in Reichweite, das
 /// kein Spieler fährt).
 pub fn enter_target<'a>(
@@ -4095,6 +4166,19 @@ impl Game for Play {
         // Einsteigen möglich: das Fahrzeug, in das F bzw. Y führt, schimmert dezent (je Spieler zu Fuß); durchscheinend,
         // daher hier und nicht in `bodies` (sonst verdeckte es den Schatten und hellte die Silhouette auf)
         if matches!(self.screen, Screen::Playing) {
+            // Route zum Wegpunkt dezent auf der Straße (je Spieler seine eigene)
+            let sp = self.spots();
+            route_dashes(
+                &self.nav.ahead(self.nav_pos()),
+                self.world.time,
+                ambient,
+                &sp,
+                out,
+            );
+            if self.world.coop() {
+                let pos2 = self.nav2_pos().0;
+                route_dashes(&self.nav2.ahead(pos2), self.world.time, ambient, &sp, out);
+            }
             let w = &self.world;
             enter_hint(w, &w.player, PLAYER_RING[0], ambient, out);
             if let Some(s) = w.p2.as_ref() {
@@ -4701,6 +4785,31 @@ mod tests {
         );
         step(&mut p, Pad::default(), b);
         assert!(!p.console.open && !p.kbd.on, "B schließt");
+    }
+    /// Route auf der Straße: Striche entlang der Strecke, nur im Bild, höchstens `ROUTE_AHEAD` voraus, wandern
+    /// mit der Zeit und liegen hinter Autos (Tiefe größer als die der Fahrzeuge).
+    #[test]
+    fn route_is_drawn_on_the_street_ahead() {
+        let route = vec![(0., 0.), (3000., 0.), (3000., 9000.)];
+        let sp = crate::coopview::Spots::one(1500., 0., 1.);
+        let mut out = Vec::new();
+        route_dashes(&route, 0., [1.; 3], &sp, &mut out);
+        assert!(out.len() > 40, "Striche im Bild: {}", out.len());
+        assert!(out.iter().all(|b| b.depth > 0.62 && b.color[3] <= 0.33));
+        // nur entlang der Strecke (erste Gerade, y = 0) und im Bild
+        assert!(
+            out.iter()
+                .all(|b| b.center[1].abs() < 1. || (b.center[0] - 3000.).abs() < 1.)
+        );
+        // weit voraus: nichts
+        let far = crate::coopview::Spots::one(3000., 8500., 1.);
+        let mut out2 = Vec::new();
+        route_dashes(&route, 0., [1.; 3], &far, &mut out2);
+        assert!(out2.is_empty(), "jenseits von ROUTE_AHEAD keine Striche");
+        // wandert: später liegen die Striche woanders
+        let mut out3 = Vec::new();
+        route_dashes(&route, 1., [1.; 3], &sp, &mut out3);
+        assert_ne!(out[0].center, out3[0].center);
     }
     /// Einsteigen möglich: das nächste freie Fahrzeug schimmert in der Farbe des Spielers, sonst nichts.
     #[test]

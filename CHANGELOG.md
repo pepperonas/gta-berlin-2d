@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Route auf der Straße.** Ist ein Wegpunkt gesetzt, liegt die Strecke als dezente, langsam
+  zum Ziel wandernde violette Strichlinie auf der Fahrbahn (nächste 600 m, hinter Autos und Häusern, nachts nur halb
+  abgedunkelt) – nicht mehr nur auf der Minikarte. Im Koop je Spieler seine Route.
 - Native Fassung: **Nachladen lauter** (+6 dB, Magazin und Einrasten), ging im Kampfgeräusch unter.
 - Native Fassung: **Leerlauf-Motorsound repariert.** Die Fahrphysik zählt Gänge ab 0, der Motorsound ab 1: im ersten
   Gang galt deshalb jedes Bild als Herunterschalten, und der Motor bekam alle 0,5 s Zwischengas – im Stand zuckte die
