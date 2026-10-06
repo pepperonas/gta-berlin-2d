@@ -183,7 +183,7 @@ Geprüft in den Quellen von wgpu 29, cpal 0.18 und gilrs 0.11 (Cargo-Registry) s
 
 | Baustein | Befund | Bewertung |
 |---|---|---|
-| DirectX auf der Series S | UWP bekommt DX12 mit **Feature Level 11.0** (App- wie Spielmodus), Shader Model 5.1–6.4; im App-Modus gibt es DX12 im Developer Mode nur über **WARP** (Software) – Spielmodus ist Pflicht. Empfohlene Auflösung Series S: 2560 × 1440. | passt |
+| DirectX auf der Series S | UWP bekommt DX12 mit **Feature Level 11.0** (App- wie Spielmodus), Shader Model 5.1–6.4; im App-Modus gibt es DX12 im Developer Mode nur über **WARP** (Software) – Spielmodus ist Pflicht (**widerlegt** am 06.10.2026: auch im App-Modus Hardware-GPU, aber gedeckelt, siehe unten). Empfohlene Auflösung Series S: 2560 × 1440. | passt |
 | wgpu-DX12 | `wgpu-hal/src/dx12/adapter.rs` legt das Gerät mit **D3D_FEATURE_LEVEL_11_0** an (fragt bis 12_2 ab). Oberflächen: HWND, DirectComposition-Visual, Surface-Handle und **XAML-`SwapChainPanel`** (`SurfaceTargetUnsafe::SwapChainPanel`); **kein `CoreWindow`**. | trägt, wenn die Hülle ein `SwapChainPanel` liefert |
 | Fenster/Eingabe | winit hat keinen UWP-Weg. Die Engine braucht einen Betrieb ohne winit: die Hülle treibt die Bilder (Render-Schleife), reicht Größe und Tasten durch. | Umbau nötig (`engine/lib.rs App`) |
 | Rust-Ziel | `x86_64-uwp-windows-msvc`: Tier 3, **std wird unterstützt**, aber nur mit Nightly und `-Z build-std=std,panic_abort`; ein `pc-windows-msvc`-Build kann Win32-Funktionen importieren, die es im Xbox-Betriebssystem nicht gibt (DLL lädt dann nicht). | machbar, Nightly festpinnen |
@@ -196,8 +196,40 @@ Vorbilder: **Cemu-UWP** (XboxEmuPorts) läuft auf der Series S im Developer Mode
 `SwapChainPanel` (dort D3D11 FL 11.0, D3D12 nur experimentell) und hält sich an rund 5 GB; **firstuwp-rs** zeigt eine reine
 Rust-UWP-App mit XAML. Ein Rust/wgpu-Spiel auf der Xbox ist nirgends belegt (ein Ruffle-UWP-Versuch ist ohne Ergebnis).
 
-**Umsetzung von (a) und (b) liegt bereit (05.10.2026):** `crates/xbox_probe` + `xbox/RustProbe` (Anleitung
-`xbox/RustProbe/README.md`), noch nicht auf Windows gebaut.
+**Umsetzung von (a) und (b) (05.10.2026):** `crates/xbox_probe` + `xbox/RustProbe` (Anleitung
+`xbox/RustProbe/README.md`).
+
+#### Ergebnis auf der Konsole (05./06.10.2026, Series X, Developer Mode, OS 10.0.26100.9438)
+
+**(a) und (b) sind belegt:** Rust (`x86_64-uwp-windows-msvc`, Nightly, build-std) + wgpu-DX12 zeichnen in einer
+C#-UWP-Hülle ins `SwapChainPanel`. Die Systembibliotheken laden im Sandkasten (`d3d12`, `dxgi`, `d3dcompiler_47`,
+`dcomp`), der Adapter ist die Hardware-GPU **`SraKmd_arden`** (daneben WARP), Feature Level 11.0, Texturgrenze 16384 px,
+Float-Ziele und 4× MSAA gehen. Korrektur zur Tabelle oben: auch im **App-Modus** gab es die Hardware-GPU, nicht nur WARP.
+
+Was auf der Konsole scheiterte und für das Spiel gilt:
+
+| Befund | Ursache | Folge fürs Spiel |
+|---|---|---|
+| `QueryInterface(ISwapChainPanelNative)` → `E_NOINTERFACE` | Hülle nahm die **WinUI-3-GUID** `63aad0b8-…` (die auch wgpu intern trägt); UWP-XAML kennt nur `F92F19D2-3ADE-45A6-A20C-F6F1EA90554B`. wgpu ruft nur `SetSwapChain` (gleiche vtable). | UWP-GUID verwenden |
+| Bild friert nach dem ersten Frame ein | Gezeichnet im UI-Thread (`CompositionTarget.Rendering`); `Fifo`-Warten auf das nächste Bild blockiert das Panel, das selbst den UI-Thread braucht | **eigener Render-Thread**; UI-Thread nur für `SetSwapChain` (erstes `configure`) |
+| Nach 7 Bildern „Surface is not configured“ | Fenster 960×540 → 1920×1080 nach dem Start; `configure` → `ResizeBuffers` scheitert („Invalid surface“), wgpu-hal hat die Swapchain da schon per `take()` verworfen | **Swapchain nicht in der Größe ändern** (Startgröße, DXGI streckt) oder neu anlegen; endgültige Größe abwarten |
+| Gerät verloren, `DXGI_ERROR_DRIVER_INTERNAL_ERROR` (`0x887A0020`) | **Anlegen der Zeitstempel-Abfragen** (`TIMESTAMP_QUERY`, zweimal an derselben Stelle) | **keine GPU-Zeitstempel** auf der Xbox; Messung per Fence |
+| Neuaufbau direkt danach: `DXGI_ERROR_DEVICE_RESET`, dann gar kein Adapter | GPU-Reset nach dem Treiberfehler | nach Geräteverlust Pause (Probe: 10 s), nicht sofort neu |
+| „Validation“ ohne Fehlertext | wgpu meldet ein verlorenes Gerät nicht über `on_uncaptured_error`, nur über `set_device_lost_callback`; DX12-Grund über `GetDeviceRemovedReason` (`as_hal::<Dx12>().raw_device()`) | beide Rückmeldungen einbauen |
+| Sonderzeichen als `�` | Consolas fehlt auf der Konsole | Standardschrift |
+
+**Messung (Fence: Last einzeln abschicken, Zeit bis die GPU fertig ist; 8 Schichten in 2560×1440, Float, 4× MSAA):**
+**53 ms Median, P95 193 ms** – noch im **App-Modus** (laut Microsoft höchstens 45 % der GPU, geteilt, 1 GB). Mac-Vergleich mit
+Zeitstempeln 4,46 ms; vergleichbarer Mac-Wert per `PROBE_FENCE=1 cargo run --release -p berlin-probe --example mac` steht aus.
+
+**Offen:** Spielmodus. Der in allen Anleitungen beschriebene Schalter (Dev Home → Ansichtstaste → *View details* → *App type:
+Game*) existiert auf dieser Systemversion nicht; die sideloadete App steht unter „Apps“. Noch nicht probiert: Device Portal
+*Settings → Preference Settings* „Treat UWP apps as games by default“. Ohne Spielmodus ist die Leistung des Spiels auf der
+Konsole nicht beurteilbar.
+
+Arbeitsumgebung: Windows-11-ARM64-VM (Parallels) auf dem Mac genügt. Visual Studio 2022 braucht dafür zusätzlich die
+MSVC-Tools **x64 und ARM64** (Buildskripte laufen auf dem ARM64-Host) und die C++-UWP-Unterstützung. Der Debug-Build der Hülle
+stürzt in der ARM-VM beim Start ab (x64-CoreCLR von UWP unter Emulation), Release (.NET Native) läuft.
 
 Vorgeschlagene Reihenfolge für Schritt 3: (a) leere C#- oder C++/WinRT-XAML-Hülle mit `SwapChainPanel`, Spielmodus;
 (b) Rust als `cdylib` für `x86_64-uwp-windows-msvc` (Nightly, build-std) mit einer Funktion, die den Panel-Zeiger nimmt und
