@@ -512,7 +512,7 @@ pub fn draw_menu(h: &mut Hud, m: &Menu, cx: f32, y: f32) {
         let bg = if sel {
             YELLOW
         } else {
-            [0.06, 0.067, 0.094, 0.7]
+            [0.06, 0.067, 0.094, 0.94]
         };
         h.rect(cx - width / 2., yy - height / 2., width, height, bg, 10.);
         let color = if sel {
@@ -606,11 +606,32 @@ pub fn open_url(url: &str) {
     let _ = cmd.arg(url).spawn();
 }
 
+/// Abdunkelung der unteren Bildhälfte im Titel: von 0 (y = `SHADE_FROM`) bis 0,35 am unteren Rand, in schmalen
+/// Streifen mit glattem Anstieg (smoothstep), damit keine Kante sichtbar ist.
+const SHADE_FROM: f32 = 300.;
+const SHADE_STRIPS: usize = 42;
+fn title_shade(h: &mut Hud, vw: f32) {
+    let step = (720. - SHADE_FROM) / SHADE_STRIPS as f32;
+    for i in 0..SHADE_STRIPS {
+        let t = (i as f32 + 0.5) / SHADE_STRIPS as f32;
+        let a = 0.35 * t * t * (3. - 2. * t);
+        h.rect(
+            0.,
+            SHADE_FROM + i as f32 * step,
+            vw,
+            step + 0.5,
+            [0.04, 0.03, 0.08, a],
+            0.,
+        );
+    }
+}
+
 pub fn draw_title(h: &mut Hud, m: &Menu, loading: bool, link_hover: bool) -> [f32; 4] {
     let vw = h.width;
     // abgedunkelt, unten stärker (ein Verlauf aus Streifen zeigte Nähte zwischen den Kanten)
     h.rect(0., 0., vw, 720., [0.04, 0.03, 0.1, 0.4], 0.);
-    h.rect(0., 430., vw, 290., [0.04, 0.03, 0.08, 0.35], 0.);
+    // unten dunkler (die Skyline hebt sich ab) – als weicher Verlauf, eine harte Kante lief quer durchs Menü
+    title_shade(h, vw);
     skyline(h);
     // Logo: Anton mit Verlauf, Kontur, 3D-Extrusion und Schatten (HD), Bitmap mit Extrusion (Pixel)
     h.logo(

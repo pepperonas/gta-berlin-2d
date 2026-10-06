@@ -6,6 +6,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ## [Unreleased] – Entwicklungsstand 2026-10-04
 
+### Behoben
+
+- Native Fassung: Titelbildschirm ohne harte Schattenkante quer durchs Menü – die untere Abdunkelung ist jetzt ein weicher
+  Verlauf, die Menüknöpfe decken fast ganz (die Skyline schien vorher durch die unteren Knöpfe).
+
 ### Neu
 
 - **README zeigt das Spiel:** neuer Abschnitt „So sieht es aus“ mit zwei Mockups (Laptop, Fernseher mit Controller)
