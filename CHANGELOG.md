@@ -525,6 +525,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Behoben
 
+- Native Fassung: Öffnet man das Waffenrad mit beiden Maustasten, bleibt die Figur jetzt sofort stehen – ein laufender
+  Klick-Laufauftrag wird abgebrochen, und solange das Rad gedrückt oder offen ist, startet kein neuer. Nach dem
+  Schließen läuft sie nicht von selbst weiter.
 - Xbox-Machbarkeitsprobe: Die UWP-Hülle fragte das `SwapChainPanel` mit der WinUI-3-GUID von `ISwapChainPanelNative`
   (`63aad0b8-…`) ab, die ein UWP-Panel mit `E_NOINTERFACE` ablehnt. Jetzt nimmt sie die UWP-GUID (`F92F19D2-…`). In der
   Windows-VM (ARM64, Release-Build) läuft die Kette damit durch: DLLs geladen, Oberfläche angelegt, Last läuft (WARP).

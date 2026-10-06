@@ -3086,6 +3086,11 @@ impl Play {
             input.combat.fire |= m.right;
             input.combat.fire_pressed |= m.right_pressed;
         }
+        if combo && on_foot {
+            // Waffenrad mit beiden Maustasten: Klicklaufen gesperrt, ein laufender Klickauftrag endet sofort
+            w2.player.click = None;
+            w2.player.click_goal = None;
+        }
         if self.diablo && on_foot && !combo {
             // Diablo: Klick läuft hin (steigt nie ein, greift nie an, `click_attack` bleibt aus)
             let ctrl = keys.held.contains(&KeyCode::ControlLeft)
@@ -5114,6 +5119,78 @@ mod tests {
             },
         );
         assert!(!p.wheel_m.open && !p.wheel_m.down, "loslassen schließt");
+        // laufen per Linksklick, dann die rechte Taste dazu: das Rad sperrt das Laufen und hält die Figur an
+        let far = Some(glam::Vec2::new(
+            (p.world.player.x + 140.) as f32,
+            p.world.player.y as f32,
+        ));
+        let (x0, _) = (p.world.player.x, p.world.player.y);
+        step(
+            &mut p,
+            Mouse {
+                world: far,
+                hud,
+                left: true,
+                left_pressed: true,
+                ..Default::default()
+            },
+        );
+        for _ in 0..8 {
+            step(
+                &mut p,
+                Mouse {
+                    world: far,
+                    hud,
+                    left: true,
+                    ..Default::default()
+                },
+            );
+        }
+        assert!(p.world.player.x - x0 > 2., "läuft los");
+        step(
+            &mut p,
+            Mouse {
+                world: far,
+                hud,
+                left: true,
+                right: true,
+                right_pressed: true,
+                ..Default::default()
+            },
+        );
+        let held = (p.world.player.x, p.world.player.y);
+        for _ in 0..40 {
+            step(
+                &mut p,
+                Mouse {
+                    world: far,
+                    hud,
+                    left: true,
+                    right: true,
+                    ..Default::default()
+                },
+            );
+        }
+        assert!(p.wheel_m.open, "Rad offen");
+        assert!(p.world.player.click.is_none() && p.world.player.click_goal.is_none());
+        let moved = (p.world.player.x - held.0).hypot(p.world.player.y - held.1);
+        assert!(
+            moved < 3.,
+            "steht still, solange das Rad offen ist: {moved}"
+        );
+        // nach dem Loslassen läuft sie nicht von selbst weiter
+        for _ in 0..30 {
+            step(
+                &mut p,
+                Mouse {
+                    world: far,
+                    hud,
+                    ..Default::default()
+                },
+            );
+        }
+        let after = (p.world.player.x - held.0).hypot(p.world.player.y - held.1);
+        assert!(after < 3., "kein Weiterlaufen nach dem Rad: {after}");
         // im Auto: keine Maustaste steigt aus (einzeln, zusammen, getippt, gehalten, doppelt)
         let pc = p.world.player_car_id.expect("Spielerauto");
         let (cx, cy) = p.world.car(pc).map(|c| (c.x, c.y)).unwrap();
