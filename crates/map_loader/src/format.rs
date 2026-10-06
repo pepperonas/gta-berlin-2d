@@ -183,6 +183,8 @@ pub enum Feature {
     /// ergeben sie den Umriss. Belag wie im Querschnitt (0 Asphalt, 1 Pflaster, 2 Platten, 3 unbefestigt).
     Plate {
         corners: Vec<Vec<Vec2>>,
+        /// Füllfläche, wenn sich die Eckzüge nicht zu einem einfachen Umriss reihen (konvexe Hülle der Mündungen)
+        fill: Option<Vec<Vec2>>,
         level: i8,
         surface: u8,
     },
@@ -417,7 +419,9 @@ impl Tile {
                 .iter()
                 .map(coords)
                 .collect::<Result<Vec<_>>>()?;
-            ensure!(corners.len() >= 2, "Kreuzungsfläche mit zu wenigen Ecken");
+            // Straßenenden haben einen Eckzug (um das Ende herum), Kreuzungen mindestens zwei
+            ensure!(!corners.is_empty(), "Kreuzungsfläche ohne Eckzug");
+            let fill = r.get(5).map(coords).transpose()?;
             plated.insert(node);
             if let Some(also) = r.get(4) {
                 for v in array(also)? {
@@ -428,6 +432,7 @@ impl Tile {
                 id: Some(FeatureId(3, node)),
                 feature: Feature::Plate {
                     corners,
+                    fill,
                     level: unpack_lvl(integer(&r[1])? as u32),
                     surface: code(&r[2])?,
                 },
@@ -645,8 +650,15 @@ fn markings(
         size: Vec2::new(along, across),
         angle: dir.y.atan2(dir.x),
     };
+    // Lage der Überwege je Straße (Bogenlänge, halbe Tiefe) – die Haltlinie steht davor
+    let mut walks: std::collections::BTreeMap<usize, Vec<(f32, f32)>> = Default::default();
     for q in crossings.as_chunks::<4>().0 {
         let (p, eid, kind) = (Vec2::new(q[0] as f32, q[1] as f32), q[2] as i64, q[3] as u8);
+        // markierte, ungeregelte Querungen ohne Zebrastreifen sind in Berlin meist nur abgesenkte Bordsteine: keine
+        // Linien (die zwei dünnen Querlinien lasen sich als Fremdkörper auf der Fahrbahn)
+        if kind >= 2 {
+            continue;
+        }
         let Some((k, (r, _))) = roads.iter().enumerate().find(|(_, (r, _))| r.id == eid) else {
             continue;
         };
@@ -655,6 +667,10 @@ fn markings(
         };
         let (d, n) = (at.direction, Vec2::new(-at.direction.y, at.direction.x));
         let half = r.width * 0.5 - 0.3 * scale;
+        walks
+            .entry(k)
+            .or_default()
+            .push((at.s, if kind == 0 { 2. * scale } else { 2.4 * scale }));
         let out = per_road.entry(k).or_default();
         match kind {
             0 => {
@@ -685,7 +701,7 @@ fn markings(
         let Some(vi) = vertices.id.iter().position(|&v| v == sig) else {
             continue;
         };
-        let trim = vertices.trim.get(vi).copied().unwrap_or(0.).max(3. * scale);
+        let lane_trim = vertices.trim.get(vi).copied().unwrap_or(0.).max(3. * scale);
         for (k, (r, (ia, ib))) in roads.iter().enumerate() {
             let toward_end = *ib == vi;
             if !toward_end && *ia != vi {
@@ -697,7 +713,20 @@ fn markings(
             }
             let cum = cum_lengths(&r.points);
             let len = *cum.last().unwrap_or(&0.);
-            let back = trim + 0.6 * scale;
+            // Haltlinie 1 m vor der Kreuzungsfläche (Kürzung dieses Endes), ohne Fläche vor der alten Spurkürzung;
+            // liegt ein Überweg dicht davor, 1 m vor dem Überweg
+            let plate = if toward_end { r.trim[1] } else { r.trim[0] };
+            let mut back = if plate > 0. {
+                plate + 1. * scale
+            } else {
+                lane_trim + 0.6 * scale
+            };
+            for &(sw, half_w) in walks.get(&k).map_or(&[][..], |v| v.as_slice()) {
+                let from_end = if toward_end { len - sw } else { sw };
+                if from_end + half_w + 1. * scale > back && from_end - half_w < back + 8. * scale {
+                    back = from_end + half_w + 1. * scale;
+                }
+            }
             if len < back + 2. * scale {
                 continue;
             }

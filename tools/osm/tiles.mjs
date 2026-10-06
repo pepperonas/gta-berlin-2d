@@ -66,11 +66,12 @@ export function tileCity(g, { tile, meta, places }) {
     });
   });
   // Kreuzungsflächen mit echten Ecken (plates.mjs, nur Darstellung): [Knoten-gid, Ebene, Belag, Eckzüge (je delta),
-  // weitere Knoten der Gruppe (optional; deren Scheiben entfallen ebenfalls)].
+  // weitere Knoten der Gruppe (optional; deren Scheiben entfallen ebenfalls), Füllfläche (optional, delta: nur wenn
+  // sich die Eckzüge nicht zu einem einfachen Umriss reihen – dann die konvexe Hülle der Mündungen)].
   // Jeder Eckzug läuft von der linken Mündungskante einer Straße zur rechten der nächsten; aneinandergereiht ergeben
   // sie den Umriss der Fläche. Abgelegt in jeder Kachel, die die Eckzüge berühren (+ Gehwegbreite).
   for (const p of g.plates ?? []) {
-    each(bboxOf(p.corners.flat(), 2.2 * S), (t) => t.plates.push([p.v, packLvl(p.lvl), p.surface, p.corners.map(delta), ...(p.also?.length ? [p.also] : [])]));
+    each(bboxOf(p.corners.flat(), 2.2 * S), (t) => t.plates.push([p.v, packLvl(p.lvl), p.surface, p.corners.map(delta), ...(p.fill ? [p.also ?? [], delta(p.fill)] : p.also?.length ? [p.also] : [])]));
   }
   // Kreuzungsflächen: [Knoten-gid, x, y, Radius px, Brücke | Pflaster << 1 | höchste Ebene << 2 | tiefste Ebene << 5, kleinste Klasse]
   for (const j of g.junctions) each([j.x - j.r, j.y - j.r, j.x + j.r, j.y + j.r], (t) => { vtx(t, j.v); t.junctions.push([j.v, j.x, j.y, j.r, j.bridge | (j.cobble << 1) | (packLvl(j.hi ?? 0) << 2) | (packLvl(j.lo ?? 0) << 5), j.cls]); });

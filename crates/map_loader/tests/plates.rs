@@ -84,3 +84,58 @@ fn trimmed_road_mouths_meet_their_plates() {
         &bad[..bad.len().min(8)]
     );
 }
+
+/// Haltlinien stehen vor der Kreuzungsfläche, nicht in ihr: kein Haltlinien-Mittelpunkt (0,5 m tief, quer über die
+/// Fahrstreifen) liegt mehr als 1 m tief in einer Fläche (vorher standen sie an der alten Scheiben-Kürzung, also oft
+/// mitten auf der Kreuzung).
+#[test]
+fn stop_lines_stand_before_the_junction() {
+    use berlin_map_loader::geom::point_in_ring;
+    let root = default_data_root();
+    let index = Index::read(&root).unwrap();
+    let (mut stops, mut inside) = (0, Vec::new());
+    for key in KEYS {
+        let tile = Tile::read(&root, TileKey::parse(key).unwrap(), &index.meta).unwrap();
+        let rings: Vec<Vec<Vec2>> = tile
+            .items
+            .iter()
+            .filter_map(|i| match &i.feature {
+                Feature::Plate {
+                    corners,
+                    fill: None,
+                    ..
+                } => Some(corners.iter().flatten().copied().collect()),
+                _ => None,
+            })
+            .collect();
+        for item in &tile.items {
+            let Feature::Marks { marks, .. } = &item.feature else {
+                continue;
+            };
+            // Haltlinie: 0,5 m tief (Zebrastreifen 4 m, Furtblöcke quadratisch)
+            for m in marks
+                .iter()
+                .filter(|m| (m.size.x - 5.).abs() < 0.01 && m.size.y > 15.)
+            {
+                stops += 1;
+                let (d, n) = (Vec2::from_angle(m.angle), Vec2::from_angle(m.angle).perp());
+                // 1 m vor und hinter der Linie (in Fahrtrichtung) liegt nicht beides in einer Fläche
+                let deep = rings.iter().any(|r| {
+                    point_in_ring(m.center + d * 10., r) && point_in_ring(m.center - d * 10., r)
+                });
+                let _ = n;
+                if deep {
+                    inside.push((key, m.center));
+                }
+            }
+        }
+    }
+    assert!(stops > 20, "nur {stops} Haltlinien");
+    eprintln!("{stops} Haltlinien, {} in einer Fläche", inside.len());
+    assert!(
+        inside.len() * 50 < stops,
+        "{} von {stops} Haltlinien in einer Kreuzungsfläche, z. B. {:?}",
+        inside.len(),
+        &inside[..inside.len().min(6)]
+    );
+}

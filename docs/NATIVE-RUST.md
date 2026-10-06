@@ -2558,3 +2558,22 @@ mit `PACE_ON = false` ergibt sich nachweislich der alte. Darstellung: `game::fig
 (iconutil), `web/assets/icon.png`/`icon-180.png`, `xbox/GtaBerlin/Assets/*.png` (ungerundet, Dachlinie über die volle
 Breite). winit setzt das Fenster-Icon unter Windows/Linux; unter macOS kommt der Dock-Icon nur über das Bundle
 (`tools/macos-app.sh`, `dist/` ist ignoriert). Datenpfad steht beim Bauen fest (`default_data_root`).
+
+## Straßen wie in Berlin (06.10.2026)
+
+- **Kreuzungsflächen (`tools/osm/plates.mjs`):** Nachbararme mit Winkel < `NOSE_PHI` (0,6 rad) bekommen eine gerade
+  Bordsteinnase von Mündung zu Mündung – parallele Richtungsfahrbahnen hatten Winkelabstand ≈ 0, der wurde zu 2π und
+  als „stumpfe Ecke“ von Knoten zu Knoten quer durch die Kreuzung gezogen (die hellen Balken). Richtungsfahrbahnen:
+  Knoten mit kurzer Querverbindung (< `DUAL_M` 35 m), an denen je eine Einbahn-Fahrbahn gleichen Namens in
+  Gegenrichtung liegt, werden zusammengefasst (Gruppe ≤ `DUAL_SPAN_M` 55 m). Rückfall: ohne Bögen, sonst konvexe
+  Hülle der Mündungen als Füllfläche (Kachelfeld 5 der Plattenzeile, `Feature::Plate::fill`). Straßenenden (Klasse
+  ≤ 8): `endPlate` – Wendehammer (`highway=turning_circle|turning_loop`, `TURN_R_M` 8 m) oder Bordstein quer. Ergebnis
+  des Baus: 132 986 Flächen, davon 3 036 Enden, 6 551 Hüllen; 34 Scheiben übrig (Ebenenwechsel).
+- **Markierung (`mesh.rs lane_lines`):** `has_lane_lines` (Asphalt, ≥ 2 Fahrstreifen, Klasse ≤ 5 oder Fahrbahn ohne
+  Park-/Radstreifen ≥ 7,5 m), Lage nach `lane_edges` (wie street.js), Strich 3 m/Lücke 6 m, Fahrstreifenbegrenzung
+  durchgezogen bei Klasse ≤ 4 mit je ≥ 2 Streifen; `end_gaps`: 2 m an gekürzten Enden (Kreuzung), 0 an Teilungen.
+  Haltlinie (`format.rs markings`) 1 m vor der Plattenkürzung, ggf. 1 m vor einem Überweg; `crossings` Art 2
+  (markiert ohne Zebra) wird nicht gezeichnet (die Daten bleiben für die Simulation).
+- **Tests:** `tests/plates.test.js` (Mittelstreifen-Nase, Straßenende/Wendehammer, Hülle), `mesh.rs
+  lane_lines_berlin_style…`, `tests/plates.rs stop_lines_stand_before_the_junction` (echte Kacheln; mit der alten
+  Platzierung lagen 34 von 68 Haltlinien in einer Fläche, jetzt 0 von 39).

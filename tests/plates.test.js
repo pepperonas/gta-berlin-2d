@@ -1,7 +1,7 @@
 // Kreuzungsflächen mit echten Ecken (tools/osm/plates.mjs): Geometrie an synthetischen Knoten.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { plateOf, platesOf, pointAt, selfIntersects, CORNER_R, lengthOf, MERGE_M } from '../tools/osm/plates.mjs';
+import { plateOf, platesOf, endPlate, convexHull, pointAt, selfIntersects, CORNER_R, lengthOf, MERGE_M, NOSE_PHI, TURN_R_M } from '../tools/osm/plates.mjs';
 
 const S = 10;
 // Straße vom Knoten (0,0) in Richtung `deg` (Grad, mathematisch), `len` m lang, `w` m breit
@@ -113,8 +113,11 @@ test('Knoten wenige Meter auseinander bilden eine gemeinsame Fläche, das Stück
   const e = (id, a, b, w, c = 7) => ({ id, a, b, w: w * 10, c, x: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, id === 10 ? 1 : 0] });
   const edges = [e(10, 1, 2, 10), e(11, 2, 3, 10), e(12, 3, 4, 10), e(13, 2, 5, 7), e(14, 3, 6, 7)];
   const edgePts = (ed) => [P[ed.a][0] * S, P[ed.a][1] * S, P[ed.b][0] * S, P[ed.b][1] * S];
-  const { plates, trimOf } = platesOf(edges, edgePts, S);
+  const { plates: all, trimOf: trimAll } = platesOf(edges, edgePts, S);
+  const plates = all.filter((p) => !p.end);
   assert.equal(plates.length, 1, 'eine Fläche statt zwei überlappender');
+  assert.equal(all.filter((p) => p.end).length, 4, 'die vier Enden des Testnetzes bekommen einen Abschluss');
+  const trimOf = (ed) => trimAll(ed);
   assert.equal(plates[0].v, 2);
   assert.deepEqual(plates[0].also, [3]);
   assert.equal(plates[0].surface, 1, 'Belag der breitesten Straße (erste bei Gleichstand)');
@@ -126,7 +129,7 @@ test('Knoten wenige Meter auseinander bilden eine gemeinsame Fläche, das Stück
   for (const ed of [edges[0], edges[2], edges[3], edges[4]]) {
     const [t0, t1] = trimOf(ed);
     assert.ok(t0 + t1 > 0, `Straße ${ed.id} gekürzt`);
-    const fwd = t0 > 0, flat = edgePts(ed);
+    const fwd = ed.a === 2 || ed.a === 3, flat = edgePts(ed);
     const pp = fwd ? flat : [flat[2], flat[3], flat[0], flat[1]];
     const p = pointAt(pp, fwd ? t0 : t1), h = ed.w / 20 * S;
     const L = [p.x - h * p.uy, p.y + h * p.ux], R = [p.x + h * p.uy, p.y - h * p.ux];
@@ -149,4 +152,49 @@ test('Ketten kurzer Stücke wachsen nicht zu einer langen Fläche zusammen', () 
     const xs = pts(pl.ring).map((q) => q[0]);
     assert.ok(Math.max(...xs) - Math.min(...xs) < 30 * S, `Fläche ${pl.v} zu lang`);
   }
+});
+
+test('Mittelstreifen: parallele Richtungsfahrbahnen bekommen eine Bordsteinnase, keinen Balken quer durch die Kreuzung', () => {
+  // Querstraße (Nord–Süd, zweiseitig) kreuzt eine Straße mit Mittelstreifen: Fahrbahn A (y = −8 m, nach Osten),
+  // Fahrbahn B (y = +8 m, nach Westen); die Querverbindung zwischen den Fahrbahnen ist 16 m lang
+  const P = { 1: [-80, -8], 2: [0, -8], 3: [80, -8], 4: [80, 8], 5: [0, 8], 6: [-80, 8], 7: [0, -80], 8: [0, 80] };
+  const e = (id, a, b, w, o = 0, n = -1) => ({ id, a, b, w: w * 10, c: 5, o, n, x: [] });
+  const edges = [
+    e(1, 1, 2, 7, 1, 3), e(2, 2, 3, 7, 1, 3), // Fahrbahn A nach Osten
+    e(3, 4, 5, 7, 1, 3), e(4, 5, 6, 7, 1, 3), // Fahrbahn B nach Westen
+    e(5, 7, 2, 8), e(6, 2, 5, 8), e(7, 5, 8, 8), // Querstraße
+  ];
+  const edgePts = (ed) => [P[ed.a][0] * S, P[ed.a][1] * S, P[ed.b][0] * S, P[ed.b][1] * S];
+  const { plates, trimOf } = platesOf(edges, edgePts, S);
+  const j = plates.filter((p) => !p.end);
+  assert.equal(j.length, 1, 'beide Knoten sind eine Kreuzung');
+  assert.deepEqual([j[0].v, ...j[0].also].sort(), [2, 5]);
+  const [t0, t1] = trimOf(edges[5]);
+  assert.ok(t0 + t1 >= 160, 'das Stück über den Mittelstreifen gehört zur Fläche');
+  // kein Eckzug verbindet die beiden Knoten quer durch die Kreuzung: jede Ecke bleibt auf einer Seite der Querstraße
+  for (const c of j[0].corners) {
+    const xs = pts(c).map((q) => q[0]);
+    assert.ok(Math.max(...xs) < 1 * S || Math.min(...xs) > -1 * S, `Eckzug quert die Kreuzung: ${xs}`);
+  }
+  assert.ok(NOSE_PHI > 0.3);
+});
+
+test('Straßenende: Bordstein quer über das Ende, Wendehammer als Kreis', () => {
+  const arm0 = { key: 0, pts: [0, 0, 60 * S, 0], h: 3 * S, c: 7 };
+  const flat = endPlate(arm0, S);
+  assert.ok(flat && flat.corners.length === 1);
+  const c = pts(flat.corners[0]);
+  // der Zug läuft von der linken Mündung über das Ende (x = 0) zur rechten
+  assert.ok(c.some((q) => Math.abs(q[0]) < 0.5 && q[1] > 0) && c.some((q) => Math.abs(q[0]) < 0.5 && q[1] < 0));
+  const tc = endPlate(arm0, S, TURN_R_M * S);
+  const r = pts(tc.ring).map((q) => Math.hypot(q[0], q[1]));
+  assert.ok(Math.max(...r) <= TURN_R_M * S + 1 && Math.max(...r) > TURN_R_M * S - 1, 'Kreis um den Knoten');
+  assert.ok(!selfIntersects(tc.ring));
+  assert.ok(Math.abs(area(tc.ring)) > Math.PI * (TURN_R_M * S) ** 2 * 0.7, 'fast ein ganzer Kreis');
+});
+
+test('Rückfall: die konvexe Hülle ist einfach und umfasst alle Punkte', () => {
+  const hull = convexHull([[0, 0], [10, 0], [10, 10], [0, 10], [5, 5], [3, 7]]);
+  assert.equal(hull.length, 8);
+  assert.ok(!selfIntersects(hull));
 });

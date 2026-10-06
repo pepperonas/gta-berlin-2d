@@ -547,8 +547,16 @@ export function buildCity(lor, osmIn, places, { scale = 10, kataster = [], life 
   // --- Spurkürzung je Knoten (Kreuzungsflächen siehe oben; Spiel und Baumregel nutzen dieselben Werte) ----------
   const trim = laneTrim(edges, vertices, S, edgePts);
   // Kreuzungsflächen mit echten Ecken (nur Darstellung der nativen Fassung; Simulation nutzt junctions)
-  const plateData = platesOf(edges, edgePts, S);
-  step(`Kreuzungsflächen ${plateData.plates.length}`);
+  // Wendehämmer (highway=turning_circle/turning_loop) am Ende einer Straße
+  const turning = new Set();
+  for (const nd of osm.tagged) {
+    if (nd.tags.highway === 'turning_circle' || nd.tags.highway === 'turning_loop') {
+      const v = vIndex.get(nd.id);
+      if (v !== undefined) turning.add(v);
+    }
+  }
+  const plateData = platesOf(edges, edgePts, S, { turning });
+  step(`Kreuzungsflächen ${plateData.plates.length} (davon ${plateData.plates.filter((p) => p.end).length} Straßenenden, ${plateData.plates.filter((p) => p.fill).length} als Hülle, Wendehämmer ${turning.size})`);
   const postStats = keepPostsOffCarriageway(access.out, { edges, vertices, junctions, S });
   access.stats.pollerVerschoben = postStats.moved; access.stats.pollerEntfernt = postStats.dropped;
 

@@ -654,7 +654,14 @@ fn curb(mesh: &mut Mesh, points: &[Vec2], width: f32, depth: f32, scale: f32) {
 /// Kreuzungsfläche (`Feature::Plate`): Asphalt im Umriss (die Eckzüge aneinandergereiht) im Belag der Straßen,
 /// vor deren Enden; entlang jedes Eckzugs dieselben Bänder wie an den Straßen (Randstreifen, Gehweg, Bordstein,
 /// Rinne), mittig auf der Fahrbahnkante – die innere Hälfte verdeckt der Asphalt, die äußere ist der Gehweg um die Ecke.
-fn plate_mesh(mesh: &mut Mesh, corners: &[Vec<Vec2>], level: i8, surface: u8, scale: f32) {
+fn plate_mesh(
+    mesh: &mut Mesh,
+    corners: &[Vec<Vec2>],
+    fill: Option<&[Vec2]>,
+    level: i8,
+    surface: u8,
+    scale: f32,
+) {
     let depth = if level > 0 {
         0.68 - level as f32 * 0.03
     } else if level < 0 {
@@ -677,7 +684,11 @@ fn plate_mesh(mesh: &mut Mesh, corners: &[Vec<Vec2>], level: i8, surface: u8, sc
         curb(mesh, line, 0., depth, scale);
     }
     let mut ring: Vec<Vec2> = Vec::new();
-    for p in corners.iter().flatten() {
+    let outline: Box<dyn Iterator<Item = &Vec2>> = match fill {
+        Some(f) => Box::new(f.iter()),
+        None => Box::new(corners.iter().flatten()),
+    };
+    for p in outline {
         if ring.last().is_none_or(|q| q.distance(*p) > 0.05) {
             ring.push(*p);
         }
@@ -698,6 +709,80 @@ fn plate_mesh(mesh: &mut Mesh, corners: &[Vec<Vec2>], level: i8, surface: u8, sc
         None,
     );
 }
+/// Wie weit Längsmarkierungen vor den Enden einer (an Kreuzungsflächen schon gekürzten) Straße aufhören (px, vorn und
+/// hinten): an einer Kreuzung 2 m vor der Mündung (dort steht ggf. die Haltlinie), an einer bloßen Teilung der Straße
+/// (OSM-Weg endet, die Straße läuft weiter) gar nicht – sonst rissen die Linien mitten auf der Straße ab.
+fn end_gaps(r: &Road, scale: f32) -> (f32, f32) {
+    let gap = |t: f32| if t > 0. { 2. * scale } else { 0. };
+    (gap(r.trim[0]), gap(r.trim[1]))
+}
+
+/// Querlage (px, + rechts der Zeichenrichtung) von linkem und rechtem Fahrbahnrand ohne Park-, Radstreifen und
+/// Bordsteinradweg – wie street.js laneOffsets.
+fn lane_edges(r: &Road) -> (f32, f32) {
+    (
+        -r.width / 2. + r.park_width[0] + r.cycle[0] + r.track[0],
+        r.width / 2. - r.park_width[1] - r.cycle[1] - r.track[1],
+    )
+}
+
+/// Bekommt die Straße Längsmarkierungen? Berlin-typisch: Hauptstraßen (bis Klasse 5, tertiär) und breite Fahrbahnen
+/// (ab 7,5 m ohne Park- und Radstreifen); Wohnstraßen, Pflaster und Spielstraßen bleiben unmarkiert.
+pub fn has_lane_lines(r: &Road, scale: f32) -> bool {
+    let (x_l, x_r) = lane_edges(r);
+    r.surface == 0
+        && r.forward + r.backward >= 2
+        && (r.class <= 5 || (r.class <= 7 && x_r - x_l >= 7.5 * scale))
+}
+
+/// Längsmarkierung: Leitlinie zwischen den Fahrtrichtungen (3 m Strich, 6 m Lücke), auf vierstreifigen Hauptstraßen
+/// als durchgezogene Fahrstreifenbegrenzung; zwischen Fahrstreifen gleicher Richtung Leitlinien.
+fn lane_lines(mesh: &mut Mesh, r: &Road, cum: &[f32], length: f32, depth: f32, scale: f32) {
+    if !has_lane_lines(r, scale) {
+        return;
+    }
+    let (x_l, x_r) = lane_edges(r);
+    let lanes = r.forward + r.backward;
+    let lw = (x_r - x_l) / lanes as f32;
+    let (g0, g1) = end_gaps(r, scale);
+    let color = rgb(0xe3dfc9);
+    let dashed = |mesh: &mut Mesh, off: f32| {
+        // Strich beginnt 1 m hinter der Lücke, damit er an der Mündung nicht als Stummel endet
+        let mut s = g0 + 1. * scale;
+        while s + 3. * scale <= length - g1 {
+            if let Some(p) = point_along_cum(&r.points, cum, s + 1.5 * scale) {
+                let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * off;
+                mesh.sprites.push(Sprite {
+                    point: [pos.x, pos.y, 0.],
+                    size: [3. * scale, 0.12 * scale],
+                    angle: p.direction.y.atan2(p.direction.x),
+                    color,
+                    cell: 7.,
+                    depth: depth - 0.001,
+                });
+            }
+            s += 9. * scale;
+        }
+    };
+    for k in 1..lanes {
+        let off = x_l + k as f32 * lw;
+        let divider = r.forward > 0 && r.backward > 0 && k == r.backward;
+        if divider && r.class <= 4 && r.forward >= 2 && r.backward >= 2 {
+            let part = crate::geom::trim_polyline(&r.points, g0, g1);
+            if part.len() >= 2 {
+                let line = crate::geom::offset_polyline(&part, off);
+                mesh.stroke(
+                    &line,
+                    0.14 * scale,
+                    Surface::ground(0xe3dfc9, 0., depth - 0.001),
+                );
+            }
+        } else {
+            dashed(mesh, off);
+        }
+    }
+}
+
 /// Farbe und Material der Fahrbahn je Belag (0 Asphalt, 1 Pflaster, 2 Platten, 3 unbefestigt).
 fn road_surface(surface: u8) -> (u32, f32) {
     match surface {
@@ -852,22 +937,7 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
             s += 30. * scale;
         }
     }
-    if r.forward > 0 && r.backward > 0 && r.class <= 7 {
-        let mut s = margin;
-        while s < length - margin {
-            if let Some(p) = point_along_cum(&r.points, &cum, s) {
-                mesh.sprites.push(Sprite {
-                    point: [p.point.x, p.point.y, 0.],
-                    size: [3. * scale, 0.14 * scale],
-                    angle: p.direction.y.atan2(p.direction.x),
-                    color: rgb(0xe3dfc9),
-                    cell: 7.,
-                    depth: depth - 0.001,
-                });
-            }
-            s += 9. * scale;
-        }
-    }
+    lane_lines(mesh, r, &cum, length, depth, scale);
     // Ölband in der Mitte jedes Fahrstreifens (grime.js laneWear): weiche, überlappende Stempel
     let lanes = (r.forward + r.backward) as usize;
     if r.class <= 8 && lanes > 0 && r.surface == 0 {
@@ -878,8 +948,9 @@ fn road_mesh(mesh: &mut Mesh, r: &Road, scale: f32) {
             let step = 2.4 * scale;
             for i in 0..lanes {
                 let off = -r.width / 2. + left + (i as f32 + 0.5) * inner / lanes as f32;
-                let mut s = margin * 0.6;
-                while s < length - margin * 0.6 {
+                let (g0, g1) = end_gaps(r, scale);
+                let mut s = g0;
+                while s < length - g1 {
                     if let Some(p) = point_along_cum(&r.points, &cum, s) {
                         let pos = p.point + Vec2::new(-p.direction.y, p.direction.x) * off;
                         mesh.sprites.push(Sprite {
@@ -1028,9 +1099,10 @@ pub fn prepare(feature: &Feature, scale: f32) -> Result<Mesh> {
         Feature::Junction { plated: true, .. } => {}
         Feature::Plate {
             corners,
+            fill,
             level,
             surface,
-        } => plate_mesh(&mut mesh, corners, *level, *surface, scale),
+        } => plate_mesh(&mut mesh, corners, fill.as_deref(), *level, *surface, scale),
         Feature::Junction {
             point,
             radius,
@@ -1180,6 +1252,56 @@ pub fn tree_look(genus: u8, seed: u32) -> (f32, u32) {
 }
 #[cfg(test)]
 mod tests {
+    fn street(class: u8, width_m: f32, surface: u8, trim: [f32; 2]) -> Road {
+        Road {
+            id: 1,
+            points: vec![Vec2::ZERO, Vec2::new(1000., 0.)],
+            width: width_m * 10.,
+            class,
+            level: 0,
+            bridge: false,
+            passage: false,
+            surface,
+            forward: 1,
+            backward: 1,
+            park: [0; 2],
+            park_width: [0.; 2],
+            cycle: [0.; 2],
+            track: [0.; 2],
+            fill: 0.,
+            trim,
+        }
+    }
+
+    #[test]
+    fn lane_lines_berlin_style_and_end_before_the_junction() {
+        let s = 10.;
+        // Hauptstraße ja, schmale Wohnstraße nein, breite Wohnstraße ja, Pflaster nie
+        assert!(has_lane_lines(&street(4, 7., 0, [0.; 2]), s));
+        assert!(!has_lane_lines(&street(7, 6.5, 0, [0.; 2]), s));
+        assert!(has_lane_lines(&street(7, 8., 0, [0.; 2]), s));
+        assert!(!has_lane_lines(&street(4, 9., 1, [0.; 2]), s));
+        // Parkstreifen zählen nicht zur Fahrbahnbreite
+        let mut parked = street(7, 9., 0, [0.; 2]);
+        parked.park_width = [20., 20.];
+        assert!(!has_lane_lines(&parked, s));
+        // Lücke nur an Kreuzungsenden (gekürzt), nicht an bloßen Teilungen
+        assert_eq!(end_gaps(&street(4, 7., 0, [40., 0.]), s), (20., 0.));
+        // Striche bleiben innerhalb der Lücken und haben den 9-m-Takt
+        let r = street(4, 7., 0, [40., 40.]);
+        let mut mesh = Mesh::default();
+        let cum = cum_lengths(&r.points);
+        lane_lines(&mut mesh, &r, &cum, 1000., 0.85, s);
+        let xs: Vec<f32> = mesh.sprites.iter().map(|q| q.point[0]).collect();
+        assert!(!xs.is_empty());
+        assert!(
+            xs.iter()
+                .all(|&x| x - 15. >= 20. - 1e-3 && x + 15. <= 980. + 1e-3),
+            "{xs:?}"
+        );
+        assert!(xs.windows(2).all(|w| (w[1] - w[0] - 90.).abs() < 1e-3));
+    }
+
     use super::*;
     use crate::geom::point_in_ring;
 

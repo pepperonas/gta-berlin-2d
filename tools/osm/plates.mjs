@@ -26,6 +26,14 @@ export const MERGE_M = 8;
 /// größte Ausdehnung einer solchen Knotengruppe (m): Ketten kurzer Stücke (Einfahrten im Abstand weniger Meter)
 /// sollen nicht zu einer langen Fläche zusammenwachsen
 export const MERGE_SPAN_M = 14;
+/// Nachbararme mit kleinerem Winkel (rad) bekommen eine gerade Bordsteinnase statt einer Ecke
+export const NOSE_PHI = 0.6;
+/// Richtungsfahrbahnen derselben Straße: Knoten, deren Querverbindung kürzer ist (m), bilden eine Fläche …
+export const DUAL_M = 35;
+/// … und die ganze Gruppe darf so groß werden (m)
+export const DUAL_SPAN_M = 55;
+/// Wendehammer: Radius (m), falls OSM keinen Durchmesser nennt
+export const TURN_R_M = 8;
 
 const norm = (a) => { while (a <= -Math.PI) a += 2 * Math.PI; while (a > Math.PI) a -= 2 * Math.PI; return a; };
 
@@ -72,22 +80,33 @@ export function plateOf(arms, S) {
     r.ord = Math.hypot(r.vx - mx, r.vy - my) < 0.5 ? r.th : Math.atan2(p.y - my, p.x - mx);
   }
   a.sort((p, q) => p.ord - q.ord || p.key - q.key);
-  const n = a.length, hMax = Math.max(...a.map((r) => r.h));
   const vx = Math.round(mx), vy = Math.round(my);
+  // erst mit Bordsteinbögen, sonst mit geraden Ecken; geht beides nicht auf, die Hülle der Mündungen
+  return corners(a, S, true) ?? corners(a, S, false) ?? hullPlate(a, S, vx, vy);
+}
+
+/// Eckzüge und Kürzungen für sortierte Arme `a`; `arcs`: Bordsteinbögen (sonst gerade Ecken). null bei Selbstschnitt.
+function corners(a, S, arcs) {
+  const n = a.length, hMax = Math.max(...a.map((r) => r.h));
+  const vx = Math.round(a.reduce((m, r) => m + r.vx, 0) / n), vy = Math.round(a.reduce((m, r) => m + r.vy, 0) / n);
+  for (const r of a) r.need = 0;
   // Ecken zwischen Straße i (linke Kante) und der nächsten j (rechte Kante)
-  const corners = [];
+  const cs = [];
   for (let i = 0; i < n; i++) {
     const r = a[i], q = a[(i + 1) % n];
+    // fast parallele Nachbarn (Richtungsfahrbahnen einer Straße, spitzes Y): gerade Bordsteinnase zwischen den
+    // Mündungen – als Ecke gerechnet liefen Bordstein und Gehweg als Balken quer durch die Kreuzung
+    if (Math.abs(norm(q.th - r.th)) < NOSE_PHI) { cs.push({ i, j: (i + 1) % n, nose: true }); continue; }
     let phi = q.th - r.th; if (phi <= 0) phi += 2 * Math.PI; // Winkel von i nach j (mathematisch positiv)
     const ni = [-r.dy, r.dx], nj = [-q.dy, q.dx];
-    if (phi >= Math.PI - 0.02) { corners.push({ i, j: (i + 1) % n, convex: true }); continue; }
+    if (phi >= Math.PI - 0.02) { cs.push({ i, j: (i + 1) % n, convex: true }); continue; }
     // L_i: v_i + h_i·n_i + t·d_i  ∩  R_j: v_j − h_j·n_j + s·d_j  (v_i = v_j bei einem Knoten)
     const ex = q.vx - r.vx - q.h * nj[0] - r.h * ni[0], ey = q.vy - r.vy - q.h * nj[1] - r.h * ni[1]; // R_j0 − L_i0
     const det = r.dx * (-q.dy) - r.dy * (-q.dx);
     let t = (ex * (-q.dy) - ey * (-q.dx)) / det;
     let s = (r.dx * ey - r.dy * ex) / det;
     const cap = MITER_MAX * hMax;
-    let R = Math.max(0, CORNER_R(Math.min(r.c, q.c)) * S);
+    let R = arcs ? Math.max(0, CORNER_R(Math.min(r.c, q.c)) * S) : 0;
     const bevel = !(t >= -1 && s >= -1) || t > cap || s > cap;
     if (bevel) { t = Math.min(Math.max(t, 0), cap); s = Math.min(Math.max(s, 0), cap); R = 0; }
     // Bogen: Berührpunkte im Abstand R / tan(φ/2) vom Eckpunkt, gedeckelt
@@ -97,27 +116,18 @@ export function plateOf(arms, S) {
     if (tan > room) { tan = room; R = tan * Math.tan(phi / 2); }
     r.need = Math.max(r.need, t + tan);
     q.need = Math.max(q.need, s + tan);
-    corners.push({ i, j: (i + 1) % n, t, s, tan, R, phi });
+    cs.push({ i, j: (i + 1) % n, t, s, tan, R, phi });
   }
-  // Kürzung je Straße, gedeckelt (kurze Straßen behalten ihre Mitte)
-  for (const r of a) r.T = Math.min(Math.max(r.need, 0.5 * S), r.L * TRIM_SHARE);
-  // Mündung: senkrecht über die gekürzte Straße; linke Normale (−uy, ux) → links = p + h·(−uy, ux)
-  const mouth = a.map((r) => {
-    const p = pointAt(r.pts, r.T);
-    return { R: [p.x + r.h * p.uy, p.y - r.h * p.ux], L: [p.x - r.h * p.uy, p.y + r.h * p.ux] };
-  });
+  const mouth = mouths(a, S);
   const ring = [], cornerLines = [];
-  const arc = (cx, cy, rad, a0, a1, out) => {
-    let d = norm(a1 - a0);
-    const steps = Math.max(2, Math.ceil(Math.abs(d) / 0.3));
-    for (let k = 1; k < steps; k++) { const ang = a0 + d * k / steps; out.push(cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)); }
-  };
-  for (const co of corners) {
+  for (const co of cs) {
     const r = a[co.i], q = a[co.j];
     const mi = mouth[co.i], mj = mouth[co.j];
     ring.push(...mi.R, ...mi.L);
     const line = [...mi.L];
-    if (co.convex) {
+    if (co.nose) {
+      // gerade von Mündung zu Mündung
+    } else if (co.convex) {
       // gerade oder stumpf nach außen: an den Knoten heran, um ihn herum
       const li0 = [r.vx - r.h * r.dy, r.vy + r.h * r.dx], rj0 = [q.vx + q.h * q.dy, q.vy - q.h * q.dx];
       line.push(...li0);
@@ -144,6 +154,77 @@ export function plateOf(arms, S) {
   if (r2.length < 6 || selfIntersects(r2)) return null;
   const trims = new Map(a.map((r) => [r.key, r.T]));
   return { ring: r2, corners: cornerLines, trims, x: vx, y: vy };
+}
+
+/// Kürzung je Straße aus dem Bedarf der Ecken (gedeckelt: kurze Straßen behalten ihre Mitte) und die Mündungen
+/// (senkrecht über die gekürzte Straße; linke Normale (−uy, ux) → links = p + h·(−uy, ux)).
+function mouths(a, S) {
+  for (const r of a) r.T = Math.min(Math.max(r.need, 0.5 * S), r.L * TRIM_SHARE);
+  return a.map((r) => {
+    const p = pointAt(r.pts, r.T);
+    return { R: [p.x + r.h * p.uy, p.y - r.h * p.ux], L: [p.x - r.h * p.uy, p.y + r.h * p.ux] };
+  });
+}
+
+/// Bogen um (cx, cy) von a0 nach a1 (kürzerer Weg) ohne Endpunkte an `out` anhängen.
+function arc(cx, cy, rad, a0, a1, out) {
+  const d = norm(a1 - a0);
+  const steps = Math.max(2, Math.ceil(Math.abs(d) / 0.3));
+  for (let k = 1; k < steps; k++) { const ang = a0 + d * k / steps; out.push(cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)); }
+}
+
+/// Letzte Rückfallstufe: Ecken gerade von Mündung zu Mündung; gefüllt wird die konvexe Hülle aller Mündungspunkte
+/// (`fill`), weil die aneinandergereihten Eckzüge sich hier schneiden. Kürzung wie bei geraden Ecken.
+function hullPlate(a, S, vx, vy) {
+  const mouth = mouths(a, S);
+  const n = a.length;
+  const cornerLines = [];
+  for (let i = 0; i < n; i++) cornerLines.push([...mouth[i].L, ...mouth[(i + 1) % n].R]);
+  const fill = convexHull(mouth.flatMap((m) => [m.R, m.L]));
+  if (fill.length < 6) return null;
+  const trims = new Map(a.map((r) => [r.key, r.T]));
+  return { ring: fill, corners: cornerLines, fill, trims, x: vx, y: vy };
+}
+
+/// Konvexe Hülle (Andrew) von Punkten [[x, y], …] als [x, y, …] gegen den Uhrzeigersinn (mathematisch).
+export function convexHull(points) {
+  const p = points.slice().sort((u, v) => u[0] - v[0] || u[1] - v[1]);
+  if (p.length < 3) return p.flat();
+  const cross = (o, u, v) => (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0]);
+  const lower = [], upper = [];
+  for (const q of p) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop(); lower.push(q); }
+  for (const q of p.reverse()) { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop(); upper.push(q); }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)].flat();
+}
+
+/// Ende einer Straße ohne Fortsetzung: Wendehammer (Kreis um den Knoten, `turnR` px) oder Bordstein quer über das
+/// Ende, um den der Gehweg herumläuft. Der Eckzug läuft von der linken Mündung um das Ende zur rechten.
+export function endPlate(arm, S, turnR = 0) {
+  const L = lengthOf(arm.pts);
+  const [vx, vy] = [arm.pts[0], arm.pts[1]];
+  const d = pointAt(arm.pts, Math.min(3 * S, L * 0.5));
+  let dx = d.x - vx, dy = d.y - vy; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+  const h = arm.h;
+  const rc = turnR > 0 ? Math.max(turnR, h + 2 * S) : 0;
+  const T = Math.min(rc > 0 ? Math.sqrt(rc * rc - h * h) : 1.2 * S, L * TRIM_SHARE);
+  if (T < 0.3 * S) return null;
+  const p = pointAt(arm.pts, T);
+  const Lm = [p.x - h * p.uy, p.y + h * p.ux], Rm = [p.x + h * p.uy, p.y - h * p.ux];
+  const line = [...Lm];
+  if (rc > 0) {
+    // Kreis um den Knoten: von der linken Mündung über die Rückseite zur rechten
+    const a0 = Math.atan2(Lm[1] - vy, Lm[0] - vx), a1 = Math.atan2(Rm[1] - vy, Rm[0] - vx);
+    let sweep = a1 - a0; while (sweep <= 0) sweep += 2 * Math.PI;
+    const steps = Math.max(8, Math.ceil(sweep / 0.2));
+    for (let k = 1; k < steps; k++) { const ang = a0 + sweep * k / steps; line.push(vx + rc * Math.cos(ang), vy + rc * Math.sin(ang)); }
+  } else {
+    // gerades Ende am Knoten
+    line.push(vx - h * dy, vy + h * dx, vx + h * dy, vy - h * dx);
+  }
+  line.push(...Rm);
+  const ring = dedupe([...Rm, ...line]);
+  if (ring.length < 6 || selfIntersects(ring)) return null;
+  return { ring, corners: [dedupe(line)], trims: new Map([[arm.key, T]]), x: Math.round(vx), y: Math.round(vy) };
 }
 
 /// Aufeinanderfolgende Doppelpunkte (< 0,5 px) entfernen.
@@ -177,7 +258,7 @@ export function selfIntersects(ring) {
 /// Flächen aller Knoten mit ≥ 3 Straßen (oder Knick/Breitensprung bei zweien) auf einer Ebene. `edges` wie im Bau,
 /// `edgePts(ed)` = Punkte von a nach b. Liefert { plates: [{ v, x, y, lvl, surface, cobble, ring, corners }],
 /// trimOf(ed) → [vorn, hinten] in px (0 = nicht gekürzt) }.
-export function platesOf(edges, edgePts, S) {
+export function platesOf(edges, edgePts, S, { turning = new Set() } = {}) {
   const at = new Map();
   for (const ed of edges) {
     if (ed.c > SIDEWALK_MAX_CLASS || ed.pass || ed.a === ed.b) continue;
@@ -199,21 +280,45 @@ export function platesOf(edges, edgePts, S) {
     if (L < MERGE_M * S) short.push([L, ed]);
   }
   short.sort((p, q) => p[0] - q[0] || p[1].a - q[1].a || p[1].b - q[1].b);
-  for (const [, ed] of short) {
+  const join = (ed, spanMax) => {
     const ra = find(ed.a), rb = find(ed.b);
-    if (ra === rb) continue;
+    if (ra === rb) return;
     const lv = lvlOf(ed.a);
-    if (lv === null || lvlOf(ed.b) !== lv || at.get(ed.a).length + at.get(ed.b).length < 4) continue;
+    if (lv === null || lvlOf(ed.b) !== lv || at.get(ed.a).length + at.get(ed.b).length < 4) return;
     const all = [...members.get(ra), ...members.get(rb)];
-    if (all.some((v) => lvlOf(v) !== lv)) continue;
+    if (all.some((v) => lvlOf(v) !== lv)) return;
     const ps = all.map(pos);
     const span = Math.hypot(Math.max(...ps.map((p) => p[0])) - Math.min(...ps.map((p) => p[0])), Math.max(...ps.map((p) => p[1])) - Math.min(...ps.map((p) => p[1])));
-    if (span > MERGE_SPAN_M * S) continue;
+    if (span > spanMax * S) return;
     const [keep, drop] = ra < rb ? [ra, rb] : [rb, ra];
     parent.set(drop, keep);
     members.set(keep, all.sort((p, q) => p - q));
     members.delete(drop);
+  };
+  for (const [, ed] of short) join(ed, MERGE_SPAN_M);
+  // Richtungsfahrbahnen: zwei Knoten, an denen je eine Einbahn-Fahrbahn derselben Straße in Gegenrichtung liegt und
+  // die eine kurze Querverbindung haben, sind eine Kreuzung (Mittelstreifen dazwischen)
+  const travel = (ed) => {
+    const p = edgePts(ed), k = p.length;
+    const dx = (p[k - 2] - p[0]) * ed.o, dy = (p[k - 1] - p[1]) * ed.o, l = Math.hypot(dx, dy) || 1;
+    return [dx / l, dy / l];
+  };
+  const oneways = (v, skip) => at.get(v).filter((e) => e !== skip && e.o && e.n >= 0);
+  const dual = [];
+  for (const ed of edges) {
+    if (!at.has(ed.a) || !at.has(ed.b) || ed.a === ed.b || ed.c > SIDEWALK_MAX_CLASS || ed.pass) continue;
+    if (at.get(ed.a).length < 3 || at.get(ed.b).length < 3) continue;
+    const L = lengthOf(edgePts(ed));
+    if (L >= DUAL_M * S) continue;
+    const pair = oneways(ed.a, ed).some((ea) => oneways(ed.b, ed).some((eb) => {
+      if (ea.n !== eb.n) return false;
+      const [ux, uy] = travel(ea), [wx, wy] = travel(eb);
+      return ux * wx + uy * wy < -0.7;
+    }));
+    if (pair) dual.push([L, ed]);
   }
+  dual.sort((p, q) => p[0] - q[0] || p[1].a - q[1].a || p[1].b - q[1].b);
+  for (const [, ed] of dual) join(ed, DUAL_SPAN_M);
   const trims = new Map(); // ed → [vorn, hinten]
   const plates = [];
   const plate = (vs) => {
@@ -245,15 +350,34 @@ export function platesOf(edges, edgePts, S) {
     plates.push({
       v: vs[0], also: vs.slice(1), x: pl.x, y: pl.y, lvl: lv, surface,
       ring: pl.ring.map(Math.round), corners: pl.corners.map((c) => c.map(Math.round)),
+      ...(pl.fill ? { fill: pl.fill.map(Math.round) } : {}),
     });
     return true;
+  };
+  // Straßenende ohne Fortsetzung: Wendehammer (OSM) oder Bordstein quer über das Ende
+  const end = (v) => {
+    const ed = at.get(v)[0];
+    const fwd = ed.a === v, pts = edgePts(ed);
+    const arm = { key: 0, ed, fwd, pts: fwd ? pts : reversePts(pts), h: ed.w / 10 * S / 2, c: ed.c };
+    const pl = endPlate(arm, S, turning.has(v) ? TURN_R_M * S : 0);
+    if (!pl) return;
+    const tr = trims.get(ed) ?? [0, 0];
+    tr[fwd ? 0 : 1] = Math.round(pl.trims.get(0));
+    trims.set(ed, tr);
+    plates.push({
+      v, also: [], x: pl.x, y: pl.y, lvl: ed.lvl ?? 0, surface: ed.x?.[11] ?? 0,
+      ring: pl.ring.map(Math.round), corners: pl.corners.map((c) => c.map(Math.round)), end: true,
+    });
   };
   for (const v of [...at.keys()].sort((p, q) => p - q)) {
     if (find(v) !== v) continue;
     const vs = members.get(v);
     if (vs.length > 1 && plate(vs)) continue;
     // einzelne Knoten (auch die einer Gruppe, deren gemeinsame Fläche nicht aufgeht)
-    for (const u of vs) if (at.get(u).length >= 2) plate([u]);
+    for (const u of vs) {
+      if (at.get(u).length >= 2) plate([u]);
+      else if (at.get(u)[0].c <= 8) end(u);
+    }
   }
   plates.sort((p, q) => p.v - q.v);
   return { plates, trimOf: (ed) => trims.get(ed) ?? [0, 0] };

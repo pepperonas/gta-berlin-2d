@@ -13,6 +13,15 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Straßen sehen aus wie in Berlin.** Große Kreuzungen an Straßen mit Mittelstreifen sind eine
+  Fläche: der Mittelstreifen endet mit einer Bordsteinnase, keine hellen Balken und kein Linien-Gitter mehr quer über
+  die Kreuzung. Keine runden Scheiben mehr (vorher an 13 % der Kreuzungen, jetzt an 34 von 28 500 – dort treffen
+  Ebenen aufeinander). Sackgassen bekommen einen Wendehammer, wo OSM einen kennt (1 614), sonst einen Bordstein quer
+  über das Ende. Markierung Berlin-typisch: Leitlinie (3 m Strich, 6 m Lücke) nur auf Hauptstraßen und breiten
+  Straßen, an der echten Grenze der Fahrtrichtungen; vierstreifige Hauptstraßen mit durchgezogener Mittellinie;
+  Fahrstreifen gleicher Richtung gestrichelt getrennt; Wohnstraßen und Pflaster ohne. Alle Linien enden 2 m vor der
+  Kreuzung und reißen an bloßen OSM-Teilungen nicht mehr ab. Haltlinien stehen 1 m vor der Kreuzung bzw. vor dem
+  Überweg statt mitten darin. Die zwei dünnen Querlinien an ungeregelten Querungen ohne Zebrastreifen entfallen.
 - **README zeigt das Spiel:** neuer Abschnitt „So sieht es aus“ mit zwei Mockups (Laptop, Fernseher mit Controller)
   aus echten Aufnahmen der nativen Fassung und einer Galerie aus sechs Szenen (Tag, Nacht, Regen, Koop, Pixel,
   Pausenmenü). Geräterahmen gezeichnet von `tools/gfx/build_mockups.py`.
