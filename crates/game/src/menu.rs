@@ -29,6 +29,8 @@ pub enum Action {
     Graphics,
     /// Spieler 2 beitreten lassen bzw. verabschieden (Beschriftung zeigt, was geschieht)
     Coop,
+    /// Koop: Geräte zuweisen (reihum, Beschriftung zeigt die Aufteilung)
+    Devices,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,6 +181,29 @@ impl Menu {
             }
         }
         self
+    }
+    /// Geräte-Eintrag direkt unter dem Koop-Eintrag: mit Beschriftung zeigen, ohne entfernen.
+    pub fn with_devices(mut self, label: Option<&'static str>) -> Self {
+        self.set_devices(label);
+        self
+    }
+    pub fn set_devices(&mut self, label: Option<&'static str>) {
+        let at = self.items.iter().position(|i| i.action == Action::Devices);
+        match (label, at) {
+            (Some(l), Some(i)) => self.items[i].label = l,
+            (Some(l), None) => {
+                if let Some(c) = self.items.iter().position(|i| i.action == Action::Coop) {
+                    self.items.insert(c + 1, item(Action::Devices, l));
+                }
+            }
+            (None, Some(i)) => {
+                self.items.remove(i);
+                if self.index >= self.items.len() {
+                    self.index = self.items.len().saturating_sub(1);
+                }
+            }
+            (None, None) => {}
+        }
     }
     pub fn set_graphics(&mut self, mode: berlin_engine::graphics::GraphicsMode) {
         use berlin_engine::graphics::GraphicsMode;

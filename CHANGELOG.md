@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Koop – Geräte zuweisen.** Beim Beitreten behält Spieler 1 seinen Controller: mit zwei Controllern
+  spielt Spieler 2 am zweiten, mit nur einem an der Tastatur (ohne Maus; Esc pausiert bzw. bricht einen Wurf ab). Im
+  Pausenmenü steht im Koop der Eintrag „Geräte: S1 … · S2 …“, jede Wahl schaltet reihum durch die möglichen
+  Aufteilungen (S2 Controller 2 · S2 Tastatur · S2 Controller 1).
 - Native Fassung: **Granate und Molotow mit Ausholen und Wurfvorschau.** Die Wurftaste halten holt aus: die Weite
   pendelt gleichmäßig zwischen einem Viertel und der vollen Weite hin und her (1,6 s je Hin und Her), Loslassen wirft.
   Ein gepunkteter Bogen zeigt die echte Flugbahn bis zum Aufschlag (bricht an Hauswänden ab), am Landepunkt ein Ring

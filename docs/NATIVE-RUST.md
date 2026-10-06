@@ -2424,3 +2424,14 @@ zeigt, Loslassen übernimmt; steht der Stick beim Loslassen in der Totzone (Mitt
 beim Öffnen). B bricht ab. Das Fahrhilfen-Rad im Auto bleibt beim Antippen (`pad_step`). Ersetzt die Beschreibung
 „nochmal drücken oder A nimmt“ weiter oben.
 
+## Koop: Geräte zuweisen (06.10.2026)
+
+`play::P2Dev` (`Pad2` · `Pad1` · `Keyboard`) ersetzt `p2_pad`. Beitreten über das Pausenmenü wählt
+`P2Dev::default_for(pad1, pad2)`: zweiter Controller, sonst Tastatur – Spieler 1 behält seinen Controller (vorher nahm
+Spieler 2 den ersten). Start auf dem zweiten Controller tritt weiter mit `Pad2` bei. Menüeintrag `Action::Devices`
+(nur im Koop, unter dem Koop-Eintrag, `Menu::with_devices`) schaltet reihum durch `P2Dev::options`. Tastatur für
+Spieler 2: `Game::step` gibt Spieler 1 im Spiel nur die Controller (keine Tasten, keine Maus) und legt die Tasten in
+`Play::p2_keys` ab; `p2_input` baut daraus dieselben Eingaben (`input_from`), Maus bleibt ungenutzt. Esc pausiert
+(oder bricht beim Ausholen den Wurf ab). In Menüs bekommt die Tastatur wieder alles. Test
+`with_one_controller_player_two_takes_the_keyboard`.
+

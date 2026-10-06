@@ -75,7 +75,7 @@ Teleport-Rückfrage mit Stick/Steuerkreuz wählen, A bestätigt.
 LB + RB gleichzeitig öffnet die Befehlszeile mit Bildschirmtastatur (Steuerkreuz/Stick wählen, A tippt, X löscht,
 Y Leerzeichen, LT/RT Vorschläge, RB übernimmt, Start führt aus, B schließt).
 Zu zweit: zweiten Controller anschließen und **Start** drücken (oder Pausenmenü „Spieler 2 beitreten“ – mit nur einem
-Controller übernimmt Spieler 2 ihn, Spieler 1 spielt mit Tastatur und Maus). Nah beieinander zeigt ein Bild beide,
+Controller behält Spieler 1 ihn und Spieler 2 spielt an der Tastatur; „Geräte“ im Pausenmenü teilt anders auf). Nah beieinander zeigt ein Bild beide,
 entfernt teilt es sich dynamisch entlang einer mitdrehenden Linie; Auftrag und Geld sind gemeinsam.
 Details und Plattformgrenzen: [Native Architektur und Build](docs/NATIVE-RUST.md).
 Die folgenden Browser-/UWP-Anleitungen beziehen sich auf den bisherigen Prototyp.

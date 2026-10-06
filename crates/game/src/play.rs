@@ -15,11 +15,58 @@ use std::path::Path;
 /// Teleport-Rückfrage: Klickpunkt und (sobald geladen) Ziel x, y, Winkel, Ortsname.
 pub type Teleport = ((f64, f64), Option<(f64, f64, f64, String)>);
 
+/// Koop: womit Spieler 2 spielt; Spieler 1 bekommt die übrigen Geräte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum P2Dev {
+    /// zweiter Controller (Spieler 1: Tastatur, Maus und erster Controller)
+    Pad2,
+    /// erster Controller (Spieler 1: Tastatur und Maus)
+    Pad1,
+    /// Tastatur, ohne Maus (Spieler 1: erster Controller)
+    Keyboard,
+}
+impl P2Dev {
+    /// Standard beim Beitreten: zweiter Controller, sonst die Tastatur (Spieler 1 behält seinen Controller).
+    pub fn default_for(pad1: bool, pad2: bool) -> Option<Self> {
+        if pad2 {
+            Some(Self::Pad2)
+        } else if pad1 {
+            Some(Self::Keyboard)
+        } else {
+            None
+        }
+    }
+    /// Mögliche Aufteilungen mit den angeschlossenen Controllern, in Wahlreihenfolge.
+    pub fn options(pad1: bool, pad2: bool) -> Vec<Self> {
+        let mut v = Vec::new();
+        if pad2 {
+            v.push(Self::Pad2);
+        }
+        if pad1 {
+            v.push(Self::Keyboard);
+            v.push(Self::Pad1);
+        }
+        v
+    }
+    /// Menüzeile: wer womit spielt.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pad2 => "Geräte: S1 Tastatur + Controller 1 · S2 Controller 2",
+            Self::Pad1 => "Geräte: S1 Tastatur · S2 Controller 1",
+            Self::Keyboard => "Geräte: S1 Controller 1 · S2 Tastatur",
+        }
+    }
+}
+
 pub struct Play {
     pub world: World,
-    /// Koop: welcher Controller Spieler 2 gehört (1 = zweiter Controller, 0 = erster – Spieler 1 spielt dann nur
-    /// mit Tastatur und Maus)
-    pub p2_pad: u8,
+    /// Koop: womit Spieler 2 spielt
+    pub p2_dev: P2Dev,
+    /// Spieler 2 an der Tastatur: gehaltene und gedrückte Tasten dieses Schritts (Spieler 1 sieht sie dann nicht)
+    p2_keys: (
+        std::collections::HashSet<KeyCode>,
+        std::collections::HashSet<KeyCode>,
+    ),
     /// `--koop [METER]`: Spieler 2 beim Start dazuholen, optional so weit östlich (geteiltes Bild)
     pub koop_start: Option<f64>,
     /// Ansichten des laufenden Bildes (von der Engine, `set_views`) und Bildgröße
@@ -543,7 +590,8 @@ impl Play {
             zoom_fix: None,
             rumbler: Default::default(),
             rumble_out: None,
-            p2_pad: 1,
+            p2_dev: P2Dev::Pad2,
+            p2_keys: Default::default(),
             koop_start: None,
             views: berlin_engine::split::Views::single(Default::default()),
             viewport: Vec2::new(1280., 720.),
@@ -1179,11 +1227,18 @@ impl Play {
         self.kbd = crate::padkbd::PadKbd::new(slot);
         self.ui_sound();
     }
-    /// Spieler 2 tritt bei (Controller-Platz `slot`).
-    pub fn join_coop(&mut self, slot: u8) {
+    /// Spieler 2 tritt bei und spielt mit `dev`.
+    pub fn join_coop(&mut self, dev: P2Dev) {
         if self.world.join_p2() {
-            self.p2_pad = slot;
+            self.p2_dev = dev;
             self.ui_sound();
+            self.world.notice = Some(berlin_sim::world::Notice {
+                text: format!(
+                    "Spieler 2 ist dabei – {}",
+                    dev.label().trim_start_matches("Geräte: ")
+                ),
+                t: 2.5,
+            });
         } else if !self.world.coop() {
             self.world.notice = Some(berlin_sim::world::Notice {
                 text: "Kein Platz für Spieler 2".into(),
@@ -1193,7 +1248,7 @@ impl Play {
     }
     pub fn leave_coop(&mut self) {
         self.world.leave_p2();
-        self.p2_pad = 1;
+        self.p2_dev = P2Dev::Pad2;
         self.world.notice = Some(berlin_sim::world::Notice {
             text: "Spieler 2 hat das Spiel verlassen".into(),
             t: 2.,
@@ -1205,15 +1260,20 @@ impl Play {
         let Some(s) = self.world.p2.as_ref() else {
             return Input::default();
         };
-        let (pad, edges) = if self.p2_pad == 0 {
-            (keys.pad, keys.pad_pressed)
-        } else {
-            (keys.pad2, keys.pad2_pressed)
+        let (pad, edges) = match self.p2_dev {
+            P2Dev::Pad1 => (keys.pad, keys.pad_pressed),
+            P2Dev::Pad2 => (keys.pad2, keys.pad2_pressed),
+            P2Dev::Keyboard => Default::default(),
         };
-        let none = std::collections::HashSet::new();
+        // an der Tastatur: deren Tasten (Spieler 1 bekommt sie in diesem Fall nicht, `Game::step`)
+        let (held, pressed) = if self.p2_dev == P2Dev::Keyboard {
+            self.p2_keys.clone()
+        } else {
+            Default::default()
+        };
         let k2 = Keys {
-            held: &none,
-            pressed: &none,
+            held: &held,
+            pressed: &pressed,
             pad,
             pad_pressed: edges,
             pad2: Default::default(),
@@ -1277,7 +1337,8 @@ impl Play {
             .is_some_and(|s| s.player.combat.charge.is_some())
         {
             i.combat.reload = false;
-            if edges.b || was || self.wheel_p2.open {
+            let esc = bind.key_pressed(&k2, B::Pause);
+            if edges.b || esc || was || self.wheel_p2.open {
                 i.combat.cancel = true;
             }
         }
@@ -1299,7 +1360,8 @@ impl Play {
         self.screen = Screen::Paused;
         self.menu = crate::menu::pause_menu()
             .with_graphics(self.graphics.mode)
-            .with_coop(self.world.coop());
+            .with_coop(self.world.coop())
+            .with_devices(self.world.coop().then(|| self.p2_dev.label()));
     }
     /// Grafik wählen (Menü, Taste, Konsole): sofort wirksam, gespeichert, als Meldung bestätigt. `--grafik` setzt
     /// `self.graphics` direkt und schreibt nichts.
@@ -1339,7 +1401,8 @@ impl Play {
         if !keep {
             self.menu = crate::menu::pause_menu()
                 .with_graphics(self.graphics.mode)
-                .with_coop(self.world.coop());
+                .with_coop(self.world.coop())
+                .with_devices(self.world.coop().then(|| self.p2_dev.label()));
         }
     }
     /// Menübildschirme; `true` = der Schritt ist damit erledigt.
@@ -1428,11 +1491,27 @@ impl Play {
                     .pad_of(B::Pause)
                     .is_some_and(|b| b.pressed(&keys.pad2_pressed));
                 if start2 && !self.world.coop() && !self.world.loading {
-                    self.join_coop(1);
+                    self.join_coop(P2Dev::Pad2);
                     return false;
                 }
+                // Spieler 2 an der Tastatur: Esc pausiert (außer beim Ausholen eines Wurfs, dann bricht es ab)
+                let p2_charging = self
+                    .world
+                    .p2
+                    .as_ref()
+                    .is_some_and(|s| s.player.combat.charge.is_some());
+                let esc2 = self.world.coop()
+                    && self.p2_dev == P2Dev::Keyboard
+                    && !p2_charging
+                    && self
+                        .bindings
+                        .keys_of(B::Pause)
+                        .iter()
+                        .flatten()
+                        .any(|k| self.p2_keys.1.contains(k));
                 let pause = self.bindings.pressed(keys, B::Pause)
-                    || (start2 && self.world.coop() && self.p2_pad == 1);
+                    || esc2
+                    || (start2 && self.world.coop() && self.p2_dev == P2Dev::Pad2);
                 if pause && self.bigmap.open && !self.bindings.pad_pressed(keys, B::Pause) {
                     self.bigmap.open = false;
                     return false;
@@ -1574,18 +1653,29 @@ impl Play {
                         if self.world.coop() {
                             self.leave_coop();
                         } else {
-                            // zweiter Controller, sonst der erste (Spieler 1 bleibt bei Tastatur und Maus)
-                            let slot = if keys.pad2.connected { 1 } else { 0 };
-                            if slot == 0 && !keys.pad.connected {
-                                self.world.notice = Some(berlin_sim::world::Notice {
-                                    text: "Spieler 2 braucht einen Controller".into(),
-                                    t: 2.5,
-                                });
-                            } else {
-                                self.join_coop(slot);
+                            // zweiter Controller, sonst die Tastatur (Spieler 1 behält seinen Controller)
+                            match P2Dev::default_for(keys.pad.connected, keys.pad2.connected) {
+                                Some(dev) => self.join_coop(dev),
+                                None => {
+                                    self.world.notice = Some(berlin_sim::world::Notice {
+                                        text: "Für zwei Spieler bitte einen Controller anschließen"
+                                            .into(),
+                                        t: 2.5,
+                                    });
+                                }
                             }
                         }
                         self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Choose(Action::Devices)) => {
+                        // reihum durch die möglichen Aufteilungen
+                        let opts = P2Dev::options(keys.pad.connected, keys.pad2.connected);
+                        if let Some(i) = opts.iter().position(|d| *d == self.p2_dev) {
+                            self.p2_dev = opts[(i + 1) % opts.len()];
+                        } else if let Some(&d) = opts.first() {
+                            self.p2_dev = d;
+                        }
+                        self.menu.set_devices(Some(self.p2_dev.label()));
                     }
                     Some(Pick::Choose(Action::Controls)) => self.screen = Screen::Controls(false),
                     Some(Pick::Choose(Action::Stats)) => self.screen = Screen::Stats(false),
@@ -3150,7 +3240,7 @@ impl Play {
         {
             if !w2.coop() {
                 w2.join_p2();
-                self.p2_pad = 1;
+                self.p2_dev = P2Dev::Pad2;
             }
             if m <= 0. {
                 self.koop_start = None;
@@ -3707,10 +3797,28 @@ impl Game for Play {
         if c1 || c2 {
             // physischer Controller → Platz in den Tasten, die `step_keys` sieht (Spieler 2 auf dem ersten: Platz 2)
             let phys = if c1 { 0 } else { 1 };
-            let mapped = self.world.coop() && self.p2_pad == 0;
+            let mapped = self.world.coop() && self.p2_dev == P2Dev::Pad1;
             self.chord_console(if mapped { 1 - phys } else { phys });
         }
-        if self.world.coop() && self.p2_pad == 0 {
+        let kb2 = self.world.coop()
+            && self.p2_dev == P2Dev::Keyboard
+            && matches!(self.screen, Screen::Playing);
+        if kb2 {
+            // Spieler 2 hat die Tastatur: Spieler 1 sieht nur noch seinen Controller (keine Tasten, keine Maus)
+            self.p2_keys = (keys.held.clone(), keys.pressed.clone());
+            let none = std::collections::HashSet::new();
+            let k1 = Keys {
+                held: &none,
+                pressed: &none,
+                pad: keys.pad,
+                pad_pressed: keys.pad_pressed,
+                pad2: keys.pad2,
+                pad2_pressed: keys.pad2_pressed,
+                mouse: Default::default(),
+                typed: "",
+            };
+            self.step_keys(&k1, dt);
+        } else if self.world.coop() && self.p2_dev == P2Dev::Pad1 {
             // Spieler 2 hat den ersten Controller: Spieler 1 sieht ihn nicht
             let k1 = Keys {
                 held: keys.held,
@@ -3722,10 +3830,10 @@ impl Game for Play {
                 mouse: keys.mouse,
                 typed: keys.typed,
             };
-            self.p2_pad = 1;
+            self.p2_dev = P2Dev::Pad2;
             self.step_keys(&k1, dt);
-            if self.world.coop() {
-                self.p2_pad = 0;
+            if self.world.coop() && self.p2_dev == P2Dev::Pad2 {
+                self.p2_dev = P2Dev::Pad1;
             }
         } else {
             self.step_keys(keys, dt);
@@ -4922,6 +5030,99 @@ mod tests {
         );
         assert_eq!(halo(&p), 1, "in Reichweite: Schimmer");
     }
+    /// Nur ein Controller: Spieler 2 bekommt beim Beitreten die Tastatur, Spieler 1 behält den Controller; die
+    /// Pfeiltaste bewegt nur Spieler 2, der Stick nur Spieler 1. Der Menüeintrag „Geräte“ schaltet reihum um.
+    #[test]
+    fn with_one_controller_player_two_takes_the_keyboard() {
+        assert_eq!(P2Dev::default_for(true, true), Some(P2Dev::Pad2));
+        assert_eq!(P2Dev::default_for(true, false), Some(P2Dev::Keyboard));
+        assert_eq!(P2Dev::default_for(false, false), None);
+        assert_eq!(
+            P2Dev::options(true, false),
+            vec![P2Dev::Keyboard, P2Dev::Pad1]
+        );
+        let dir = std::env::temp_dir().join(format!("gta-berlin-kbd2-{}", std::process::id()));
+        let root = berlin_map_loader::default_data_root();
+        let mut p = Play::new(
+            &root,
+            4,
+            Some(FileStorage::new(dir.join("s.json"))),
+            false,
+            Start::New,
+        )
+        .unwrap();
+        let none = HashSet::new();
+        let right_key: HashSet<KeyCode> = [KeyCode::ArrowRight].into_iter().collect();
+        let step = |p: &mut Play, held: &HashSet<KeyCode>, pad: Pad| {
+            p.step(
+                &Keys {
+                    held,
+                    pressed: &none,
+                    pad,
+                    pad_pressed: Pad::default(),
+                    pad2: Pad::default(),
+                    pad2_pressed: Pad::default(),
+                    mouse: Default::default(),
+                    typed: "",
+                },
+                DT,
+            );
+        };
+        let idle = Pad {
+            connected: true,
+            ..Default::default()
+        };
+        let t0 = std::time::Instant::now();
+        while p.world.loading && t0.elapsed().as_secs() < 30 {
+            step(&mut p, &none, idle);
+        }
+        p.world.mission.state = berlin_sim::mission::State::Available;
+        let dev = P2Dev::default_for(idle.connected, false).unwrap();
+        p.join_coop(dev);
+        assert!(p.world.coop() && p.p2_dev == P2Dev::Keyboard);
+        // Pfeiltaste: nur Spieler 2 läuft
+        let (x1, x2) = (p.world.player.x, p.world.p2.as_ref().unwrap().player.x);
+        for _ in 0..40 {
+            step(&mut p, &right_key, idle);
+        }
+        assert!(
+            p.world.p2.as_ref().unwrap().player.x > x2 + 5.,
+            "Tastatur bewegt Spieler 2"
+        );
+        assert!(
+            (p.world.player.x - x1).abs() < 1.,
+            "Spieler 1 bleibt stehen"
+        );
+        // Stick: nur Spieler 1 läuft
+        let stick = Pad {
+            connected: true,
+            lx: 1.,
+            ..Default::default()
+        };
+        let (x1, x2) = (p.world.player.x, p.world.p2.as_ref().unwrap().player.x);
+        for _ in 0..40 {
+            step(&mut p, &none, stick);
+        }
+        assert!(p.world.player.x > x1 + 5., "Controller bewegt Spieler 1");
+        assert!((p.world.p2.as_ref().unwrap().player.x - x2).abs() < 1.);
+        // Pausenmenü: Geräte-Eintrag unter „Spieler 2 verlassen“, Wahl schaltet um
+        let m = crate::menu::pause_menu()
+            .with_coop(true)
+            .with_devices(Some(p.p2_dev.label()));
+        let i = m
+            .items
+            .iter()
+            .position(|it| it.action == crate::menu::Action::Devices)
+            .expect("Geräte-Eintrag");
+        assert_eq!(m.items[i - 1].action, crate::menu::Action::Coop);
+        assert!(m.items[i].label.contains("S2 Tastatur"));
+        let m = m.with_devices(None);
+        assert!(
+            !m.items
+                .iter()
+                .any(|it| it.action == crate::menu::Action::Devices)
+        );
+    }
     /// Maus am PC: links läuft nur (auch auf eine Person), rechts schießt zum Zeiger, beide Tasten öffnen das Rad;
     /// Koop: Start auf dem zweiten Controller holt Spieler 2 dazu, sein Stick bewegt nur ihn; mit nur einem
     /// Controller übernimmt Spieler 2 den ersten, Spieler 1 spielt mit Tastatur.
@@ -5014,7 +5215,7 @@ mod tests {
         );
         assert!(!p.world.coop(), "Spieler 2 hat verlassen");
         // nur ein Controller: Spieler 2 übernimmt ihn, Spieler 1 bleibt an der Tastatur
-        p.join_coop(0);
+        p.join_coop(P2Dev::Pad1);
         assert!(p.world.coop());
         let x1 = p.world.player.x;
         let x2 = p.world.p2.as_ref().unwrap().player.x;

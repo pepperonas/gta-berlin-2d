@@ -835,6 +835,13 @@ impl Bindings {
             .flatten()
             .any(|k| keys.held.contains(k))
     }
+    /// Nur die Tasten (nicht der Controller): gedrückt seit dem letzten Schritt.
+    pub fn key_pressed(&self, keys: &Keys, a: Action) -> bool {
+        self.keys_of(a)
+            .iter()
+            .flatten()
+            .any(|k| keys.pressed.contains(k))
+    }
     /// Gedrückt seit dem letzten Schritt (Flanke).
     pub fn pressed(&self, keys: &Keys, a: Action) -> bool {
         self.keys_of(a)
