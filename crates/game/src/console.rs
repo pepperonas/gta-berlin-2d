@@ -304,6 +304,8 @@ pub enum Action {
     Quality(berlin_engine::graphics::Quality),
     /// Autoradio: Sender wählen (`None` = aus)
     Radio(Option<usize>),
+    /// Autoradio: Lautstärke in Prozent
+    RadioVolume(u8),
 }
 
 /// Anzeige-Schalter der Befehlszeile (`fps`, `ebenen`, `silhouetten`, `physik`, `motorsound`); gehören dem Spiel, nicht der Welt.
@@ -576,9 +578,12 @@ pub const COMMANDS: &[Command] = &[
     Command {
         name: "radio",
         aliases: &["sender"],
-        help: "Autoradio: Sender 1–12, Name oder Genre (z. B. jazz), aus; ohne Angabe: Liste",
+        help: "Autoradio: Sender 1–12, Name oder Genre (z. B. jazz), aus; lautstärke 0–100; ohne Angabe: Liste",
         cheat: false,
-        args: &[arg("sender", true, Values::None)],
+        args: &[
+            arg("sender", true, Values::None),
+            arg("wert", true, Values::None),
+        ],
     },
     Command {
         name: "werfen",
@@ -1326,6 +1331,21 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 return ok(format!("Sender: {} · aus", list.join(" · ")));
             };
             let q = q.to_lowercase();
+            if matches!(
+                q.as_str(),
+                "lautstärke" | "lautstaerke" | "laut" | "vol" | "volume"
+            ) {
+                return match args
+                    .get(1)
+                    .and_then(|v| v.trim_end_matches('%').parse::<u8>().ok())
+                {
+                    Some(v) if v <= 100 => {
+                        ctx.actions.push(Action::RadioVolume(v));
+                        ok(format!("Radio-Lautstärke {v} %"))
+                    }
+                    _ => err("radio lautstärke 0–100"),
+                };
+            }
             if matches!(q.as_str(), "aus" | "off" | "0") {
                 ctx.actions.push(Action::Radio(None));
                 return ok("Radio aus");

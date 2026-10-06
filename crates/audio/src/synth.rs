@@ -214,6 +214,8 @@ pub struct Frame {
     pub reference: Option<Arc<[f32]>>,
     /// Autoradio: gewünschter Sender (`radio::stations()`), None = aus
     pub radio: Option<usize>,
+    /// Autoradio: Lautstärke 0…1 (Einstellung)
+    pub radio_volume: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -826,7 +828,7 @@ impl Synth {
     /// Parameter eines Bildes übernehmen.
     pub fn apply(&mut self, f: &Frame) {
         if let Some(r) = &mut self.radio {
-            r.set(f.radio);
+            r.set(f.radio, f.radio_volume);
         }
         self.set_vehicle(&f.vehicle);
         self.set_voices(&f.voices);

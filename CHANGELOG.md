@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Radiolautstärke einstellbar** – Pausenmenü „Radio-Lautstärke“ (jede Wahl +10 %, nach 100 % aus),
+  Befehl `radio lautstärke 0–100`, gespeichert in settings.json (`radio_lautstaerke`). Voreinstellung 40 % der
+  bisherigen Lautstärke (war zu laut). Lange Menüs setzen ab zehn Einträgen enger.
 - Native Fassung: **Autoradio mit zwölf Online-Sendern**, je ein Genre, Berlin zuerst: 104.6 RTL (Pop), 98.8 KISS FM
   Hip-Hop, FluxFM (Indie), Star FM (Rock), FluxFM Sound of Berlin (Techno & House), rbb radio3 (Klassik), JazzRadio
   106.8 (Jazz), Schlager Radio B2 (Schlager), Radio Berlin 88,8 (80er & 90er), dazu SomaFM Metal Detector (Metal),

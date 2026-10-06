@@ -320,7 +320,7 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Als Zugführer: Türen auf/zu, am Endhalt wenden | A | E |
 | Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
 | Hupe | X | H |
-| Radio: nächster / vorheriger Sender (im Auto, AUS gehört zur Runde) | RB / LB | R / Q |
+| Radio: nächster / vorheriger Sender (im Auto, AUS gehört zur Runde; Lautstärke im Pausenmenü) | RB / LB | R / Q |
 | Stadtplan | Ansicht-Taste | Tab |
 | Gesamten Ton an/aus | – | M |
 | Menüs | Steuerkreuz, A / B | Maus: zeigen wählt aus, Klick bestätigt; Tastenhinweise (A/B) sind anklickbar |

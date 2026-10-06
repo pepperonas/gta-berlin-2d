@@ -181,6 +181,8 @@ pub struct Play {
     streets: [Option<(berlin_sim::streetinfo::StreetLabel, f64)>; 2],
     /// Autoradio: Sender je Auto (radio.rs)
     radio: crate::radio::RadioCtl,
+    /// Autoradio-Lautstärke in Prozent (settings.json `radio_lautstaerke`)
+    pub radio_vol: u8,
     street_tick: u32,
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
@@ -232,6 +234,14 @@ fn read_settings(
         crate::bindings::Bindings::from_json(&v["bindings"]),
         graphics_from_json(&v),
     )
+}
+/// Radiolautstärke (%) aus `settings.json` (`radio_lautstaerke`); fehlt sie, die Voreinstellung.
+fn read_radio_volume(st: &FileStorage) -> u8 {
+    std::fs::read(settings_path(st))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| v["radio_lautstaerke"].as_u64())
+        .map_or(berlin_audio::radio::DEFAULT_VOLUME, |v| v.min(100) as u8)
 }
 /// `"grafik"` und `"qualitaet"` aus `settings.json`; Fehlendes oder Unbekanntes = Standard (HD, hoch).
 pub fn graphics_from_json(v: &serde_json::Value) -> berlin_engine::graphics::GraphicsSettings {
@@ -535,6 +545,9 @@ impl Play {
             .is_some_and(|st| read_save(st as &dyn Storage).is_some());
         let (stats_total, stats_saved) = save.as_ref().map(read_stats).unwrap_or_default();
         let (diablo, bindings, graphics) = save.as_ref().map(read_settings).unwrap_or_default();
+        let radio_vol = save
+            .as_ref()
+            .map_or(berlin_audio::radio::DEFAULT_VOLUME, read_radio_volume);
         let diablo = save.is_none() || diablo;
         let stats = if start == Start::Continue && screen == Screen::Playing && has_save {
             stats_saved.clone()
@@ -647,6 +660,7 @@ impl Play {
             arcs: Vec::new(),
             streets: [None, None],
             radio: Default::default(),
+            radio_vol,
             street_tick: 0,
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
@@ -972,6 +986,10 @@ impl Play {
                     self.stats_total.bump("cheats");
                 }
                 Action::Money(m) => self.tracker.set_money(m),
+                Action::RadioVolume(v) => {
+                    self.radio_vol = v.min(100);
+                    self.write_settings();
+                }
                 Action::Radio(k) => {
                     if !self.radio.set(k, self.real_t) {
                         self.console
@@ -1099,6 +1117,7 @@ impl Play {
                 "bindings": self.bindings.to_json(),
                 "grafik": self.graphics_saved.mode.key(),
                 "qualitaet": self.graphics_saved.quality.key(),
+                "radio_lautstaerke": self.radio_vol,
             });
             if let Err(e) = std::fs::write(settings_path(st), v.to_string()) {
                 eprintln!("Einstellungen nicht gespeichert: {e}");
@@ -1398,7 +1417,8 @@ impl Play {
         self.menu = crate::menu::pause_menu()
             .with_graphics(self.graphics.mode)
             .with_coop(self.world.coop())
-            .with_devices(self.world.coop().then(|| self.p2_dev.label()));
+            .with_devices(self.world.coop().then(|| self.p2_dev.label()))
+            .with_radio(self.radio_vol);
     }
     /// Grafik wählen (Menü, Taste, Konsole): sofort wirksam, gespeichert, als Meldung bestätigt. `--grafik` setzt
     /// `self.graphics` direkt und schreibt nichts.
@@ -1703,6 +1723,11 @@ impl Play {
                             }
                         }
                         self.screen = Screen::Playing;
+                    }
+                    Some(Pick::Choose(Action::RadioVolume)) => {
+                        self.radio_vol = crate::menu::radio_step(self.radio_vol);
+                        self.menu.set_radio(self.radio_vol);
+                        self.write_settings();
                     }
                     Some(Pick::Choose(Action::Devices)) => {
                         // reihum durch die möglichen Aufteilungen
@@ -3603,6 +3628,7 @@ impl Play {
         // Klang-Frame immer berechnen: der Motorzustand speist auch Drehzahlmesser und Gang im HUD
         let mut frame = self.listener.frame(&mut self.world, dt);
         frame.radio = want;
+        frame.radio_volume = self.radio_vol as f32 / 100.;
         if let Some(audio) = &self.audio {
             audio.apply(&frame);
         }
@@ -5679,10 +5705,17 @@ mod tests {
         press(&mut p, Some(KeyCode::F8));
         assert_eq!(p.graphics.mode, GraphicsMode::Pixel);
         assert_eq!(stored().mode, GraphicsMode::Pixel);
+        // Radiolautstärke: Voreinstellung, Konsole, gespeichert
+        assert_eq!(p.radio_vol, berlin_audio::radio::DEFAULT_VOLUME);
+        assert!(p.run_command("radio lautstärke 70").ok);
+        assert!(!p.run_command("radio lautstärke 130").ok);
+        assert_eq!(p.radio_vol, 70);
+        assert_eq!(read_radio_volume(&FileStorage::new(&path)), 70);
         // ein neuer Start liest die Einstellung
         let q = Play::new(&root, 4, Some(FileStorage::new(&path)), false, Start::Title).unwrap();
         assert_eq!(q.graphics.mode, GraphicsMode::Pixel);
         assert_eq!(q.menu.items[g].label, "Grafik: Pixel");
+        assert_eq!(q.radio_vol, 70);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -5764,8 +5797,9 @@ mod tests {
         assert!(path.exists(), "Spielstand geschrieben");
         // zum Hauptmenü: jetzt mit „Fortsetzen“ vorn
         press(&mut p, Some(KeyCode::KeyP));
-        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Spieler 2, Steuerung, Grafik, Statistik)
-        for _ in 0..7 {
+        // „Über das Spiel“ aus der Pause und zurück in die Pause (davor: Spieler 2, Steuerung, Grafik, Radio,
+        // Statistik)
+        for _ in 0..8 {
             press(&mut p, Some(KeyCode::ArrowDown));
         }
         press(&mut p, Some(KeyCode::Enter));

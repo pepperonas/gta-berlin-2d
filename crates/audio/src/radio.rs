@@ -12,8 +12,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 pub const LIST: &str = include_str!("../../../data/radio.json");
-/// Lautstärke des Radios (linear, über Master)
+/// Lautstärke des Radios bei 100 % (linear, über Master); eingestellt wird ein Anteil davon (`Frame::radio_volume`)
 pub const RADIO_GAIN: f32 = 0.42;
+/// Voreinstellung der Radiolautstärke (%), bis der Spieler sie ändert
+pub const DEFAULT_VOLUME: u8 = 40;
 /// so lange läuft ein nicht mehr gebrauchter Stream noch weiter (s)
 pub const LINGER_S: f64 = 20.;
 /// vorpuffern, bevor gespielt wird (s), und höchstens puffern (s)
@@ -128,9 +130,14 @@ impl Default for Radio {
 }
 
 impl Radio {
-    /// Gewünschten Sender setzen (jedes Bild): wechselt den Stream bei Bedarf, `None` blendet aus.
-    pub fn set(&mut self, want: Option<usize>) {
+    /// Gewünschten Sender und Lautstärke (0…1) setzen (jedes Bild): wechselt den Stream bei Bedarf, `None` blendet
+    /// aus.
+    pub fn set(&mut self, want: Option<usize>, volume: f32) {
         let want = want.filter(|&i| i < stations().len());
+        let vol = RADIO_GAIN * volume.clamp(0., 1.);
+        if want.is_some() {
+            self.target = vol;
+        }
         if want == self.want {
             if want.is_none()
                 && let Some(t) = self.idle_since
@@ -149,7 +156,7 @@ impl Radio {
             }
             Some(i) => {
                 self.idle_since = None;
-                self.target = RADIO_GAIN;
+                self.target = vol;
                 if self.stream.as_ref().is_none_or(|s| s.station != i) {
                     self.stream = Some(spawn(i));
                     self.playing = false;
@@ -403,7 +410,7 @@ mod tests {
         let left = shared.buf.lock().unwrap().len();
         assert!((11900..=12100).contains(&left), "Rest {left}");
         // aus: blendet weg (nach 1,5 s nichts mehr zu hören)
-        r.set(None);
+        r.set(None, 1.);
         let mut out = vec![0f32; 48000 * 3];
         r.fill(&mut out, 48000.);
         assert!(out[out.len() - 2].abs() < 1e-3);
@@ -434,5 +441,39 @@ mod tests {
             }
         }
         assert!(bad.is_empty(), "ohne Ton: {bad:?}");
+    }
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::*;
+    #[test]
+    fn volume_scales_the_target_and_zero_mutes() {
+        // ohne Netz: Stream von Hand, damit `set` nicht verbindet
+        let mut r = Radio {
+            stream: Some(Stream {
+                station: 0,
+                shared: Arc::new(Shared {
+                    buf: Mutex::new(VecDeque::new()),
+                    sr: AtomicU32::new(48000),
+                    state: AtomicU8::new(State::Playing.code()),
+                    stop: AtomicBool::new(true),
+                }),
+            }),
+            ..Default::default()
+        };
+        r.set(Some(0), 0.4);
+        assert!((r.target - RADIO_GAIN * 0.4).abs() < 1e-6);
+        r.set(Some(0), 1.);
+        assert!(
+            (r.target - RADIO_GAIN).abs() < 1e-6,
+            "Lautstärke folgt sofort"
+        );
+        r.set(Some(0), 0.);
+        assert_eq!(r.target, 0.);
+        assert!(
+            r.stream.as_ref().is_some_and(|s| s.station == 0),
+            "kein Neuverbinden"
+        );
     }
 }

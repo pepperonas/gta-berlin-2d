@@ -31,6 +31,8 @@ pub enum Action {
     Coop,
     /// Koop: Geräte zuweisen (reihum, Beschriftung zeigt die Aufteilung)
     Devices,
+    /// Autoradio-Lautstärke: jede Wahl +10 %, nach 100 % wieder 0 %
+    RadioVolume,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,7 +119,12 @@ impl Menu {
     }
     /// Zeilenabstand und Knopfhöhe: ab sieben Einträgen enger, damit das Menü über der Fußzeile endet.
     pub fn spacing(&self) -> (f32, f32) {
-        if self.items.len() >= 9 {
+        // lange Menüs (Pause mit Radio, im Koop zusätzlich „Geräte“) enger, damit sie über der Fußzeile enden
+        if self.items.len() >= 11 {
+            (36., 31.)
+        } else if self.items.len() >= 10 {
+            (40., 34.)
+        } else if self.items.len() >= 9 {
             (44., 38.)
         } else if self.items.len() >= 7 {
             (50., 42.)
@@ -182,6 +189,18 @@ impl Menu {
         }
         self
     }
+    /// Beschriftung des Radio-Eintrags an die Lautstärke anpassen.
+    pub fn with_radio(mut self, vol: u8) -> Self {
+        self.set_radio(vol);
+        self
+    }
+    pub fn set_radio(&mut self, vol: u8) {
+        for it in &mut self.items {
+            if it.action == Action::RadioVolume {
+                it.label = radio_label(vol);
+            }
+        }
+    }
     /// Geräte-Eintrag direkt unter dem Koop-Eintrag: mit Beschriftung zeigen, ohne entfernen.
     pub fn with_devices(mut self, label: Option<&'static str>) -> Self {
         self.set_devices(label);
@@ -235,6 +254,30 @@ pub fn title_menu(has_save: bool) -> Menu {
     m
 }
 
+/// Beschriftungen der Radiolautstärke in 10-%-Schritten (statisch, wie alle Menüeinträge).
+const RADIO_LABELS: [&str; 11] = [
+    "Radio-Lautstärke: aus",
+    "Radio-Lautstärke: 10 %",
+    "Radio-Lautstärke: 20 %",
+    "Radio-Lautstärke: 30 %",
+    "Radio-Lautstärke: 40 %",
+    "Radio-Lautstärke: 50 %",
+    "Radio-Lautstärke: 60 %",
+    "Radio-Lautstärke: 70 %",
+    "Radio-Lautstärke: 80 %",
+    "Radio-Lautstärke: 90 %",
+    "Radio-Lautstärke: 100 %",
+];
+/// Beschriftung für eine Lautstärke in Prozent (auf 10 % gerundet).
+pub fn radio_label(vol: u8) -> &'static str {
+    RADIO_LABELS[((vol as usize + 5) / 10).min(10)]
+}
+/// Nächster Wert beim Wählen: +10 %, nach 100 % wieder 0 %.
+pub fn radio_step(vol: u8) -> u8 {
+    let v = (vol as u32 + 5) / 10 * 10;
+    if v >= 100 { 0 } else { (v + 10) as u8 }
+}
+
 pub fn pause_menu() -> Menu {
     Menu::new(vec![
         item(Action::Resume, "Weiterspielen"),
@@ -243,6 +286,7 @@ pub fn pause_menu() -> Menu {
         item(Action::Coop, COOP_JOIN),
         item(Action::Controls, "Steuerung"),
         item(Action::Graphics, GRAPHICS_HD),
+        item(Action::RadioVolume, RADIO_LABELS[4]),
         item(Action::Stats, "Statistik"),
         item(Action::About, "Über das Spiel"),
         item(Action::Title, "Zum Hauptmenü"),
@@ -943,23 +987,26 @@ mod tests {
     fn mouse_points_and_clicks_entries() {
         use glam::Vec2;
         let mut m = pause_menu();
-        // neun Einträge: eng gesetzt (y = 280 + i·44, je 38 hoch), 380 breit um cx
-        assert_eq!(m.spacing(), (44., 38.));
+        // zehn Einträge (mit Radio): eng gesetzt (y = 280 + i·40, je 34 hoch), 380 breit um cx
+        assert_eq!(m.spacing(), (40., 34.));
         assert_eq!(
             result_menu(false).spacing(),
             (58., 48.),
             "kurze Menüs behalten den weiten Abstand"
         );
         assert_eq!(m.at(640., 280., Vec2::new(640., 280.)), Some(0));
-        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 44. * 2.)), Some(2));
+        assert_eq!(m.at(640., 280., Vec2::new(500., 280. + 40. * 2.)), Some(2));
         assert_eq!(
-            m.at(640., 280., Vec2::new(640., 280. + 22.)),
+            m.at(640., 280., Vec2::new(640., 280. + 20.)),
             None,
             "Lücke zwischen zwei Einträgen"
         );
-        // das Pausenmenü endet über der Fußzeile
+        // das Pausenmenü endet über der Fußzeile – auch im Koop mit „Geräte“
         let (step, height) = m.spacing();
         assert!(280. + (m.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10.);
+        let k = pause_menu().with_devices(Some("Geräte: S1 Controller 1 · S2 Tastatur"));
+        let (step, height) = k.spacing();
+        assert!(280. + (k.items.len() - 1) as f32 * step + height / 2. < 720. - 36. - 10.);
         // das Titelmenü endet über der Fußzeile
         let t = title_menu(true);
         let (step, height) = t.spacing();
@@ -1037,6 +1084,27 @@ mod tests {
             h.items
                 .iter()
                 .all(|i| i.center[1] >= -1. && i.center[1] <= 721.)
+        );
+    }
+}
+
+#[cfg(test)]
+mod radio_menu_tests {
+    use super::*;
+    #[test]
+    fn radio_volume_steps_by_ten_and_wraps() {
+        assert_eq!(radio_step(40), 50);
+        assert_eq!(radio_step(90), 100);
+        assert_eq!(radio_step(100), 0);
+        assert_eq!(radio_step(0), 10);
+        assert_eq!(radio_step(37), 50, "auf 10 % gerundet, dann weiter");
+        assert_eq!(radio_label(0), "Radio-Lautstärke: aus");
+        assert_eq!(radio_label(40), "Radio-Lautstärke: 40 %");
+        let m = pause_menu().with_radio(70);
+        assert!(
+            m.items
+                .iter()
+                .any(|i| i.action == Action::RadioVolume && i.label == "Radio-Lautstärke: 70 %")
         );
     }
 }

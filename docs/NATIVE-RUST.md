@@ -2460,3 +2460,9 @@ Zeitpunkt eines Wechsels; `hud::street` zeichnet oben mittig (Koop: `low`, unter
   sitzt. HUD `hud::radio` (3 s nach Wechsel/Einsteigen, Zustand aus `Audio::radio_state`). Konsole `radio`.
 - **Behoben:** `amb_fire` wurde in `Synth::render` nicht addiert (Brand-Schleife war stumm).
 
+**Radiolautstärke (06.10.2026):** `Frame::radio_volume` (0…1) skaliert `RADIO_GAIN` (= 100 %) und wirkt sofort, ohne
+neu zu verbinden (`Radio::set(want, volume)`). `Play::radio_vol` in Prozent, Voreinstellung
+`radio::DEFAULT_VOLUME` = 40, gespeichert als `radio_lautstaerke` in settings.json. Pausenmenü `Action::RadioVolume`
+(`menu::radio_step`/`radio_label`, 10-%-Schritte, nach 100 % aus), Konsole `radio lautstärke N`. `Menu::spacing`: ab
+10 Einträgen 40/34, ab 11 (Koop mit „Geräte“) 36/31.
+
