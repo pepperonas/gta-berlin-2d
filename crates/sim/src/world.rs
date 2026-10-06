@@ -58,6 +58,8 @@ pub fn run_over_damage(speed: f64) -> f64 {
     ((speed - RUN_OVER_MIN) * 1.25).max(0.)
 }
 pub const GRID_CELL: f64 = 128.;
+/// Aufprallstärke (`Event::Crash`, 1 = 300 px/s senkrecht), ab der man vom Zweirad abgeworfen wird
+pub const CRASH_THROW: f64 = 0.37;
 pub const GRID_REACH: f64 = 90.;
 pub const PED_HP: f64 = 100.;
 pub const VEH_INFO_S: f64 = 4.5;
@@ -2628,6 +2630,43 @@ impl World {
 
     /// Zweirad gestürzt: der Fahrer fliegt in Fahrtrichtung ab, landet benommen und verletzt sich je nach Tempo;
     /// das Rad rutscht liegend aus (wieder aufsteigen richtet es auf).
+    /// Spieler-Fahrhilfe: vom Zweirad fällt man nur bei Aufprallen – ein Zusammenstoß ab `CRASH_THROW` (Stärke
+    /// des `Crash`-Ereignisses, ≈ 40 km/h senkrecht auf das Hindernis) wirft ab, das Rad stürzt.
+    fn throw_on_crash(&mut self) {
+        if !crate::vehdata::game_feel().moto_assist {
+            return;
+        }
+        let hits: Vec<u32> = self
+            .events
+            .iter()
+            .filter_map(|e| match *e {
+                Event::Crash { car, strength, .. } if strength >= CRASH_THROW => Some(car),
+                _ => None,
+            })
+            .collect();
+        for id in hits {
+            let Some(i) = self.cars.iter().position(|c| c.id == id) else {
+                continue;
+            };
+            let c = &mut self.cars[i];
+            if c.driver != Some(crate::car::Driver::Player)
+                || !crate::car::vphys_vehicle(c).is_some_and(|v| v.two_wheel)
+            {
+                continue;
+            }
+            let Some(st) = c.phys.as_mut() else { continue };
+            if st.fallen.is_some() {
+                continue;
+            }
+            crate::twowheel::fall(st, crate::twowheel::Fall::Crash);
+            if self.seat_of_car(id) == Some(1) {
+                self.with_p2(|w| w.throw_rider(i, crate::twowheel::Fall::Crash));
+            } else {
+                self.throw_rider(i, crate::twowheel::Fall::Crash);
+            }
+        }
+    }
+
     pub fn throw_rider(&mut self, i: usize, why: crate::twowheel::Fall) {
         let c = &mut self.cars[i];
         let (x, y, vx, vy, lvl) = (c.x, c.y, c.vx, c.vy, c.lvl());
@@ -3124,6 +3163,7 @@ impl World {
         }
         self.sync_seat_car(&pre_hit);
         self.with_p2(|w| w.sync_seat_car(&pre_hit));
+        self.throw_on_crash();
         self.update_transit(dt);
         self.seat_transit(&train_input, dt);
         self.update_levels();

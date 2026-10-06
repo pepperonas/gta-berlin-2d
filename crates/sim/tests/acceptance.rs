@@ -11,8 +11,13 @@ use berlin_sim::vphys::{Env, Ground, HZ, Input, STEP, State, steer_limit, step};
 fn car(id: &str) -> Vehicle {
     shared().calibrated(id).unwrap_or_else(|| panic!("{id}"))
 }
+/// Spielgefühl ohne Motorrad-Fahrhilfe: die Abnahmeszenen beschreiben die Fahrphysik (Sturz am Bordstein,
+/// Wheelie-Control …); die Hilfe hat eigene Tests in `twowheel.rs`.
 fn feel() -> Feel {
-    Feel::game()
+    Feel {
+        moto_assist: false,
+        ..Feel::game()
+    }
 }
 fn kmh(s: &State) -> f64 {
     s.vx.hypot(s.vy) * 3.6

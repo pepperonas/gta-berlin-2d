@@ -13,6 +13,13 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Motorrad fährt sich wie in GTA** (Spieler-Hilfe `motorrad_hilfe`, wie andere Spiele es lösen:
+  GTA, Ride/MotoGP mit Fahrhilfen). Kein Wegrutschen mehr in Kurven, im Regen oder auf Schienen – nasse Straße macht
+  die Kurve nur weiter; abgeworfen wird nur bei einem harten Aufprall (wie in GTA). Bei hohem Tempo lenkt es direkt
+  statt praktisch gar nicht (Mindest-Drehrate, bei 150 km/h rund 60 m Radius statt über 150 m), die Schräglage folgt
+  schneller. Bordsteine (dort stehen die Laternen) bremsen höchstens 5 % statt bis zu 25 % und werfen nicht mehr ab.
+  **Bremse im Stand halten schiebt das Motorrad rückwärts** (bis 1,3 m/s). KI-Motorräder und die Kalibrierung fahren
+  weiter mit voller Physik.
 - Native Fassung: **Kreuzungen mit runden Ecken fast überall.** Nur noch 1 634 statt 6 551 Kreuzungen fallen auf
   eine Notfläche mit geraden Ecken zurück: an spitzen Abzweigen sitzt die Bordsteinnase jetzt dort, wo sich die
   Fahrbahnen trennen; kurze Straßenstücke mit freiem Ende dürfen fast ganz in die Fläche; fast gleiche Punkte gelten

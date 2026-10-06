@@ -130,6 +130,14 @@ pub const FEEL: &[Slider<Feel>] = &[
         |f, v| f.wall_slide = v > 0.5,
     ),
     s(
+        "motorrad_hilfe",
+        1.,
+        0.,
+        1.,
+        |f| b(f.moto_assist),
+        |f, v| f.moto_assist = v > 0.5,
+    ),
+    s(
         "anfahr_zuschlag",
         0.1,
         0.,

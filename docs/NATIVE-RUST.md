@@ -2583,3 +2583,13 @@ Arm, Beispiele). Ursachen und Abhilfe: spitze Abzweige (< `NOSE_PHI`) – die Na
 vor (Suche bis `NOSE_MAX_M` 30 m, ≤ 90 % der Armlänge); kurze Arme – `TRIM_SHARE_FREE` 0,9 statt 0,45, wenn das andere
 Ende keine eigene Fläche hat (Grad < 3); Mini-Rückwärtsschritte – `DEDUPE_PX` 2 (Endpunkt = Mündung bleibt exakt).
 6 551 → 1 634 Hüllen. Haarriss an der Mündung: `mesh.rs SEAM_PX` – die Straße endet 2 px unter der Fläche.
+
+**Motorrad-Spielerhilfe (07.10.2026):** `Feel::moto_assist` (`feel.json motorrad_hilfe`, F3-Regler; aus in
+`Feel::simulation()` und für die KI über `feel_ai`, damit Kalibrierung und Einspieler-Fingerabdruck unverändert
+bleiben). In `twowheel.rs substep`: kein Lowside (nasse Haftung weitet nur den Bogen, `wet` 0,55–1), kein Sturz durch
+Vorderrad-Blockade, Rillen, Bordstein (Verlust ≤ `ASSIST_CURB_LOSS` 5 %) oder Überschlag (Nickwinkel ≤
+`ASSIST_PITCH`); Lenkung mit Mindest-Drehrate `ASSIST_YAW_MIN` 0,7 rad/s (κ ≥ 0,7/v), Schräglagenrate ×2,5;
+Schieben: Bremse im Stand → rückwärts bis `PUSH_SPEED` 1,3 m/s. Abwurf nur noch über `World::throw_on_crash`:
+`Event::Crash` mit Stärke ≥ `CRASH_THROW` 0,37 am Spieler-Zweirad → `Fall::Crash` + `throw_rider`. Die
+Abnahme-Szenen (`tests/acceptance.rs`) schalten die Hilfe aus, sie beschreiben die Physik.
+

@@ -12,5 +12,6 @@
  "lkw_begrenzer_tunebar": true,
  "wandkontakt_gleiten": true,
  "anfahr_zuschlag": 0.6,
- "anfahr_bis_kmh": 50
+ "anfahr_bis_kmh": 50,
+ "motorrad_hilfe": true
 }

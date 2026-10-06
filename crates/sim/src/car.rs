@@ -549,6 +549,7 @@ fn step_vphys(car: &mut Car, v: &crate::vehdata::Vehicle, ctl: Controls, ground:
     } else {
         feel_ai = crate::vehdata::Feel {
             drift_layer: false,
+            moto_assist: false,
             ..crate::vehdata::game_feel().clone()
         };
         &feel_ai

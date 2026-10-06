@@ -41,6 +41,8 @@ pub enum Fall {
     Rail,
     /// kleines Rad am Bordstein
     Curb,
+    /// Aufprall (Auto, Wand, Baum) – mit der Spieler-Fahrhilfe der einzige Sturzgrund
+    Crash,
 }
 impl Fall {
     pub fn label(self) -> &'static str {
@@ -50,6 +52,7 @@ impl Fall {
             Fall::Flip => "Überschlagen!",
             Fall::Rail => "In die Schiene geraten!",
             Fall::Curb => "Am Bordstein gestürzt!",
+            Fall::Crash => "Abgeworfen!",
         }
     }
 }
@@ -101,6 +104,16 @@ pub const CURB_LOSS: f64 = 0.3;
 pub const CURB_LOSS_MAX: f64 = 0.25;
 /// Zweirad ohne ABS: ein länger als so lange (s) blockiertes Vorderrad stürzt
 pub const FRONT_LOCK_S: f64 = 0.4;
+/// Spieler-Fahrhilfe (`Feel::moto_assist`): kleinste Drehrate (rad/s), die der Lenker bei Tempo noch erreicht –
+/// 0,7 rad/s ≈ 60 m Radius bei 150 km/h (rein physikalisch ~180 m)
+pub const ASSIST_YAW_MIN: f64 = 0.7;
+/// … Bordsteinstoß kostet höchstens so viel Tempo (statt `CURB_LOSS_MAX`)
+pub const ASSIST_CURB_LOSS: f64 = 0.05;
+/// … Schieben im Stand (Bremse halten): Tempo rückwärts (m/s) und Anlauf (m/s²)
+pub const PUSH_SPEED: f64 = 1.3;
+pub const PUSH_ACCEL: f64 = 1.5;
+/// … Nickwinkel (rad), auf den ein Wheelie bzw. Stoppie begrenzt wird
+pub const ASSIST_PITCH: f64 = 0.35;
 /// gestürztes Zweirad rutscht mit diesem Anteil der Haftung
 pub const SLIDE_MU: f64 = 0.45;
 
@@ -136,6 +149,7 @@ pub fn lean_limit(mu: f64, ax: f64) -> f64 {
 }
 
 fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: f64) {
+    let assist = feel.moto_assist;
     let (m, h) = v.loaded(s.load);
     let l = v.wheelbase;
     // Schwerpunkt bis Vorder- bzw. Hinterachse
@@ -181,15 +195,27 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         if !s.groove_seen {
             s.groove_seen = true;
             if hash01(s.dist.floor() + v.wheelbase * 100.) < groove {
-                fall(s, Fall::Rail);
-                return;
+                if assist {
+                    // die Rille reißt am Lenker, wirft aber nicht ab
+                    s.lean += 0.12 * if s.lean >= 0. { 1. } else { -1. };
+                } else {
+                    fall(s, Fall::Rail);
+                    return;
+                }
             }
         }
     } else {
         s.groove_seen = false;
     }
     if env.wheel[0].curb > 0. && speed > 0.5 {
-        if v.wheel_r < SMALL_WHEEL {
+        if assist {
+            // Spieler: spürbarer Stoß, kein Sturz und kaum Tempoverlust (einmal je Kante)
+            if !s.curb_seen {
+                let k = (env.wheel[0].curb / 0.12).clamp(0.3, 1.5);
+                s.vx -= (CURB_LOSS * k * speed).min(speed * ASSIST_CURB_LOSS);
+                s.pitch = (s.pitch + 0.05 * k).min(0.2);
+            }
+        } else if v.wheel_r < SMALL_WHEEL {
             if speed > CURB_FALL_V {
                 fall(s, Fall::Curb);
                 return;
@@ -290,7 +316,7 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         // ohne ABS: blockiertes Vorderrad rutscht; hält es zu lange an, stürzt es – langsam und geradeaus geht es
         // noch gut
         s.lock_t += dt;
-        if s.lock_t > FRONT_LOCK_S && (speed > 6. || s.lean.abs() > 0.1) {
+        if !assist && s.lock_t > FRONT_LOCK_S && (speed > 6. || s.lean.abs() > 0.1) {
             fall(s, Fall::FrontLock);
             return;
         }
@@ -313,7 +339,10 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
     } else if s.pitch < 0. {
         s.pitch = (s.pitch + PITCH_BACK * dt).min(0.);
     }
-    if s.pitch.abs() > FLIP {
+    if assist {
+        // Spieler: Wheelie und Stoppie bleiben steil, aber das Rad überschlägt sich nicht
+        s.pitch = s.pitch.clamp(-ASSIST_PITCH, ASSIST_PITCH);
+    } else if s.pitch.abs() > FLIP {
         fall(s, Fall::Flip);
         return;
     }
@@ -324,34 +353,62 @@ fn substep(v: &Vehicle, feel: &Feel, s: &mut State, inp: &Input, env: &Env, dt: 
         0.
     };
     let ax = (f_drive - f_drag - f_roll - f_brake_total - coast) / (m * df.max(1.));
-    s.vx = (s.vx + ax * dt).max(0.);
-    // gebremst fast im Stand: steht
-    if s.brake_p > 0.05 && s.vx < 0.1 && f_drive <= 0. {
-        s.vx = 0.;
+    // Spieler-Hilfe: Bremse halten im Stand schiebt das Rad mit Schrittgeschwindigkeit zurück (wie in GTA)
+    let pushing = assist && inp.brake > 0.3 && inp.throttle < 0.05 && s.vx <= 0.05;
+    if pushing {
+        s.vx = (s.vx.min(0.) - PUSH_ACCEL * dt).max(-PUSH_SPEED);
+        s.reverse = true;
+    } else if s.vx < 0. {
+        // losgelassen oder Gas: das Schieben läuft aus
+        s.vx = (s.vx + (2. * PUSH_ACCEL).max(ax) * dt).min(0.);
+    } else {
+        s.vx = (s.vx + ax * dt).max(0.);
+        // gebremst fast im Stand: steht
+        if s.brake_p > 0.05 && s.vx < 0.1 && f_drive <= 0. {
+            s.vx = 0.;
+        }
     }
     let speed = s.vx;
     // Lenkung → Wunschkrümmung (Anteil der höchstmöglichen) → Lenkwinkel (Rate begrenzt) → Wunsch-Schräglage
-    // bemessen am trockenen Nenngrip: Nässe, Kopfstein oder Schiene muss der Fahrer selbst berücksichtigen
-    let kappa_target = inp.steer.clamp(-1., 1.) * kappa_max(v, speed, v.tire.mu * feel.grip());
+    // bemessen am trockenen Nenngrip: Nässe, Kopfstein oder Schiene muss der Fahrer selbst berücksichtigen.
+    // Spieler-Hilfe: bei Tempo mindestens `ASSIST_YAW_MIN` Drehrate (direkte Lenkung statt ~180 m Radius)
+    let k_phys = kappa_max(v, speed, v.tire.mu * feel.grip());
+    let k_max = if assist {
+        k_phys.max(ASSIST_YAW_MIN / speed.abs().max(1.))
+    } else {
+        k_phys
+    };
+    let kappa_target = inp.steer.clamp(-1., 1.) * k_max;
     let delta_cmd = (l * kappa_target).atan();
     let rate = BAR_RATE / (1. + speed / BAR_RATE_V);
     s.delta += (delta_cmd - s.delta).clamp(-rate * dt, rate * dt);
     let kappa_cmd = s.delta.tan() / l;
     // der Fahrer legt sich nur so weit, wie die Haftung unter ihm trägt (Nässe, Kopfstein: weitere Bögen)
-    let lean_cap = v.max_lean.min(lean_limit(mu, 0.) * LEAN_SKILL);
+    let lean_cap = if assist {
+        // Spieler: die Schräglage ist Anzeige (die Bahn folgt dem Lenker), nur durch das Rad begrenzt
+        v.max_lean
+    } else {
+        v.max_lean.min(lean_limit(mu, 0.) * LEAN_SKILL)
+    };
     let lean_want = (speed * speed * kappa_cmd / G)
         .atan()
         .clamp(-lean_cap, lean_cap);
-    let lean_rate = LEAN_RATE / (1. + speed / LEAN_RATE_V);
+    let lean_rate = LEAN_RATE / (1. + speed / LEAN_RATE_V) * if assist { 2.5 } else { 1. };
     s.lean += (lean_want - s.lean).clamp(-lean_rate * dt, lean_rate * dt);
-    // Haftgrenze in Schräglage (Reibungskreis mit der Längskraft)
-    if speed > KIN[0] && s.lean.abs() > lean_limit(mu, ax) * LOWSIDE_MARGIN {
-        fall(s, Fall::Lowside);
-        return;
-    }
-    let kappa_lean = G * s.lean.tan() / (speed * speed).max(1.);
-    let w = smooth(KIN[0], KIN[1], speed);
-    let kappa = kappa_cmd * (1. - w) + kappa_lean * w;
+    let kappa = if assist {
+        // Spieler: kein Wegrutschen; auf Nässe, Pflaster oder Eis wird der Bogen nur etwas weiter
+        let wet = (mu / (v.tire.mu * feel.grip()).max(1e-6)).clamp(0.55, 1.);
+        kappa_cmd * if speed.abs() > KIN[1] { wet } else { 1. }
+    } else {
+        // Haftgrenze in Schräglage (Reibungskreis mit der Längskraft)
+        if speed > KIN[0] && s.lean.abs() > lean_limit(mu, ax) * LOWSIDE_MARGIN {
+            fall(s, Fall::Lowside);
+            return;
+        }
+        let kappa_lean = G * s.lean.tan() / (speed * speed).max(1.);
+        let w = smooth(KIN[0], KIN[1], speed);
+        kappa_cmd * (1. - w) + kappa_lean * w
+    };
     s.r = speed * kappa;
     s.vy = 0.;
     // Motorrad auf losem Untergrund: Gas in Schräglage lässt das Heck leicht kommen
@@ -379,7 +436,8 @@ fn integrate(s: &mut State, dt: f64) {
     s.dist += s.vx.hypot(s.vy) * dt;
 }
 
-fn fall(s: &mut State, why: Fall) {
+/// Zweirad stürzt: liegt auf der Seite, rutscht aus (auch für Aufpralle aus `world`).
+pub fn fall(s: &mut State, why: Fall) {
     s.fallen = Some(why);
     s.lean = if s.lean >= 0. {
         std::f64::consts::FRAC_PI_2
@@ -718,5 +776,109 @@ mod tests {
         };
         run(bike, &mut s, Input::default(), &rail, 0.05);
         assert_eq!(s.fallen, Some(Fall::Rail));
+    }
+
+    fn game_run(v: &Vehicle, s: &mut State, inp: Input, env: &Env, secs: f64) {
+        let feel = Feel {
+            moto_assist: true,
+            ..Feel::simulation()
+        };
+        for _ in 0..(secs * HZ) as usize {
+            vstep(v, &feel, s, &inp, env, 1. / HZ);
+        }
+    }
+
+    #[test]
+    fn rider_assist_keeps_the_bike_up_on_wet_ground_and_steers_at_speed() {
+        let db = db();
+        let v = db.get("motorrad_naked").unwrap();
+        let wet = Env::uniform(Ground {
+            mu_rel: 0.5,
+            ..Ground::DRY
+        });
+        // voll eingelenkt voll bremsen im Regen: ohne Hilfe Lowside, mit Hilfe nur ein weiterer Bogen
+        let mut s = State {
+            vx: 18.,
+            gear: 3,
+            ..Default::default()
+        };
+        game_run(
+            v,
+            &mut s,
+            Input {
+                brake: 1.,
+                steer: 1.,
+                ..Default::default()
+            },
+            &wet,
+            2.,
+        );
+        assert!(s.fallen.is_none(), "{:?}", s.fallen);
+        // bei 150 km/h trocken: Radius höchstens rund 60 m (Mindest-Drehrate)
+        let feel = Feel {
+            moto_assist: true,
+            ..Feel::simulation()
+        };
+        let mut s = State {
+            vx: 150. / 3.6,
+            gear: 5,
+            ..Default::default()
+        };
+        let inp = Input {
+            steer: 1.,
+            ..Default::default()
+        };
+        for _ in 0..(2. * HZ) as usize {
+            s.vx = 150. / 3.6;
+            vstep(v, &feel, &mut s, &inp, &Env::default(), 1. / HZ);
+        }
+        let r = s.vx / s.r.abs().max(1e-9);
+        assert!(s.fallen.is_none() && r <= 62., "Radius {r:.0} m");
+        // ohne Hilfe deutlich weiter
+        let (r_phys, _, _) = full_lock(v, &Env::default(), 150., 2.);
+        assert!(r_phys > r * 1.3, "{r_phys:.0} vs {r:.0}");
+    }
+
+    #[test]
+    fn rider_assist_pushes_backwards_and_shrugs_off_curbs() {
+        let db = db();
+        let v = db.get("motorrad_naked").unwrap();
+        // im Stand Bremse halten: das Motorrad rollt rückwärts (Schieben), höchstens Schritttempo
+        let mut s = State::default();
+        game_run(
+            v,
+            &mut s,
+            Input {
+                brake: 1.,
+                ..Default::default()
+            },
+            &Env::default(),
+            2.,
+        );
+        assert!(
+            (-PUSH_SPEED - 1e-9..=-PUSH_SPEED * 0.9).contains(&s.vx),
+            "{}",
+            s.vx
+        );
+        // loslassen: kommt wieder zum Stehen
+        game_run(v, &mut s, Input::default(), &Env::default(), 1.5);
+        assert!(s.vx.abs() < 1e-6, "{}", s.vx);
+        // Bordstein bei 50 km/h: höchstens 5 % Tempo weg, kein Sturz, kein Überschlag
+        let mut curb = Env::default();
+        curb.wheel[0].curb = 0.18;
+        let v0 = 50. / 3.6;
+        let mut s = State {
+            vx: v0,
+            gear: 3,
+            ..Default::default()
+        };
+        game_run(v, &mut s, Input::default(), &curb, 0.05);
+        assert!(s.fallen.is_none(), "{:?}", s.fallen);
+        assert!(
+            s.vx >= v0 * (1. - ASSIST_CURB_LOSS) - 0.2,
+            "{} von {v0}",
+            s.vx
+        );
+        assert!(s.pitch.abs() <= ASSIST_PITCH + 1e-9);
     }
 }

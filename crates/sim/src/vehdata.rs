@@ -82,6 +82,10 @@ pub struct Feel {
     /// den Antrieb, nie auf die Haftgrenze – durchdrehende Räder bleiben durchdrehende Räder.
     pub launch_boost: f64,
     pub launch_until: f64,
+    /// Fahrhilfe fürs Motorrad (nur der Spieler, wie in GTA): kein Wegrutschen, Blockieren, Überschlag oder
+    /// Bordsteinsturz – gestürzt wird nur bei Aufprallen (`world`); direkte Lenkung mit Mindest-Drehrate bei Tempo.
+    /// Die Kalibrierung und die KI fahren ohne.
+    pub moto_assist: bool,
 }
 impl Feel {
     /// Simulation pur (Kalibrierung): Realismus 1, globaler Grip 1.
@@ -93,6 +97,7 @@ impl Feel {
             steer_assist: 0.,
             drift_layer: false,
             launch_boost: 0.,
+            moto_assist: false,
             ..Self::game()
         }
     }
@@ -119,6 +124,7 @@ impl Feel {
             wall_slide: b("wandkontakt_gleiten", true),
             launch_boost: f("anfahr_zuschlag", 0.).clamp(0., 2.),
             launch_until: f("anfahr_bis_kmh", 50.).max(1.) / 3.6,
+            moto_assist: b("motorrad_hilfe", true),
         })
     }
     /// Faktor aufs Motormoment beim Tempo `speed` (m/s): 1 + Zuschlag im Stand, weich auslaufend bis `launch_until`.

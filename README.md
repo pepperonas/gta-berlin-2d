@@ -570,7 +570,11 @@ Hochdachkombi und Kleinbus mit Heckmotor; Geländewagen („Grunewald Keiler“,
 Förster 110“, kleiner „Lausitz Taiga“) und SUVs („Spree Tiga“, „Oberbaum Cayo“, „Teltower TX7“,
 „Voltwerk E-Terra“); dazu Kleinwagen, Kompakt, Hot Hatch, Zweitakter, Roadster, Muscle-Car, Oldtimer, Pick-up und
 Rallye-Kompakt. Dazu **Motorrad und Motorroller**: zu viel Gas hebt das Vorderrad, zu hartes Bremsen das Hinterrad
-(deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein, ein Aufprall ab ≈ 27 km/h wirft ihn ab.
+(deshalb bremsen sie länger als Autos), in Kurven legt sich der Fahrer hinein. Damit es Spaß macht, hilft das Spiel
+wie in GTA: Wegrutschen gibt es nicht, im Regen wird die Kurve nur weiter; auch bei hohem Tempo lenkt das Motorrad
+direkt (bei 150 km/h rund 60 m Radius); Bordsteine kosten höchstens 5 % Tempo; abgeworfen wird man nur bei einem
+harten Aufprall. **Bremse im Stand halten schiebt das Motorrad rückwärts** (Schritttempo). Ohne diese Hilfe
+(`motorrad_hilfe` in `data/vehicles/feel.json` bzw. im F3-Fenster) gilt die volle Physik.
 Beim Einsteigen blendet das HUD Name und Technik ein (ohne Kasten, Schrift mit Kontur), z. B. „Oberbaum Furia –
 Sportwagen · Mittelmotor · RWD · 435 PS“ (Antrieb FWD/RWD/AWD, Leistung in PS). Der Tacho unten rechts zeigt km/h,
 die Drehzahl als Bogen mit rotem Bereich, den Gang (R rückwärts, D beim Elektroauto), Antrieb sowie ESP- und ABS-Status.

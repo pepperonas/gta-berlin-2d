@@ -52,6 +52,9 @@ data record uses vphys (`car::vphys_vehicle` maps bicycle/escooter kinds), `dyna
 Two-wheel steer = share of `twowheel::kappa_max` (low speed: bar angle `DELTA_LOW`, at speed: lean up to
 `LEAN_SKILL` × dry grip) — AI converts curvature with the same function; motorcycles are drawn by `game/motoart.rs`
 (parts per `Style`, lean shift `LEAN_SHIFT`), bicycles still by the old branch in `play.rs`.
+Player rider aid `Feel::moto_assist` (feel.json `motorrad_hilfe`): no lowside/curb/lock falls, minimum yaw
+`ASSIST_YAW_MIN`, brake at standstill pushes backwards; throws only via `World::throw_on_crash` (`CRASH_THROW`).
+Off in `Feel::simulation()` and for AI (`feel_ai`) – keep it that way, calibration and the fingerprint depend on it.
 Phase 6: masses from data in `collide_cars` (`Car::mass`), rollover via `vphys::tip_limit` (min of force and v·r),
 rigs via `Vehicle.hitch` + `State.art` (`car::trailer_pose` draws the trailer); data-only vehicles spawn with
 `World::spawn_data_vehicle` / console `auto <id>`.
