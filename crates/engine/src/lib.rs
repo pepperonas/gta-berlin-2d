@@ -13,6 +13,7 @@ pub mod pad;
 mod palette;
 mod renderer;
 mod scenepass;
+pub mod split;
 pub mod vehatlas;
 use anyhow::Result;
 use berlin_map_loader::{
