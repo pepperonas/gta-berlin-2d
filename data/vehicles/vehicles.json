@@ -395,6 +395,55 @@
   }
  },
  {
+  "id": "dirtbike",
+  "name": "Grunewald Enduro 450",
+  "klasse": "zweirad_motor",
+  "vorbild": "KTM 450 EXC-F",
+  "masse": 195,
+  "lbh": [
+   2.2,
+   0.82,
+   1.25
+  ],
+  "radstand": 1.48,
+  "cg_h": 0.85,
+  "vorn": 0.47,
+  "motor": {
+   "typ": "sauger_benzin",
+   "kw": 46,
+   "nm": 47,
+   "n_max": 10500
+  },
+  "getriebe": {
+   "typ": "manuell",
+   "gaenge": 6,
+   "schalt": 0.12
+  },
+  "reifen": {
+   "typ": "enduro",
+   "breite_mm": 140,
+   "kpa": 110,
+   "zoll": 18
+  },
+  "aero": {
+   "cwA": 0.55
+  },
+  "bremse": {
+   "typ": "scheibe",
+   "abs": false,
+   "vorn": 0.7
+  },
+  "lenkung": {
+   "wendekreis": 4.4
+  },
+  "max_schraeglage": 50,
+  "ziel": {
+   "0_100": 4.2,
+   "vmax": 165,
+   "brems_100": 45
+  }
+ },
+ {
   "id": "kleinwagen_65ps",
   "name": "Havel Mini 65",
   "klasse": "pkw_klein",

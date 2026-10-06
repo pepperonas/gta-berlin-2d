@@ -294,6 +294,20 @@
     "eis": 0.4,
     "lose": 0.85
    }
+  },
+  "enduro": {
+   "mu_trocken": 0.95,
+   "peak_schraeglauf_grad": null,
+   "gleit_zu_peak": 0.85,
+   "mu_laengs": 1.15,
+   "peak_schlupf": 0.14,
+   "faktor": {
+    "trocken": 1,
+    "nass": 0.9,
+    "schnee": 0.6,
+    "eis": 0.35,
+    "lose": 1.05
+   }
   }
  }
 }

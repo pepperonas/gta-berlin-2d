@@ -72,6 +72,16 @@
     "uebersetzung": 1.0,
     "wirkungsgrad": 1.0
   },
+  "dirtbike": {
+    "_grund": "vmax: Leistung zu groß für das Ziel, auch mit cwA +15 %",
+    "_ok": false,
+    "bremskraft": 0.807879066467285,
+    "cwA": 1.15,
+    "mu": 0.9600000000000001,
+    "schalt": 1.5,
+    "uebersetzung": 1.6,
+    "wirkungsgrad": 1.03
+  },
   "doppeldecker": {
     "_ok": true,
     "bremskraft": 0.685195732116699,

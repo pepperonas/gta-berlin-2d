@@ -2,7 +2,7 @@
 
 Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener Asphalt, `realismus = 1`, `grip_global = 1`; LKW und Busse voll beladen, sonst leer. Toleranzen: 0-X ±7 %, Vmax ±3 %, Bremsweg ±5 %, Querbeschleunigung ±0,05 g. Stellschrauben nur innerhalb der erlaubten Grenzen (cwA ±15 %, μ ±10 %, Übersetzung, Schaltzeit, Wirkungsgrad ±3 %, Bremskraft); Masse, Leistung und Drehmoment unverändert. Verläufe im 100-ms-Takt: `docs/kalibrierung/csv/<id>.csv`.
 
-**184 von 207 Zielwerten in der Toleranz** (88 Fahrzeuge, Laufzeit 12 s).
+**186 von 210 Zielwerten in der Toleranz** (89 Fahrzeuge, Laufzeit 8 s).
 
 | Fahrzeug | Test | Ziel | Ist | Abweichung | | Stellschrauben |
 |---|---|---|---|---|---|---|
@@ -36,6 +36,10 @@ Erzeugt von `cargo run --release -p physics-calibrate`. Bedingungen: trockener A
 | **Havelland Fatline** (cruiser) | 0–100 km/h | 4.4 s | 4.7 s | +6.3 % | ✓ | cwA +15 %, μ -8 %, Bremskraft -10 %, Übersetzung ×1.60, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 44.0 m | 44.0 m | -0.0 % | ✓ |  |
 |  | Vmax | 180 km/h | 189 km/h | +5.3 % | ✗ |  |
+| | *Grund:* vmax: Leistung zu groß für das Ziel, auch mit cwA +15 % | | | | | |
+| **Grunewald Enduro 450** (dirtbike) | 0–100 km/h | 4.2 s | 4.3 s | +2.6 % | ✓ | cwA +15 %, μ -4 %, Bremskraft -19 %, Übersetzung ×1.60, Schaltzeit ×1.50, Wirkungsgrad +3 % |
+|  | Bremsweg 100 km/h | 45.0 m | 45.0 m | -0.0 % | ✓ |  |
+|  | Vmax | 165 km/h | 171 km/h | +3.5 % | ✗ |  |
 | | *Grund:* vmax: Leistung zu groß für das Ziel, auch mit cwA +15 % | | | | | |
 | **Havel Mini 65** (kleinwagen_65ps) | 0–100 km/h | 14.4 s | 15.3 s | +6.2 % | ✓ | cwA +4 %, μ -5 %, Bremskraft +60 %, Übersetzung ×1.60, Schaltzeit ×0.75, Wirkungsgrad +3 % |
 |  | Bremsweg 100 km/h | 38.0 m | 38.4 m | +1.0 % | ✓ |  |

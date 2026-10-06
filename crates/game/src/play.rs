@@ -2331,6 +2331,7 @@ fn moto_lab_bodies(cx: f32, cy: f32, out: &mut Vec<Body>) {
         (Style::Naked, 0x1d4ed8, 10.5),
         (Style::Cruiser, 0x15171b, 12.),
         (Style::Scooter, 0x2fa84f, 9.),
+        (Style::Dirt, 0xf26a10, 11.),
     ];
     let rows: [(f32, f32, f32, bool, bool); 4] = [
         (0., 0., 0.35, false, false),
@@ -2343,7 +2344,7 @@ fn moto_lab_bodies(cx: f32, cy: f32, out: &mut Vec<Body>) {
             let (jacket, helmet) = crate::motoart::rider_colors(i as u32 * 7 + j as u32);
             bodies(
                 &Pose {
-                    x: cx + (i as f32 - 1.5) * 40. * LAB_SCALE,
+                    x: cx + (i as f32 - (styles.len() as f32 - 1.) / 2.) * 40. * LAB_SCALE,
                     y: cy + (j as f32 - 1.5) * 26. * LAB_SCALE,
                     angle: 0.,
                     hw: hw * LAB_SCALE,

@@ -569,6 +569,13 @@ pub const COMMANDS: &[Command] = &[
         args: &[arg("art", true, Values::Vehicles)],
     },
     Command {
+        name: "motorrad",
+        aliases: &["motorbike", "motorcycle", "krad", "moped"],
+        help: "Motorrad neben dir spawnen (naked, sport, cruiser, roller, dirt)",
+        cheat: true,
+        args: &[arg("typ", true, Values::Fixed(MOTO_TYPES))],
+    },
+    Command {
         name: "sprengen",
         aliases: &["explode", "boom", "explosion", "explodieren"],
         help: "nächstes Auto in Brand setzen – es explodiert gleich",
@@ -683,6 +690,32 @@ pub const COMMANDS: &[Command] = &[
     },
 ];
 
+/// Motorradtypen des Befehls `motorrad` (Eingabe, Beschreibung) und ihre Fahrzeugdaten.
+const MOTO_TYPES: &[(&str, &str)] = &[
+    ("naked", "Tegel Nackt 700"),
+    ("sport", "Tegel RR 1000 (Superbike)"),
+    ("cruiser", "Havelland Fatline"),
+    ("roller", "Kiezflitzer 50"),
+    ("dirt", "Grunewald Enduro 450 (Dirt-Bike)"),
+];
+/// Fahrzeug-id zu einer Eingabe (Typ, Fahrzeug-id oder Name; schon `norm`alisiert).
+fn moto_id(q: &str) -> Option<&'static str> {
+    let id = match q {
+        "naked" | "nackt" | "standard" => "motorrad_naked",
+        "sport" | "superbike" | "rennmaschine" => "superbike",
+        "cruiser" | "chopper" => "cruiser",
+        "roller" | "scooter" | "moped" => "roller_45",
+        "dirt" | "dirtbike" | "enduro" | "cross" | "motocross" => "dirtbike",
+        _ => {
+            return berlin_sim::vehdata::shared()
+                .vehicles
+                .iter()
+                .find(|d| d.class == "zweirad_motor" && (norm(&d.id) == q || norm(&d.name) == q))
+                .map(|d| d.id.as_str());
+        }
+    };
+    Some(id)
+}
 const KIND_LABEL: [(&str, &str); 11] = [
     ("car", "Pkw"),
     ("truck", "Lkw"),
@@ -1310,6 +1343,26 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 .map_or(kind, |x| x.1);
             match w.spawn_vehicle(kind, None) {
                 Some(_) => ok(format!("{label} steht bereit")),
+                None => err("Kein Platz für ein Fahrzeug"),
+            }
+        }
+        "motorrad" => {
+            let q = a0.map(norm).unwrap_or_else(|| "naked".into());
+            let Some(id) = moto_id(&q) else {
+                return err(format!(
+                    "Typ: {}",
+                    MOTO_TYPES
+                        .iter()
+                        .map(|t| t.0)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            };
+            let name = berlin_sim::vehdata::shared()
+                .get(id)
+                .map_or(id.to_string(), |d| d.name.clone());
+            match w.spawn_data_vehicle(id) {
+                Some(_) => ok(format!("{name} steht bereit")),
                 None => err("Kein Platz für ein Fahrzeug"),
             }
         }
@@ -2182,6 +2235,27 @@ mod tests {
         assert!(r.ok, "{}", r.msg);
         assert_eq!(w.cars.len(), n + 1);
         assert_eq!(w.cars.last().unwrap().kind, "motorcycle");
+        // Befehl „motorrad“: jeder Typ, ohne Typ das Naked Bike, Unsinn abgewiesen
+        for (q, id) in [
+            ("motorrad", "motorrad_naked"),
+            ("motorrad dirt", "dirtbike"),
+            ("motorrad enduro", "dirtbike"),
+            ("krad sport", "superbike"),
+            ("motorrad cruiser", "cruiser"),
+            ("motorrad roller", "roller_45"),
+        ] {
+            let n = w.cars.len();
+            let (r, _) = run(q, &mut w);
+            assert!(r.ok, "{q}: {}", r.msg);
+            assert_eq!(w.cars.len(), n + 1, "{q}");
+            let c = w.cars.last().unwrap();
+            assert_eq!(c.model_name(), id, "{q}");
+            assert!(
+                berlin_sim::car::vphys_vehicle(c).is_some_and(|v| v.two_wheel),
+                "{q}"
+            );
+        }
+        assert!(!run("motorrad trecker", &mut w).0.ok);
         let r = run("wettr", &mut w).0;
         assert!(!r.ok && r.msg.contains("„wetter“"), "{}", r.msg);
         assert!(!run("schnee 7", &mut w).0.ok);

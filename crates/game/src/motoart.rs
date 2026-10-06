@@ -1,7 +1,8 @@
 //! Motorräder und Roller von oben, aus Teilen gezeichnet (statt eines Rechtecks): Reifen (das Vorderrad lenkt),
 //! Schwinge, Motor, Auspuff, Tank, Sitzbank, Heck mit Rücklicht, Lenker mit Spiegeln und je Bauart eigene Teile –
 //! Verkleidung mit Scheibe (Superbike), Rundscheinwerfer und Gabel (Naked), Chrom, Trittbretter und breiter Lenker
-//! (Cruiser), Karosserie mit Trittbrett und Beinschild (Roller). Dazu der Fahrer mit Knien am Tank, Armen zum Lenker
+//! (Cruiser), Karosserie mit Trittbrett und Beinschild (Roller), Stollenreifen, hoher Kotflügel, Startnummerntafel
+//! und Handschützer (Dirt-Bike). Dazu der Fahrer mit Knien am Tank, Armen zum Lenker
 //! und Helm mit Visier, in der Haltung der Bauart (Superbike geduckt, Cruiser aufrecht zurückgelehnt).
 //!
 //! Teile sind in Metern im Fahrzeugsystem beschrieben (`a` längs, + nach vorn; `s` quer, + nach rechts; `h` Höhe
@@ -17,6 +18,8 @@ pub enum Style {
     Naked,
     Cruiser,
     Scooter,
+    /// Enduro/Motocross: hoch, schmal, Stollenreifen
+    Dirt,
 }
 
 /// Bauart eines Modells (Fahrzeug-id bzw. Pkw-Modellname).
@@ -25,6 +28,7 @@ pub fn style_of(model: &str) -> Style {
         "superbike" => Style::Sport,
         "cruiser" => Style::Cruiser,
         "roller_45" | "scooter" => Style::Scooter,
+        "dirtbike" => Style::Dirt,
         _ => Style::Naked,
     }
 }
@@ -208,6 +212,40 @@ fn bike_parts(st: Style, paint: [f32; 4], braking: bool) -> Vec<Part> {
                 p.push(steer(part(0.42, s, 1.2, 0.04, 0.05, 7., chrome)));
             }
         }
+        Style::Dirt => {
+            // Stollen: helle Querrippen über dem Hinterrad (das Vorderrad lenkt, dort nur der Reifen)
+            let tread = rgba(0x575b63, 1.);
+            p.push(part(-0.74, 0., 0.34, 0.34, 0.075, 0., tire));
+            for k in [-0.26, -0.13, 0., 0.13, 0.26] {
+                p.push(part(-0.74 + k, 0., 0.35, 0.03, 0.082, 0., tread));
+            }
+            p.push(steer(part(0.76, 0., 0.36, 0.36, 0.05, 0., tire)));
+            p.push(part(-0.4, 0., 0.38, 0.32, 0.045, 0., metal));
+            p.push(part(0.02, 0., 0.42, 0.2, 0.13, 0., dark));
+            // Schalldämpfer hoch rechts, langer Heckkotflügel mit Rücklicht
+            p.push(part(-0.5, 0.14, 0.78, 0.24, 0.045, 7., chrome));
+            p.push(part(-0.74, 0., 0.95, 0.28, 0.07, 6., paint));
+            p.push(part(-0.99, 0., 0.95, 0.03, 0.04, 0., tail));
+            // lange flache Sitzbank bis zum Tank, schmaler Tank mit Kühlerspoilern
+            p.push(part(-0.2, 0., 0.97, 0.42, 0.085, 0., seat));
+            p.push(part(0.22, 0., 0.97, 0.2, 0.2, 6., paint));
+            // hoher Vorderkotflügel, Startnummerntafel mit kleinem Scheinwerfer, breiter Lenker mit Handschützern
+            p.push(steer(part(0.66, 0., 1.0, 0.22, 0.065, 6., paint)));
+            p.push(steer(part(
+                0.5,
+                0.,
+                1.06,
+                0.06,
+                0.13,
+                6.,
+                rgba(0xf2f2ee, 1.),
+            )));
+            p.push(steer(part(0.53, 0., 1.09, 0.03, 0.05, 1., lamp)));
+            p.push(steer(part(0.36, 0., 1.12, 0.025, 0.4, 0., dark)));
+            for s in [-0.38, 0.38] {
+                p.push(steer(part(0.41, s, 1.16, 0.06, 0.05, 6., paint)));
+            }
+        }
         Style::Scooter => {
             p.push(part(-0.6, 0., 0.18, 0.18, 0.06, 0., tire));
             p.push(steer(part(0.62, 0., 0.18, 0.18, 0.055, 0., tire)));
@@ -257,6 +295,14 @@ fn stance(st: Style) -> Stance {
             grip: (0.4, 0.4),
             knee: 0.22,
             hang: 0.,
+        },
+        // aufrecht und weit vorn über dem Tank, Ellbogen breit
+        Style::Dirt => Stance {
+            helm: 0.02,
+            torso: -0.1,
+            grip: (0.36, 0.38),
+            knee: 0.15,
+            hang: 0.03,
         },
         Style::Scooter => Stance {
             helm: -0.12,
@@ -407,7 +453,13 @@ mod tests {
 
     #[test]
     fn every_style_has_wheels_rider_and_stays_on_its_footprint() {
-        for st in [Style::Sport, Style::Naked, Style::Cruiser, Style::Scooter] {
+        for st in [
+            Style::Sport,
+            Style::Naked,
+            Style::Cruiser,
+            Style::Scooter,
+            Style::Dirt,
+        ] {
             let b = draw(&pose(), st);
             assert!(b.len() >= 20, "{st:?}: {} Teile", b.len());
             // alles innerhalb der Länge (± etwas Spiegel), schmal wie ein Motorrad
@@ -434,15 +486,22 @@ mod tests {
             assert!(empty.len() + 6 <= b.len());
         }
         // Bauarten unterscheiden sich
-        let n: Vec<usize> = [Style::Sport, Style::Naked, Style::Cruiser, Style::Scooter]
-            .iter()
-            .map(|&s| draw(&pose(), s).len())
-            .collect();
+        let n: Vec<usize> = [
+            Style::Sport,
+            Style::Naked,
+            Style::Cruiser,
+            Style::Scooter,
+            Style::Dirt,
+        ]
+        .iter()
+        .map(|&s| draw(&pose(), s).len())
+        .collect();
         assert!(n.windows(2).any(|w| w[0] != w[1]), "{n:?}");
         assert_eq!(style_of("superbike"), Style::Sport);
         assert_eq!(style_of("roller_45"), Style::Scooter);
         assert_eq!(style_of("cruiser"), Style::Cruiser);
         assert_eq!(style_of("motorrad_naked"), Style::Naked);
+        assert_eq!(style_of("dirtbike"), Style::Dirt);
     }
 
     #[test]

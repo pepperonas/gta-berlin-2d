@@ -2518,3 +2518,8 @@ dem ersten Wort des Sendernamens). Gemessen am 06.10.: alle zwölf Sender liefer
 `menu::draw_pause_radio` (Breite gemessen gekürzt, `PAUSE_RADIO_MAX_W`). In der Pause hält `Frame { radio: aktueller
 Sender, radio_volume: 0 }` den Stream offen (`Radio::fill` puffert dann nicht weiter, der Titel vom Pausenbeginn
 bleibt).
+
+**Dirt-Bike (06.10.2026):** Datensatz `dirtbike` (Klasse `zweirad_motor`) + Reifen `enduro` (`faktor.lose` 1,05);
+kalibriert mit `physics-calibrate`, Vmax 171 statt 165 km/h ist in `bekannte_abweichungen.json` begründet (nicht die
+Leistung verstellt). `motoart::Style::Dirt` (`style_of("dirtbike")`), Musterseite `--bildschirm motorraeder` mit fünf
+Spalten. Konsole `motorrad` → `moto_id` → `World::spawn_data_vehicle`.

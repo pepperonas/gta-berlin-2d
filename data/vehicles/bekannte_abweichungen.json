@@ -7,6 +7,7 @@
  "roller_45/0_45": "zu schnell: auch mit längster Übersetzung",
  "superbike/0_100": "zu schnell: die Kippgrenze g·l_h/h = 1.07 g erlaubt mehr; eine längere Übersetzung nähme den Wheelie beim Ampelstart (Akzeptanzszene 13 hat Vorrang)",
  "cruiser/vmax": "Leistung zu groß für das Ziel, auch mit cwA +15 %",
+ "dirtbike/vmax": "Leistung zu groß für das Ziel, auch mit cwA +15 % (Vorbild je nach Endübersetzung 160–170 km/h, gemessen 171 km/h)",
  "gelaendewagen/brems_100": "Haftung begrenzt: auch mit μ +10 % und ABS kein kürzerer Bremsweg",
  "gelaendewagen/quer_g": "Reifenhaftung reicht auch mit μ +10 % nicht (Lastverlagerung, Schwerpunkt)",
  "e_performance/0_100": "physikalisch nicht erreichbar: selbst konstante Spitzenleistung ohne Schaltpausen braucht 2.3 s",
