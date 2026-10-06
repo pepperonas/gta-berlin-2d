@@ -19,6 +19,7 @@ mod menu;
 mod motoart;
 mod nav;
 mod neon;
+mod padkbd;
 mod physdebug;
 mod play;
 mod railaudio;
@@ -253,7 +254,7 @@ fn main() -> Result<()> {
             }
             "--bildschirm" => {
                 let v = args.next().context(
-                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, autos, ueber, lizenzen oder changelog",
+                    "--bildschirm erwartet pause, steuerung, belegung, statistik, waffenrad, teleport, konsole, konsole-pad, zugfahrt, bahnhof, tunnelfahrt, leute, verdeckt, reklame, schilder, motorraeder, autos, ueber, lizenzen oder changelog",
                 )?;
                 ensure!(
                     [
@@ -264,6 +265,7 @@ fn main() -> Result<()> {
                         "waffenrad",
                         "teleport",
                         "konsole",
+                        "konsole-pad",
                         "zugfahrt",
                         "bahnhof",
                         "tunnelfahrt",
@@ -301,7 +303,7 @@ fn main() -> Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--koop [METER]] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
+                    "cargo run -- [--fps 60|120] [--data PFAD] [--seed N] [--new | --fortsetzen] [--save DATEI] [--position X Y | --geo LAT LON] [--zoom 0.72..2.6] [--free] [--uhr HH:MM | --sun-hour 0..24] [--smoke-frames N] [--capture PNG] [--messung JSON] [--fenster BxH] [--grafik hd|pixel] [--qualitaet niedrig|mittel|hoch] [--check-map] [--check-sim SEKUNDEN] [--stumm] [--im-auto] [--koop [METER]] [--wetter ART] [--stadtplan ZOOM] [--bildschirm pause|steuerung|statistik|ueber|lizenzen|changelog|waffenrad|teleport|konsole|konsole-pad|zugfahrt|bahnhof|tunnelfahrt] [--bars DATEI|live|URL|aus] [--befehl BEFEHL] [--kampf-demo] [--drift-demo] [--fahrzeugschau] [--dev] [--physik-anzeige] [--audio-wav DATEI [--audio-seconds N] [--audio-szene auto|ubahn]]\n\
 Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langsam · F: ein-/aussteigen · E: Aktion (halten: einladen) · Leertaste: Handbremse · H: Hupe · X: ESP · Y/Z: ABS · T: +1 Stunde · N: Wetter durchschalten · M: Ton an/aus · Tab: Stadtplan · Maus links: laufen · Maus rechts/Strg: angreifen · beide Maustasten: Waffenrad · V: treten · Q/1–6: Waffe · R: nachladen · F5: speichern · Mausrad: Zoom · Esc/P: Pause (Menü: Beenden)\n\
 --free: freie Kartenansicht wie in Phase 2 (WASD/Shift/Mausrad, 1/2/3 Zoomstufen) · im Spiel springen --position/--geo dorthin, --zoom hält die Kamera fest · --messung: Bildzeiten (CPU, GPU) als JSON"
                 );
@@ -433,6 +435,11 @@ Spiel: WASD/Pfeile gehen bzw. Gas/Bremse/Lenken · Shift: sprinten · Alt: langs
         Some("konsole") => {
             play.console.open(&play.places);
             play.console.set_text("tp kott", &play.places);
+        }
+        Some("konsole-pad") => {
+            play.console.open(&play.places);
+            play.console.set_text("uhr 2", &play.places);
+            play.open_pad_keyboard();
         }
         _ => {}
     }

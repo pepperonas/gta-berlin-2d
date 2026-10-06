@@ -667,6 +667,63 @@ pub const THROTTLE_GAMMA: f32 = 1.35;
 pub const PEDAL_UP: f64 = 0.15;
 pub const PEDAL_DOWN: f64 = 0.08;
 /// Pedalstellung `cur` einen Schritt `dt` zur Tastenstellung `target` (0/1) nachführen.
+/// s, die ein einzelner Druck auf LB bzw. RB auf den anderen wartet (gleichzeitig = Befehlszeile)
+pub const CHORD_WINDOW: f64 = 0.09;
+
+/// LB + RB gleichzeitig öffnen die Befehlszeile. Damit ein einzelner Druck (nächste Waffe, treten) nicht mit auslöst,
+/// wartet er bis `CHORD_WINDOW` auf den anderen Knopf und wird erst dann (oder beim Loslassen) weitergegeben.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ShoulderChord {
+    /// wartender Druck: RB (sonst LB) und Wartezeit
+    wait: Option<(bool, f64)>,
+    /// beide gedrückt: bis beide los sind, gibt es nichts weiter
+    both: bool,
+}
+impl ShoulderChord {
+    /// Gehaltene Knöpfe und Flanken dieses Schritts → (Befehlszeile, LB-Druck, RB-Druck).
+    pub fn step(
+        &mut self,
+        lb: bool,
+        rb: bool,
+        lb_edge: bool,
+        rb_edge: bool,
+        dt: f64,
+    ) -> (bool, bool, bool) {
+        if self.both {
+            if !lb && !rb {
+                self.both = false;
+            }
+            return (false, false, false);
+        }
+        if lb && rb && (lb_edge || rb_edge || self.wait.is_some()) {
+            self.both = true;
+            self.wait = None;
+            return (true, false, false);
+        }
+        let mut out = (false, false, false);
+        if let Some((is_rb, t)) = self.wait.as_mut() {
+            *t += dt;
+            let held = if *is_rb { rb } else { lb };
+            if !held || *t >= CHORD_WINDOW - 1e-9 {
+                if *is_rb {
+                    out.2 = true;
+                } else {
+                    out.1 = true;
+                }
+                self.wait = None;
+            }
+        }
+        if self.wait.is_none() {
+            if lb_edge && !rb {
+                self.wait = Some((false, 0.));
+            } else if rb_edge && !lb {
+                self.wait = Some((true, 0.));
+            }
+        }
+        out
+    }
+}
+
 /// s gehalten, bis die Hupe zur Sirene wird (nur Fahrzeuge mit Sirene)
 pub const SIREN_HOLD: f64 = 0.45;
 
@@ -876,6 +933,38 @@ impl Bindings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn both_shoulders_open_the_console_without_side_effects() {
+        use super::ShoulderChord;
+        let dt = 1. / 60.;
+        // gleichzeitig: Befehlszeile, kein LB/RB-Druck – auch nicht später
+        let mut c = ShoulderChord::default();
+        assert_eq!(c.step(true, true, true, true, dt), (true, false, false));
+        for _ in 0..20 {
+            assert_eq!(c.step(true, true, false, false, dt), (false, false, false));
+        }
+        assert_eq!(
+            c.step(false, false, false, false, dt),
+            (false, false, false)
+        );
+        // knapp nacheinander (zwei Schritte): ebenfalls Befehlszeile
+        let mut c = ShoulderChord::default();
+        assert_eq!(c.step(true, false, true, false, dt), (false, false, false));
+        assert_eq!(c.step(true, true, false, true, dt), (true, false, false));
+        // einzeln gehalten: nach dem Fenster genau ein LB-Druck
+        let mut c = ShoulderChord::default();
+        let mut lb = 0;
+        for i in 0..20 {
+            let o = c.step(true, false, i == 0, false, dt);
+            assert!(!o.0 && !o.2);
+            lb += o.1 as u32;
+        }
+        assert_eq!(lb, 1);
+        // kurz getippt (Druck und Loslassen zwischen zwei Schritten): ein RB-Druck im nächsten Schritt
+        let mut c = ShoulderChord::default();
+        assert_eq!(c.step(false, false, false, true, dt), (false, false, false));
+        assert_eq!(c.step(false, false, false, false, dt), (false, false, true));
+    }
     #[test]
     fn long_horn_switches_the_siren_once() {
         use super::HornPress;

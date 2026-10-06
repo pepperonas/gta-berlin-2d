@@ -2311,6 +2311,9 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
 - **Einsteigen anzeigen:** `play::enter_target` wählt wie `World::try_enter_car`; ein durchscheinendes Rechteck in der
   Spielerfarbe hinter dem Fahrzeug (Effekt-Durchgang, schreibt keine Tiefe), leicht pulsierend.
 - **Stadtplan:** rechter Stick zoomt; **Teleport-Rückfrage:** Auswahl Ja/Nein mit Pfeilen/Steuerkreuz/Stick.
-- **Offen:** Befehlszeile per RT+LT – am Controller kollidiert das mit Gas/Bremse und Zielen/Schießen, und Tippen
-  braucht eine Bildschirmtastatur; noch nicht umgesetzt.
+- **Befehlszeile am Controller:** LB + RB gleichzeitig (statt RT+LT – die sind Gas/Bremse bzw. Zielen/Schießen).
+  `bindings::ShoulderChord` lässt einen einzelnen Druck bis `CHORD_WINDOW` (0,09 s) auf den zweiten warten und gibt
+  ihn danach (oder beim Loslassen) weiter; gefiltert wird in `Play::step` vor allem anderen, je Controller. Tippen über
+  `padkbd.rs` (Bildschirmtastatur oben im Bild, Ziffern, Buchstaben, `:.,-`, Leerzeichen, Löschen, OK). Mit der
+  Tastatur geöffnet bleibt sie aus. Aufnahme: `--bildschirm konsole-pad`.
 

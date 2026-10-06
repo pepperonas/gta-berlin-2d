@@ -131,6 +131,9 @@ pub struct Play {
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
     wheel_p2: crate::wheel::WheelButton,
+    /// LB + RB gleichzeitig = Befehlszeile (je Controller) und deren Bildschirmtastatur
+    chord: [crate::bindings::ShoulderChord; 2],
+    kbd: crate::padkbd::PadKbd,
     /// Teleport-Rückfrage: „Nein“ ausgewählt (Pfeile/Stick wechseln, A bzw. Enter nimmt die Auswahl)
     teleport_no: bool,
     /// Fahrhilfen-Rad (rechter Stick im Fahrzeug) je Spieler und die Hupe mit langem Druck (Sirene)
@@ -406,6 +409,9 @@ impl Play {
         }
         if self.screen == Screen::Playing {
             crate::console::draw(out, &self.console, &self.world);
+            if self.console.open {
+                crate::padkbd::draw(out, &self.kbd);
+            }
         }
         if self.assist[0].open && self.screen == Screen::Playing {
             let items = assist_items(&self.world);
@@ -573,6 +579,8 @@ impl Play {
             wheel_m: Default::default(),
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
+            chord: Default::default(),
+            kbd: Default::default(),
             teleport_no: false,
             assist: Default::default(),
             horn: Default::default(),
@@ -844,7 +852,14 @@ impl Play {
                 list.push(key);
             }
         }
-        if keys.pad_pressed.b {
+        if self.kbd.on {
+            let (pad, e) = if self.kbd.slot == 0 {
+                (keys.pad, keys.pad_pressed)
+            } else {
+                (keys.pad2, keys.pad2_pressed)
+            };
+            list.extend(self.kbd.step(&pad, &e));
+        } else if keys.pad_pressed.b {
             list.push(Key::Escape);
         }
         let now = self.world.time;
@@ -862,6 +877,9 @@ impl Play {
             if !self.console.open {
                 break;
             }
+        }
+        if !self.console.open {
+            self.kbd.on = false;
         }
     }
     fn console_actions(&mut self, actions: Vec<crate::console::Action>, now: f64) {
@@ -1139,6 +1157,25 @@ impl Play {
             }
         }
     }
+    /// Aufnahmen (`--bildschirm konsole-pad`): Bildschirmtastatur zur offenen Befehlszeile.
+    pub fn open_pad_keyboard(&mut self) {
+        self.kbd = crate::padkbd::PadKbd::new(0);
+    }
+    /// Befehlszeile per LB + RB öffnen (nur im laufenden Spiel, nicht über Karte, Rückfrage oder Ergebnis).
+    fn chord_console(&mut self, slot: u8) {
+        if self.screen != Screen::Playing
+            || self.console.open
+            || self.bigmap.open
+            || self.world.loading
+            || self.teleport.is_some()
+            || matches!(self.world.mission.state, State::Success | State::Failed)
+        {
+            return;
+        }
+        self.console.open(&self.places);
+        self.kbd = crate::padkbd::PadKbd::new(slot);
+        self.ui_sound();
+    }
     /// Spieler 2 tritt bei (Controller-Platz `slot`).
     pub fn join_coop(&mut self, slot: u8) {
         if self.world.join_p2() {
@@ -1392,6 +1429,8 @@ impl Play {
                     && !matches!(self.world.mission.state, State::Success | State::Failed)
                 {
                     self.console.open(&self.places);
+                    // mit der Tastatur geöffnet: keine Bildschirmtastatur
+                    self.kbd = Default::default();
                     self.ui_sound();
                     return true;
                 }
@@ -3515,6 +3554,29 @@ impl Game for Play {
         DT
     }
     fn step(&mut self, keys: &Keys, dt: f64) {
+        // LB + RB gleichzeitig: Befehlszeile mit Bildschirmtastatur; einzelne Drücke kommen leicht verzögert durch
+        let (mut pe, mut pe2) = (keys.pad_pressed, keys.pad2_pressed);
+        let (c1, lb1, rb1) = self.chord[0].step(keys.pad.lb, keys.pad.rb, pe.lb, pe.rb, dt);
+        (pe.lb, pe.rb) = (lb1, rb1);
+        let (c2, lb2, rb2) = self.chord[1].step(keys.pad2.lb, keys.pad2.rb, pe2.lb, pe2.rb, dt);
+        (pe2.lb, pe2.rb) = (lb2, rb2);
+        let filtered = Keys {
+            held: keys.held,
+            pressed: keys.pressed,
+            pad: keys.pad,
+            pad_pressed: pe,
+            pad2: keys.pad2,
+            pad2_pressed: pe2,
+            mouse: keys.mouse,
+            typed: keys.typed,
+        };
+        let keys = &filtered;
+        if c1 || c2 {
+            // physischer Controller → Platz in den Tasten, die `step_keys` sieht (Spieler 2 auf dem ersten: Platz 2)
+            let phys = if c1 { 0 } else { 1 };
+            let mapped = self.world.coop() && self.p2_pad == 0;
+            self.chord_console(if mapped { 1 - phys } else { phys });
+        }
         if self.world.coop() && self.p2_pad == 0 {
             // Spieler 2 hat den ersten Controller: Spieler 1 sieht ihn nicht
             let k1 = Keys {
@@ -4562,6 +4624,83 @@ mod tests {
         assert!(car_b.handbrake);
         let car_x = input_from(&keys(x), true, &b);
         assert!(car_x.horn && !car_x.jump);
+    }
+    /// LB + RB gleichzeitig öffnen die Befehlszeile mit Bildschirmtastatur; A tippt, B leert bzw. schließt. Ein
+    /// einzelner LB-Druck wechselt weiterhin die Waffe (leicht verzögert).
+    #[test]
+    fn shoulders_open_the_console_with_a_pad_keyboard() {
+        let dir = std::env::temp_dir().join(format!("gta-berlin-chord-{}", std::process::id()));
+        let root = berlin_map_loader::default_data_root();
+        let mut p = Play::new(
+            &root,
+            4,
+            Some(FileStorage::new(dir.join("s.json"))),
+            false,
+            Start::New,
+        )
+        .unwrap();
+        let none = HashSet::new();
+        let step = |p: &mut Play, held: Pad, edges: Pad| {
+            p.step(
+                &Keys {
+                    held: &none,
+                    pressed: &none,
+                    pad: Pad {
+                        connected: true,
+                        ..held
+                    },
+                    pad_pressed: edges,
+                    pad2: Default::default(),
+                    pad2_pressed: Default::default(),
+                    mouse: Default::default(),
+                    typed: "",
+                },
+                DT,
+            );
+        };
+        for _ in 0..5 {
+            step(&mut p, Pad::default(), Pad::default());
+        }
+        // einzelnes LB: nächste Waffe, keine Befehlszeile
+        let w0 = p.world.player.combat.weapon;
+        let lb = Pad {
+            lb: true,
+            ..Default::default()
+        };
+        step(&mut p, lb, lb);
+        for _ in 0..10 {
+            step(&mut p, Pad::default(), Pad::default());
+        }
+        assert!(!p.console.open);
+        assert_ne!(p.world.player.combat.weapon, w0, "LB wechselt die Waffe");
+        // beide gleichzeitig
+        let both = Pad {
+            lb: true,
+            rb: true,
+            ..Default::default()
+        };
+        step(&mut p, both, both);
+        assert!(
+            p.console.open && p.kbd.on,
+            "Befehlszeile mit Bildschirmtastatur"
+        );
+        let a = Pad {
+            a: true,
+            ..Default::default()
+        };
+        step(&mut p, Pad::default(), a);
+        assert_eq!(p.console.text, "q");
+        let b = Pad {
+            b: true,
+            ..Default::default()
+        };
+        step(&mut p, Pad::default(), b);
+        assert!(
+            p.console.open && p.console.text.is_empty(),
+            "B leert zuerst"
+        );
+        step(&mut p, Pad::default(), b);
+        assert!(!p.console.open && !p.kbd.on, "B schließt");
     }
     /// Einsteigen möglich: das nächste freie Fahrzeug schimmert in der Farbe des Spielers, sonst nichts.
     #[test]

@@ -8,6 +8,9 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Befehlszeile am Controller** – LB + RB gleichzeitig öffnen sie mit einer Bildschirmtastatur
+  (Steuerkreuz/Stick wählen, A tippt, X löscht, Y Leerzeichen, LT/RT Vorschläge, RB übernimmt, Start führt aus, B
+  schließt). Einzelne LB-/RB-Drücke (nächste Waffe, treten) warten dafür bis 0,09 s auf den zweiten Knopf.
 - Native Fassung: **neue Controller-Belegung** (nach dem Notizblatt): zu Fuß X springen, B nachladen, RB treten,
   LB nächste Waffe, rechten Stick drücken = Waffenrad (drücken öffnet, Stick wählt, nochmal drücken oder A nimmt, B
   bricht ab); im Auto B Handbremse, Steuerkreuz ↓ ABS, rechten Stick drücken = neues **Fahrhilfen-Rad** (ESP, ABS,

@@ -72,6 +72,8 @@ nochmal drücken oder A nimmt, B bricht ab). Im Auto: RT/LT Gas/Bremse, B Handbr
 (in Polizei- und Rettungswagen lang halten = Sirene), rechten Stick drücken = Fahrhilfen-Rad (ESP, ABS, Sirene).
 Stadtplan: linker Stick verschieben, rechter Stick bzw. RT/LT zoomen, A Wegpunkt, X Teleport, B zurück;
 Teleport-Rückfrage mit Stick/Steuerkreuz wählen, A bestätigt.
+LB + RB gleichzeitig öffnet die Befehlszeile mit Bildschirmtastatur (Steuerkreuz/Stick wählen, A tippt, X löscht,
+Y Leerzeichen, LT/RT Vorschläge, RB übernimmt, Start führt aus, B schließt).
 Zu zweit: zweiten Controller anschließen und **Start** drücken (oder Pausenmenü „Spieler 2 beitreten“ – mit nur einem
 Controller übernimmt Spieler 2 ihn, Spieler 1 spielt mit Tastatur und Maus). Nah beieinander zeigt ein Bild beide,
 entfernt teilt es sich dynamisch entlang einer mitdrehenden Linie; Auftrag und Geld sind gemeinsam.
