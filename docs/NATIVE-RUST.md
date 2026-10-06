@@ -2435,3 +2435,12 @@ Spieler 2: `Game::step` gibt Spieler 1 im Spiel nur die Controller (keine Tasten
 (oder bricht beim Ausholen den Wurf ab). In Menüs bekommt die Tastatur wieder alles. Test
 `with_one_controller_player_two_takes_the_keyboard`.
 
+## Straßenname und Kreuzung im HUD (06.10.2026)
+
+`sim/streetinfo.rs`: `World::street_label` / `street_label_at(w, x, y, heading)` – nächste benannte Straße (Klasse
+≤ 10, auf der Fahrbahn bzw. am Rand), dann entlang dieser Straße in Bewegungsrichtung (Auto: Geschwindigkeit, sonst
+Fahrzeug- bzw. Blickwinkel) über Knoten gleichen Namens bis zur ersten Querstraße mit anderem Namen (Klasse ≤ 8,
+höchstens `AHEAD_M` = 150 m, 8 Knoten). `Play::streets` frischt das sechsmal je Sekunde je Spieler auf und merkt den
+Zeitpunkt eines Wechsels; `hud::street` zeichnet oben mittig (Koop: `low`, unter der Kopfzeile), Texte aus der reinen
+`hud::street_lines`. Tests: `crates/sim/tests/streetinfo.rs`, `hud::street_tests`.
+

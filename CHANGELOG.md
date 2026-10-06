@@ -8,6 +8,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Straßenname und nächste Kreuzung im HUD.** Oben mittig, dezent und halbtransparent: die Straße,
+  auf der man gerade ist, darunter die nächste Querstraße in Lauf- bzw. Fahrtrichtung mit Entfernung („Kreuzung
+  Eisenbahnstraße · 90 m“, auf 10 m gerundet). Wechsel blenden weich ein; im Koop je Bildhälfte eine Zeile tiefer.
+  Nicht im Bahnhof und nicht als Fahrgast.
 - Native Fassung: **Koop – Geräte zuweisen.** Beim Beitreten behält Spieler 1 seinen Controller: mit zwei Controllern
   spielt Spieler 2 am zweiten, mit nur einem an der Tastatur (ohne Maus; Esc pausiert bzw. bricht einen Wurf ab). Im
   Pausenmenü steht im Koop der Eintrag „Geräte: S1 … · S2 …“, jede Wahl schaltet reihum durch die möglichen

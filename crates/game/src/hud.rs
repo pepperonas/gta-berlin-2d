@@ -733,6 +733,50 @@ pub fn breath(h: &mut Hud, left: f64, tired: bool, x: f32, y: f32, w: f32, t: f6
     }
 }
 
+/// Zeilen der Straßenanzeige: Straßenname und (falls voraus) „Kreuzung Name · 80 m“ (auf 10 m gerundet, ganz nah ohne
+/// Entfernung).
+pub fn street_lines(l: &berlin_sim::streetinfo::StreetLabel) -> (String, Option<String>) {
+    let cross = l.cross.as_ref().map(|(name, d)| {
+        if *d < 15. {
+            format!("Kreuzung {name}")
+        } else {
+            format!("Kreuzung {name} · {} m", ((d / 10.).round() * 10.) as i64)
+        }
+    });
+    (l.street.clone(), cross)
+}
+
+/// Straßenname oben mittig, darunter die nächste Kreuzung in Bewegungsrichtung – dezent, halbtransparent, blendet
+/// bei jedem Wechsel weich ein (`age` = Sekunden seit dem Wechsel).
+/// `low`: eine Zeile tiefer (Koop – die halben Bilder sind oben zu schmal neben Uhr und Auftrag).
+pub fn street(h: &mut Hud, l: &berlin_sim::streetinfo::StreetLabel, age: f64, low: bool) {
+    let a = ((age / 0.35).clamp(0., 1.) as f32).powf(0.8);
+    let cx = h.width / 2.;
+    // oben mittig: dort liegt nichts (links Geld und Uhr, rechts der Auftrag; unten Hinweise und Tacho)
+    let base = MARGIN.1 + if low { 104. } else { 38. };
+    let (name, cross) = street_lines(l);
+    h.text(
+        &name,
+        cx,
+        base - 13.,
+        15.,
+        [1., 1., 1., 0.72 * a],
+        Align::Center,
+        true,
+    );
+    if let Some(t) = cross {
+        h.text(
+            &t,
+            cx,
+            base + 4.,
+            11.,
+            [0.9, 0.9, 0.92, 0.55 * a],
+            Align::Center,
+            true,
+        );
+    }
+}
+
 pub fn health(h: &mut Hud, c: &berlin_sim::combat::Combat, x: f32, y: f32, w: f32, t: f64) {
     let hp = (c.hp / berlin_sim::combat::PLAYER_HP).clamp(0., 1.) as f32;
     h.rect(x, y, w, 6., [0., 0., 0., 0.6], 0.);
@@ -1321,5 +1365,41 @@ mod tests {
             .find(|i| i.color == YELLOW)
             .expect("Zielpunkt");
         assert!(yellow.center[0] <= 40. + MINI && yellow.center[0] > 40. + MINI / 2.);
+    }
+}
+
+#[cfg(test)]
+mod street_tests {
+    use super::*;
+    #[test]
+    fn street_label_shows_name_and_rounded_crossing_and_fades_in() {
+        let l = berlin_sim::streetinfo::StreetLabel {
+            street: "Karl-Marx-Straße".into(),
+            cross: Some(("Hermannstraße".into(), 84.)),
+        };
+        let (n, c) = street_lines(&l);
+        assert_eq!(n, "Karl-Marx-Straße");
+        assert_eq!(c.as_deref(), Some("Kreuzung Hermannstraße · 80 m"));
+        let near = berlin_sim::streetinfo::StreetLabel {
+            cross: Some(("Hermannstraße".into(), 9.)),
+            ..l.clone()
+        };
+        assert_eq!(
+            street_lines(&near).1.as_deref(),
+            Some("Kreuzung Hermannstraße")
+        );
+        let none = berlin_sim::streetinfo::StreetLabel {
+            cross: None,
+            ..l.clone()
+        };
+        assert!(street_lines(&none).1.is_none());
+        // gerade gewechselt: noch fast unsichtbar; eingeblendet dezent (nie ganz deckend)
+        let max_a = |age: f64| {
+            let mut h = Hud::new([1280., 720.]);
+            street(&mut h, &l, age, false);
+            h.items.iter().map(|i| i.color[3]).fold(0f32, f32::max)
+        };
+        assert!(max_a(0.02) < max_a(1.) * 0.2);
+        assert!(max_a(1.) > 0.3 && max_a(1.) < 0.8, "dezent: {}", max_a(1.));
     }
 }

@@ -177,6 +177,9 @@ pub struct Play {
     wheel_m: crate::wheel::WheelButton,
     /// Wurfvorschau je Spieler beim Ausholen (throwaim.rs)
     arcs: Vec<crate::throwaim::Arc>,
+    /// Straßenname und nächste Kreuzung je Spieler, seit wann so (sanftes Einblenden)
+    streets: [Option<(berlin_sim::streetinfo::StreetLabel, f64)>; 2],
+    street_tick: u32,
     wheel_p: crate::wheel::WheelButton,
     /// Waffenrad von Spieler 2 (Koop, LB an seinem Controller; ohne Zeitlupe – die Welt gehört beiden)
     wheel_p2: crate::wheel::WheelButton,
@@ -437,6 +440,11 @@ impl Play {
                 out,
                 crate::hud::Parts::ALL,
             );
+            if self.screen == Screen::Playing
+                && let Some((l, since)) = &self.streets[0]
+            {
+                crate::hud::street(out, l, self.real_t - since, false);
+            }
         }
         self.physdebug.draw(out, &self.world);
         self.enginedebug.draw(out, &self.listener.engine_view);
@@ -628,6 +636,8 @@ impl Play {
 
             wheel_m: Default::default(),
             arcs: Vec::new(),
+            streets: [None, None],
+            street_tick: 0,
             wheel_p: Default::default(),
             wheel_p2: Default::default(),
             chord: Default::default(),
@@ -1132,6 +1142,11 @@ impl Play {
             out,
             only(true),
         );
+        if self.screen == Screen::Playing
+            && let Some((l, since)) = &self.streets[0]
+        {
+            crate::hud::street(out, l, self.real_t - since, true);
+        }
         let cam2 = views.cams[(views.count == 2) as usize].clone();
         let from = out.items.len();
         let nav2 = self.nav2.view(self.nav2_pos().0);
@@ -1154,6 +1169,11 @@ impl Play {
         );
         let items2 = assist_items(&self.world);
         self.world.swap_seat();
+        if self.screen == Screen::Playing
+            && let Some((l, since)) = &self.streets[1]
+        {
+            crate::hud::street(out, l, self.real_t - since, true);
+        }
         out.shift_since(from, half);
         out.width = full;
         // Räder von Spieler 2 liegen schon in Bildschirmlage (Mitte seiner Hälfte)
@@ -1888,6 +1908,14 @@ pub fn combat_input(
         aim_world: None,
         cancel: false,
     }
+}
+
+/// Straße und nächste Kreuzung des Spielers auf dem aktiven Sitz; nicht im Bahnhof, nicht als Fahrgast in der Bahn.
+fn street_of(w: &mut berlin_sim::world::World) -> Option<berlin_sim::streetinfo::StreetLabel> {
+    if w.in_tunnel_station() || w.player.ride.is_some() || w.loading {
+        return None;
+    }
+    w.street_label()
 }
 
 /// Wurfvorschau des Spielers auf dem aktiven Sitz, solange er mit einer Wurfwaffe ausholt.
@@ -3425,6 +3453,25 @@ impl Play {
         }
         if let Some(Some(a)) = self.world.with_p2(throw_arc) {
             self.arcs.push(a);
+        }
+        // Straße und Kreuzung fürs HUD (sechsmal je Sekunde reicht)
+        self.street_tick = self.street_tick.wrapping_add(1);
+        if self.street_tick % 10 == 0 {
+            let l1 = street_of(&mut self.world);
+            let l2 = self.world.with_p2(street_of).flatten();
+            let t = self.real_t;
+            for (slot, l) in self.streets.iter_mut().zip([l1, l2]) {
+                *slot = match (slot.take(), l) {
+                    (Some((old, since)), Some(new)) => {
+                        // Einblenden nur, wenn sich die Straße ändert (die Entfernung zählt still mit)
+                        let same = old.street == new.street
+                            && old.cross.as_ref().map(|c| &c.0) == new.cross.as_ref().map(|c| &c.0);
+                        Some((new, if same { since } else { t }))
+                    }
+                    (_, Some(new)) => Some((new, t)),
+                    (_, None) => None,
+                };
+            }
         }
         self.step_nav();
         // Controller-Vibration aus Stößen und dem Schlupf des eigenen Autos
