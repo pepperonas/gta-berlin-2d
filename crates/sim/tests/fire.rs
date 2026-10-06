@@ -53,7 +53,7 @@ fn wreck_burns_then_explodes_and_hurts_the_surroundings() {
         &mut w,
         max,
         Input::default(),
-        |e| matches!(e, Event::Explosion { car, .. } if *car == pc),
+        |e| matches!(e, Event::Explosion { car, .. } if *car == Some(pc)),
     );
     let k = boom.expect("explodiert");
     assert!(
@@ -87,7 +87,7 @@ fn explosions_chain_from_car_to_car() {
         &mut w,
         max,
         Input::default(),
-        |e| matches!(e, Event::Explosion { car, .. } if *car == id2),
+        |e| matches!(e, Event::Explosion { car, .. } if *car == Some(id2)),
     );
     assert!(
         second.is_some(),
@@ -192,7 +192,15 @@ fn console_ignite_never_picks_the_own_car() {
     w.cars.retain(|c| c.id == pc);
     assert_eq!(w.ignite_nearest(x, y, 600., 0.5), None);
     // ein fremdes daneben: das brennt
-    w.cars.push(Car::new(9_997, x + 60., y, 0., 0x777777, Role::Parked, "car"));
+    w.cars.push(Car::new(
+        9_997,
+        x + 60.,
+        y,
+        0.,
+        0x777777,
+        Role::Parked,
+        "car",
+    ));
     assert_eq!(w.ignite_nearest(x, y, 600., 0.5), Some(9_997));
     let c = w.car(9_997).unwrap();
     assert!(c.wrecked && c.burn.is_some());

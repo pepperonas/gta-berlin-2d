@@ -153,6 +153,11 @@ impl Listener {
                     ))
                 }
                 Event::CarFire { x, y, .. } => Some((Sfx::FireCrackle(1.), near(x, y))),
+                Event::Throw { x, y, .. } => Some((Sfx::Swing(0.7), near(x, y))),
+                Event::Bounce { x, y, strength } => {
+                    Some((Sfx::Impact(0.3 + 0.5 * strength as f32), near(x, y)))
+                }
+                Event::Shatter { x, y, .. } => Some((Sfx::Molotov(1.), near(x, y))),
                 Event::Wreck { .. }
                 | Event::Notice(_)
                 | Event::Blood { .. }
@@ -173,6 +178,7 @@ impl Listener {
                     Sfx::Thud(k) => Sfx::Thud(k * gain),
                     Sfx::Impact(k) => Sfx::Impact(k * gain),
                     Sfx::FireCrackle(k) => Sfx::FireCrackle(k * gain),
+                    Sfx::Molotov(k) => Sfx::Molotov(k * gain),
                     s => s,
                 });
             }
@@ -186,6 +192,17 @@ impl Listener {
             live.push(c.id);
             let g = near(c.x, c.y);
             let last = self.crackle.entry(c.id).or_insert(w.time);
+            if w.time - *last >= 2.2 && g > 0.02 {
+                *last = w.time;
+                f.sfx.push(Sfx::FireCrackle(g));
+            }
+        }
+        // Molotow-Feuer ebenso (eigene Schlüssel neben den Fahrzeugnummern)
+        for fl in &w.flames {
+            let key = (1 << 31) | fl.id;
+            live.push(key);
+            let g = near(fl.x, fl.y) * 0.8;
+            let last = self.crackle.entry(key).or_insert(w.time - 1.4);
             if w.time - *last >= 2.2 && g > 0.02 {
                 *last = w.time;
                 f.sfx.push(Sfx::FireCrackle(g));

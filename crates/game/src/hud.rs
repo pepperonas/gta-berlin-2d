@@ -1006,7 +1006,7 @@ pub fn weapon_panel(h: &mut Hud, c: &berlin_sim::combat::Combat, r: f32, b: f32)
     } else if c.reload_t > 0. {
         let u = (1. - c.reload_t / wp.reload).clamp(0., 1.) as f32;
         h.text(
-            "NACHLADEN",
+            if wp.throw { "NACHSCHUB" } else { "NACHLADEN" },
             r,
             y + 40.,
             14.,

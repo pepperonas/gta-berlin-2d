@@ -1,5 +1,6 @@
 //! Brennende Wracks und Explosionen (Darstellung zu `sim/fire.rs`): Flammen und Rauch am brennenden Wagen, Feuerball,
 //! Druckwellenring, Trümmer und Rauchsäule beim Knall, Brandfleck am Boden, Glimmen des ausgebrannten Wracks.
+//! Dazu die Wurfwaffen (`sim/throw.rs`): fliegende Granaten und Molotows mit Schatten, Molotow-Feuer am Boden.
 //! Streuung nur aus Hashes, nie aus dem Welt-Zufall.
 use berlin_engine::{Body, LightSource};
 use berlin_sim::events::Event;
@@ -13,6 +14,8 @@ enum Kind {
     Smoke,
     /// Trümmer: dunkle Splitter, fliegen und bremsen ab
     Debris,
+    /// Flammenzunge (Molotow, Docht): schmal, steigt auf, satt orange
+    Lick,
 }
 #[derive(Debug, Clone, Copy)]
 struct Puff {
@@ -55,7 +58,14 @@ pub struct FireFx {
     /// Ausstoß-Rest je Wrack (Bruchteile tragen über Schritte)
     emit: std::collections::HashMap<u32, f32>,
     seq: u32,
+    /// Wurfkörper dieses Schritts (Lage, Höhe, Drehung, Granate?, Sekunden seit dem Wurf)
+    thrown: Vec<([f32; 2], f32, f32, bool, f32)>,
+    /// Molotow-Feuer dieses Schritts (Mitte, Radius, Alter) für den Glutteppich
+    flames: Vec<([f32; 2], f32, f32)>,
 }
+/// Ausstoß-Schlüssel der Molotow-Feuer und brennenden Flaschen (getrennt von den Fahrzeugnummern)
+const FLAME_KEY: u32 = 1 << 31;
+const BOTTLE_KEY: u32 = 3 << 30;
 
 impl FireFx {
     fn h(&mut self, k: f64) -> f32 {
@@ -175,6 +185,31 @@ impl FireFx {
                         self.scorch.pop_front();
                     }
                 }
+                Event::Shatter { x, y, r } => {
+                    // Glas und Benzin spritzen auf, Brandfleck bleibt
+                    for _ in 0..10 {
+                        let a = self.h(30.) * std::f32::consts::TAU;
+                        let sp = 40. + self.h(31.) * 60.;
+                        let p = Puff {
+                            kind: Kind::Fire,
+                            at: [x as f32, y as f32],
+                            v: [a.cos() * sp, a.sin() * sp],
+                            size: 4. + self.h(32.) * 5.,
+                            grow: 14.,
+                            life: 0.3,
+                            max: 0.3,
+                            rot: a,
+                        };
+                        self.push(p);
+                    }
+                    let a = self.h(33.) * std::f32::consts::PI;
+                    self.scorch.push_back(Scorch {
+                        at: [x as f32, y as f32],
+                        r: [r as f32 * 0.95, r as f32 * 0.8],
+                        angle: a,
+                        age: 0.,
+                    });
+                }
                 Event::CarFire { x, y, .. } => {
                     // Stichflamme beim Entzünden
                     for _ in 0..6 {
@@ -260,7 +295,91 @@ impl FireFx {
                 }
             }
         }
+        // Molotow-Feuer: Flammen über die ganze Fläche, etwas Rauch
+        self.flames.clear();
+        for f in &w.flames {
+            if berlin_sim::coop::min_dist(&foci[..nf], f.x, f.y) > 2600. {
+                continue;
+            }
+            let key = FLAME_KEY | f.id;
+            live.push(key);
+            let r = f.r() as f32;
+            let heat = (r / berlin_sim::throw::FLAME_R as f32).clamp(0.2, 1.);
+            let at = [f.x as f32, f.y as f32];
+            self.burning.push((at, heat * 0.9));
+            self.flames.push((at, r, f.t as f32));
+            let acc = self.emit.entry(key).or_insert(0.);
+            *acc += (30. + r * 2.2) * dt;
+            let n = acc.floor() as usize;
+            *acc -= n as f32;
+            for _ in 0..n {
+                let a = self.h(40.) * std::f32::consts::TAU;
+                let d = self.h(41.).sqrt() * r;
+                let base = [at[0] + a.cos() * d, at[1] + a.sin() * d];
+                if self.h(42.) < 0.88 {
+                    let life = 0.3 + self.h(43.) * 0.35;
+                    let p = Puff {
+                        kind: Kind::Lick,
+                        at: base,
+                        v: [(self.h(44.) - 0.5) * 8., -16. - self.h(45.) * 18.],
+                        size: 2.6 + self.h(46.) * 3.4,
+                        grow: 9.,
+                        life,
+                        max: life,
+                        rot: 0.,
+                    };
+                    self.push(p);
+                } else {
+                    let life = 1.5 + self.h(47.) * 1.5;
+                    let p = Puff {
+                        kind: Kind::Smoke,
+                        at: base,
+                        v: [6., -9. - self.h(48.) * 8.],
+                        size: 5. + self.h(49.) * 4.,
+                        grow: 6.,
+                        life,
+                        max: life,
+                        rot: 0.,
+                    };
+                    self.push(p);
+                }
+            }
+        }
+        // Wurfkörper; die Molotow-Flasche brennt am Docht
+        self.thrown.clear();
+        for g in &w.thrown {
+            let grenade = g.kind == berlin_sim::throw::Kind::Grenade;
+            let at = [g.x as f32, g.y as f32];
+            self.thrown
+                .push((at, g.z as f32, g.spin as f32, grenade, g.t as f32));
+            if !grenade {
+                let key = BOTTLE_KEY | g.id;
+                live.push(key);
+                let lift = Self::lift(g.z as f32);
+                let acc = self.emit.entry(key).or_insert(0.);
+                *acc += 40. * dt;
+                let n = acc.floor() as usize;
+                *acc -= n as f32;
+                for _ in 0..n {
+                    let p = Puff {
+                        kind: Kind::Lick,
+                        at: [at[0], at[1] - lift],
+                        v: [(self.h(50.) - 0.5) * 10., -8.],
+                        size: 2. + self.h(51.) * 1.5,
+                        grow: 6.,
+                        life: 0.18,
+                        max: 0.18,
+                        rot: 0.,
+                    };
+                    self.push(p);
+                }
+            }
+        }
         self.emit.retain(|id, _| live.contains(id));
+    }
+    /// Bildversatz eines Wurfkörpers nach oben (Draufsicht mit leichter Schräge)
+    fn lift(z: f32) -> f32 {
+        z * 0.55
     }
     pub fn step(&mut self, dt: f32) {
         for p in &mut self.puffs {
@@ -270,6 +389,7 @@ impl FireFx {
             // Luftwiderstand: Feuerball und Trümmer bremsen schnell, Rauch treibt
             let drag = match p.kind {
                 Kind::Fire => 4.,
+                Kind::Lick => 1.5,
                 Kind::Debris => 2.5,
                 Kind::Smoke => 0.6,
             };
@@ -326,6 +446,24 @@ impl FireFx {
                         color: [c[0], c[1], c[2], a],
                     });
                 }
+                Kind::Lick => {
+                    // gelb am Fuß, dann sattes Orange, zuletzt Rot; schmal und hochgezogen
+                    let c = if age < 0.25 {
+                        [1., 0.84, 0.4]
+                    } else {
+                        let t = ((age - 0.25) / 0.75).clamp(0., 1.);
+                        [1., 0.6 - 0.32 * t, 0.16 - 0.1 * t]
+                    };
+                    let a = (1. - age).powf(1.3) * 0.85;
+                    out.push(Body {
+                        center: p.at,
+                        half: [p.size * 0.65, p.size * 1.35],
+                        angle: 0.,
+                        shape: 3.,
+                        depth: 0.5885,
+                        color: [c[0], c[1], c[2], a],
+                    });
+                }
                 Kind::Debris => {
                     let c = lit([0.12, 0.11, 0.1]);
                     out.push(Body {
@@ -338,6 +476,27 @@ impl FireFx {
                     });
                 }
             }
+        }
+        // Molotow: glühender Teppich unter den Flammen, flackert
+        for (i, &(at, r, t)) in self.flames.iter().enumerate() {
+            let fl = 0.85 + 0.15 * (t * 17. + i as f32 * 2.1).sin() * (t * 5.3).cos();
+            let a = (t / 0.25).min(1.) * 0.42 * fl;
+            out.push(Body {
+                center: at,
+                half: [r * 1.05, r * 0.9],
+                angle: 0.,
+                shape: 3.,
+                depth: 0.5895,
+                color: [1., 0.55, 0.16, a],
+            });
+            out.push(Body {
+                center: at,
+                half: [r * 0.6, r * 0.5],
+                angle: 0.,
+                shape: 3.,
+                depth: 0.5893,
+                color: [1., 0.86, 0.45, a * 0.8],
+            });
         }
         // Druckwelle: heller Ring, der auseinanderläuft
         for b in &self.blasts {
@@ -353,8 +512,69 @@ impl FireFx {
             });
         }
     }
-    /// Am Boden: Brandflecken (unter allem Bewegten).
+    /// Am Boden: Brandflecken (unter allem Bewegten); Wurfkörper mit Schatten.
     pub fn bodies(&self, out: &mut Vec<Body>) {
+        for &(at, z, spin, grenade, t) in &self.thrown {
+            // Schatten am Boden, kleiner und blasser je höher
+            let k = 1. / (1. + z / 40.);
+            out.push(Body {
+                center: at,
+                half: [3.4 * k, 2.6 * k],
+                angle: 0.,
+                shape: 1.,
+                depth: 0.831,
+                color: [0., 0., 0., 0.35 * k],
+            });
+            let big = 1. + z / 90.;
+            let c = [at[0], at[1] - Self::lift(z)];
+            let depth = if z > berlin_sim::throw::OVER_CAR as f32 {
+                0.6
+            } else {
+                0.75
+            };
+            if grenade {
+                out.push(Body {
+                    center: c,
+                    half: [2.6 * big, 2.1 * big],
+                    angle: spin,
+                    shape: 1.,
+                    depth,
+                    color: [0.24, 0.27, 0.16, 1.],
+                });
+                // Zünder blinkt in der letzten Sekunde immer schneller
+                let left = berlin_sim::throw::FUSE_S as f32 - t;
+                let on = left < 1. && (t * (6. + 14. * (1. - left))).fract() < 0.5;
+                out.push(Body {
+                    center: [c[0] + spin.cos() * 2.2 * big, c[1] + spin.sin() * 2.2 * big],
+                    half: [0.9 * big, 0.9 * big],
+                    angle: 0.,
+                    shape: 1.,
+                    depth: depth - 0.0002,
+                    color: if on {
+                        [1., 0.25, 0.15, 1.]
+                    } else {
+                        [0.62, 0.6, 0.55, 1.]
+                    },
+                });
+            } else {
+                out.push(Body {
+                    center: c,
+                    half: [4.2 * big, 1.6 * big],
+                    angle: spin,
+                    shape: 0.,
+                    depth,
+                    color: [0.2, 0.36, 0.2, 1.],
+                });
+                out.push(Body {
+                    center: [c[0] + spin.cos() * 4.2 * big, c[1] + spin.sin() * 4.2 * big],
+                    half: [1.4 * big, 0.9 * big],
+                    angle: spin,
+                    shape: 0.,
+                    depth: depth - 0.0002,
+                    color: [0.85, 0.82, 0.72, 1.],
+                });
+            }
+        }
         for s in &self.scorch {
             let fade = 1. - (s.age / SCORCH_KEEP).powi(3);
             out.push(Body {
@@ -413,7 +633,7 @@ mod tests {
         fx.ingest(&[Event::Explosion {
             x: 100.,
             y: 50.,
-            car: 1,
+            car: Some(1),
             strength: 0.6,
         }]);
         let (p, b, s) = fx.counts();
@@ -437,11 +657,26 @@ mod tests {
     }
 
     #[test]
+    fn molotov_shatter_sprays_fire_and_leaves_a_scorch_mark() {
+        let mut fx = FireFx::default();
+        fx.ingest(&[Event::Shatter {
+            x: 10.,
+            y: 20.,
+            r: 34.,
+        }]);
+        assert!(fx.puffs.iter().filter(|p| p.kind == Kind::Fire).count() >= 8);
+        assert_eq!(fx.scorch.len(), 1);
+        let mut ground = Vec::new();
+        fx.bodies(&mut ground);
+        assert_eq!(ground.len(), 1, "nur der Brandfleck, kein Wurfkörper");
+    }
+
+    #[test]
     fn same_events_same_picture() {
         let ev = [Event::Explosion {
             x: 0.,
             y: 0.,
-            car: 3,
+            car: Some(3),
             strength: 1.,
         }];
         let run = || {

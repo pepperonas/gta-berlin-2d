@@ -26,12 +26,30 @@ pub enum Event {
         y: f64,
         car: u32,
     },
-    /// Fahrzeug explodiert (Druckwelle schon angewandt); `strength` 0…1 nach Fahrzeuggröße
+    /// Explosion (Druckwelle schon angewandt): Fahrzeug (`car`) oder Handgranate (`car` = None); `strength` 0…1
     Explosion {
         x: f64,
         y: f64,
-        car: u32,
+        car: Option<u32>,
         strength: f64,
+    },
+    /// Wurfwaffe geworfen (Handgranate, Molotow)
+    Throw {
+        x: f64,
+        y: f64,
+        weapon: &'static str,
+    },
+    /// Handgranate prallt auf (Boden, Wand, Auto)
+    Bounce {
+        x: f64,
+        y: f64,
+        strength: f64,
+    },
+    /// Molotow zerschellt: Feuer am Boden (`r` = Radius in px)
+    Shatter {
+        x: f64,
+        y: f64,
+        r: f64,
     },
     /// Rad fährt über einen Bordstein (Fahrphysik)
     Curb {

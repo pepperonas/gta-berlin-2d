@@ -286,6 +286,7 @@ pub fn track_step(sets: &mut [&mut Stats], tr: &mut Tracker, w: &World, dt: f64)
                 add(&weapon_key(weapon, "shots"), 1.);
                 add(&weapon_key(weapon, "bullets"), n);
             }
+            Event::Throw { weapon, .. } => add(&weapon_key(weapon, "shots"), 1.),
             Event::WeaponHit { weapon, .. } => {
                 add("hits", 1.);
                 add(&weapon_key(weapon, "hits"), 1.);

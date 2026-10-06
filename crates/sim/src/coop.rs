@@ -68,6 +68,11 @@ impl World {
         Some(r)
     }
 
+    /// Welcher Sitz gerade auf dem Platz von Spieler 1 sitzt: 0 = Spieler 1, 1 = Spieler 2 (während `with_p2`).
+    pub fn seat_index(&self) -> u8 {
+        u8::from(self.focus_key == P2_FOCUS)
+    }
+
     /// Ist Spieler 2 dabei?
     pub fn coop(&self) -> bool {
         self.p2.is_some()

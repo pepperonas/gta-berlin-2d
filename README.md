@@ -65,7 +65,7 @@ Zu Fuß: WASD/Pfeile, Shift sprinten, Alt langsam. F ein-/aussteigen, E Aktion
 (halten = Kisten einladen). Im Auto: W/S Gas/Bremse (gehalten: rückwärts), A/D
 lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
 erledigten Auftrag wird automatisch gespeichert. F8 schaltet die Grafik zwischen HD (Standard) und Pixel um (auch im
-Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–6 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
+Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–8 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller zu Fuß: A sprinten (tippen = Aktion), X springen, Y einsteigen (das Fahrzeug schimmert dann
 dezent), B nachladen, RT angreifen, RB treten, LB nächste Waffe, rechten Stick drücken = Waffenrad (Stick wählt,
 nochmal drücken oder A nimmt, B bricht ab). Im Auto: RT/LT Gas/Bremse, B Handbremse, Y aussteigen, X hupen
@@ -256,8 +256,10 @@ Version und noch nicht versionierte Änderungen stehen in [`CHANGELOG.md`](CHANG
 - **Autos und Menschen:** 37 Pkw-Modelle sowie Nutzfahrzeuge und Zweiräder mit detaillierten Karosserien, Scheiben,
   Spiegeln und lenkenden Vorderrädern, Blinker der KI vor dem Abbiegen, Rückfahrlicht; Passanten mit Armen und Beinen
   im Gang, verschiedener Kleidung und Haarfarbe, manche mit Rucksack oder Tasche.
-- **Kämpfen:** zu Fuß Fäuste, Tritte, Baseballschläger, Messer, Pistole, Maschinenpistole und Schrotflinte (alle von
-  Anfang an, Munition unbegrenzt mit Nachladen). Zielen in Blickrichtung mit Zielhilfe, mit der Maus auf den Zeiger.
+- **Kämpfen:** zu Fuß Fäuste, Tritte, Baseballschläger, Messer, Pistole, Maschinenpistole, Schrotflinte,
+  Handgranate und Molotowcocktail (alle von Anfang an, Munition unbegrenzt mit Nachladen bzw. Nachschub). Granaten
+  fliegen im Bogen zum Zeiger, prallen ab und explodieren nach 2,4 s; Molotows zerschellen und setzen den Boden
+  8 s in Brand. Zielen in Blickrichtung mit Zielhilfe, mit der Maus auf den Zeiger.
   Kugeln stoppen an Hauswänden, beschädigen Autos bis zum Wrack (der Fahrer flieht). Verletzte NPCs bleiben auf den
   Beinen, fliehen oder wehren sich; ein Lebensbalken zeigt ihren Zustand. Erst tödlicher Schaden lässt sie umfallen. Schüsse vertreiben die Passanten ringsum. Etwa jeder siebte Passant wehrt
   sich mit den Fäusten. Die Spielfigur hat 100 Lebenspunkte (heilen nach einer Pause); bei 0 wacht man im nächsten
@@ -326,8 +328,8 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Angreifen / Schießen (zu Fuß) | RT | rechte Maustaste (vertauscht: linke), oder Strg |
 | Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
 | Treten (zu Fuß) | B | V |
-| Waffe wechseln / wählen | LB tippen (zurück) / RB (vor) | Q, Mausrad / 1–6 |
-| Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | linke und rechte Maustaste gleichzeitig halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–6 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
+| Waffe wechseln / wählen | LB tippen (zurück) / RB (vor) | Q, Mausrad / 1–8 |
+| Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | linke und rechte Maustaste gleichzeitig halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–8 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
 | Statistik | Menü „Statistik“ (Titel und Pause) | dito, oder Befehl `stats` |

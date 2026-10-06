@@ -1760,6 +1760,8 @@ pub fn combat_input(
         KeyCode::Digit4,
         KeyCode::Digit5,
         KeyCode::Digit6,
+        KeyCode::Digit7,
+        KeyCode::Digit8,
     ];
     berlin_sim::combat::CombatInput {
         fire: b.held(keys, A::Fire),
@@ -2685,7 +2687,7 @@ fn weapon_bodies(
     // Ausholen: beim Schlag schwingt die Waffe ein Stück herum, beim Tritt schiebt sich ein Fuß nach vorn
     let swing = c
         .attack
-        .filter(|t| t.kind == AttackKind::Swing)
+        .filter(|t| matches!(t.kind, AttackKind::Swing | AttackKind::Throw))
         .map_or(0., |t| (t.t / 0.22) as f32);
     let kick = c
         .attack
@@ -2707,6 +2709,8 @@ fn weapon_bodies(
         "pistol" => (5., 1.4, [0.1, 0.1, 0.11, 1.]),
         "smg" => (8., 1.8, [0.1, 0.1, 0.11, 1.]),
         "shotgun" => (11., 1.6, [0.25, 0.18, 0.12, 1.]),
+        "grenade" => (3., 2.4, [0.24, 0.27, 0.16, 1.]),
+        "molotov" => (6., 1.5, [0.2, 0.36, 0.2, 1.]),
         _ => (0., 0., [0.; 4]),
     };
     if len == 0. {
@@ -3232,6 +3236,8 @@ impl Play {
                 KeyCode::Digit4,
                 KeyCode::Digit5,
                 KeyCode::Digit6,
+                KeyCode::Digit7,
+                KeyCode::Digit8,
             ];
             if let Some(i) = digits.iter().position(|d| keys.pressed.contains(d)) {
                 outcomes.push(self.wheel_m.choose(i));

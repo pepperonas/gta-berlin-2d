@@ -84,6 +84,7 @@ pub const HORN: SfxSpec = spec("horn", 0.168, 0.02, true);
 /// Fahrzeug-Explosion (Knall mit Nachhall) und Knistern eines brennenden Wracks
 pub const EXPLOSION: SfxSpec = spec("explosion", 0.653, 0.06, true);
 pub const FIRE_CRACKLE: SfxSpec = spec("fire_crackle", 0.893, 0.08, true);
+pub const MOLOTOV: SfxSpec = spec("molotov", 0.7, 0.06, true);
 pub const DOOR: SfxSpec = spec("door", 0.229, 0.05, true);
 pub const KNOCK: SfxSpec = spec("knock", 0.408, 0.08, true);
 pub const SPLASH: SfxSpec = spec("splash", 0.351, 0.1, true);
@@ -145,6 +146,8 @@ pub enum Sfx {
     /// Fahrzeug explodiert (Lautstärke), brennendes Wrack knistert (Lautstärke)
     Explosion(f32),
     FireCrackle(f32),
+    /// Molotow zerschellt: Glas und auflodernde Flamme
+    Molotov(f32),
     Hit,
     Horn(f32),
     Knock(f32),
@@ -1574,6 +1577,15 @@ impl Synth {
                 self.burst(0.35, 2600., 0.5 * k, Lowpass, 0.7, 0., 0.002, M);
                 self.tone(55., 0.9, Sine, 0.6 * k, 0., -30., 0., M);
             }
+            Sfx::Molotov(k) if self.sample(MOLOTOV, k, M) => {}
+            Sfx::Molotov(k) => {
+                // ohne Aufnahme: helle Glassplitter, dann fauchendes Rauschen
+                for i in 0..6 {
+                    let f = 3500. + 900. * i as f32;
+                    self.burst(0.06, f, 0.12 * k, Bandpass, 4., i as f32 * 0.018, 0.001, M);
+                }
+                self.burst(0.9, 900., 0.25 * k, Lowpass, 0.7, 0.05, 0.12, M);
+            }
             Sfx::FireCrackle(k) if self.sample(FIRE_CRACKLE, k, M) => {}
             Sfx::FireCrackle(k) => {
                 let mut t = 0.;
@@ -2162,6 +2174,7 @@ mod tests {
             (Sfx::Crash(1.), "crash_heavy", 0.1018),
             (Sfx::Explosion(1.), "explosion", 0.17),
             (Sfx::FireCrackle(1.), "fire_crackle", 0.02),
+            (Sfx::Molotov(1.), "molotov", 0.08),
             (Sfx::Crash(0.3), "crash_light", 0.0342),
             (Sfx::Horn(1.), "horn", 0.03),
             (Sfx::Door, "door", 0.0376),

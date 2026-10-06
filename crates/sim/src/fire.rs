@@ -141,13 +141,22 @@ impl World {
         // das Wrack hüpft
         c.ang_vel += (crate::math::hash01(id as f64 * 3.3) - 0.5) * 2.;
         let (x, y, lvl) = (c.x, c.y, c.lvl());
-        let r = BLAST_R * k;
         self.events.push(Event::Explosion {
             x,
             y,
-            car: id,
+            car: Some(id),
             strength: (k / 1.6).clamp(0., 1.),
         });
+        self.blast(x, y, lvl, k, Some(id), None);
+    }
+
+    /// Druckwelle der Stärke `k` (Pkw ≈ 1) um (x, y) auf Ebene `lvl`: Menschen, Fahrzeuge (außer `skip`), Spieler.
+    /// `by` = Sitz des Werfers (0/1) bei einer Handgranate: zählt als Spielertreffer, der Partner bleibt verschont
+    /// (kein Eigenbeschuss im Koop); `None` = Fahrzeug, trifft beide Spieler.
+    pub fn blast(&mut self, x: f64, y: f64, lvl: i8, k: f64, skip: Option<u32>, by: Option<u8>) {
+        let r = BLAST_R * k;
+        let player = by.is_some();
+        let weapon = if player { "grenade" } else { "explosion" };
         // Menschen
         for q in 0..self.peds.len() {
             let p = &self.peds[q];
@@ -157,7 +166,7 @@ impl World {
             let d = (p.x - x).hypot(p.y - y);
             if d < r {
                 let dmg = BLAST_PED * (1. - d / r);
-                crate::combat::hurt_ped(self, q, dmg, (x, y), false, "explosion", false);
+                crate::combat::hurt_ped(self, q, dmg, (x, y), false, weapon, player);
             }
         }
         for p in &mut self.peds {
@@ -165,10 +174,30 @@ impl World {
                 crate::pedestrians::scare(p, (x, y), 4.);
             }
         }
-        // andere Fahrzeuge: Schaden und Stoß (wer dabei zum Wrack wird, brennt und explodiert später selbst)
+        // Radfahrer fallen vom Rad
+        for i in (0..self.bikes.len()).rev() {
+            let b = &self.bikes[i];
+            if b.state == crate::bikes::State::Ride
+                && b.level.lvl == lvl
+                && (b.x - x).hypot(b.y - y) < r
+            {
+                let d = (b.x - x).hypot(b.y - y);
+                crate::combat::hurt_bike(
+                    self,
+                    i,
+                    BLAST_PED * (1. - d / r),
+                    (x, y),
+                    false,
+                    weapon,
+                    player,
+                );
+            }
+        }
+        // Fahrzeuge: Schaden und Stoß (wer dabei zum Wrack wird, brennt und explodiert später selbst)
+        let seed = skip.unwrap_or((x * 7. + y * 13.).abs() as u32);
         for j in 0..self.cars.len() {
             let o = &mut self.cars[j];
-            if o.id == id || o.lvl() != lvl {
+            if Some(o.id) == skip || o.lvl() != lvl {
                 continue;
             }
             let (dx, dy) = (o.x - x, o.y - y);
@@ -181,7 +210,7 @@ impl World {
             let (ux, uy) = if d > 1. { (dx / d, dy / d) } else { (1., 0.) };
             o.vx += ux * BLAST_PUSH * f;
             o.vy += uy * BLAST_PUSH * f;
-            o.ang_vel += (crate::math::hash01((id + o.id) as f64) - 0.5) * 3. * f;
+            o.ang_vel += (crate::math::hash01(seed.wrapping_add(o.id) as f64) - 0.5) * 3. * f;
             if !o.wrecked {
                 o.health = (o.health - BLAST_CAR * f).max(0.);
                 if o.health <= 0. {
@@ -191,21 +220,27 @@ impl World {
                         x: ox,
                         y: oy,
                         car: oid,
-                        player: false,
+                        player,
                     });
                 }
             }
         }
-        // Spieler (beide Sitze)
-        self.blast_player(x, y, id, r);
-        self.with_p2(|w| w.blast_player(x, y, id, r));
+        // Spieler (beide Sitze; beim Wurf nur der Werfer selbst)
+        let me = self.seat_index();
+        if by.is_none_or(|s| s == me) {
+            self.blast_player(x, y, skip, r);
+        }
+        let other = 1 - me;
+        if by.is_none_or(|s| s == other) {
+            self.with_p2(|w| w.blast_player(x, y, skip, r));
+        }
     }
 
-    fn blast_player(&mut self, x: f64, y: f64, car: u32, r: f64) {
-        if self.player.in_car == Some(car) {
+    fn blast_player(&mut self, x: f64, y: f64, car: Option<u32>, r: f64) {
+        if car.is_some() && self.player.in_car == car {
             // im explodierenden Wagen: hinausgeschleudert (neben die Tür), schwer verletzt
             self.player.in_car = None;
-            if let Some(c) = self.cars.iter_mut().find(|c| c.id == car) {
+            if let Some(c) = self.cars.iter_mut().find(|c| Some(c.id) == car) {
                 c.driver = None;
                 let a = c.angle + std::f64::consts::FRAC_PI_2;
                 self.player.x = c.x + a.cos() * (c.hh + 14.);

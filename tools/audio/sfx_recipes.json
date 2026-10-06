@@ -488,6 +488,30 @@
       "sha256": "d3ff653d2c7dd55b1f27754158923cf68226cc20911b9ae64b4959fe958be0a9",
       "lizenz": "CC0 1.0",
       "urheber": "KieranKeegan"
+    },
+    "fs_212698": {
+      "freesound": 212698,
+      "titel": "Breaking a glass bottle",
+      "seite": "https://freesound.org/people/dasebr/sounds/212698/",
+      "sha256": "a5229bd6cd1ccae9343193edde3e60d54c15f4d62f202f1b65b1edad628a3530",
+      "lizenz": "CC0 1.0",
+      "urheber": "dasebr"
+    },
+    "fs_407431": {
+      "freesound": 407431,
+      "titel": "bottle break.wav",
+      "seite": "https://freesound.org/people/DeezSoundzTho/sounds/407431/",
+      "sha256": "93e2ddb9ae91e7309aadb5ba965b65f3d719f196f6381891f980d20219528401",
+      "lizenz": "CC0 1.0",
+      "urheber": "DeezSoundzTho"
+    },
+    "fs_475879": {
+      "freesound": 475879,
+      "titel": "ESE - WHOOSH - CALM - Fire Flame.wav",
+      "seite": "https://freesound.org/people/EpicSoundEffects/sounds/475879/",
+      "sha256": "047ad7ed1dd904ee0deda0aa7070b10697b7162f1039f40de8ae1a7cae6ad355",
+      "lizenz": "CC0 1.0",
+      "urheber": "EpicSoundEffects"
     }
   },
   "klaenge": {
@@ -1709,6 +1733,41 @@
       "laenge_s": 2.4,
       "fade_s": 0.25,
       "hochpass_hz": 150
+    },
+    "molotov": {
+      "zweck": "Molotow zerschellt: Glasbruch, das Benzin fängt fauchend Feuer",
+      "quelle": "fs_212698",
+      "varianten": [
+        [
+          {
+            "quelle": "fs_212698",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_475879",
+            "datei": "*",
+            "at": 0.06,
+            "db": -5
+          }
+        ],
+        [
+          {
+            "quelle": "fs_407431",
+            "datei": "*",
+            "at": 0
+          },
+          {
+            "quelle": "fs_475879",
+            "datei": "*",
+            "at": 0.04,
+            "db": -5
+          }
+        ]
+      ],
+      "laenge_s": 2.2,
+      "fade_s": 0.6,
+      "hochpass_hz": 60
     }
   }
 }

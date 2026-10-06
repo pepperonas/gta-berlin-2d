@@ -572,6 +572,20 @@ pub const COMMANDS: &[Command] = &[
         args: &[],
     },
     Command {
+        name: "werfen",
+        aliases: &["throw", "wurf"],
+        help: "Handgranate oder Molotow 15 m weit werfen (Blickrichtung oder Grad, 0 = Osten, 90 = Süden)",
+        cheat: true,
+        args: &[
+            arg(
+                "was",
+                true,
+                Values::Fixed(&[("granate", "Handgranate"), ("molotow", "Molotowcocktail")]),
+            ),
+            arg("grad", true, Values::None),
+        ],
+    },
+    Command {
         name: "reparieren",
         aliases: &["repair"],
         help: "eigenes Auto reparieren",
@@ -1291,6 +1305,25 @@ fn run(c: &Command, ctx: &mut Ctx, args: &[String]) -> Outcome {
                 Some(_) => ok("Gleich knallt's – Abstand halten"),
                 None => err("Kein Auto in der Nähe"),
             }
+        }
+        "werfen" => {
+            let kind = match a0.unwrap_or("granate") {
+                "granate" | "grenade" => berlin_sim::throw::Kind::Grenade,
+                "molotow" | "molotov" => berlin_sim::throw::Kind::Molotov,
+                v => return err(format!("Unbekannt: {v} – granate oder molotow")),
+            };
+            if w.player.in_car.is_some() {
+                return err("Erst aussteigen");
+            }
+            let a = match args.get(1).map(String::as_str) {
+                None => w.player.angle,
+                Some(v) => match v.replace(',', ".").trim_end_matches('°').parse::<f64>() {
+                    Ok(d) => d.to_radians(),
+                    Err(_) => return err(format!("Richtung in Grad, nicht „{v}“")),
+                },
+            };
+            w.throw(kind, a, 150.);
+            ok("Geworfen")
         }
         "reparieren" => {
             if repair(w) {

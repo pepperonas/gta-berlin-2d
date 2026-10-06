@@ -277,6 +277,8 @@ pub fn draw(h: &mut Hud, w: &WheelButton, c: &Combat, age: f64, pad: bool) {
             "knife" => "Messer",
             "pistol" => "Pistole",
             "smg" => "MP",
+            "grenade" => "Granate",
+            "molotov" => "Molotow",
             _ => "Flinte",
         };
         h.text(short, tx, ty, 14., col, Align::Center, !on);
@@ -337,6 +339,8 @@ pub fn draw(h: &mut Hud, w: &WheelButton, c: &Combat, age: f64, pad: bool) {
     );
     let info = if wp.melee {
         "Nahkampf".to_string()
+    } else if wp.throw {
+        format!("{} übrig", c.mag[k])
     } else {
         format!("{} / {}", c.mag[k], wp.mag)
     };

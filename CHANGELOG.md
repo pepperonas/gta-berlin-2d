@@ -8,6 +8,11 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Handgranate und Molotowcocktail** (Waffen 7 und 8, Waffenrad). Granaten fliegen im Bogen zum
+  Zeiger, prallen von Wänden ab, rollen aus und explodieren nach 2,4 s mit derselben Druckwelle wie ein Auto (Zünder
+  blinkt am Ende). Molotows zerschellen und setzen den Boden 8 s lang in Brand: Menschen brennen, Autos werden zum
+  Wrack und explodieren. Im Koop trifft der eigene Wurf nie den Partner. Glasbruch und Flamme aus CC0-Aufnahmen,
+  Befehl `werfen`. Explosionen werfen jetzt auch Radfahrer vom Rad.
 - Native Fassung: **Fahrzeug-Explosionen.** Wird ein Fahrzeug zum Wrack (Unfall, Beschuss, Überschlag), fängt es
   Feuer und explodiert nach gut 4 s: Feuerball mit weißem Kern, Druckwellenring, Trümmer, Rauchsäule, Lichtblitz,
   danach Brandfleck und ein verkohltes, noch qualmendes Wrack. Die Druckwelle verletzt Menschen und Spieler,

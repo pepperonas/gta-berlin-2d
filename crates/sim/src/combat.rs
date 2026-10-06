@@ -30,6 +30,8 @@ pub struct Weapon {
     pub pellets: u32,
     /// Dauerfeuer, solange gehalten
     pub auto: bool,
+    /// Wurfwaffe (throw.rs): `mag` = Vorrat, `reload` = Nachschub, `range` = größte Wurfweite
+    pub throw: bool,
 }
 const fn melee(
     id: &'static str,
@@ -52,6 +54,32 @@ const fn melee(
         reload: 0.,
         pellets: 1,
         auto: false,
+        throw: false,
+    }
+}
+/// Wurfwaffe: Schaden kommt aus throw.rs, hier nur Vorrat, Nachschub, Wurfweite und Takt.
+const fn throwable(
+    id: &'static str,
+    name: &'static str,
+    range: f64,
+    cooldown: f64,
+    count: u32,
+    restock: f64,
+) -> Weapon {
+    Weapon {
+        id,
+        name,
+        melee: false,
+        dmg: 0.,
+        range,
+        arc: 0.,
+        cooldown,
+        spread: 0.,
+        mag: count,
+        reload: restock,
+        pellets: 1,
+        auto: false,
+        throw: true,
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -80,9 +108,10 @@ const fn gun(
         reload,
         pellets,
         auto,
+        throw: false,
     }
 }
-pub const WEAPONS: [Weapon; 6] = [
+pub const WEAPONS: [Weapon; 8] = [
     melee("fists", "Fäuste", 20., 22., 1.3, 0.3),
     melee("bat", "Baseballschläger", 38., 34., 1.7, 0.55),
     melee("knife", "Messer", 34., 20., 1.0, 0.32),
@@ -113,6 +142,8 @@ pub const WEAPONS: [Weapon; 6] = [
         8,
         false,
     ),
+    throwable("grenade", "Handgranate", 280., 0.9, 4, 4.),
+    throwable("molotov", "Molotowcocktail", 240., 0.9, 4, 4.),
 ];
 pub const KICK: Weapon = melee("kick", "Tritt", 24., 26., 1.1, 0.5);
 pub const PED_HP: f64 = 100.;
@@ -142,6 +173,7 @@ pub enum AttackKind {
     Kick,
     Swing,
     Shot,
+    Throw,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Attack {
@@ -157,7 +189,7 @@ pub struct Combat {
     pub since_hurt: f64,
     pub hurt_flash: f64,
     pub weapon: usize,
-    pub mag: [u32; 6],
+    pub mag: [u32; 8],
     pub cool: f64,
     pub reload_t: f64,
     pub attack: Option<Attack>,
@@ -868,7 +900,7 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
         None => w.player.angle,
     };
     // Einzelfeuer (Pistole, Schrotflinte) je Druck, Dauerfeuer (MP) und Nahkampf solange gehalten
-    let attacking = if wp.auto || wp.melee {
+    let attacking = if (wp.auto || wp.melee) && !wp.throw {
         input.fire
     } else {
         input.fire_pressed
@@ -903,6 +935,23 @@ pub fn update_player_combat(w: &mut World, input: &CombatInput, dt: f64) {
             weapon: wp.id,
         });
         strike(w, &wp, ang);
+    } else if wp.throw && c.reload_t <= 0. && c.mag[c.weapon] > 0 {
+        c.cool = wp.cooldown;
+        c.attack = Some(Attack {
+            kind: AttackKind::Throw,
+            t: 0.3,
+            weapon: wp.id,
+        });
+        c.mag[c.weapon] -= 1;
+        // Weite: bis zum Mauspunkt, am Stick drei Viertel der größten Weite
+        let (px, py) = (w.player.x, w.player.y);
+        let d = match input.aim_world {
+            Some((x, y)) => (x - px).hypot(y - py).clamp(30., wp.range),
+            None => wp.range * 0.75,
+        };
+        if let Some(k) = crate::throw::Kind::of(wp.id) {
+            w.throw(k, ang, d);
+        }
     } else if c.reload_t <= 0. && c.mag[c.weapon] > 0 {
         c.cool = wp.cooldown;
         c.attack = Some(Attack {
@@ -1005,11 +1054,14 @@ mod tests {
     fn weapons_match_the_reference() {
         assert_eq!(
             WEAPONS.map(|w| w.id),
-            ["fists", "bat", "knife", "pistol", "smg", "shotgun"]
+            [
+                "fists", "bat", "knife", "pistol", "smg", "shotgun", "grenade", "molotov"
+            ]
         );
         assert!(WEAPONS[4].auto && WEAPONS[5].pellets == 8 && WEAPONS[3].mag == 12);
+        assert!(WEAPONS[6].throw && WEAPONS[7].throw && !WEAPONS[3].throw);
         let c = Combat::default();
-        assert_eq!(c.mag, [0, 0, 0, 12, 30, 6]);
+        assert_eq!(c.mag, [0, 0, 0, 12, 30, 6, 4, 4]);
         assert_eq!(spread_factor(0.), 0.7);
     }
 }

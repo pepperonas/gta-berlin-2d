@@ -237,6 +237,18 @@
       ],
       "quelle": "kenney_jingles"
     },
+    "molotov": {
+      "zweck": "Molotow zerschellt: Glasbruch, das Benzin fängt fauchend Feuer",
+      "dateien": [
+        "molotov_1.wav",
+        "molotov_2.wav"
+      ],
+      "quelle": "fs_212698",
+      "weitere_quellen": [
+        "fs_407431",
+        "fs_475879"
+      ]
+    },
     "pickup": {
       "zweck": "Einsammeln, Trinkgeld, Wiederbelebung",
       "dateien": [
@@ -900,6 +912,24 @@
       "seite": "https://freesound.org/people/KieranKeegan/sounds/422742/",
       "lizenz": "CC0 1.0",
       "urheber": "KieranKeegan"
+    },
+    "fs_212698": {
+      "titel": "Breaking a glass bottle",
+      "seite": "https://freesound.org/people/dasebr/sounds/212698/",
+      "lizenz": "CC0 1.0",
+      "urheber": "dasebr"
+    },
+    "fs_407431": {
+      "titel": "bottle break.wav",
+      "seite": "https://freesound.org/people/DeezSoundzTho/sounds/407431/",
+      "lizenz": "CC0 1.0",
+      "urheber": "DeezSoundzTho"
+    },
+    "fs_475879": {
+      "titel": "ESE - WHOOSH - CALM - Fire Flame.wav",
+      "seite": "https://freesound.org/people/EpicSoundEffects/sounds/475879/",
+      "lizenz": "CC0 1.0",
+      "urheber": "EpicSoundEffects"
     }
   }
 }

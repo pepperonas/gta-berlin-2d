@@ -657,7 +657,7 @@ Die GPU-Aufnahme wurde visuell kontrolliert.
 - **Treten:** V bzw. B.
 - **Springen:** Leertaste bzw. L3 (über Zäune, Poller, Kisten).
 - **Nachladen:** R bzw. X.
-- **Waffe wechseln:** Q oder RB vor, LB zurück, 1–6 direkt.
+- **Waffe wechseln:** Q oder RB vor, LB zurück, 1–8 direkt.
 - **Zielen:** rechter Stick (mit Zielhilfe) oder Maus (siehe unten).
 
 **Trefferzonen und Zufall (05.10.2026, `combat.rs`):** Schaden = Grundschaden der Waffe × Zone × (1 ± 20 %).
@@ -2352,4 +2352,26 @@ die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
   Ersatz ohne Samples. Vibration nach Entfernung (`rumble.rs`).
 - **Befehl `sprengen`:** `World::ignite_nearest` – nächstes heiles fremdes Fahrzeug (nie das eigene oder das von
   Spieler 2) brennt, explodiert nach 0,8 s.
+
+## Granaten und Molotows (06.10.2026)
+
+- **Waffen 7 und 8** (`combat.rs`, `Weapon::throw`): Handgranate und Molotowcocktail, je 4 im Vorrat, leer nach 4 s
+  Nachschub (wie Nachladen). Geworfen wird je Druck (Strg/RT) in Zielrichtung: mit der Maus genau bis zum Zeiger
+  (3–28 bzw. 24 m), am Stick drei Viertel der größten Weite.
+- **Flug (`sim/throw.rs`):** Bogen mit eigener Schwerkraft (320 px/s², Flugzeit wächst mit der Weite). Hauswände halten
+  den Wurf auf, Zäune und Geländer nicht, Autos nur unter 1,6 m Höhe. Die Granate prallt ab, springt am Boden, rollt
+  aus und explodiert 2,4 s nach dem Wurf mit `World::blast` (dieselbe Druckwelle wie ein Fahrzeug, Stärke 0,85; auch
+  Radfahrer fallen jetzt vom Rad). Der Molotow zerschellt bei der ersten Berührung: Feuer (`Flame`, 3,4 m Radius,
+  8 s), das Menschen (30 LP/s), den Spieler (16 LP/s) und Autos (14/s bis zum Wrack, das dann wie jedes Wrack
+  ausbrennt und explodiert) in Takten von 0,25 s verbrennt.
+- **Koop:** der Werfer verletzt sich selbst, den Partner nie (`World::seat_index`, Sitz im Wurf gespeichert). Wracks
+  treffen weiter beide.
+- **Ereignisse:** `Throw`, `Bounce`, `Shatter`; `Explosion.car` ist jetzt `Option` (`None` = Granate).
+- **Darstellung (`firefx.rs`):** Wurfkörper mit Bodenschatten, im Flug höher gezeichnet und größer; der Zünder blinkt in
+  der letzten Sekunde immer schneller, die Molotow-Flasche brennt am Docht. Feuer am Boden = glühender Teppich plus
+  schmale, aufsteigende Flammenzungen (`Kind::Lick`), Rauch, flackerndes Licht, Brandfleck.
+- **Klang:** Wurf (Schwung), Aufprall (Metall), Zerschellen = Glasbruch + auflodernde Flamme aus Freesound-Aufnahmen
+  (CC0: dasebr, DeezSoundzTho, EpicSoundEffects; Rezept `molotov`, Pegel 0,08), Feuer knistert wie ein Wrack.
+- **Befehl `werfen [granate|molotow] [grad]`:** wirft 15 m weit in Blickrichtung oder in die Richtung in Grad
+  (0 = Osten, 90 = Süden). Tests: `crates/sim/tests/throw.rs`.
 
