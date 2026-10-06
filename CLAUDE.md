@@ -67,6 +67,13 @@ v10/` sport/supercar, `v12/` hypercar, `r4/` four-cylinders, `d4/` diesel cars/v
 `sim/enginesound.rs` (profiles `data/audio/engine_profiles.json`), playback `audio/sampler.rs` (16-bit WAV via
 `include_bytes!`, lists `V10`/`V12`/`R4`/`D4`/`D6` must match the manifests), wiring in `game/sound.rs`; such cars are removed from the
 synth voices. Panel `game/enginedebug.rs` (F4 / console `motorsound`). `GTA_ENGINE_SAMPLES=0` = synth only.
+Local co-op: `sim/coop.rs` (`Seat`, `World::p2`, `swap_seat`/`with_p2`; `World::update_coop` = `player_phase` per seat
++ shared world phase; multi-focus helpers `foci`/`min_dist`/`in_view_any`/`spawn_focus` — anything that lived
+"around the camera" must use them) — without P2 the sim must stay bit-identical (`single_player_fingerprint_is_stable`,
+never re-record it to make a change pass). Views: `engine/split.rs` (pure Voronoi split) → `Game::camera2`/`set_views`,
+`Renderer::render_views` draws each view through the same targets, the second blends in `lighting.wgsl split_out`
+(camera field `split`); HUD `hud::Parts` + `Hud::shift_since`/`map2`; culling via `game/coopview.rs Spots`; pads
+`engine/pad.rs` slots (`Keys.pad2`). `--koop [METER]` for captures.
 Use `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`
 and `cargo test --workspace` for native changes. See `docs/NATIVE-RUST.md`.
 The Canvas implementation below remains the reference for later porting phases.

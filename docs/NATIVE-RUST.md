@@ -2229,3 +2229,65 @@ zwischen zwei Palettenfarben, die Farben trafen die gedämpften Grautöne der Pa
   Nachbar aber kaum (Licht, Nebel); gleichmäßige Flächen bleiben einfarbig, Kanten und Strukturen unberührt.
 - **Kontur:** abgedunkelte Eigenfarbe (×0,22) statt Mischung mit festem Blaugrau.
 - Vorher/nachher: `docs/images/native/grafik/08-pixel/klar-*.webp`; Test `pixel_mode_calms_surfaces_and_gates_dither`.
+
+## Lokaler Koop mit dynamischem Splitscreen (06.10.2026)
+
+Zu zweit an einem Bildschirm, gemeinsamer Auftrag und gemeinsames Geld, kein Eigenbeschuss. Spieler 2 gilt nur für
+die Sitzung (Spielstand und Statistik bleiben bei Spieler 1).
+
+![Gemeinsames Bild](images/native/koop/gemeinsam.webp)
+![Geteilt](images/native/koop/geteilt.webp)
+![Geteilt, Pixel, Nacht](images/native/koop/geteilt-pixel-nacht.webp)
+
+- **Beitritt:** Start auf dem zweiten Controller tritt bei (danach öffnet derselbe Knopf die Pause), oder im
+  Pausenmenü „Spieler 2 beitreten“ – gibt es nur einen Controller, übernimmt Spieler 2 ihn und Spieler 1 spielt mit
+  Tastatur und Maus. „Spieler 2 verlassen“ im Pausenmenü; sein Fahrzeug bleibt stehen. Aufnahmen und Tests:
+  `--koop [METER]` (Spieler 2 von Anfang an, optional so weit östlich).
+- **Controller (`engine/pad.rs`):** zwei feste Plätze; wer verbunden bleibt, behält seinen Platz, ein neuer füllt den
+  ersten freien (`assign_slots`, getestet). `Keys.pad2`/`pad2_pressed`, Vibration je Platz (`Game::rumble2`).
+  Spieler 2 bekommt dieselbe Belegung über ein eigenes `Keys` ohne Tastatur und Maus (`Play::p2_input`); LB tippen =
+  vorige Waffe (kein eigenes Waffenrad).
+- **Simulation per Platztausch (`sim/coop.rs`):** Alles, was einem Spieler gehört (Figur, Auto, Bahn, Kamera,
+  Hinweise, Fahrhilfen, Bahnhofsnähe, Streaming-Schlüssel), liegt in einem `Seat`; Spieler 2 sitzt in `World::p2`.
+  `World::update_coop` teilt den Schritt in `player_phase` (Bahnhof, Ein-/Aussteigen, eigenes Auto, zu Fuß, Kampf,
+  Bewusstlosigkeit) und den Rest; für Spieler 2 tauscht `swap_seat` die Felder, der gewohnte Spielercode läuft, dann
+  zurück. Gezielt angepasst: ein vom anderen Spieler gefahrenes Auto ist nicht zu entern, Passanten und KI weichen
+  beiden Spielern aus, Kämpfer greifen den näheren an und dessen Schläge treffen ihn, Physik-LOD und Aufräumen messen
+  zum nächsten Spieler, Hinweise eines Autos gehen an dessen Fahrer (`notify_car`). Auftrag: zählt für den Spieler
+  mit der Fracht, sonst für den, der dem Ziel näher ist (`mission_prefers_p2`); Briefing und Ergebnis bestätigt jeder.
+- **Stadt um beide (`foci`, `min_dist`, `in_view_any`):** Verkehr, Passanten, Radler, Parker, Stadtleben, Tiere,
+  Roller, Nahverkehr (`transit::scan` mit mehreren Kameras) und Blaulichteinsätze entstehen reihum um beide Kameras
+  (`spawn_focus`, nie im Blick des anderen) und verschwinden erst fern von beiden; sind die Spieler getrennt
+  (`APART` 250 m), wächst die Zielbevölkerung ×1,6. Kacheln der Simulation lädt ein zweiter Fokus `p2`, die Welt
+  steht still, bis beide Ausschnitte da sind.
+- **Bitgleich allein:** Ohne Spieler 2 laufen dieselben Rechnungen (eine Kamera = derselbe Abstand, dieselbe
+  Reihenfolge, kein zusätzlicher Zufall). Test `single_player_fingerprint_is_stable` (`sim/tests/world.rs`):
+  FNV-Hash über Spieler, alle Autos, Passanten und Räder nach 3000 Schritten mit wechselnden Eingaben, vor dem Umbau
+  aufgezeichnet.
+- **Ansichten (`engine/split.rs`, rein, getestet):** Voronoi-Split. Gemeinsamer Zoom = der kleinere Wunschzoom; passen
+  beide nicht mehr in die innere Hälfte des Bildes, zoomt es bis ×0,8 heraus (`FIT_MIN`), danach teilt es sich und der
+  Zoom kehrt stetig zurück (`FIT_RETURN`). Geteilt rückt jede Kamera so weit vor ihren Spieler, dass er in der Mitte
+  seiner Bildhälfte steht; die Trennlinie steht senkrecht zur Verbindung der Spieler und dreht mit. Bis zur Grenze sind
+  beide Kameras gleich – kein Sprung beim Teilen, kein Schnitt beim Zusammenführen (Test `moving_apart_never_jumps`);
+  die Linie blendet über 8 % der kürzeren Bildseite ein.
+- **Renderer:** je Ansicht eigene Kamera-Uniforms (`scene_uniform2`, `uniform2`) und dieselben Durchgänge in dieselben
+  Ziele (Schattenmaske, Lichtkarte, Szene, Bloom, Pixel-Palette werden nacheinander wiederverwendet, kein zusätzlicher
+  Speicher). Die Nachbearbeitung der zweiten Ansicht legt sich mit Alpha-Mischung nur auf ihre Seite
+  (`lighting.wgsl split_out`, Kamera-Feld `split` = Normale, Linie, Seite); dort entsteht auch die Linie: heller Kern,
+  Schein in Spielerfarbe (Spieler 1 Cyan, Spieler 2 Orange), zur Linie hin leicht abgedunkelt. Allein ist die Deckkraft
+  1 und das Bild dasselbe. Instanzlisten (Körper, Silhouetten, Lichter, Laternen, Schilder, Bahnen) kommen aus beiden
+  Ausschnitten (`game/coopview.rs Spots`). Der Kartenstreamer lädt mit `Focus.second` reihum um beide (höchstens 64
+  Kacheln wie bisher).
+- **HUD:** Gemeinsames (Geld, Uhr, Auftrag, Auftragshinweis, Briefing, Ergebnis) einmal übers Bild; je Spieler
+  Minikarte, Gesundheit, Waffe bzw. Tacho, Hinweise und Zielpfeil in seiner Bildhälfte (`hud::Parts`; Spieler 2 per
+  Sitztausch, danach `Hud::shift_since`). Die Engine kennt zwei Minikarten (`Hud::map2`, eigene Kamera-Uniform).
+  Weltmarken (Lebensbalken, Schilder, Bahnhofsbuchstaben) je Ansicht projiziert und nur auf der eigenen Hälfte
+  behalten. Geteilt zeigt an der Linie je ein Pfeil in der Farbe des anderen Spielers zu ihm, mit Entfernung.
+- **Ton:** Ereignisse hört man nach dem Abstand zum näheren Spieler; der Motor bleibt der von Spieler 1, das Auto von
+  Spieler 2 klingt wie ein Auto im Verkehr.
+- **Messung** (M1 Pro, 2560 × 1440, HD Standard, `--messung`, je 540 Bilder): allein GPU 6,4 ms (P95 8,9),
+  gemeinsames Bild 6,4 ms, geteilt 10,4 ms (P95 15,3; CPU 2,4 ms), Pixel geteilt 4,6 ms. Im Budget, die
+  Kantenglättung bleibt auch geteilt an.
+- **Grenzen:** Die Fahrplanzüge warten nur hinter einem Zug, den Spieler 1 führt; Spieler 2 hat kein Waffenrad und
+  keine Wegpunkt-Navigation; Statistik zählt beide Spieler zusammen.
+

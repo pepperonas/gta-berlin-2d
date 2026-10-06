@@ -8,6 +8,14 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **lokaler Koop mit dynamischem Splitscreen.** Ein zweiter Controller tritt mit Start bei (oder
+  Pausenmenü „Spieler 2 beitreten“; mit nur einem Controller spielt Spieler 1 mit Tastatur und Maus). Nah beieinander
+  zeigt ein Bild beide (es zoomt dafür etwas heraus); entfernen sie sich, teilt es sich nahtlos – die Trennlinie steht
+  senkrecht zur Verbindung der Spieler und dreht mit (nebeneinander links/rechts, übereinander oben/unten, sonst
+  schräg), mit leuchtendem Kern in den Spielerfarben Cyan und Orange und einem Pfeil zum anderen Spieler samt
+  Entfernung. Gemeinsamer Auftrag und gemeinsames Geld, kein Eigenbeschuss; jeder hat seine Minikarte, Gesundheit,
+  Waffe bzw. Tacho, Hinweise und Vibration; Verkehr und Leben entstehen um beide. Allein läuft das Spiel bitgleich wie
+  vorher. Aufnahmen: `--koop [METER]`.
 - Native Fassung: **Pixel-Modus nicht mehr verwaschen – klare Pixel-Art.** Böden, Dächer und Fassaden sind im
   Pixel-Modus fast flächig (Texturdetail, Relief, Schmutz und Moos auf 5 % gedämpft), die Farben vor der Palette
   kräftiger (Sättigung ×1,3, mehr Kontrast in mittleren und hellen Tönen), die Streuung wirkt nur noch in echten

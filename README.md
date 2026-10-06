@@ -55,6 +55,7 @@ cargo run --release                   # Titelbildschirm (Fortsetzen / Neues Spie
 cargo run --release -- --new          # sofort neu beginnen (Stand wird beim Speichern überschrieben)
 cargo run --release -- --fortsetzen   # sofort mit dem gespeicherten Stand weiterspielen
 cargo run --release -- --check-sim 120  # Simulation ohne Fenster
+cargo run --release -- --koop 1500     # zu zweit, Spieler 2 1,5 km östlich (geteiltes Bild)
 cargo run -- --free                   # freie Kartenansicht (Phase 2)
 cargo test --workspace
 cargo run -- --check-map
@@ -66,6 +67,9 @@ lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
 erledigten Auftrag wird automatisch gespeichert. F8 schaltet die Grafik zwischen HD (Standard) und Pixel um (auch im
 Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–6 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller: linker Stick, RT/LT Gas/Bremse, Y ein-/aussteigen, A Aktion, B/RB Handbremse, X Hupe.
+Zu zweit: zweiten Controller anschließen und **Start** drücken (oder Pausenmenü „Spieler 2 beitreten“ – mit nur einem
+Controller übernimmt Spieler 2 ihn, Spieler 1 spielt mit Tastatur und Maus). Nah beieinander zeigt ein Bild beide,
+entfernt teilt es sich dynamisch entlang einer mitdrehenden Linie; Auftrag und Geld sind gemeinsam.
 Details und Plattformgrenzen: [Native Architektur und Build](docs/NATIVE-RUST.md).
 Die folgenden Browser-/UWP-Anleitungen beziehen sich auf den bisherigen Prototyp.
 
