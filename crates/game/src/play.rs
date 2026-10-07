@@ -3986,24 +3986,21 @@ fn player_figure(
     out: &mut Vec<Body>,
 ) {
     if p.in_car.is_none() && p.combat.dead {
-        // K. o.: liegt
-        let (x, y, f) = (p.x as f32, p.y as f32, p.combat.fall as f32);
-        out.push(Body {
-            center: [x, y],
-            half: [9., 5.],
-            angle: f,
-            shape: 1.,
-            depth: 0.617,
-            color: rgba(0x2b2f3a, 1.),
-        });
-        out.push(Body {
-            center: [x + f.cos() * 10., y + f.sin() * 10.],
-            half: [3.2, 3.2],
-            angle: 0.,
-            shape: 1.,
-            depth: 0.6168,
-            color: rgba(0xe0ac69, 1.),
-        });
+        // K. o.: liegt (ohne Blut, er wacht im Krankenhaus auf)
+        crate::figure::lying_bodies(
+            &crate::figure::Lying {
+                x: p.x,
+                y: p.y,
+                fall: p.combat.fall,
+                seed: 1.5,
+                since: p.combat.dead_t,
+                skin: 0xe0ac69,
+                blood: false,
+            },
+            look,
+            0.617,
+            out,
+        );
     } else if p.in_car.is_none() && p.ride.is_none() {
         let (x, y, a) = (p.x as f32, p.y as f32, p.angle as f32);
         let depth0 = if p.level.lvl >= 1 { 0.548 } else { 0.617 };
@@ -4535,25 +4532,27 @@ impl Game for Play {
             {
                 continue;
             }
-            if p.state == PedState::Dead {
-                // liegt in Sturzrichtung: Körper lang, Kopf voraus
-                let f = p.fall as f32;
-                out.push(Body {
-                    center: [x, y],
-                    half: [8.5, 4.5],
-                    angle: f,
-                    shape: 1.,
-                    depth: depth + 0.001,
-                    color: shade(rgba(p.shirt, 1.), 0.8),
-                });
-                out.push(Body {
-                    center: [x + f.cos() * 9., y + f.sin() * 9.],
-                    half: [3., 3.],
-                    angle: 0.,
-                    shape: 1.,
-                    depth: depth + 0.0008,
-                    color: rgba(p.skin, 1.),
-                });
+            if matches!(p.state, PedState::Dead | PedState::Down) {
+                // liegt in Sturzrichtung, Glieder nach der Person, Tote mit Blutlache
+                let dead = p.state == PedState::Dead;
+                crate::figure::lying_bodies(
+                    &crate::figure::Lying {
+                        x: p.x,
+                        y: p.y,
+                        fall: if dead {
+                            p.fall
+                        } else {
+                            (p.y - p.threat.1).atan2(p.x - p.threat.0)
+                        },
+                        seed: p.id as f64,
+                        since: if dead { p.dead_t } else { 1. },
+                        skin: p.skin,
+                        blood: dead,
+                    },
+                    &crate::figure::look_of(p),
+                    depth + 0.001,
+                    out,
+                );
                 continue;
             }
             crate::figure::person_bodies(

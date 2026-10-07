@@ -2593,3 +2593,10 @@ Schieben: Bremse im Stand → rückwärts bis `PUSH_SPEED` 1,3 m/s. Abwurf nur n
 `Event::Crash` mit Stärke ≥ `CRASH_THROW` 0,37 am Spieler-Zweirad → `Fall::Crash` + `throw_rider`. Die
 Abnahme-Szenen (`tests/acceptance.rs`) schalten die Hilfe aus, sie beschreiben die Physik.
 
+**Leichen (07.10.2026):** `game/figure.rs lying_bodies` (`Lying`: Lage, `fall`, Nummer als Haltungs-Seed,
+`since`, Blut) – Hinfallen `fall_progress` (`FALL_S` 0,4 s), Blutlache `pool_radius` (`POOL_R`, `POOL_TAU`) aus
+vier Flecken; genutzt für `PedState::Dead`/`Down` und den K. o. des Spielers. Autounfälle setzen `Ped::fall` auf die
+Fahrtrichtung (nur Darstellung). Aufräumen in `world.rs`: Leichen bleiben in Sicht (`CORPSE_VIEW`), außer Sicht
+`CORPSE_KEEP_S` 120 s, höchstens `CORPSE_MAX` 40 (älteste außer Sicht zuerst). Test
+`corpses_stay_while_seen_and_go_out_of_sight`.
+

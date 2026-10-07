@@ -703,9 +703,302 @@ pub fn person_bodies(who: &Who, look: &Look, depth: f32, t: f64, out: &mut Vec<B
     }
 }
 
+/// Eine liegende Person (tot oder umgeworfen).
+#[derive(Debug, Clone, Copy)]
+pub struct Lying {
+    pub x: f64,
+    pub y: f64,
+    /// Sturzrichtung (rad, Weltsystem): der Kopf liegt in dieser Richtung
+    pub fall: f64,
+    /// Zahl für die Haltung der Glieder (Nummer der Person)
+    pub seed: f64,
+    /// Sekunden seit dem Sturz (treibt das Hinfallen und die Blutlache)
+    pub since: f64,
+    pub skin: u32,
+    /// tot: Blutlache, die langsam wächst
+    pub blood: bool,
+}
+
+/// Wie lange das Hinfallen dauert (s)
+pub const FALL_S: f32 = 0.4;
+/// Endgröße der Blutlache (px, Halbachse quer) und Zeitkonstante, mit der sie wächst (s)
+pub const POOL_R: f32 = 7.;
+pub const POOL_TAU: f32 = 9.;
+
+/// Wie weit die Person schon liegt: 0 steht noch … 1 liegt (Hinfallen mit kleinem Nachfedern).
+pub fn fall_progress(since: f32) -> f32 {
+    let u = (since / FALL_S).clamp(0., 1.);
+    let e = 1. - (1. - u).powi(3);
+    e + (u * std::f32::consts::PI).sin() * 0.06 * (1. - u)
+}
+
+/// Halbachse der Blutlache (px) nach `since` Sekunden; wächst schnell an und läuft dann langsam aus.
+pub fn pool_radius(since: f32) -> f32 {
+    let t = (since - FALL_S).max(0.);
+    POOL_R * (1. - (-t / POOL_TAU).exp()).sqrt()
+}
+
+/// Liegende Person von oben: Rumpf, Hüfte, abgespreizte Beine mit Schuhen, Arme in einer von mehreren Haltungen
+/// (am Körper, zur Seite, über dem Kopf, angewinkelt), Kopf mit Haaren oder Kopfbedeckung; die Tasche liegt daneben.
+/// Die Haltung kommt aus der Nummer, nie aus dem Zufall der Welt. Beim Hinfallen streckt sich der Körper in
+/// `FALL_S` vom Standpunkt aus; unter Toten wächst eine Blutlache.
+pub fn lying_bodies(l: &Lying, look: &Look, depth: f32, out: &mut Vec<Body>) {
+    let k = look.scale;
+    let (x, y) = (l.x as f32, l.y as f32);
+    let r = |n: f64| h01(l.seed, n) as f32;
+    // leicht schräg zur Sturzrichtung, der Rumpf etwas verdreht
+    let a = l.fall as f32 + (r(1.) - 0.5) * 0.5;
+    let e = fall_progress(l.since as f32);
+    let (c, s) = (a.cos(), a.sin());
+    // Punkt im Körperrahmen: u zum Kopf, v quer; beim Hinfallen von der Mitte aus gestreckt
+    let at = |u: f32, v: f32| {
+        let (u, v) = (u * k * (0.25 + 0.75 * e), v * k * (0.7 + 0.3 * e));
+        [x + c * u - s * v, y + s * u + c * v]
+    };
+    let push = |out: &mut Vec<Body>,
+                center: [f32; 2],
+                half: [f32; 2],
+                angle: f32,
+                shape: f32,
+                d: f32,
+                col: [f32; 4]| {
+        out.push(Body {
+            center,
+            half,
+            angle,
+            shape,
+            depth: depth + d,
+            color: col,
+        });
+    };
+    // Glied von p0 nach p1 (Körperrahmen) als Kapsel
+    let limb = |out: &mut Vec<Body>, p0: [f32; 2], p1: [f32; 2], w: f32, d: f32, col: [f32; 4]| {
+        let (a0, a1) = (at(p0[0], p0[1]), at(p1[0], p1[1]));
+        let (dx, dy) = (a1[0] - a0[0], a1[1] - a0[1]);
+        out.push(Body {
+            center: [(a0[0] + a1[0]) / 2., (a0[1] + a1[1]) / 2.],
+            half: [dx.hypot(dy) / 2. + w * 0.5, w],
+            angle: dy.atan2(dx),
+            shape: 0.,
+            depth: depth + d,
+            color: col,
+        });
+    };
+    // Schatten und Blutlache (unter dem Oberkörper, zum Kopf hin)
+    push(
+        out,
+        at(0., 0.),
+        [12. * k * e.max(0.5), 6. * k],
+        a,
+        1.,
+        0.0005,
+        [0., 0., 0., 0.18],
+    );
+    if l.blood {
+        // unregelmäßig aus mehreren Flecken, unter Kopf und Brust, dunkel und leicht glänzend
+        let pr = pool_radius(l.since as f32) * k;
+        if pr > 0.3 {
+            for j in 0..4 {
+                let jf = j as f64;
+                let u = 4. + (r(30. + jf) - 0.3) * 7.;
+                let v = (r(40. + jf) - 0.5) * 7.;
+                let sz = 0.5 + r(50. + jf) * 0.45;
+                let col = if j == 0 {
+                    [0.3, 0.015, 0.02, 0.93]
+                } else {
+                    [0.36, 0.02, 0.03, 0.88]
+                };
+                push(
+                    out,
+                    at(u, v),
+                    [pr * sz * 1.3, pr * sz],
+                    a + r(60. + jf) * 3.,
+                    1.,
+                    0.00046 - j as f32 * 0.000002,
+                    col,
+                );
+            }
+        }
+    }
+    let top = rgba(look.top);
+    let pants = rgba(look.pants);
+    let skin = rgba(l.skin);
+    // Beine: aus der Hüfte abgespreizt, eines manchmal im Knie angewinkelt
+    for (i, side) in [-1f32, 1.].into_iter().enumerate() {
+        let spread = 0.06 + r(10. + i as f64) * 0.38;
+        let hip = [-3., side * 1.9];
+        let dir = std::f32::consts::PI + side * spread;
+        let bend = if r(12. + i as f64) < 0.35 {
+            side * 0.9
+        } else {
+            0.
+        };
+        let knee = [hip[0] + dir.cos() * 4.6, hip[1] + dir.sin() * 4.6];
+        let d2 = dir - bend;
+        let foot = [knee[0] + d2.cos() * 4.4, knee[1] + d2.sin() * 4.4];
+        limb(out, hip, knee, 1.45 * k, 0.00022, pants);
+        limb(out, knee, foot, 1.3 * k, 0.00021, shade(pants, 0.92));
+        let sh = [foot[0] + d2.cos() * 1.1, foot[1] + d2.sin() * 1.1];
+        let fp = at(sh[0], sh[1]);
+        push(
+            out,
+            fp,
+            [1.9 * k, 1.15 * k],
+            a + d2,
+            0.,
+            0.0002,
+            rgba(look.shoes),
+        );
+    }
+    // Arme: Haltung je Seite
+    for (i, side) in [-1f32, 1.].into_iter().enumerate() {
+        let sh = [5., side * 4.4];
+        // Winkel des Oberarms gegen die Körperachse (0 = zum Kopf, π = zu den Füßen)
+        let pick = r(20. + i as f64);
+        let (up, fore) = if pick < 0.35 {
+            (std::f32::consts::PI - 0.25, 0.15) // am Körper entlang
+        } else if pick < 0.65 {
+            (std::f32::consts::FRAC_PI_2 + 0.2, 0.5) // zur Seite
+        } else if pick < 0.85 {
+            (0.45, -0.3) // über den Kopf
+        } else {
+            (2.1, -1.6) // angewinkelt, Hand auf dem Bauch
+        };
+        let ua = side * up;
+        let el = [sh[0] + ua.cos() * 4.2, sh[1] + ua.sin() * 4.2];
+        let fa = ua + side * fore;
+        let hd = [el[0] + fa.cos() * 3.8, el[1] + fa.sin() * 3.8];
+        let (dd, df) = if pick >= 0.85 {
+            (-0.00008, -0.00009)
+        } else {
+            (0.00012, 0.00011)
+        };
+        limb(out, sh, el, 1.25 * k, dd, shade(top, 0.9));
+        limb(out, el, hd, 1.05 * k, df, shade(top, 0.84));
+        push(
+            out,
+            at(hd[0], hd[1]),
+            [1.05 * k, 1.05 * k],
+            0.,
+            1.,
+            df - 0.00001,
+            skin,
+        );
+    }
+    // Hüfte (Hose) und Rumpf
+    push(out, at(-2.2, 0.), [2.4 * k, 3.9 * k], a, 0., 0.00008, pants);
+    push(
+        out,
+        at(1.6, 0.),
+        [4.3 * k * (0.25 + 0.75 * e).max(0.5), 4.9 * k],
+        a + (r(4.) - 0.5) * 0.25,
+        0.,
+        0.,
+        top,
+    );
+    // Kopf etwas zur Seite gedreht, Haare zum Scheitel hin
+    let ha = a + (r(5.) - 0.5) * 1.2;
+    let hc = at(9.3, (r(6.) - 0.5) * 1.6);
+    push(out, hc, [2.85 * k, 2.85 * k], 0., 1., -0.0001, skin);
+    let crown = [hc[0] + ha.cos() * 0.9 * k, hc[1] + ha.sin() * 0.9 * k];
+    if let Some(hat) = look.hat {
+        push(out, crown, [2.5 * k, 2.6 * k], ha, 1., -0.00014, rgba(hat));
+    } else if let Some(hair) = look.hair {
+        push(out, crown, [2.1 * k, 2.6 * k], ha, 1., -0.00014, rgba(hair));
+    }
+    // Tasche ist heruntergefallen
+    if let Some(b) = look.bag {
+        let bp = at(-1. + r(7.) * 6., (r(8.) - 0.5) * 22.);
+        push(
+            out,
+            bp,
+            figart::half([2.1, 3.7 * k]),
+            a + r(9.) * 3.,
+            figart::shape(look.bag_part),
+            0.00015,
+            rgba(b),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_dead_fall_down_and_bleed_out_slowly() {
+        assert!(fall_progress(0.) < 0.05);
+        assert!((fall_progress(FALL_S) - 1.).abs() < 1e-6);
+        assert!(fall_progress(FALL_S * 0.5) > 0.6);
+        // die Lache fängt erst nach dem Hinfallen an und wächst stetig bis fast zur Endgröße
+        assert_eq!(pool_radius(0.2), 0.);
+        let rs: Vec<f32> = [1., 3., 10., 30., 120.]
+            .iter()
+            .map(|&t| pool_radius(t))
+            .collect();
+        assert!(rs.windows(2).all(|w| w[1] > w[0]), "{rs:?}");
+        assert!(rs[4] > POOL_R * 0.98 && rs[4] <= POOL_R);
+    }
+
+    #[test]
+    fn a_lying_body_is_long_has_a_pool_only_when_dead_and_varies_by_person() {
+        let p = test_ped();
+        let look = look_of(&p);
+        let mut l = Lying {
+            x: 0.,
+            y: 0.,
+            fall: 0.,
+            seed: 7.,
+            since: 60.,
+            skin: p.skin,
+            blood: true,
+        };
+        let mut a = Vec::new();
+        lying_bodies(&l, &look, 0.6, &mut a);
+        // Ausdehnung längs (x) deutlich größer als quer: der Körper liegt ausgestreckt in Sturzrichtung
+        let ext = |v: &[Body], f: fn(&Body) -> f32| {
+            v.iter()
+                .filter(|b| b.color[3] > 0.5 && b.color[0] < 0.3 || b.depth < 0.6004)
+                .map(f)
+                .fold((f32::MAX, f32::MIN), |(lo, hi), x| (lo.min(x), hi.max(x)))
+        };
+        let (x0, x1) = ext(&a, |b| b.center[0]);
+        assert!(x1 - x0 > 18., "Länge {}", x1 - x0);
+        // der Kopf (Hautfarbe, vorn) liegt in Sturzrichtung
+        let skin = rgba(p.skin);
+        let head = a
+            .iter()
+            .filter(|b| b.color == skin && b.half[0] > 2.5)
+            .map(|b| b.center[0])
+            .fold(f32::MIN, f32::max);
+        assert!(head > 7., "Kopf bei {head}");
+        let red = |v: &[Body]| {
+            v.iter()
+                .filter(|b| b.color[0] > 0.25 && b.color[1] < 0.05)
+                .count()
+        };
+        assert_eq!(red(&a), 4);
+        l.blood = false;
+        let mut b = Vec::new();
+        lying_bodies(&l, &look, 0.6, &mut b);
+        assert_eq!(red(&b), 0);
+        // andere Person, andere Haltung
+        l.seed = 8.;
+        let mut c = Vec::new();
+        lying_bodies(&l, &look, 0.6, &mut c);
+        assert!(
+            b.iter()
+                .zip(&c)
+                .any(|(p, q)| (p.center[0] - q.center[0]).abs() > 0.5
+                    || (p.center[1] - q.center[1]).abs() > 0.5)
+        );
+        // gerade gefallen: noch zusammengesunken (kürzer)
+        l.since = 0.05;
+        let mut d = Vec::new();
+        lying_bodies(&l, &look, 0.6, &mut d);
+        let (y0, y1) = ext(&d, |b| b.center[0]);
+        assert!(y1 - y0 < (x1 - x0) * 0.6, "{} vs {}", y1 - y0, x1 - x0);
+    }
 
     #[test]
     fn looks_follow_kind() {

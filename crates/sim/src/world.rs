@@ -43,6 +43,11 @@ pub const TRAFFIC_PEDS: usize = 55;
 pub const SPAWN_MIN: f64 = 750.;
 pub const SPAWN_MAX: f64 = 1800.;
 pub const DESPAWN: f64 = 2400.;
+/// Leichen: so lange liegen sie außer Sicht noch (s), höchstens so viele gleichzeitig, und so weit (px, halbe Breite
+/// und Höhe um die Kamera) gilt eine Leiche als gesehen
+pub const CORPSE_KEEP_S: f64 = 120.;
+pub const CORPSE_MAX: usize = 40;
+pub const CORPSE_VIEW: (f64, f64) = (1300., 850.);
 pub const PARKED_SHARE: f64 = 0.6;
 pub const PARKED_RADIUS: f64 = 1300.;
 pub const PARKED_DESPAWN: f64 = 1800.;
@@ -3620,6 +3625,8 @@ impl World {
                             if ped.hp <= 0. {
                                 ped.state = PedState::Dead;
                                 ped.dead_t = 0.;
+                                // fällt in Fahrtrichtung des Autos (nur Darstellung)
+                                ped.fall = c.angle;
                             } else if by_player {
                                 // umgeworfen: liegt je nach Wucht eine Weile, flieht danach
                                 ped.state = PedState::Down;
@@ -3684,12 +3691,33 @@ impl World {
                 }
             }
         }
-        let (foci, nf) = self.foci();
-        self.peds.retain(|q| {
-            q.state != PedState::Dead
-                || ((q.dead_t < 60. || crate::coop::min_dist(&foci[..nf], q.x, q.y) < 900.)
-                    && q.dead_t < 300.)
-        });
+        // Leichen bleiben liegen, solange jemand hinsieht; außer Sicht verschwinden sie nach `CORPSE_KEEP_S`, und
+        // von mehr als `CORPSE_MAX` gehen die ältesten außer Sicht zuerst
+        let seen = |w: &World, q: &crate::pedestrians::Ped| {
+            w.in_view_any(q.x, q.y, CORPSE_VIEW.0, CORPSE_VIEW.1)
+        };
+        let mut gone: Vec<u32> = Vec::new();
+        let mut out_of_view: Vec<(f64, u32)> = Vec::new();
+        let mut n = 0;
+        for q in self.peds.iter().filter(|q| q.state == PedState::Dead) {
+            n += 1;
+            if !seen(self, q) {
+                if q.dead_t >= CORPSE_KEEP_S {
+                    gone.push(q.id);
+                } else {
+                    out_of_view.push((q.dead_t, q.id));
+                }
+            }
+        }
+        let over = (n - gone.len()).saturating_sub(CORPSE_MAX);
+        if over > 0 {
+            out_of_view.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+            gone.extend(out_of_view.iter().take(over).map(|&(_, id)| id));
+        }
+        if !gone.is_empty() {
+            self.peds
+                .retain(|q| q.state != PedState::Dead || !gone.contains(&q.id));
+        }
     }
 
     fn mission_view(&self) -> PlayerView {

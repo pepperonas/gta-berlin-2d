@@ -13,6 +13,12 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung: **Leichen liegen realistisch.** Statt Oval mit Kopf eine ganze liegende Figur in ihrer Kleidung:
+  Kopf in Sturzrichtung (vom Schützen bzw. in Fahrtrichtung des Autos weg), Beine abgespreizt, eines manchmal
+  angewinkelt, Arme je Person am Körper, zur Seite, über dem Kopf oder auf dem Bauch, die Tasche liegt daneben. Die
+  Person sinkt in 0,4 s zu Boden, unter Toten läuft langsam eine unregelmäßige Blutlache aus. Umgeworfene Passanten und
+  der bewusstlose Spieler liegen genauso (ohne Blut). Leichen verschwinden nicht mehr nach einer Minute, sobald man
+  90 m weg ist: sie bleiben, solange man sie sehen kann, außer Sicht noch 2 Minuten, höchstens 40 gleichzeitig.
 - Native Fassung: **Motorrad fährt sich wie in GTA** (Spieler-Hilfe `motorrad_hilfe`, wie andere Spiele es lösen:
   GTA, Ride/MotoGP mit Fahrhilfen). Kein Wegrutschen mehr in Kurven, im Regen oder auf Schienen – nasse Straße macht
   die Kurve nur weiter; abgeworfen wird nur bei einem harten Aufprall (wie in GTA). Bei hohem Tempo lenkt es direkt

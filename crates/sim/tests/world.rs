@@ -2992,3 +2992,57 @@ fn cars_knock_down_and_kill_pedestrians_at_city_speeds() {
         assert_eq!(p.state, want, "{kmh} km/h");
     }
 }
+
+/// Leichen bleiben liegen, solange man sie sieht – auch nach Minuten; außer Sicht verschwinden sie nach
+/// `CORPSE_KEEP_S`, und es liegen nie mehr als `CORPSE_MAX` gleichzeitig.
+#[test]
+fn corpses_stay_while_seen_and_go_out_of_sight() {
+    use berlin_sim::world::{CORPSE_KEEP_S, CORPSE_MAX};
+    let mut w = world(12);
+    run(&mut w, 30, idle());
+    w.car_target = 0;
+    w.ped_target = 0;
+    let (px, py) = (w.camera.x, w.camera.y);
+    let mut q = w.peds[0].clone();
+    w.peds.clear();
+    q.state = PedState::Dead;
+    q.dead_t = CORPSE_KEEP_S * 3.;
+    (q.x, q.y) = (px + 200., py);
+    let id = q.id;
+    let tpl = q.clone();
+    w.peds.push(q);
+    run(&mut w, 60, idle());
+    assert!(
+        w.peds.iter().any(|p| p.id == id),
+        "Leiche im Bild bleibt liegen"
+    );
+    // außer Sicht (aber innerhalb des Bevölkerungsradius): weg
+    let p = w.peds.iter_mut().find(|p| p.id == id).unwrap();
+    (p.x, p.y) = (px + 1800., py);
+    run(&mut w, 2, idle());
+    assert!(
+        !w.peds.iter().any(|p| p.id == id),
+        "außer Sicht verschwunden"
+    );
+    // viele frische außer Sicht: die ältesten gehen zuerst
+    let mut many = Vec::new();
+    for i in 0..CORPSE_MAX + 10 {
+        let mut c = tpl.clone();
+        c.id = 900_000 + i as u32;
+        c.state = PedState::Dead;
+        c.dead_t = i as f64;
+        (c.x, c.y) = (px + 1800., py + i as f64 * 3.);
+        many.push(c);
+    }
+    w.peds = many;
+    run(&mut w, 1, idle());
+    let left: Vec<u32> = w
+        .peds
+        .iter()
+        .filter(|p| p.state == PedState::Dead)
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(left.len(), CORPSE_MAX, "höchstens so viele Leichen");
+    // die ältesten sind zuerst gegangen
+    assert!(left.iter().all(|&id| id < 900_000 + CORPSE_MAX as u32));
+}
