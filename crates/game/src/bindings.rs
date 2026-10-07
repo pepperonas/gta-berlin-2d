@@ -54,6 +54,7 @@ pub enum Action {
     Kick,
     Reload,
     NextWeapon,
+    PrevWeapon,
     WeaponWheel,
     ZoomIn,
     ZoomOut,
@@ -307,10 +308,10 @@ pub const ACTIONS: &[Info] = &[
     ),
     info(
         A::Horn,
-        "Hupe (lang: Sirene)",
+        "Hupe (halten: Sirene)",
         Car,
         [Some(KeyCode::KeyH), None],
-        Some(P::X),
+        Some(P::LS),
         None,
     ),
     info(
@@ -406,7 +407,7 @@ pub const ACTIONS: &[Info] = &[
         "Treten",
         Foot,
         [Some(KeyCode::KeyV), None],
-        Some(P::RB),
+        Some(P::LS),
         None,
     ),
     info(
@@ -422,6 +423,14 @@ pub const ACTIONS: &[Info] = &[
         "Nächste Waffe",
         Foot,
         [Some(KeyCode::KeyQ), None],
+        Some(P::RB),
+        None,
+    ),
+    info(
+        A::PrevWeapon,
+        "Vorherige Waffe",
+        Foot,
+        [None, None],
         Some(P::LB),
         None,
     ),
@@ -766,32 +775,44 @@ impl ShoulderChord {
 /// s gehalten, bis die Hupe zur Sirene wird (nur Fahrzeuge mit Sirene)
 pub const SIREN_HOLD: f64 = 0.45;
 
-/// Hupe mit langem Druck: kurz = Hupe; in einem Fahrzeug mit Sirene schaltet ein Druck ab `SIREN_HOLD` die Sirene
-/// (einmal je Druck), die Hupe verstummt dann bis zum Loslassen.
+/// So lange klingt die Hupe nach einem kurzen Druck in einem Fahrzeug mit Sirene (s)
+pub const HORN_TAP: f64 = 0.3;
+
+/// Hupe mit langem Druck: ohne Sirene hupt sie, solange gehalten. In einem Fahrzeug mit Sirene hupt ein Druck nicht
+/// sofort – erst beim Loslassen vor `SIREN_HOLD` kommt ein kurzer Hupton (`HORN_TAP`); wer länger hält, schaltet die
+/// Sirene (einmal je Druck), ohne zu hupen.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HornPress {
     t: f64,
     fired: bool,
+    /// Rest des Huptons nach einem kurzen Druck
+    tap: f64,
 }
 impl HornPress {
     /// Liefert (Hupe, Sirene umschalten).
     pub fn step(&mut self, held: bool, siren: bool, dt: f64) -> (bool, bool) {
         if !held {
-            *self = Self::default();
-            return (false, false);
+            let tap = if siren && self.t > 0. && !self.fired {
+                HORN_TAP
+            } else {
+                (self.tap - dt).max(0.)
+            };
+            *self = Self {
+                tap,
+                ..Self::default()
+            };
+            return (tap > 0., false);
         }
         self.t += dt;
+        self.tap = 0.;
         if !siren {
             return (true, false);
         }
-        if self.fired {
-            return (false, false);
-        }
-        if self.t >= SIREN_HOLD - 1e-9 {
+        if !self.fired && self.t >= SIREN_HOLD - 1e-9 {
             self.fired = true;
             return (false, true);
         }
-        (true, false)
+        (false, false)
     }
 }
 
@@ -1013,14 +1034,15 @@ mod tests {
     }
     #[test]
     fn long_horn_switches_the_siren_once() {
-        use super::HornPress;
+        use super::{HORN_TAP, HornPress};
         let dt = 1. / 60.;
         // normales Auto: Hupe, solange gehalten
         let mut h = HornPress::default();
         for _ in 0..60 {
             assert_eq!(h.step(true, false, dt), (true, false));
         }
-        // mit Sirene: kurz = Hupe, lang = einmal Sirene, danach still bis zum Loslassen
+        assert_eq!(h.step(false, false, dt), (false, false));
+        // mit Sirene: gehalten hupt nie, schaltet einmal die Sirene, danach still bis zum Loslassen
         let mut h = HornPress::default();
         let (mut toggles, mut horn) = (0, 0);
         for _ in 0..60 {
@@ -1028,13 +1050,23 @@ mod tests {
             horn += a as u32;
             toggles += b as u32;
         }
-        assert_eq!(toggles, 1);
-        assert!(horn > 0 && horn < 30, "erst Hupe, dann Ruhe: {horn}");
-        assert_eq!(h.step(false, true, dt), (false, false));
-        // kurzer Druck schaltet nichts
+        assert_eq!((toggles, horn), (1, 0));
+        let after: u32 = (0..30).map(|_| h.step(false, true, dt).0 as u32).sum();
+        assert_eq!(after, 0, "nach der Sirene kein Hupen beim Loslassen");
+        // kurzer Druck: erst beim Loslassen ein kurzer Hupton, keine Sirene
         let mut h = HornPress::default();
-        let toggles: u32 = (0..10).map(|_| h.step(true, true, dt).1 as u32).sum();
+        let mut toggles = 0;
+        for _ in 0..10 {
+            let (a, b) = h.step(true, true, dt);
+            assert!(!a, "nicht sofort hupen");
+            toggles += b as u32;
+        }
         assert_eq!(toggles, 0);
+        let honk: u32 = (0..60).map(|_| h.step(false, true, dt).0 as u32).sum();
+        assert!(
+            (honk as f64 * dt - HORN_TAP).abs() < 2. * dt,
+            "kurzer Hupton: {honk}"
+        );
     }
     #[test]
     fn keyboard_pedal_ramps_up_and_down() {

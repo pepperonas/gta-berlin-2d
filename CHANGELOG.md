@@ -13,6 +13,10 @@ ein Prototyp: Spielstände, Kartenformat und Steuerung können sich zwischen Ver
 
 ### Neu
 
+- Native Fassung, Controller: **Hupe auf dem linken Stick** (drücken). In Fahrzeugen mit Sirene hupt ein Druck nicht
+  mehr sofort: kurz drücken hupt beim Loslassen, gedrückt halten schaltet die Sirene an oder aus, ohne zu hupen.
+  **RB wählt die nächste, LB die vorherige Waffe**; Treten liegt zu Fuß jetzt auf dem linken Stick. LB + RB
+  gleichzeitig öffnen weiter die Befehlszeile.
 - Native Fassung: **Leichen liegen realistisch.** Statt Oval mit Kopf eine ganze liegende Figur in ihrer Kleidung:
   Kopf in Sturzrichtung (vom Schützen bzw. in Fahrtrichtung des Autos weg), Beine abgespreizt, eines manchmal
   angewinkelt, Arme je Person am Körper, zur Seite, über dem Kopf oder auf dem Bauch, die Tasche liegt daneben. Die

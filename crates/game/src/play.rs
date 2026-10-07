@@ -2056,8 +2056,7 @@ pub fn combat_input(
         kick: b.pressed(keys, A::Kick),
         reload: b.pressed(keys, A::Reload),
         weapon_next: b.pressed(keys, A::NextWeapon),
-        // Waffenrad-Taste: tippen = vorige Waffe, halten = Waffenrad (Play::step)
-        weapon_prev: false,
+        weapon_prev: b.pressed(keys, A::PrevWeapon),
         weapon_slot: digits
             .iter()
             .position(|&d| pressed(d))
@@ -5123,8 +5122,11 @@ mod tests {
         assert_eq!(b.pad_of(A::Handbrake), Some(P::A));
         assert_eq!(b.pad_of(A::Esp), Some(P::B));
         assert_eq!(b.pad_of(A::UseCar), Some(P::Right));
-        assert_eq!(b.pad_of(A::Horn), Some(P::X));
+        assert_eq!(b.pad_of(A::Horn), Some(P::LS));
         assert_eq!(b.pad_of(A::AssistWheel), Some(P::RS));
+        assert_eq!(b.pad_of(A::NextWeapon), Some(P::RB));
+        assert_eq!(b.pad_of(A::PrevWeapon), Some(P::LB));
+        assert_eq!(b.pad_of(A::Kick), Some(P::LS));
         assert!(
             b.conflicts().is_empty(),
             "Standard ohne Doppelbelegung: {:?}",
@@ -5161,7 +5163,30 @@ mod tests {
         let car_b = input_from(&keys(bb), true, &b);
         assert!(car_b.esp_toggle && !car_b.handbrake);
         let car_x = input_from(&keys(x), true, &b);
-        assert!(car_x.horn && !car_x.jump);
+        assert!(!car_x.horn && !car_x.jump, "X hupt nicht mehr");
+        // linker Stick drücken: im Fahrzeug Hupe, zu Fuß Treten
+        let ls = Pad {
+            ls: true,
+            ..Default::default()
+        };
+        let mut kls = keys(ls);
+        kls.pad.ls = true;
+        assert!(input_from(&kls, true, &b).horn);
+        let foot_ls = input_from(&kls, false, &b);
+        assert!(foot_ls.combat.kick && !foot_ls.combat.weapon_next);
+        // RB nächste, LB vorherige Waffe
+        let rb = Pad {
+            rb: true,
+            ..Default::default()
+        };
+        let lb = Pad {
+            lb: true,
+            ..Default::default()
+        };
+        let foot_rb = input_from(&keys(rb), false, &b);
+        assert!(foot_rb.combat.weapon_next && !foot_rb.combat.weapon_prev && !foot_rb.combat.kick);
+        let foot_lb = input_from(&keys(lb), false, &b);
+        assert!(foot_lb.combat.weapon_prev && !foot_lb.combat.weapon_next);
         // A im Fahrzeug: nur Handbremse – kein Einladen, kein kräftiges Treten auf dem Fahrrad
         let a = Pad {
             a: true,

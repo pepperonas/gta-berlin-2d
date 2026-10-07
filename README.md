@@ -92,8 +92,8 @@ lenken, Leertaste Handbremse, H Hupe, X ESP, Y/Z ABS. F5 speichert, nach einem
 erledigten Auftrag wird automatisch gespeichert. F8 schaltet die Grafik zwischen HD (Standard) und Pixel um (auch im
 Titel- und Pausenmenü). Mit der Maus (Diablo-Schema, Standard): Klick läuft hin, greift an oder steigt ein, Strg + Klick greift am Platz an. Zu Fuß kämpfen: Strg angreifen/schießen, rechte Taste oder V treten, Q oder 1–8 Waffe, R nachladen. Mausrad zoomt, Esc/P pausiert (Menü: speichern, Mission neu, Hauptmenü).
 Mit Controller zu Fuß: A sprinten (tippen = Aktion), X springen, Y einsteigen (das Fahrzeug schimmert dann
-dezent), B nachladen, RT angreifen, RB treten, LB nächste Waffe, rechten Stick gedrückt halten = Waffenrad (Stick
-wählt, Loslassen nimmt, Stick in der Mitte lässt die Waffe, B bricht ab). Im Auto: RT/LT Gas/Bremse, A Handbremse, B ESP an/aus, Steuerkreuz rechts Aktion (Einladen), Steuerkreuz oben auf dem Fahrrad kräftig treten, Y aussteigen, X hupen, RB/LB Radiosender
+dezent), B nachladen, RT angreifen, linken Stick drücken treten, RB nächste / LB vorherige Waffe, rechten Stick gedrückt halten = Waffenrad (Stick
+wählt, Loslassen nimmt, Stick in der Mitte lässt die Waffe, B bricht ab). Im Auto: RT/LT Gas/Bremse, A Handbremse, B ESP an/aus, Steuerkreuz rechts Aktion (Einladen), Steuerkreuz oben auf dem Fahrrad kräftig treten, Y aussteigen, linken Stick drücken hupen (mit Sirene: halten schaltet die Sirene, ohne zu hupen), RB/LB Radiosender
 (in Polizei- und Rettungswagen lang halten = Sirene), rechten Stick drücken = Fahrhilfen-Rad (ESP, ABS, Sirene).
 Stadtplan: linker Stick verschieben, rechter Stick bzw. RT/LT zoomen, A Wegpunkt, X Teleport, B zurück;
 Teleport-Rückfrage mit Stick/Steuerkreuz wählen, A bestätigt.
@@ -344,7 +344,7 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Als Zugführer: Fahrt / Bremse / Notbremse | RT / LT / A | W / S / Leertaste |
 | Als Zugführer: Türen auf/zu, am Endhalt wenden | Steuerkreuz rechts | E |
 | Befehlszeile (Uhrzeit, Wetter, Teleport, Cheats …) | – | Enter; Tab/→ ergänzt, ↑↓ wählt bzw. blättert im Verlauf, Enter führt aus, Esc schließt |
-| Hupe | X | H |
+| Hupe (im Fahrzeug) | linken Stick drücken; mit Sirene: kurz = Hupe beim Loslassen, halten = Sirene an/aus (ohne zu hupen) | H (ebenso) |
 | Radio: nächster / vorheriger Sender (im Auto, AUS gehört zur Runde; Lautstärke im Pausenmenü) | RB / LB | R / Q |
 | Stadtplan | Ansicht-Taste | Tab |
 | Gesamten Ton an/aus | – | M |
@@ -353,8 +353,8 @@ dem Controller bleibt die Zielhilfe wie gehabt.
 | Teleport (auf dem Stadtplan) | – | Mausklick auf die Karte, dann Ja/Nein (Maus, A/Enter, B/Esc) |
 | Angreifen / Schießen (zu Fuß) | RT | rechte Maustaste (vertauscht: linke), oder Strg |
 | Zielen (zu Fuß) | rechter Stick | Maus (Figur zielt auf den Zeiger) |
-| Treten (zu Fuß) | B | V |
-| Waffe wechseln / wählen | LB tippen (zurück) / RB (vor) | Q, Mausrad / 1–8 |
+| Treten (zu Fuß) | linken Stick drücken | V |
+| Waffe wechseln / wählen | RB nächste, LB vorherige | Q, Mausrad / 1–8 |
 | Waffenrad (zu Fuß) | LB halten, rechter Stick zeigt, LB loslassen wählt, B bricht ab | linke und rechte Maustaste gleichzeitig halten, Maus in Richtung der Waffe, loslassen wählt; Mausrad dreht, 1–8 wählt sofort, Esc bricht ab (Zeitlupe, solange offen; auch beim Schießen) |
 | Nachladen | X | R |
 | Pause | Menü-Taste | Esc / P |
